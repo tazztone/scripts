@@ -104,28 +104,22 @@ def fetch_all_files(service, folder_id=None, recursive=False):
     return all_files
 
 
-def handle_duplicate(service, file1, file2, delete=False):
-    """Log the duplicate and handle deletion if necessary."""
-    logging.info(f"Duplicate found: {file1['name']} (ID: {file1['id']}) and {file2['name']} (ID: {file2['id']})")
-    if delete:
-        if file1['name'] != file2['name']:
-            print(f"\nFound files with different names but same content:\n1. {file1['name']} "
-                  f"(ID: {file1['id']})\n2. {file2['name']} (ID: {file2['id']})")
+def handle_duplicates_with_different_names(service, duplicates):
+    """Handle duplicates with different names by asking the user for each one."""
+    for file1, file2 in duplicates:
+        print(f"\nFound files with different names but same content:\n1. {file1['name']} (ID: {file1['id']})\n2. {file2['name']} (ID: {file2['id']})")
 
-            choice = input("Enter 1 to move the first file to trash, "
-                           "2 to move the second file to trash (or any other key to skip): ")
-            if choice == '1':
-                move_file_to_trash(service, file1)
-
-            elif choice == '2':
-                move_file_to_trash(service, file2)
-
-            else:
-                logging.info(f"No action was taken for duplicates files: "
-                             f"{file1['name']} with id {file1['id']} and {file2['name']} with id {file2['id']}.")
-        else:
+        choice = input("Enter 1 to move the first file to trash, "
+                       "2 to move the second file to trash (or any other key to skip): ")
+        if choice == '1':
             move_file_to_trash(service, file1)
 
+        elif choice == '2':
+            move_file_to_trash(service, file2)
+
+        else:
+            logging.info(f"No action was taken for duplicates files: "
+                         f"{file1['name']} with id {file1['id']} and {file2['name']} with id {file2['id']}.")
 
 def find_duplicates(service, delete=False, folder_id=None, recursive=False):
     """Find duplicate files in Google Drive."""
@@ -137,16 +131,31 @@ def find_duplicates(service, delete=False, folder_id=None, recursive=False):
     all_files = fetch_all_files(service, folder_id, recursive)
     total_files = len(all_files)
     file_dict = {}
+    duplicates_with_same_name = []
+    duplicates_with_different_names = []
+
     for i, file in enumerate(all_files, 1):
         if 'md5Checksum' in file:
             duplicate = file_dict.get(file['md5Checksum'])
             if duplicate:
-                handle_duplicate(service, file, duplicate, delete)
+                logging.info(f"Duplicate found: {file['name']} (ID: {file['id']}) and {duplicate['name']} (ID: {duplicate['id']})")
+                if file['name'] == duplicate['name']:
+                    duplicates_with_same_name.append(file)
+                else:
+                    duplicates_with_different_names.append((file, duplicate))
             else:
                 file_dict[file['md5Checksum']] = file
 
         if i % 100 == 0 or i == total_files:
             logging.info(f"Checked {i} out of {total_files} files.")
+
+    if delete:
+        for file in duplicates_with_same_name:
+            move_file_to_trash(service, file)
+        
+        if duplicates_with_different_names:
+            handle_duplicates_with_different_names(service, duplicates_with_different_names)
+
 
 
 def main():
