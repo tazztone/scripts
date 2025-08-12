@@ -35,7 +35,7 @@ def get_service():
             creds = flow.run_local_server(port=0)
         with open('token.json', 'wb') as token:
             pickle.dump(creds, token)
-    return build('drive', 'v3', credentials=creds)
+    return build('drive', 'v3', credentials=creds, cache_discovery=False)
 
 
 def move_file_to_trash(service, file):
@@ -47,19 +47,56 @@ def move_file_to_trash(service, file):
         logging.error(f"An error occurred: {e}")
 
 
-def fetch_all_files(service):
-    """Fetch all file metadata from Google Drive and return as a list."""
+def fetch_all_files(service, folder_id=None, recursive=False):
+    """Fetch all file metadata from Google Drive."""
+    
+    if folder_id and recursive:
+        logging.info("Starting recursive folder scan...")
+        all_folder_ids = [folder_id]
+        folders_to_process = [folder_id]
+        while folders_to_process:
+            current_folder_id = folders_to_process.pop(0)
+            page_token = None
+            while True:
+                folder_query = f"'{current_folder_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+                response = service.files().list(q=folder_query, pageSize=1000, fields="nextPageToken, files(id, name)", pageToken=page_token).execute()
+                subfolders = response.get('files', [])
+                for folder in subfolders:
+                    all_folder_ids.append(folder['id'])
+                    folders_to_process.append(folder['id'])
+                page_token = response.get('nextPageToken', None)
+                if page_token is None:
+                    break
+        
+        logging.info(f"Found {len(all_folder_ids)} total folders to scan.")
+        
+        all_files = []
+        for i, f_id in enumerate(all_folder_ids, 1):
+            page_token = None
+            while True:
+                file_query = f"'{f_id}' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false"
+                response = service.files().list(q=file_query, pageSize=1000, fields="nextPageToken, files(id, name, size, md5Checksum, trashed)", pageToken=page_token).execute()
+                all_files.extend(response.get('files', []))
+                page_token = response.get('nextPageToken', None)
+                if page_token is None:
+                    break
+            logging.info(f"Scanned folder {i} of {len(all_folder_ids)}. Total files found: {len(all_files)}")
+        return all_files
+
     all_files = []
     page_token = None
-    retrieved_files = 0
+    query = "mimeType != 'application/vnd.google-apps.folder' and trashed = false"
+    if folder_id:
+        query += f" and '{folder_id}' in parents"
+
     while True:
         response = service.files().list(
-            q="trashed = false",
-            pageSize=1000, fields="nextPageToken, files(id, name, size, md5Checksum, trashed)",
+            q=query,
+            pageSize=1000,
+            fields="nextPageToken, files(id, name, size, md5Checksum, trashed)",
             pageToken=page_token).execute()
         all_files.extend(response.get('files', []))
-        logging.info(f"Retrieved {retrieved_files + 1000} file's metadata so far")
-        retrieved_files += 1000
+        logging.info(f"Retrieved {len(all_files)} file's metadata so far...")
         page_token = response.get('nextPageToken', None)
         if page_token is None:
             break
@@ -89,9 +126,14 @@ def handle_duplicate(service, file1, file2, delete=False):
             move_file_to_trash(service, file1)
 
 
-def find_duplicates(service, delete=False):
+def find_duplicates(service, delete=False, folder_id=None, recursive=False):
     """Find duplicate files in Google Drive."""
-    all_files = fetch_all_files(service)
+    if folder_id:
+        logging.info(f"Scanning folder with ID: {folder_id}")
+    else:
+        logging.info("Scanning all files in Google Drive.")
+        
+    all_files = fetch_all_files(service, folder_id, recursive)
     total_files = len(all_files)
     file_dict = {}
     for i, file in enumerate(all_files, 1):
@@ -109,9 +151,11 @@ def find_duplicates(service, delete=False):
 def main():
     parser = argparse.ArgumentParser(description="Find duplicate files in Google Drive")
     parser.add_argument('--delete', action='store_true', help='Move duplicate files to trash')
+    parser.add_argument('--folder', help='ID of the Google Drive folder to scan')
+    parser.add_argument('--recursive', action='store_true', help='Scan subfolders recursively when a folder is specified')
     args = parser.parse_args()
     service = get_service()
-    find_duplicates(service, delete=args.delete)
+    find_duplicates(service, delete=args.delete, folder_id=args.folder, recursive=args.recursive)
 
 
 if __name__ == '__main__':
