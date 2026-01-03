@@ -1,4 +1,13 @@
 @echo off
+:: =================================================================================================
+:: Script Name: exiftool_copy_and_organize_by_date.bat
+:: Description: Copies ARW, JPG, and MP4 files from a source directory to a destination directory,
+::              organizing them into folders by date (Year/Year-Month-Day/YearMonthDay).
+::              Files are renamed to include the timestamp.
+:: Dependencies: exiftool (must be in PATH)
+:: Usage: Edit the "source" and "destination" variables below, then run the script.
+:: =================================================================================================
+
 set "source=F:"
 set "destination=X:"
 

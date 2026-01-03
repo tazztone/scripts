@@ -1,1 +1,0 @@
-exiftool -Rotation=270 *.MP4
