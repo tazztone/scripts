@@ -2,6 +2,8 @@
 
 A collection of "Right-Click" productivity tools for Ubuntu users. These scripts integrate directly into the Nautilus file manager (Files), allowing you to convert, compress, and manipulate video/audio files without opening a heavy GUI application.
 
+![alt text](image.png)
+
 Powered by `ffmpeg`, `zenity`, and `bc`.
 
 ## 🚀 Features
@@ -50,8 +52,6 @@ sudo apt install ffmpeg zenity bc
     ```
 
 ## 🖱️ How to Use
-
-![alt text](image.png)
 
 1.  Open your file manager (**Files / Nautilus**).
 2.  Select one or more video/audio files.
