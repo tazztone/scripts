@@ -41,14 +41,15 @@ sudo apt install ffmpeg zenity bc
     # Create the directory if it doesn't exist
     mkdir -p ~/.local/share/nautilus/scripts/
     
-    # Copy all scripts into it
-    cp *.sh ~/.local/share/nautilus/scripts/
+    # Copy all categories into the Nautilus scripts folder
+    # This preserves the subdirectories to create submenus in Nautilus
+    cp -r ffmpeg/* ~/.local/share/nautilus/scripts/
     ```
 
 3.  **Make them executable:**
     Linux requires scripts to have permission to run.
     ```bash
-    chmod +x ~/.local/share/nautilus/scripts/*.sh
+    chmod +x ~/.local/share/nautilus/scripts/*/*.sh
     ```
 
 ## 🖱️ How to Use
@@ -63,26 +64,84 @@ sudo apt install ffmpeg zenity bc
 
 ## 📂 Included Scripts
 
-Quick command-line tools for common video and audio tasks.
+The scripts are organized into subdirectories to keep the Nautilus context menu clean. Selecting one or more files and navigating to **Scripts > ffmpeg > [Category]** will reveal the tools.
 
-| Script | Description | Usage |
-| :--- | :--- | :--- |
-| `001-AAC-PCM-remux.sh` | Remux AAC/PCM | (Original script) |
-| `002-filesize-9.sh` | Filesize utility | (Original script) |
-| `003-scale-video.sh` | Resize video | `./003-scale-video.sh <input> <width> [output]` |
-| `004-convert-format.sh` | Change container | `./004-convert-format.sh <input> <ext> [output]` |
-| `005-extract-audio.sh` | Extract audio track | `./005-extract-audio.sh <input> [format]` |
-| `006-trim-video.sh` | Fast video trimming | `./006-trim-video.sh <input> <start> <duration>` |
-| `007-compress-video.sh` | CRF compression | `./007-compress-video.sh <input> <crf> [preset]` |
-| `008-concat-videos.sh` | Join videos | `./008-concat-videos.sh <output> <in1> <in2> ...` |
-| `009-make-gif.sh` | High-quality GIF | `./009-make-gif.sh <input> <start> <dur> <width>` |
-| `010-add-watermark.sh` | Add watermark | `./010-add-watermark.sh <video> <img> <pos>` |
-| `011-generate-thumbnails.sh` | Frame extraction | `./011-generate-thumbnails.sh <input> <interval>` |
+### 1. 🌐 Web & Social Media (`1-Web_Social`)
+*Optimized for sharing, compatibility, and platform limits.*
+- **H.264 Universal**: Best compatibility (Plays anywhere).
+- **H.265 Archive**: High efficiency (Half size of H.264).
+- **Discord (25MB)**: Auto-calc bitrate to fit standard limit.
+- **Discord Nitro (500MB)**: High quality for Nitro users.
+- **WebM Transparent**: VP9 with alpha support.
+- **GIF (High Quality)**: Two-pass palette generation.
+- **Vertical Crop (9:16)**: Center crop for TikTok/Reels.
+- **WhatsApp/Instagram/Twitter**: Presets for specific platform requirements.
+- **Email Tiny (<10MB)**: Aggressive compression for attachments.
 
-## Testing (`/testing`)
+### 2. 🎬 Editing Intermediates (`2-Editing_Pro`)
+*High-quality formats for smooth performance in video editors.*
+- **ProRes (422, Proxy, 4444)**: Industry standard intermediates.
+- **DNxHR SQ / DNxHD 36**: Avid-friendly proxies and mastering files.
+- **Rewrap (MOV/MKV)**: Instant container swaps without re-encoding.
+- **Fix VFR**: Enforces Constant Framerate to prevent audio drift.
+- **All-Intra (GOP-1)**: Every frame is a keyframe for instant seeking.
+- **Uncompress (Raw)**: Absolute pixel-perfect Raw video.
 
-- `run_ffmpeg_tests.sh`: Automated test suite for all FFmpeg utilities.
+### 3. 🔊 Audio Operations (`3-Audio_Ops`)
+*Extract, normalize, and manipulate audio tracks.*
+- **Extract (MP3 V0, WAV, FLAC, AAC)**: One-click audio extraction.
+- **Normalize (EBU R128)**: Broadcast standard volume leveling.
+- **Boost Volume (+6dB)**: Quick fix for quiet clips.
+- **Channel Ops**: Mono-to-Stereo, Stereo-to-Mono.
+- **Extract Stems**: Splits 5.1 surround into 6 separate WAV files.
+- **Remove Audio**: Creates a silent video track.
 
+### 4. 📐 Geometry & Time (`4-Geometry_Time`)
+*Resize, rotate, and manipulate video flow.*
+- **Scale (50%, 1080p, 720p)**: Fast resolution changes.
+- **Rotate (90° CW/CCW)**: Fix orientation issues.
+- **Flip Horizontal**: Mirror the image.
+- **Crop (16:9)**: Force widescreen aspect ratio.
+- **Stabilize**: Two-pass analysis to remove camera shake.
+- **Speed (2x / 0.5x)**: Simple time-lapse or slow-motion.
+
+### 5. 🛠️ Utility & Batch (`5-Utils`)
+*Developer and workflow helper tools.*
+- **Thumbnail (50%)**: Grabs a JPG from the middle of the video.
+- **Image Sequence**: Exports every frame as a JPG.
+- **Images to Video**: Stitches a folder of JPGs into an MP4.
+- **Burn Subtitles**: Hardcodes `.srt` files into the video.
+- **Web Optimize**: FastStart metadata for instant streaming.
+- **Concat (Join)**: Stitches selected files together.
+- **Split by Scene**: Automatic cut detection.
+- **Metadata Cleaner**: Removes GPS and camera info.
+- **Trim (Start/End)**: Quick 10s snips.
+
+## 🧪 Testing Setup
+
+The project includes a unified, automated testing framework to verify all scripts without needing a full Nautilus environment.
+
+### Automated Test Runner (`test_runner.sh`)
+The `test_runner.sh` tool provides a robust way to verify script functionality. It automatically handles Zenity mocking for headless environments and uses `ffprobe` to validate the properties of the generated media.
+
+```bash
+# Run the unified test suite (Headless/Mocked)
+bash testing/test_runner.sh
+```
+
+**What it does:**
+- **Zenity Mocking**: Simulates user interaction so tests run without GUI popups.
+- **Media Validation**: Verifies resolution, codecs, and stream properties using `ffprobe`.
+- **Category Coverage**: Runs representative tests from all 5 categories.
+- **Colorized Reports**: Provides a clear PASS/FAIL summary in the terminal.
+
+### Syntax Verification
+To check all 50+ scripts for shell syntax errors manually:
+```bash
+for f in ffmpeg/*/*.sh; do bash -n "$f" && echo "OK: $f"; done
+```
+
+---
 
 ## 🤝 Contributing
 
