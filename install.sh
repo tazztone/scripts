@@ -17,7 +17,7 @@ echo -e "${GREEN}Starting installation of Nautilus FFmpeg Scripts...${NC}"
 # Check for prerequisites
 echo -e "${YELLOW}Checking for prerequisites...${NC}"
 MISSING_DEPS=0
-for cmd in ffmpeg zenity bc; do
+for cmd in ffmpeg ffprobe zenity bc; do
     if ! command -v $cmd &> /dev/null; then
         echo -e "${RED}Error: $cmd is not installed.${NC}"
         MISSING_DEPS=1

@@ -20,14 +20,31 @@ fi
 
 # PTS = 1/Speed
 PTS_VAL=$(echo "scale=4; 1/$SPEED" | bc)
-# Atempo must be between 0.5 and 2.0. We can chain them if needed.
-# For simplicity in this shell script, we'll use a single stage or warn.
-ATEMPO=$SPEED
+
+# Calculate audio filter chain
+# atempo is limited to [0.5, 2.0]. We chain them for larger/smaller values.
+AFILTER=""
+REMAINING_SPEED=$SPEED
+
+# Handle Slow Motion (< 0.5)
+while (( $(echo "$REMAINING_SPEED < 0.5" | bc -l) )); do
+    AFILTER="${AFILTER}atempo=0.5,"
+    REMAINING_SPEED=$(echo "$REMAINING_SPEED * 2" | bc -l)
+done
+
+# Handle Fast Motion (> 2.0)
+while (( $(echo "$REMAINING_SPEED > 2.0" | bc -l) )); do
+    AFILTER="${AFILTER}atempo=2.0,"
+    REMAINING_SPEED=$(echo "$REMAINING_SPEED / 2" | bc -l)
+done
+
+# Add remaining factor
+AFILTER="${AFILTER}atempo=${REMAINING_SPEED}"
 
 (
 for f in "$@"; do
     echo "# Changing speed of $f to ${SPEED}x..."
-    ffmpeg -y -i "$f" -vf "setpts=${PTS_VAL}*PTS" -filter:a "atempo=${ATEMPO}" "${f%.*}_${SPEED}x.mp4"
+    ffmpeg -y -i "$f" -vf "setpts=${PTS_VAL}*PTS" -filter:a "$AFILTER" "${f%.*}_${SPEED}x.mp4"
 done
 ) | zenity --progress --title="Changing Speed..." --pulsate --auto-close
 

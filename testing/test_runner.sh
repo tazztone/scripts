@@ -27,6 +27,16 @@ setup_mock_zenity() {
 #!/bin/bash
 # Headless Zenity Mock
 ARGS="$*"
+# Allow dynamic overrides via environment variables
+if [[ "$ARGS" == *"--entry"* && -n "$ZENITY_ENTRY_RESPONSE" ]]; then
+    echo "$ZENITY_ENTRY_RESPONSE"
+    exit 0
+fi
+if [[ "$ARGS" == *"--list"* && -n "$ZENITY_LIST_RESPONSE" ]]; then
+    echo "$ZENITY_LIST_RESPONSE"
+    exit 0
+fi
+
 case "$ARGS" in
     *--scale*) echo "1280" ;;
     *--entry*) echo "9" ;;
@@ -129,8 +139,9 @@ run_test() {
     
     log_info "Testing: $(basename "$script_path")"
     
-    # 0. Clean test data of any previous outputs (but keep src.mp4)
-    find "$TEST_DATA" -type f ! -name "src.mp4" ! -name "test.srt" -delete
+    # 0. Clean test data of any previous outputs (but keep src.mp4 and other sources)
+    # We want to keep src.mp4, test.srt, and specifically named test files
+    find "$TEST_DATA" -type f -not \( -name "src.mp4" -o -name "test.srt" -o -name "*'*.mp4" \) -delete
     
     # 1. Capture current files
     local before=$(mktemp)
@@ -138,7 +149,14 @@ run_test() {
 
     # 2. Run the script
     local script_log=$(mktemp)
-    bash "$script_path" "$input_file" > "$script_log" 2>&1
+    # CD to the directory of the input file to mimic Nautilus behavior
+    local input_dir=$(dirname "$input_file")
+    local input_base=$(basename "$input_file")
+    
+    # We need to resolve script path to absolute because we are changing dir
+    local abs_script_path=$(readlink -f "$script_path")
+
+    ( cd "$input_dir" && bash "$abs_script_path" "$input_base" ) > "$script_log" 2>&1
     local exit_code=$?
     
     if [ $exit_code -ne 0 ]; then
@@ -152,13 +170,24 @@ run_test() {
     local output_file=""
     local newest=$(ls -t "$TEST_DATA" | head -n 1)
     
-    # Verify it's not one of our sources
-    if [[ "$newest" == "src.mp4" || "$newest" == "test.srt" ]]; then
-        # Try second newest if newest is source
-        newest=$(ls -t "$TEST_DATA" | sed -n '2p')
+    # Verify it's not one of our sources (simple check, could be better)
+    if [[ "$newest" == "src.mp4" || "$newest" == "test.srt" || "$newest" == *"'"* ]]; then
+        # If the newest file is a source, maybe the script didn't produce anything?
+        # Or maybe it modified in place (scripts usually don't).
+        # Let's check diff against 'before'
+        local after=$(mktemp)
+        ls -1 "$TEST_DATA" | sort > "$after"
+        local diff_file=$(comm -13 "$before" "$after")
+        if [ -n "$diff_file" ]; then
+             newest=$(echo "$diff_file" | head -n 1)
+        fi
+        rm "$after"
     fi
 
-    if [[ -z "$newest" || "$newest" == "src.mp4" || "$newest" == "test.srt" ]]; then
+    # Final check if we found a new file
+    if [[ -z "$newest" || "$newest" == "src.mp4" || "$newest" == "test.srt" || "$newest" == "User's Video.mp4" ]]; then
+        # One last check: did we rename/modify?
+        # For now assume failure if no new file appears
         log_fail "No output file detected for $(basename "$script_path")"
         echo "Files in $TEST_DATA:"
         ls -l "$TEST_DATA"
@@ -186,6 +215,18 @@ run_test() {
 
 # --- Main Execution ---
 generate_test_media
+
+echo -e "\n${YELLOW}=== Running Fix Verification: Special Characters ===${NC}"
+# Create a file with single quote
+SPECIAL_FILE="$TEST_DATA/User's Video.mp4"
+cp "$TEST_DATA/src.mp4" "$SPECIAL_FILE"
+# Test 5-04 Concat (Pass only one file to test the internal list generation logic)
+run_test "ffmpeg/5-04 🔗 Concat-Join-Videos.sh" "" "$SPECIAL_FILE"
+
+echo -e "\n${YELLOW}=== Running Fix Verification: Speed Limits ===${NC}"
+export ZENITY_LIST_RESPONSE="4x Fast"
+run_test "ffmpeg/4-05 ⏩ Video-Speed-Fast-Slow-Motion.sh" "vcodec=h264" "$TEST_DATA/src.mp4"
+unset ZENITY_LIST_RESPONSE
 
 echo -e "\n${YELLOW}=== Running Category: Web & Social ===${NC}"
 run_test "ffmpeg/1-01 🌐 H264-Social-Web-Presets.sh" "vcodec=h264,acodec=aac" "$TEST_DATA/src.mp4"

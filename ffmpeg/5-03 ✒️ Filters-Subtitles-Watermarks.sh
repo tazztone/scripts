@@ -12,10 +12,15 @@ case "$CHOICE" in
     "Burn Subtitles")
         SUB_FILE=$(zenity --file-selection --title="Select Subtitle File (.srt)" --file-filter="*.srt")
         if [ -z "$SUB_FILE" ]; then exit; fi
+        
+        # Escape backslashes and single quotes for ffmpeg filter string
+        SAFE_SUB="${SUB_FILE//\\/\\\\}"
+        SAFE_SUB="${SAFE_SUB//\'/\\\'}"
+        
         (
         for f in "$@"; do
             echo "# Burning subs into $f..."
-            ffmpeg -y -i "$f" -vf "subtitles='$SUB_FILE'" -c:v libx264 -crf 20 -c:a copy "${f%.*}_hardsub.mp4"
+            ffmpeg -y -i "$f" -vf "subtitles='$SAFE_SUB'" -c:v libx264 -crf 20 -c:a copy "${f%.*}_hardsub.mp4"
         done
         ) | zenity --progress --title="Burning Subtitles..." --pulsate --auto-close
         ;;

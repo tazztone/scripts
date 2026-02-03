@@ -2,6 +2,9 @@
 # Compress to Target Size
 # Calculates bitrate to fit video exactly in a target MB size.
 
+DIR="$(dirname "$0")"
+source "$DIR/common.sh"
+
 CHOICE=$(zenity --list --title="Target Size" --column="Size" --column="Description" \
     "9.5" "Email Tiny (10MB Limit)" \
     "25" "Discord Standard (25MB Limit)" \
@@ -21,9 +24,9 @@ fi
 for f in "$@"; do
     echo "# Analyzing $f..."
     
-    DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$f")
+    DURATION=$(get_duration "$f")
     
-    if [ -z "$DURATION" ]; then
+    if [ -z "$DURATION" ] || [ "$DURATION" == "0" ]; then
         zenity --error --text="Could not determine duration for $f"
         continue
     fi
@@ -50,12 +53,15 @@ for f in "$@"; do
 
     echo "# Target: ${VIDEO_BITRATE}k for ${TARGET_MB}MB"
 
-    # 2-Pass Encoding
-    ffmpeg -y -i "$f" -c:v libx264 -b:v "${VIDEO_BITRATE}k" -pass 1 -an -f null /dev/null
-    ffmpeg -y -i "$f" -c:v libx264 -b:v "${VIDEO_BITRATE}k" -pass 2 -c:a aac -b:a "${A_BR}k" -ac "$A_CHAN" "${f%.*}_${TARGET_MB}MB.mp4"
+    # Generate unique log prefix to avoid collisions
+    PASS_LOG=$(get_sys_temp "ffmpeg_pass")
 
-    rm -f ffmpeg2pass-0.log ffmpeg2pass-0.log.mbtree
+    # 2-Pass Encoding
+    ffmpeg -y -i "$f" -c:v libx264 -b:v "${VIDEO_BITRATE}k" -pass 1 -passlogfile "$PASS_LOG" -an -f null /dev/null
+    ffmpeg -y -i "$f" -c:v libx264 -b:v "${VIDEO_BITRATE}k" -pass 2 -passlogfile "$PASS_LOG" -c:a aac -b:a "${A_BR}k" -ac "$A_CHAN" "${f%.*}_${TARGET_MB}MB.mp4"
+
+    rm -f "${PASS_LOG}"* 
 done
-) | zenity --progress --title="Compressing to ${TARGET_MB} MB..." --pulsate --auto-close
+) | Z_PROGRESS "Compressing to ${TARGET_MB} MB..."
 
 zenity --notification --text="Compression Finished!"
