@@ -73,58 +73,50 @@ sudo apt install ffmpeg zenity bc
 
 ## 📂 Included Scripts
 
-The scripts are organized in a flat structure inside the `ffmpeg` folder. They use a smart naming scheme (`Category-Number-Name`) to keep them sorted and easy to access without clicking through multiple submenus.
+The scripts are now organized into **Master Scripts** to reduce menu clutter. Each script uses a Zenity menu to let you choose specific technical flavors or presets.
 
-### 1. 🌐 Web & Social Media (`1-*`)
+### 1. 🌐 Distribution & Web (`1-*`)
 *Optimized for sharing, compatibility, and platform limits.*
-- **H.264 Universal**: Best compatibility (Plays anywhere).
-- **H.265 Archive**: High efficiency (Half size of H.264).
-- **Discord (25MB)**: Auto-calc bitrate to fit standard limit.
-- **Discord Nitro (500MB)**: High quality for Nitro users.
-- **WebM Transparent**: VP9 with alpha support.
-- **GIF (High Quality)**: Two-pass palette generation.
-- **Vertical Crop (9:16)**: Center crop for TikTok/Reels.
-- **WhatsApp/Instagram/Twitter**: Presets for specific platform requirements.
-- **Email Tiny (<10MB)**: Aggressive compression for attachments.
+- **H.264 Presets (Social & Web)**: Integrated presets for Twitter, WhatsApp, and Universal compatibility.
+- **H.265 HEVC Archive**: Ultra-efficient compression for long-term storage.
+- **H.264 Compress to Target Size**: Auto-calculates bitrate to hit exact MB limits (Discord/Email).
+- **VP9 WebM Alpha**: Web-friendly video with support for transparency.
+- **GIF Palette Optimized**: High-quality GIF generation using two-pass palette analysis.
 
-### 2. 🎬 Editing Intermediates (`2-*`)
-*High-quality formats for smooth performance in video editors.*
-- **ProRes (422, Proxy, 4444)**: Industry standard intermediates.
-- **DNxHR SQ / DNxHD 36**: Avid-friendly proxies and mastering files.
-- **Rewrap (MOV/MKV)**: Instant container swaps without re-encoding.
-- **Fix VFR**: Enforces Constant Framerate to prevent audio drift.
-- **All-Intra (GOP-1)**: Every frame is a keyframe for instant seeking.
-- **Uncompress (Raw)**: Absolute pixel-perfect Raw video.
+### 2. 🎬 Production & Intermediates (`2-*`)
+*High-fidelity formats and repair tools for video editing.*
+- **ProRes Intermediate**: All profiles (Proxy, LT, Standard, HQ, 4444).
+- **DNxHD/HR Intermediate**: Avid-friendly proxies and mastering files.
+- **Fix VFR**: Enforces Constant Framerate to prevent audio drift in editors.
+- **H264 All-Intra Production**: Every frame is a keyframe for instant seeking.
+- **Uncompressed Raw Video**: Bit-for-bit pixel perfect output.
+- **Audio Internal Fix**: Specialized fix for PCM/WAV synchronization.
+- **Container Remux/Rewrap**: Instant container swaps (MOV/MKV/MP4) without re-encoding.
 
 ### 3. 🔊 Audio Operations (`3-*`)
 *Extract, normalize, and manipulate audio tracks.*
-- **Extract (MP3 V0, WAV, FLAC, AAC)**: One-click audio extraction.
-- **Normalize (EBU R128)**: Broadcast standard volume leveling.
-- **Boost Volume (+6dB)**: Quick fix for quiet clips.
-- **Channel Ops**: Mono-to-Stereo, Stereo-to-Mono.
-- **Extract Stems**: Splits 5.1 surround into 6 separate WAV files.
-- **Remove Audio**: Creates a silent video track.
+- **Audio Format Converter**: One-click extraction to MP3, WAV, FLAC, or AAC.
+- **Audio Fix (Normalize/Boost/Mute)**: EBU R128 normalization, +6dB boost, or total mute.
+- **Audio Channel Remix**: Unified Mono-to-Stereo and Stereo-to-Mono tools.
+- **Audio Stem Extraction (5.1)**: Splits surround sound into 6 individual mono WAV tracks.
 
 ### 4. 📐 Geometry & Time (`4-*`)
 *Resize, rotate, and manipulate video flow.*
-- **Scale (50%, 1080p, 720p)**: Fast resolution changes.
-- **Rotate (90° CW/CCW)**: Fix orientation issues.
-- **Flip Horizontal**: Mirror the image.
-- **Crop (16:9)**: Force widescreen aspect ratio.
-- **Stabilize**: Two-pass analysis to remove camera shake.
-- **Speed (2x / 0.5x)**: Simple time-lapse or slow-motion.
+- **Resolution Smart Scaler**: Presets for 720p, 1080p, 4K, or custom width scaling.
+- **Geometry Transform**: Rotate (90 CW/CCW, 180) and Mirror/Flip in one tool.
+- **VidStab Stabilization**: Two-pass software analysis to remove camera shake.
+- **Crop Aspect Ratios**: Center-crop for 9:16 (Vertical), 16:9, 4:3, or 2.39:1 (Cinema).
+- **Video Speed (Fast/Slow)**: Variable playback speed with auto-pitch correction.
 
-### 5. 🛠️ Utility & Batch (`5-*`)
-*Developer and workflow helper tools.*
-- **Thumbnail (50%)**: Grabs a JPG from the middle of the video.
-- **Image Sequence**: Exports every frame as a JPG.
-- **Images to Video**: Stitches a folder of JPGs into an MP4.
-- **Burn Subtitles**: Hardcodes `.srt` files into the video.
-- **Web Optimize**: FastStart metadata for instant streaming.
-- **Concat (Join)**: Stitches selected files together.
-- **Split by Scene**: Automatic cut detection.
-- **Metadata Cleaner**: Removes GPS and camera info.
-- **Trim (Start/End)**: Quick 10s snips.
+### 5. 🛠️ Utilities & Editing (`5-*`)
+*Workflow helpers and specialized editing tools.*
+- **Image Extract (Thumb/Sequence)**: Middle snapshots, full sequences, or interval thumbs.
+- **Image Sequence to Video**: Stitches a folder of JPGs into an MP4 video.
+- **Filters (Subtitles/Watermarks)**: Burn `.srt` files or overlay image watermarks.
+- **Concat/Join Videos**: Stitches selected files together into one.
+- **Metadata Privacy & Web Optimize**: Cleans personal info and prepares for web streaming.
+- **Scene Detection Split**: Automatic cutting based on visual scene changes.
+- **Editing Smart Trim**: Unified tool for trimming heads, tails, or specific ranges.
 
 ## 🧪 Testing Setup
 

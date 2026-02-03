@@ -26,18 +26,36 @@ setup_mock_zenity() {
     cat <<'EOF' > "$MOCK_BIN/zenity"
 #!/bin/bash
 # Headless Zenity Mock
-case "$*" in
+ARGS="$*"
+case "$ARGS" in
     *--scale*) echo "1280" ;;
     *--entry*) echo "9" ;;
-    *--list*|"Convert Format"*) echo "MP4" ;;
-    *--list*|"Extract Audio"*) echo "MP3" ;;
     *--file-selection*) echo "/tmp/scripts_test_data/test.srt" ;;
     *--progress*) 
         while read -r line; do
-            # Consume progress updates silently or echo to log
-            # echo "Progress: $line" >> /tmp/zenity_mock.log
             [[ "$line" == "#"* ]] && echo "$line"
         done
+        ;;
+    *--list*)
+        case "$ARGS" in
+            *"Target Platform"*|*"H.264 Presets"*) echo "Universal" ;;
+            *"Audio Adjustment"*) echo "Normalize" ;;
+            *"Speed Control"*) echo "2x Fast" ;;
+            *"Image Extraction"*) echo "Thumbnail" ;;
+            *"File Polish"*) echo "Strip Metadata" ;;
+            *"Target Size"*) echo "25" ;;
+            *"Target Format"*) echo "MP3" ;;
+            *"ProRes Profile"*) echo "Standard" ;;
+            *"Geometric Transform"*) echo "90 CW" ;;
+            *"Target Resolution"*) echo "1080p" ;;
+            *"Target Container"*) echo "MOV" ;;
+            *"Trim Operation"*) echo "Start" ;;
+            *"Channel Remix"*) echo "Mono to Stereo" ;;
+            *"Avid DNx Profile"*) echo "DNxHD 36" ;;
+            *"Target Aspect Ratio"*) echo "16:9" ;;
+            *"Overlay Selection"*) echo "Burn Subtitles" ;;
+            *) echo "" ;;
+        esac
         ;;
     *) exit 0 ;;
 esac
@@ -170,25 +188,25 @@ run_test() {
 generate_test_media
 
 echo -e "\n${YELLOW}=== Running Category: Web & Social ===${NC}"
-run_test "ffmpeg/1-01-H264-Universal.sh" "vcodec=h264,acodec=aac" "$TEST_DATA/src.mp4"
-run_test "ffmpeg/1-06-GIF-HighQual.sh" "" "$TEST_DATA/src.mp4"
-run_test "ffmpeg/1-11-Custom-Size-MB.sh" "vcodec=h264" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/1-01-H264-Presets-Social-Web.sh" "vcodec=h264,acodec=aac" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/1-05-GIF-Palette-Optimized.sh" "" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/1-03-H264-Compress-to-Target-Size.sh" "vcodec=h264" "$TEST_DATA/src.mp4"
 
 echo -e "\n${YELLOW}=== Running Category: Editing Pro ===${NC}"
-run_test "ffmpeg/2-01-ProRes-422.sh" "vcodec=prores" "$TEST_DATA/src.mp4"
-run_test "ffmpeg/2-06-Rewrap-MOV.sh" "vcodec=h264" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/2-01-ProRes-Intermediate-Transcoder.sh" "vcodec=prores" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/2-07-Container-Remux-Rewrap.sh" "vcodec=h264" "$TEST_DATA/src.mp4"
 
 echo -e "\n${YELLOW}=== Running Category: Audio Ops ===${NC}"
-run_test "ffmpeg/3-01-Extract-MP3-V0.sh" "no_video,acodec=mp3" "$TEST_DATA/src.mp4"
-run_test "ffmpeg/3-02-Extract-WAV.sh" "no_video,acodec=pcm_s16le" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/3-01-Audio-Format-Converter.sh" "no_video,acodec=mp3" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/3-02-Audio-Fix-Normalize-Boost-Mute.sh" "acodec=aac" "$TEST_DATA/src.mp4"
 
 echo -e "\n${YELLOW}=== Running Category: Geometry & Time ===${NC}"
-run_test "ffmpeg/4-01-Scale-50p.sh" "width=960,height=540" "$TEST_DATA/src.mp4"
-run_test "ffmpeg/4-04-Rotate-90-CW.sh" "width=1080,height=1920" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/4-01-Resolution-Smart-Scaler.sh" "width=1920,height=1080" "$TEST_DATA/src.mp4" # Mocked to 1080p
+run_test "ffmpeg/4-02-Geometry-Transform-Rotate-Flip.sh" "width=1080,height=1920" "$TEST_DATA/src.mp4"
 
 echo -e "\n${YELLOW}=== Running Category: Utils ===${NC}"
-run_test "ffmpeg/5-01-Extract-Thumb-50p.sh" "" "$TEST_DATA/src.mp4"
-run_test "ffmpeg/5-05-Remove-Metadata.sh" "" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/5-01-Image-Extract-Thumb-Sequence.sh" "" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/5-05-Metadata-Privacy-Web-Optimize.sh" "" "$TEST_DATA/src.mp4"
 
 # --- Summary ---
 echo -e "\n${YELLOW}=== Test Summary ===${NC}"
