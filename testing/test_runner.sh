@@ -188,25 +188,25 @@ run_test() {
 generate_test_media
 
 echo -e "\n${YELLOW}=== Running Category: Web & Social ===${NC}"
-run_test "ffmpeg/1-01-H264-Presets-Social-Web.sh" "vcodec=h264,acodec=aac" "$TEST_DATA/src.mp4"
-run_test "ffmpeg/1-05-GIF-Palette-Optimized.sh" "" "$TEST_DATA/src.mp4"
-run_test "ffmpeg/1-03-H264-Compress-to-Target-Size.sh" "vcodec=h264" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/1-01 🌐 H264-Social-Web-Presets.sh" "vcodec=h264,acodec=aac" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/1-05 🎞️ GIF-Palette-Optimized.sh" "" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/1-03 ⚖️ H264-Compress-to-Target-Size.sh" "vcodec=h264" "$TEST_DATA/src.mp4"
 
 echo -e "\n${YELLOW}=== Running Category: Editing Pro ===${NC}"
-run_test "ffmpeg/2-01-ProRes-Intermediate-Transcoder.sh" "vcodec=prores" "$TEST_DATA/src.mp4"
-run_test "ffmpeg/2-07-Container-Remux-Rewrap.sh" "vcodec=h264" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/2-01 🍎 ProRes-Intermediate-Transcoder.sh" "vcodec=prores" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/2-07 🎁 Container-Remux-Rewrap.sh" "vcodec=h264" "$TEST_DATA/src.mp4"
 
 echo -e "\n${YELLOW}=== Running Category: Audio Ops ===${NC}"
-run_test "ffmpeg/3-01-Audio-Format-Converter.sh" "no_video,acodec=mp3" "$TEST_DATA/src.mp4"
-run_test "ffmpeg/3-02-Audio-Fix-Normalize-Boost-Mute.sh" "acodec=aac" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/3-01 🔊 Audio-Format-Converter.sh" "no_video,acodec=mp3" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/3-02 🎚️ Audio-Normalize-Boost-Mute.sh" "acodec=aac" "$TEST_DATA/src.mp4"
 
 echo -e "\n${YELLOW}=== Running Category: Geometry & Time ===${NC}"
-run_test "ffmpeg/4-01-Resolution-Smart-Scaler.sh" "width=1920,height=1080" "$TEST_DATA/src.mp4" # Mocked to 1080p
-run_test "ffmpeg/4-02-Geometry-Transform-Rotate-Flip.sh" "width=1080,height=1920" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/4-01 📐 Resolution-Smart-Scaler.sh" "width=1920,height=1080" "$TEST_DATA/src.mp4" # Mocked to 1080p
+run_test "ffmpeg/4-02 🔄 Geometry-Rotate-Flip.sh" "width=1080,height=1920" "$TEST_DATA/src.mp4"
 
 echo -e "\n${YELLOW}=== Running Category: Utils ===${NC}"
-run_test "ffmpeg/5-01-Image-Extract-Thumb-Sequence.sh" "" "$TEST_DATA/src.mp4"
-run_test "ffmpeg/5-05-Metadata-Privacy-Web-Optimize.sh" "" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/5-01 🖼️ Image-Extract-Thumb-Sequence.sh" "" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/5-05 🧹 Metadata-Privacy-Web-Optimize.sh" "" "$TEST_DATA/src.mp4"
 
 # --- Summary ---
 echo -e "\n${YELLOW}=== Test Summary ===${NC}"

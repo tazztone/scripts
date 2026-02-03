@@ -77,46 +77,46 @@ The scripts are now organized into **Master Scripts** to reduce menu clutter. Ea
 
 ### 1. 🌐 Distribution & Web (`1-*`)
 *Optimized for sharing, compatibility, and platform limits.*
-- **H.264 Presets (Social & Web)**: Integrated presets for Twitter, WhatsApp, and Universal compatibility.
-- **H.265 HEVC Archive**: Ultra-efficient compression for long-term storage.
-- **H.264 Compress to Target Size**: Auto-calculates bitrate to hit exact MB limits (Discord/Email).
-- **VP9 WebM Alpha**: Web-friendly video with support for transparency.
-- **GIF Palette Optimized**: High-quality GIF generation using two-pass palette analysis.
+- **1-01 🌐 H264-Social-Web-Presets**: Integrated presets for Twitter, WhatsApp, and Universal compatibility.
+- **1-02 📦 H265-HEVC-Archive**: Ultra-efficient compression for long-term storage.
+- **1-03 ⚖️ H264-Compress-to-Target-Size**: Auto-calculates bitrate to hit exact MB limits (Discord/Email).
+- **1-04 👻 VP9-WebM-Alpha-Transparency**: Web-friendly video with support for transparency.
+- **1-05 🎞️ GIF-Palette-Optimized**: High-quality GIF generation using two-pass palette analysis.
 
 ### 2. 🎬 Production & Intermediates (`2-*`)
 *High-fidelity formats and repair tools for video editing.*
-- **ProRes Intermediate**: All profiles (Proxy, LT, Standard, HQ, 4444).
-- **DNxHD/HR Intermediate**: Avid-friendly proxies and mastering files.
-- **Fix VFR**: Enforces Constant Framerate to prevent audio drift in editors.
-- **H264 All-Intra Production**: Every frame is a keyframe for instant seeking.
-- **Uncompressed Raw Video**: Bit-for-bit pixel perfect output.
-- **Audio Internal Fix**: Specialized fix for PCM/WAV synchronization.
-- **Container Remux/Rewrap**: Instant container swaps (MOV/MKV/MP4) without re-encoding.
+- **2-01 🍎 ProRes-Intermediate-Transcoder**: All profiles (Proxy, LT, Standard, HQ, 4444).
+- **2-02 🎬 DNxHD/HR-Intermediate-Transcoder**: Avid-friendly proxies and mastering files.
+- **2-03 🔧 Fix-VFR-Constant-Framerate**: Enforces Constant Framerate to prevent audio drift in editors.
+- **2-04 🎥 H264-All-Intra-Production**: Every frame is a keyframe for instant seeking.
+- **2-05 💎 Uncompressed-Raw-Video**: Bit-for-bit pixel perfect output.
+- **2-06 🎙️ Audio-Internal-Fix-PCM-WAV**: Specialized fix for PCM/WAV synchronization.
+- **2-07 🎁 Container-Remux-Rewrap**: Instant container swaps (MOV/MKV/MP4) without re-encoding.
 
 ### 3. 🔊 Audio Operations (`3-*`)
 *Extract, normalize, and manipulate audio tracks.*
-- **Audio Format Converter**: One-click extraction to MP3, WAV, FLAC, or AAC.
-- **Audio Fix (Normalize/Boost/Mute)**: EBU R128 normalization, +6dB boost, or total mute.
-- **Audio Channel Remix**: Unified Mono-to-Stereo and Stereo-to-Mono tools.
-- **Audio Stem Extraction (5.1)**: Splits surround sound into 6 individual mono WAV tracks.
+- **3-01 🔊 Audio-Format-Converter**: One-click extraction to MP3, WAV, FLAC, or AAC.
+- **3-02 🎚️ Audio-Normalize-Boost-Mute**: EBU R128 normalization, +6dB boost, or total mute.
+- **3-03 🎧 Audio-Channel-Remix**: Unified Mono-to-Stereo and Stereo-to-Mono tools.
+- **3-04 🔪 Audio-Stem-Extraction-5.1**: Splits surround sound into 6 individual mono WAV tracks.
 
 ### 4. 📐 Geometry & Time (`4-*`)
 *Resize, rotate, and manipulate video flow.*
-- **Resolution Smart Scaler**: Presets for 720p, 1080p, 4K, or custom width scaling.
-- **Geometry Transform**: Rotate (90 CW/CCW, 180) and Mirror/Flip in one tool.
-- **VidStab Stabilization**: Two-pass software analysis to remove camera shake.
-- **Crop Aspect Ratios**: Center-crop for 9:16 (Vertical), 16:9, 4:3, or 2.39:1 (Cinema).
-- **Video Speed (Fast/Slow)**: Variable playback speed with auto-pitch correction.
+- **4-01 📐 Resolution-Smart-Scaler**: Presets for 720p, 1080p, 4K, or custom width scaling.
+- **4-02 🔄 Geometry-Rotate-Flip**: Rotate (90 CW/CCW, 180) and Mirror/Flip in one tool.
+- **4-03 🔭 VidStab-Video-Stabilization**: Two-pass software analysis to remove camera shake.
+- **4-04 ✂️ Crop-Aspect-Ratios**: Center-crop for 9:16 (Vertical), 16:9, 4:3, or 2.39:1 (Cinema).
+- **4-05 ⏩ Video-Speed-Fast-Slow-Motion**: Variable playback speed with auto-pitch correction.
 
 ### 5. 🛠️ Utilities & Editing (`5-*`)
 *Workflow helpers and specialized editing tools.*
-- **Image Extract (Thumb/Sequence)**: Middle snapshots, full sequences, or interval thumbs.
-- **Image Sequence to Video**: Stitches a folder of JPGs into an MP4 video.
-- **Filters (Subtitles/Watermarks)**: Burn `.srt` files or overlay image watermarks.
-- **Concat/Join Videos**: Stitches selected files together into one.
-- **Metadata Privacy & Web Optimize**: Cleans personal info and prepares for web streaming.
-- **Scene Detection Split**: Automatic cutting based on visual scene changes.
-- **Editing Smart Trim**: Unified tool for trimming heads, tails, or specific ranges.
+- **5-01 🖼️ Image-Extract-Thumb-Sequence**: Middle snapshots, full sequences, or interval thumbs.
+- **5-02 🎞️ Image-Sequence-to-Video**: Stitches a folder of JPGs into an MP4 video.
+- **5-03 ✒️ Filters-Subtitles-Watermarks**: Burn `.srt` files or overlay image watermarks.
+- **5-04 🔗 Concat-Join-Videos**: Stitches selected files together into one.
+- **5-05 🧹 Metadata-Privacy-Web-Optimize**: Cleans personal info and prepares for web streaming.
+- **5-06 🎬 Scene-Detection-Split**: Automatic cutting based on visual scene changes.
+- **5-07 🎥 Editing-Smart-Trim**: Unified tool for trimming heads, tails, or specific ranges.
 
 ## 🧪 Testing Setup
 
