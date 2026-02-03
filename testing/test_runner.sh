@@ -170,25 +170,25 @@ run_test() {
 generate_test_media
 
 echo -e "\n${YELLOW}=== Running Category: Web & Social ===${NC}"
-run_test "ffmpeg/1-Web_Social/01-H264-Universal.sh" "vcodec=h264,acodec=aac" "$TEST_DATA/src.mp4"
-run_test "ffmpeg/1-Web_Social/06-GIF-HighQual.sh" "" "$TEST_DATA/src.mp4"
-run_test "ffmpeg/1-Web_Social/11-Custom-Size-MB.sh" "vcodec=h264" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/1-01-H264-Universal.sh" "vcodec=h264,acodec=aac" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/1-06-GIF-HighQual.sh" "" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/1-11-Custom-Size-MB.sh" "vcodec=h264" "$TEST_DATA/src.mp4"
 
 echo -e "\n${YELLOW}=== Running Category: Editing Pro ===${NC}"
-run_test "ffmpeg/2-Editing_Pro/01-ProRes-422.sh" "vcodec=prores" "$TEST_DATA/src.mp4"
-run_test "ffmpeg/2-Editing_Pro/06-Rewrap-MOV.sh" "vcodec=h264" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/2-01-ProRes-422.sh" "vcodec=prores" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/2-06-Rewrap-MOV.sh" "vcodec=h264" "$TEST_DATA/src.mp4"
 
 echo -e "\n${YELLOW}=== Running Category: Audio Ops ===${NC}"
-run_test "ffmpeg/3-Audio_Ops/01-Extract-MP3-V0.sh" "no_video,acodec=mp3" "$TEST_DATA/src.mp4"
-run_test "ffmpeg/3-Audio_Ops/02-Extract-WAV.sh" "no_video,acodec=pcm_s16le" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/3-01-Extract-MP3-V0.sh" "no_video,acodec=mp3" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/3-02-Extract-WAV.sh" "no_video,acodec=pcm_s16le" "$TEST_DATA/src.mp4"
 
 echo -e "\n${YELLOW}=== Running Category: Geometry & Time ===${NC}"
-run_test "ffmpeg/4-Geometry_Time/01-Scale-50p.sh" "width=960,height=540" "$TEST_DATA/src.mp4"
-run_test "ffmpeg/4-Geometry_Time/04-Rotate-90-CW.sh" "width=1080,height=1920" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/4-01-Scale-50p.sh" "width=960,height=540" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/4-04-Rotate-90-CW.sh" "width=1080,height=1920" "$TEST_DATA/src.mp4"
 
 echo -e "\n${YELLOW}=== Running Category: Utils ===${NC}"
-run_test "ffmpeg/5-Utils/01-Extract-Thumb-50p.sh" "" "$TEST_DATA/src.mp4"
-run_test "ffmpeg/5-Utils/05-Remove-Metadata.sh" "" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/5-01-Extract-Thumb-50p.sh" "" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/5-05-Remove-Metadata.sh" "" "$TEST_DATA/src.mp4"
 
 # --- Summary ---
 echo -e "\n${YELLOW}=== Test Summary ===${NC}"

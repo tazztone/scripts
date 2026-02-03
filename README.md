@@ -30,9 +30,18 @@ sudo apt install ffmpeg zenity bc
 1.  **Clone this repository** (or download the scripts):
     ```bash
     git clone https://github.com/YOUR_USERNAME/nautilus-ffmpeg-scripts.git
+    cd nautilus-ffmpeg-scripts
     ```
 
-2.  **Move scripts to the Nautilus folder:**
+2.  **Run the Installer (Recommended):**
+    ```bash
+    ./install.sh
+    ```
+
+3.  **Manual Installation (Alternative):**
+    If you prefer to copy files manually:
+
+   1.  **Move scripts to the Nautilus folder:**
     Depending on your Ubuntu version, the folder is in one of two places:
     *   **Ubuntu 22.04 / 24.04+ (Modern):** `~/.local/share/nautilus/scripts/`
     *   *Older Ubuntu:* `~/.gnome2/nautilus-scripts/`
@@ -46,7 +55,7 @@ sudo apt install ffmpeg zenity bc
     cp -r ffmpeg/* ~/.local/share/nautilus/scripts/
     ```
 
-3.  **Make them executable:**
+   2.  **Make them executable:**
     Linux requires scripts to have permission to run.
     ```bash
     chmod +x ~/.local/share/nautilus/scripts/*/*.sh
@@ -58,15 +67,15 @@ sudo apt install ffmpeg zenity bc
 2.  Select one or more video/audio files.
 3.  **Right-Click** the selection.
 4.  Navigate to **Scripts** in the context menu.
-5.  Choose the tool you want to run (e.g., `Smart_Compress_9MB.sh`).
+5.  Choose the tool you want to run (e.g., `1-11-Custom-Size-MB.sh`).
 
 *A popup window will appear showing the progress, and the new file will be created in the same folder as the original.*
 
 ## 📂 Included Scripts
 
-The scripts are organized into subdirectories to keep the Nautilus context menu clean. Selecting one or more files and navigating to **Scripts > ffmpeg > [Category]** will reveal the tools.
+The scripts are organized in a flat structure inside the `ffmpeg` folder. They use a smart naming scheme (`Category-Number-Name`) to keep them sorted and easy to access without clicking through multiple submenus.
 
-### 1. 🌐 Web & Social Media (`1-Web_Social`)
+### 1. 🌐 Web & Social Media (`1-*`)
 *Optimized for sharing, compatibility, and platform limits.*
 - **H.264 Universal**: Best compatibility (Plays anywhere).
 - **H.265 Archive**: High efficiency (Half size of H.264).
@@ -78,7 +87,7 @@ The scripts are organized into subdirectories to keep the Nautilus context menu 
 - **WhatsApp/Instagram/Twitter**: Presets for specific platform requirements.
 - **Email Tiny (<10MB)**: Aggressive compression for attachments.
 
-### 2. 🎬 Editing Intermediates (`2-Editing_Pro`)
+### 2. 🎬 Editing Intermediates (`2-*`)
 *High-quality formats for smooth performance in video editors.*
 - **ProRes (422, Proxy, 4444)**: Industry standard intermediates.
 - **DNxHR SQ / DNxHD 36**: Avid-friendly proxies and mastering files.
@@ -87,7 +96,7 @@ The scripts are organized into subdirectories to keep the Nautilus context menu 
 - **All-Intra (GOP-1)**: Every frame is a keyframe for instant seeking.
 - **Uncompress (Raw)**: Absolute pixel-perfect Raw video.
 
-### 3. 🔊 Audio Operations (`3-Audio_Ops`)
+### 3. 🔊 Audio Operations (`3-*`)
 *Extract, normalize, and manipulate audio tracks.*
 - **Extract (MP3 V0, WAV, FLAC, AAC)**: One-click audio extraction.
 - **Normalize (EBU R128)**: Broadcast standard volume leveling.
@@ -96,7 +105,7 @@ The scripts are organized into subdirectories to keep the Nautilus context menu 
 - **Extract Stems**: Splits 5.1 surround into 6 separate WAV files.
 - **Remove Audio**: Creates a silent video track.
 
-### 4. 📐 Geometry & Time (`4-Geometry_Time`)
+### 4. 📐 Geometry & Time (`4-*`)
 *Resize, rotate, and manipulate video flow.*
 - **Scale (50%, 1080p, 720p)**: Fast resolution changes.
 - **Rotate (90° CW/CCW)**: Fix orientation issues.
@@ -105,7 +114,7 @@ The scripts are organized into subdirectories to keep the Nautilus context menu 
 - **Stabilize**: Two-pass analysis to remove camera shake.
 - **Speed (2x / 0.5x)**: Simple time-lapse or slow-motion.
 
-### 5. 🛠️ Utility & Batch (`5-Utils`)
+### 5. 🛠️ Utility & Batch (`5-*`)
 *Developer and workflow helper tools.*
 - **Thumbnail (50%)**: Grabs a JPG from the middle of the video.
 - **Image Sequence**: Exports every frame as a JPG.
