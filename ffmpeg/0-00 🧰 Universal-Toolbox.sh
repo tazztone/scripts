@@ -7,6 +7,32 @@ get_duration() {
     ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$1" | cut -d. -f1
 }
 
+# --- GPU PROBE (Run once at startup) ---
+GPU_CACHE="/tmp/scripts-sh-gpu-cache"
+probe_gpu() {
+    # Skip if fresh cache exists (<24h)
+    if [ -f "$GPU_CACHE" ] && [ $(( $(date +%s) - $(stat -c %Y "$GPU_CACHE") )) -lt 86400 ]; then
+        return 0
+    fi
+    echo "" > "$GPU_CACHE"
+    
+    # 1. NVENC Probe
+    if ffmpeg -v error -f lavfi -i color=black:s=1280x720 -vframes 1 -an -c:v h264_nvenc -f null - 2>/dev/null; then
+        echo "nvenc" >> "$GPU_CACHE"
+    fi
+    
+    # 2. QSV Probe
+    if ffmpeg -v error -f lavfi -i color=black:s=1280x720 -vframes 1 -an -c:v h264_qsv -f null - 2>/dev/null; then
+        echo "qsv" >> "$GPU_CACHE"
+    fi
+    
+    # 3. VAAPI Probe (Needs valid device)
+    if ffmpeg -v error -f lavfi -i color=black:s=1280x720 -vframes 1 -an -c:v h264_vaapi -f null - 2>/dev/null; then
+        echo "vaapi" >> "$GPU_CACHE"
+    fi
+}
+probe_gpu &
+
 # --- CONFIG & PRESETS ---
 CONFIG_DIR="$HOME/.config/scripts-sh"
 PRESET_FILE="$CONFIG_DIR/presets.conf"
@@ -91,11 +117,6 @@ while true; do
             ZENITY_INTENTS+=(FALSE "📝 Subtitles" "Burn-in or Mux sidecar .srt")
         fi
         
-        # Conditional Hardware (Always show if GPU detected)
-        GPU_CACHE="/tmp/scripts-sh-gpu-cache"
-        if [ -s "$GPU_CACHE" ]; then
-            ZENITY_INTENTS+=(FALSE "🏎️ Hardware Acceleration" "Optimize for your GPU (Nvidia/Intel/AMD)")
-        fi
 
         INTENTS=$(zenity "${ZENITY_INTENTS[@]}" --separator="|")
         # --- STEP 3: UNIFIED CONFIG & SAVE ---
@@ -109,19 +130,19 @@ while true; do
         # 1. SPEED (Index: 0, 1)
         VAL_ispd=" (Inactive)"; VAL_icspd=""
         [[ "$INTENTS" == *"Speed"* ]] && VAL_ispd="1x (Normal)"
-        ZENITY_FORMS+=( "--add-combo=⏩ Speed" "--combo-values=$VAL_ispd|2x (Fast)|4x (Super Fast)|0.5x (Slow)" )
+        ZENITY_FORMS+=( "--add-combo=⏩ Speed" "--combo-values=$VAL_ispd|2x (Fast)|4x (Super Fast)|0.5x (Slow)|0.25x (Very Slow)" )
         ZENITY_FORMS+=( "--add-entry=✍️ Custom Speed" )
 
-        # 2. SCALE (Index: 2, 3)
+        # 2. SCALE (Index: 2, 3) - Custom Width overrides combo
         VAL_ires=" (Inactive)"; VAL_icw=""
         [[ "$INTENTS" == *"Scale"* ]] && VAL_ires="1080p"
-        ZENITY_FORMS+=( "--add-combo=📐 Resolution" "--combo-values=$VAL_ires|720p|4k|480p|50%|Custom" )
-        ZENITY_FORMS+=( "--add-entry=✍️ Custom Width" )
+        ZENITY_FORMS+=( "--add-combo=📐 Resolution" "--combo-values=$VAL_ires|1440p|720p|4k|480p|360p|50%" )
+        ZENITY_FORMS+=( "--add-entry=✍️ Custom Width (overrides)" )
 
         # 3. GEOMETRY & TIME (Index: 4, 5, 6, 7)
         VAL_icrp=" (Inactive)"
         [[ "$INTENTS" == *"Crop"* ]] && VAL_icrp="16:9 (Landscape)"
-        ZENITY_FORMS+=( "--add-combo=🖼️ Crop/Aspect" "--combo-values=$VAL_icrp|9:16 (Vertical)|Square 1:1" )
+        ZENITY_FORMS+=( "--add-combo=🖼️ Crop/Aspect" "--combo-values=$VAL_icrp|9:16 (Vertical)|Square 1:1|4:3 (Classic)|21:9 (Cinema)" )
         
         VAL_ior=" (Inactive)"
         [[ "$INTENTS" == *"Rotate"* ]] && VAL_ior="No Change"
@@ -132,22 +153,25 @@ while true; do
         # 4. AUDIO & SUBS (Index: 8, 9)
         VAL_iaud=" (Inactive)"
         [[ "$INTENTS" == *"Audio"* ]] && VAL_iaud="No Change"
-        ZENITY_FORMS+=( "--add-combo=🔊 Audio Action" "--combo-values=$VAL_iaud|Mute Audio|Normalize (R128)|Boost Volume (+6dB)|Downmix to Stereo|Extract MP3|Extract WAV" )
+        ZENITY_FORMS+=( "--add-combo=🔊 Audio Action" "--combo-values=$VAL_iaud|Remove Audio Track|Normalize (R128)|Boost Volume (+6dB)|Downmix to Stereo|Recode to PCM (for Linux)|Extract MP3|Extract WAV" )
         
         VAL_isub=" (Inactive)"
         [[ "$INTENTS" == *"Subtitles"* ]] && VAL_isub="Burn-in"
-        ZENITY_FORMS+=( "--add-combo=📝 Subtitles" "--combo-values=$VAL_iaud|Burn-in|Mux (Softsub)" )
+        ZENITY_FORMS+=( "--add-combo=📝 Subtitles" "--combo-values=$VAL_isub|Burn-in|Mux (Softsub)" )
 
-        # 5. EXPORT (Always active) (Index: 10, 11, 12, 13)
-        ZENITY_FORMS+=( "--add-combo=💎 Quality Strategy" "--combo-values=Medium Default|High (Lossless)|Low (Small)|Fit to Target MB..." )
-        ZENITY_FORMS+=( "--add-entry=💾 Target Size (MB)" )
-        ZENITY_FORMS+=( "--add-combo=📦 Output Format" "--combo-values=Auto/MP4|H.265|WebM|ProRes|GIF" )
+        # 5. EXPORT (Always active) (Index: 10, 11, 12, 13) - Target Size overrides Quality
+        ZENITY_FORMS+=( "--add-combo=💎 Quality Strategy" "--combo-values=Medium (CRF 23)|High (CRF 18)|Low (CRF 28)|Lossless (CRF 0)" )
+        ZENITY_FORMS+=( "--add-entry=💾 Target Size MB (overrides)" )
+        ZENITY_FORMS+=( "--add-combo=📦 Output Format" "--combo-values=Auto/MP4|H.265|AV1|WebM|ProRes|MOV|MKV|GIF" )
         
-        GPU_OPTS="None (CPU Only)"
-        grep -q "nvenc" "$GPU_CACHE" && GPU_OPTS="${GPU_OPTS}|Use NVENC (Nvidia)"
-        grep -q "qsv" "$GPU_CACHE" && GPU_OPTS="${GPU_OPTS}|Use QSV (Intel)"
-        grep -q "vaapi" "$GPU_CACHE" && GPU_OPTS="${GPU_OPTS}|Use VAAPI (AMD/Intel)"
-        ZENITY_FORMS+=( "--add-combo=🏎️ Hardware" "--combo-values=$GPU_OPTS" )
+        HW_OPTS=""
+        if [ -s "$GPU_CACHE" ]; then
+            grep -q "nvenc" "$GPU_CACHE" && HW_OPTS="${HW_OPTS}Use NVENC (Nvidia)|"
+            grep -q "qsv" "$GPU_CACHE" && HW_OPTS="${HW_OPTS}Use QSV (Intel)|"
+            grep -q "vaapi" "$GPU_CACHE" && HW_OPTS="${HW_OPTS}Use VAAPI (AMD/Intel)|"
+        fi
+        HW_OPTS="${HW_OPTS}None (CPU Only)"
+        ZENITY_FORMS+=( "--add-combo=🏎️ Hardware" "--combo-values=$HW_OPTS" )
 
         CONFIG_RESULT=$(zenity "${ZENITY_FORMS[@]}")
         [ -z "$CONFIG_RESULT" ] && continue # Back to Launchpad
@@ -167,14 +191,14 @@ while true; do
             [ -n "$CUST_spd" ] && CHOICES+="Speed: ${CUST_spd}x|" || CHOICES+="Speed: ${PICK_spd}|"
         fi
 
-        # 2. Scale
+        # 2. Scale - Custom Width OVERRIDES Resolution combo
         PICK_res="${VALS[2]}"; CUST_W="${VALS[3]}"
-        if [[ "$PICK_res" != *"Inactive"* ]]; then
-            if [[ "$PICK_res" == "Custom" && -n "$CUST_W" ]]; then
-                W_VAL="$CUST_W"; CHOICES+="Custom Scale Width|"; USER_W="$W_VAL"
-            else
-                CHOICES+="Scale: ${PICK_res}|"
-            fi
+        if [ -n "$CUST_W" ]; then
+            # Persist custom value in choice string for reload
+            CHOICES+="Custom Scale Width:$CUST_W|"
+            USER_W="$CUST_W"
+        elif [[ "$PICK_res" != *"Inactive"* ]]; then
+            CHOICES+="Scale: ${PICK_res}|"
         fi
 
         # 4. Crop
@@ -201,14 +225,19 @@ while true; do
         # EXPORT (Fixed Indices)
         Q_STRAT="${VALS[10]}"; T_MB="${VALS[11]}"; O_FMT="${VALS[12]}"; H_ACCEL="${VALS[13]}"
 
-        case "$Q_STRAT" in
-            *"High"*) CHOICES+="Quality: High|" ;;
-            *"Low"*) CHOICES+="Quality: Low|" ;;
-            *"Medium"*) CHOICES+="Quality: Medium|" ;;
-            *"Fit to Target"*) CHOICES+="Target Size|" ;;
-        esac
+        # Target Size entry OVERRIDES Quality combo
+        if [ -n "$T_MB" ]; then
+            CHOICES+="Target Size:$T_MB|"
+            USER_TARGET_MB="$T_MB"
+        else
+            case "$Q_STRAT" in
+                *"High"*|*"CRF 18"*) CHOICES+="Quality: High|" ;;
+                *"Low"*|*"CRF 28"*) CHOICES+="Quality: Low|" ;;
+                *"Lossless"*|*"CRF 0"*) CHOICES+="Quality: Lossless|" ;;
+                *) CHOICES+="Quality: Medium|" ;;
+            esac
+        fi
         
-        [ -n "$T_MB" ] && USER_TARGET_MB="$T_MB"
         [[ "$O_FMT" != "Auto/MP4" ]] && CHOICES+="Output: $O_FMT|"
 
         if [[ "$H_ACCEL" == *"NVENC"* ]]; then CHOICES+="🏎️ Use NVENC (Nvidia)|"; fi
@@ -278,6 +307,12 @@ fi
 
 # --- TARGET SIZE PROMPT ---
 TARGET_MB="${USER_TARGET_MB}"
+# Extract embedded Target Size if present (format: "Target Size:25")
+if [[ "$CHOICES" =~ Target\ Size:([0-9]+) ]]; then
+    TARGET_MB="${BASH_REMATCH[1]}"
+    USER_TARGET_MB="$TARGET_MB" # Sync for consistency
+fi
+
 if [[ "$CHOICES" == *"Target Size"* ]]; then
     if [ -z "$TARGET_MB" ]; then
         TARGET_MB=$(zenity --entry --title="Target Size" --text="Total file size (MB):" --entry-text="25")
@@ -303,6 +338,7 @@ GPU_TYPE=""
 CRF_CPU=23; CQ_NV=23; GQ_QSV=25; QP_VA=25
 if [[ "$CHOICES" == *"Quality: High"* ]]; then CRF_CPU=18; CQ_NV=19; GQ_QSV=20; QP_VA=20; TAG="${TAG}_high"; fi
 if [[ "$CHOICES" == *"Quality: Low"* ]]; then CRF_CPU=28; CQ_NV=28; GQ_QSV=30; QP_VA=30; TAG="${TAG}_low"; fi
+if [[ "$CHOICES" == *"Quality: Lossless"* ]]; then CRF_CPU=0; CQ_NV=0; GQ_QSV=1; QP_VA=1; TAG="${TAG}_lossless"; fi
 
 # Helper to add video filter safely
 add_vf() {
@@ -361,13 +397,17 @@ fi
 if [[ "$CHOICES" == *"Crop: 9:16"* ]]; then add_vf "crop=ih*(9/16):ih:(iw-ow)/2:0"; TAG="${TAG}_9x16"; fi
 if [[ "$CHOICES" == *"Crop: 16:9"* ]]; then add_vf "crop=iw:iw*9/16:0:(ih-ow)/2"; TAG="${TAG}_16x9"; fi
 if [[ "$CHOICES" == *"Crop: Square"* ]]; then add_vf "crop=min(iw\,ih):min(iw\,ih):(iw-ow)/2:(ih-oh)/2"; TAG="${TAG}_sq"; fi
+if [[ "$CHOICES" == *"Crop: 4:3"* ]]; then add_vf "crop=ih*(4/3):ih:(iw-ow)/2:0"; TAG="${TAG}_4x3"; fi
+if [[ "$CHOICES" == *"Crop: 21:9"* ]]; then add_vf "crop=iw:iw*(9/21):0:(ih-oh)/2"; TAG="${TAG}_21x9"; fi
 
 # --- SCALE ---
 SCALE_W=""
-if [[ "$CHOICES" == *"Scale: 4K"* ]]; then SCALE_W="3840"; TAG="${TAG}_4k"; fi
+if [[ "$CHOICES" == *"Scale: 4K"* ]] || [[ "$CHOICES" == *"Scale: 4k"* ]]; then SCALE_W="3840"; TAG="${TAG}_4k"; fi
+if [[ "$CHOICES" == *"Scale: 1440p"* ]]; then SCALE_W="2560"; TAG="${TAG}_1440p"; fi
 if [[ "$CHOICES" == *"Scale: 1080p"* ]]; then SCALE_W="1920"; TAG="${TAG}_1080p"; fi
 if [[ "$CHOICES" == *"Scale: 720p"* ]]; then SCALE_W="1280"; TAG="${TAG}_720p"; fi
 if [[ "$CHOICES" == *"Scale: 480p"* ]]; then SCALE_W="854"; TAG="${TAG}_480p"; fi
+if [[ "$CHOICES" == *"Scale: 360p"* ]]; then SCALE_W="640"; TAG="${TAG}_360p"; fi
 if [[ "$CHOICES" == *"Scale: 50%"* ]]; then SCALE_W="iw*0.5"; TAG="${TAG}_half"; fi
 if [[ "$CHOICES" == *"Custom Scale Width"* ]]; then
     W="${USER_W}"
@@ -375,6 +415,11 @@ if [[ "$CHOICES" == *"Custom Scale Width"* ]]; then
         W=$(zenity --entry --title="Scale Width" --text="Target Width (px):" --entry-text="1280")
     fi
     if [ -n "$W" ]; then SCALE_W="$W"; TAG="${TAG}_${W}w"; fi
+fi
+# Extract embedded width if present (format: "Custom Scale Width:1280")
+if [[ "$CHOICES" =~ Custom\ Scale\ Width:([0-9]+) ]]; then
+    SCALE_W="${BASH_REMATCH[1]}"
+    TAG="${TAG}_${SCALE_W}w"
 fi
 
 if [ -n "$SCALE_W" ]; then
@@ -388,14 +433,15 @@ if [[ "$CHOICES" == *"Flip: Horizontal"* ]]; then add_vf "hflip"; TAG="${TAG}_fl
 if [[ "$CHOICES" == *"Flip: Vertical"* ]]; then add_vf "vflip"; TAG="${TAG}_flipV"; fi
 
 # --- AUDIO ---
-MUTE_AUDIO=false
-if [[ "$CHOICES" == *"Mute Audio"* ]]; then 
-    MUTE_AUDIO=true
-    TAG="${TAG}_mute"
+REMOVE_AUDIO=false
+if [[ "$CHOICES" == *"Remove Audio Track"* ]]; then 
+    REMOVE_AUDIO=true
+    TAG="${TAG}_noaudio"
 else
     if [[ "$CHOICES" == *"Downmix to Stereo"* ]]; then ACODEC_OPTS="$ACODEC_OPTS -ac 2"; TAG="${TAG}_stereo"; fi
     if [[ "$CHOICES" == *"Normalize"* ]]; then add_af "loudnorm=I=-23:LRA=7:TP=-1.5"; TAG="${TAG}_norm"; fi
     if [[ "$CHOICES" == *"Boost Volume"* ]]; then add_af "volume=6dB"; TAG="${TAG}_boost"; fi
+    if [[ "$CHOICES" == *"Recode to PCM"* ]]; then ACODEC_OPTS="-c:a pcm_s16le"; TAG="${TAG}_pcm"; fi
 fi
 
 # --- GPU LOGIC ---
@@ -442,6 +488,23 @@ elif [[ "$CHOICES" == *"Extract Audio (WAV)"* ]]; then
 elif [[ "$CHOICES" == *"Output: GIF"* ]]; then
     IS_gif=true
     EXT="gif"
+elif [[ "$CHOICES" == *"Output: AV1"* ]]; then
+    VCODEC_OPTS="-c:v libaom-av1 -crf $CRF_CPU -cpu-used 4 -row-mt 1"
+    ACODEC_OPTS="-c:a libopus"
+    EXT="mkv"
+    TAG="${TAG}_av1"
+elif [[ "$CHOICES" == *"Output: MOV"* ]]; then
+    VCODEC_OPTS="-c:v copy"
+    ACODEC_OPTS="-c:a copy"
+    EXT="mov"
+    GLOBAL_OPTS="-movflags +faststart"
+    TAG="${TAG}_mov"
+elif [[ "$CHOICES" == *"Output: MKV"* ]]; then
+    VCODEC_OPTS="-c:v copy"
+    ACODEC_OPTS="-c:a copy"
+    EXT="mkv"
+    GLOBAL_OPTS=""
+    TAG="${TAG}_mkv"
 else
     # Default H.264
     if [ "$USE_GPU" = true ]; then
@@ -466,10 +529,7 @@ if [[ "$CHOICES" == *"Clean Metadata"* ]]; then
 fi
 
 # --- SMART FILENAMING ---
-if [ "$FILTER_COUNT" -ge 3 ]; then
-    TAG="_UniversalEdit"
-fi
-if [ -z "$TAG" ]; then TAG="_edit"; fi
+# Handled inside the loop now
 
 # --- EXECUTION ---
 LOG_FILE="/tmp/ffmpeg_universal_last_run.log"
@@ -523,7 +583,7 @@ for f in "$@"; do
     
     # Handle Audio flags correctly
     CURRENT_ACORE=""
-    if [ "$MUTE_AUDIO" = true ]; then
+    if [ "$REMOVE_AUDIO" = true ]; then
         CURRENT_ACORE="-an"
     else
         if [ -n "$AF_CHAIN" ] && [ "$IS_audio_only" = false ]; then 
@@ -533,7 +593,27 @@ for f in "$@"; do
         fi
     fi
     
-    OUT_FILE="${f%.*}${FILE_TAG}.${EXT}"
+    # --- SMART FILENAMING ---
+    # Construct tag from active filters
+    FILE_TAG=""
+    [ -n "$SPEED_VAL" ] && FILE_TAG="${FILE_TAG}_${SPEED_VAL}x"
+    [ -n "$SCALE_W" ] && FILE_TAG="${FILE_TAG}_${SCALE_W}p"
+    [ "$REMOVE_AUDIO" = true ] && FILE_TAG="${FILE_TAG}_noaudio"
+    [ -n "$GPU_TYPE" ] && FILE_TAG="${FILE_TAG}_${GPU_TYPE}"
+    
+    # Fallback if empty or generic
+    if [ -z "$FILE_TAG" ] || [ "$FILE_TAG" == "_" ]; then FILE_TAG="_edit"; fi
+    
+    BASE="${f%.*}"
+    OUT_FILE="${BASE}${FILE_TAG}.${EXT}"
+    
+    # --- AUTO-RENAME PROTECTION ---
+    # Don't overwrite. Increment _v1, _v2 etc.
+    CTR=1
+    while [ -f "$OUT_FILE" ]; do
+        OUT_FILE="${BASE}${FILE_TAG}_v${CTR}.${EXT}"
+        ((CTR++))
+    done
     
     echo "# Processing $f..."
     
@@ -546,7 +626,7 @@ for f in "$@"; do
         
         ABR=192
         if [[ "$ACODEC_OPTS" == *"-b:a 128k"* ]]; then ABR=128; fi
-        if [ "$MUTE_AUDIO" = true ]; then ABR=0; fi
+        if [ "$REMOVE_AUDIO" = true ]; then ABR=0; fi
         
         TOTAL_BR=$(echo "($TARGET_MB * 8192) / $DUR" | bc)
         V_BR=$(echo "$TOTAL_BR - $ABR" | bc)

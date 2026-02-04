@@ -284,10 +284,10 @@ echo "Testing CLI Preset..."
     cd "$TEST_DATA"
     bash "$HOME/_coding/scripts-sh/ffmpeg/0-00 🧰 Universal-Toolbox.sh" --preset "TestPreset" "src.mp4"
 ) > /dev/null 2>&1
-# Check if output exists (Universal-Toolbox now uses a standard _UniversalEdit tag unless filters are present)
-if [ -f "$TEST_DATA/src_UniversalEdit.mp4" ]; then
+# Check if output exists (Universal-Toolbox now uses Smart Tagging e.g. _2x_1280p)
+if [ -f "$TEST_DATA/src_2x_1280p.mp4" ]; then
     log_pass "CLI Preset loaded successfully"
-    rm "$TEST_DATA/src_UniversalEdit.mp4"
+    rm "$TEST_DATA/src_2x_1280p.mp4"
 else
     log_fail "CLI Preset failed to generate output"
 fi

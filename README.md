@@ -77,13 +77,16 @@ The scripts are now organized into **Master Scripts** to reduce menu clutter. Ea
 
 ### 0. 🧰 Universal Toolbox (`0-*`)
 *The Swiss Army Knife for FFmpeg. A powerful, workstation-grade tool for all operations.*
-- **0-00 🧰 Universal-Toolbox v2.0**: The ultimate one-stop shop for video editing.
-    - **🚀 Unified Launchpad**: Start from a **Custom Edit**, pick from your **⭐ Favorites**, or re-run a command from your **🕒 Recent History**.
-    - **⭐ "Star" as Favorite**: Any custom or history edit can be starred and named to create a permanent one-click preset.
-    - **🕒 Automated History**: Your last 15 unique edits are automatically saved—never repeat manual setup again.
-    - **🏎️ Parallel GPU Probing**: Auto-detects Nvidia (NVENC), Intel (QSV), and AMD (VAAPI) in the background with zero-delay caching.
-    - **📝 Smart Subtitles**: Auto-detects `.srt` files and offers **Burn-in** (styled) or **Mux** (selectable) options.
-    - **🔊 Production Audio**: Integrated **Stereo Downmixing**, EBU R128 Normalization, and +6dB Boost.
+- **0-00 🧰 Universal-Toolbox v3.5**: The ultimate one-stop shop for video editing.
+    - **🧙‍♂️ Guided 3-Step Wizard**: 
+        1. **Launchpad**: Pick a starting point (Custom, Starred, or History).
+        2. **Intent**: Select categories (Speed, Scale, Crop, etc.) to keep the UI clean.
+        3. **Dashboard**: Configure everything in a single, unified window.
+    - **🏎️ Smart Hardware Auto-Probe**: Performs a silent 1-frame dummy encode at startup to detect and **automatically enable** NVENC (Nvidia), QSV (Intel), or VAAPI (AMD), hiding broken options.
+    - **🛡️ Auto-Rename Safety**: Never overwrites files. Automatically increments names (`_v1`, `_v2`) if the output target already exists.
+    - **🏷️ Descriptive Smart Tagging**: Files are named based on your edits (e.g. `video_2x_1080p_noaudio.mp4`) instead of generic tags.
+    - **💾 Persistent Custom Presets**: Saved favorites now remember your manual entries (e.g. Custom Width, Target Size) and reload them instantly.
+    - **📝 Smart Subtitles**: Auto-detects `.srt` files and offers styled **Burn-in** or **Mux** options.
 
 ### 1. 🌐 Distribution & Web (`1-*`)
 *Optimized for sharing, compatibility, and platform limits.*
