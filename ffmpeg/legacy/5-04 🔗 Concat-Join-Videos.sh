@@ -18,7 +18,8 @@ done
 
 echo "# Joining files..."
 # -safe 0 allows absolute paths (though we use relative now)
-ffmpeg -y -f concat -safe 0 -i "$LISTFILE" -c copy "joined_output.mp4"
+# -nostdin prevents ffmpeg from hanging waiting for input in background scripts
+ffmpeg -y -nostdin -f concat -safe 0 -i "$LISTFILE" -c copy "joined_output.mp4"
 
 rm -f "$LISTFILE"
 ) | Z_PROGRESS "Joining Videos..."

@@ -154,6 +154,22 @@ for f in ffmpeg/*/*.sh; do bash -n "$f" && echo "OK: $f"; done
 
 ---
 
+## 🛠️ Development & Testing
+
+This project includes a robust, headless testing suite to ensure all FFmpeg scripts work across different environments. Developers and AI agents should refer to the [Testing Guide](./testing/README.md) for details on:
+
+- Running the automated test runner.
+- Mocking the Zenity GUI.
+- Guidelines for adding new features without breaking existing tests.
+
+## 🤝 Contribution
+
+Contributions are welcome! Please ensure you run `bash testing/test_runner.sh` before submitting a pull request to verify that all core functionality remains intact.
+
+## 📜 License
+
+MIT License. Feel free to use and modify for your own workflow.
+
 ## 🤝 Contributing
 
 Feel free to submit Pull Requests with your own useful FFmpeg one-liners!
