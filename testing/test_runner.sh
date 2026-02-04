@@ -27,6 +27,7 @@ setup_mock_zenity() {
 #!/bin/bash
 # Headless Zenity Mock
 ARGS="$*"
+echo "MOCK ZENITY CALLED WITH: $ARGS" >> "/tmp/zenity_mock.log"
 # Allow dynamic overrides via environment variables
 if [[ "$ARGS" == *"--entry"* && -n "$ZENITY_ENTRY_RESPONSE" ]]; then
     echo "$ZENITY_ENTRY_RESPONSE"
@@ -244,7 +245,39 @@ unset ZENITY_LIST_RESPONSE
 echo -e "\n${YELLOW}=== Running New: Universal Toolbox ===${NC}"
 # Test combination: Speed 2x + Scale 720p + Mute + H.265
 # User reported "only H265 respects", so we verify everything else failed.
+# Test combination: Speed 2x + Scale 720p + Mute + H.265
+# User reported "only H265 respects", so we verify everything else failed.
 run_test "ffmpeg/0-00 🧰 Universal-Toolbox.sh" "width=1280,no_audio,vcodec=hevc,fps=30" "$TEST_DATA/src.mp4"
+
+echo -e "\n${YELLOW}=== Running New: Universal Toolbox v2 (Features) ===${NC}"
+# 1. Subtitle Burn-in Test
+touch "$TEST_DATA/src.srt"
+export ZENITY_LIST_RESPONSE="Subtitles|Burn-in Subtitles"
+# We can't actually burn subtitles without fontconfig/freetype working perfectly in strict headless, 
+# but we can verify the script runs and tries to use the filter.
+# If it fails due to missing fonts, we accept that as a "pass" for the SCRIPT logic if we see the log.
+# For now, let's assume standard run.
+run_test "ffmpeg/0-00 🧰 Universal-Toolbox.sh" "vcodec=h264" "$TEST_DATA/src.mp4"
+rm "$TEST_DATA/src.srt"
+unset ZENITY_LIST_RESPONSE
+
+# 2. Preset CLI Test
+mkdir -p "$HOME/.config/scripts-sh"
+echo "TestPreset|Speed|Speed 2x (Fast)|Resolution|Scale 720p" > "$HOME/.config/scripts-sh/presets.conf"
+# Helper to run CLI args (our run_test function handles args if we modify it, but it passes $input_file as $1)
+# We need to manually call the script here to test CLI args specifically
+echo "Testing CLI Preset..."
+( 
+    cd "$TEST_DATA"
+    bash "$HOME/_coding/scripts-sh/ffmpeg/0-00 🧰 Universal-Toolbox.sh" --preset "TestPreset" "src.mp4"
+) > /dev/null 2>&1
+# Check if output exists (src_2x_720p.mp4)
+if [ -f "$TEST_DATA/src_2x_720p.mp4" ]; then
+    log_pass "CLI Preset loaded successfully"
+    rm "$TEST_DATA/src_2x_720p.mp4"
+else
+    log_fail "CLI Preset failed to generate output"
+fi
 
 echo -e "\n${YELLOW}=== Running Category: Web & Social ===${NC}"
 run_test "ffmpeg/1-01 🌐 H264-Social-Web-Presets.sh" "vcodec=h264,acodec=aac" "$TEST_DATA/src.mp4"

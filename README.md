@@ -76,11 +76,14 @@ sudo apt install ffmpeg zenity bc
 The scripts are now organized into **Master Scripts** to reduce menu clutter. Each script uses a Zenity menu to let you choose specific technical flavors or presets.
 
 ### 0. 🧰 Universal Toolbox (`0-*`)
-*The Swiss Army Knife for FFmpeg. Combine multiple operations in one pass.*
-- **0-00 🧰 Universal-Toolbox**: The ultimate multi-tool. Select standard operations (Speed, Scale, Crop, Rotate, Audio, Format) from a single checklist.
-    - **Combines Filters**: Apply "2x Speed" + "Crop" + "Scale" + "Mute" in one efficient encoding run.
-    - **Smart Formats**: Export typically to H.264, or override with WebM, ProRes, or High-Quality GIF.
-    - **Smart Filenaming**: Auto-generates concise filenames like `_UniversalEdit.mp4` when complex filters are used.
+*The Swiss Army Knife for FFmpeg. A powerful, workstation-grade tool for all operations.*
+- **0-00 🧰 Universal-Toolbox v2.0**: The ultimate one-stop shop for video editing.
+    - **🚀 Unified Launchpad**: Start from a **Custom Edit**, pick from your **⭐ Favorites**, or re-run a command from your **🕒 Recent History**.
+    - **⭐ "Star" as Favorite**: Any custom or history edit can be starred and named to create a permanent one-click preset.
+    - **🕒 Automated History**: Your last 15 unique edits are automatically saved—never repeat manual setup again.
+    - **🏎️ Parallel GPU Probing**: Auto-detects Nvidia (NVENC), Intel (QSV), and AMD (VAAPI) in the background with zero-delay caching.
+    - **📝 Smart Subtitles**: Auto-detects `.srt` files and offers **Burn-in** (styled) or **Mux** (selectable) options.
+    - **🔊 Production Audio**: Integrated **Stereo Downmixing**, EBU R128 Normalization, and +6dB Boost.
 
 ### 1. 🌐 Distribution & Web (`1-*`)
 *Optimized for sharing, compatibility, and platform limits.*
