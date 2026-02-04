@@ -81,8 +81,9 @@ The scripts are now organized into **Master Scripts** to reduce menu clutter. Ea
     - **🧙‍♂️ Guided 3-Step Wizard**: 
         1. **Launchpad**: Pick a starting point (Custom, Starred, or History).
         2. **Intent**: Select categories (Speed, Scale, Crop, etc.) to keep the UI clean.
-        3. **Dashboard**: Configure everything in a single, unified window.
+        3. **Dashboard**: Configure everything in a single, unified window with dynamic fields.
     - **🏎️ Smart Hardware Auto-Probe**: Performs a silent 1-frame dummy encode at startup to detect and **automatically enable** NVENC (Nvidia), QSV (Intel), or VAAPI (AMD), hiding broken options.
+    - **⚖️ Integrated Target Size**: Accurate 2-pass encoding to hit exact MB limits (e.g., 25MB for Discord) directly in the tool.
     - **🛡️ Auto-Rename Safety**: Never overwrites files. Automatically increments names (`_v1`, `_v2`) if the output target already exists.
     - **🏷️ Descriptive Smart Tagging**: Files are named based on your edits (e.g. `video_2x_1080p_noaudio.mp4`) instead of generic tags.
     - **💾 Persistent Custom Presets**: Saved favorites now remember your manual entries (e.g. Custom Width, Target Size) and reload them instantly.
@@ -172,6 +173,25 @@ Contributions are welcome! Please ensure you run `bash testing/test_runner.sh` b
 ## 📜 License
 
 MIT License. Feel free to use and modify for your own workflow.
+
+---
+
+## 🗺️ Project Roadmap
+
+### 🏁 Phase 1-3: Foundation & Wizard (Completed) ✅
+- [x] **Universal Basis**: Single script for all major FFmpeg operations.
+- [x] **Hardware Acceleration**: Smart auto-probe and vendor-specific optimizations.
+- [x] **The Wizard**: 3-step guided flow for cleaner UX.
+- [x] **Safety & Persistence**: Auto-rename protection and persistent custom presets.
+
+### 🚧 Phase 4: Extended Capabilities (In Progress)
+- [ ] **Visual Preview**: "Test Run" button to generate a 5-second sample to verify filters.
+- [ ] **Watermarking**: Auto-detect `watermark.png` and offer easy overlay options.
+- [ ] **Quality of Life**: Add support for more granular cropping and manual bitrate entries.
+
+### 📦 Phase 5: Distribution
+- [ ] **Debian Package**: Create a `.deb` for easy installation.
+- [ ] **PPA**: Host on Launchpad for automated updates.
 
 ## 🤝 Contributing
 
