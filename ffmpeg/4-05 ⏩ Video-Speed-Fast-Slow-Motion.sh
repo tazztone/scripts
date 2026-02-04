@@ -43,8 +43,21 @@ AFILTER="${AFILTER}atempo=${REMAINING_SPEED}"
 
 (
 for f in "$@"; do
+    # Detect Framerate if Speed > 1 (Fast Motion) to optionally preserve it
+    FPS_OPT=""
+    if (( $(echo "$SPEED > 1" | bc -l) )); then
+        if zenity --question --text="Preserve original framerate?\n(Drop frames to prevent high-FPS output)" --title="Framerate Option" --no-wrap; then
+            # Get input FPS
+            IN_FPS=$(ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=noprint_wrappers=1:nokey=1 "$f")
+            if [ -n "$IN_FPS" ]; then
+                FPS_OPT="-r $IN_FPS"
+                echo "# Preserving input FPS: $IN_FPS"
+            fi
+        fi
+    fi
+
     echo "# Changing speed of $f to ${SPEED}x..."
-    ffmpeg -y -i "$f" -vf "setpts=${PTS_VAL}*PTS" -filter:a "$AFILTER" "${f%.*}_${SPEED}x.mp4"
+    ffmpeg -y -i "$f" -vf "setpts=${PTS_VAL}*PTS" $FPS_OPT -filter:a "$AFILTER" "${f%.*}_${SPEED}x.mp4"
 done
 ) | zenity --progress --title="Changing Speed..." --pulsate --auto-close
 
