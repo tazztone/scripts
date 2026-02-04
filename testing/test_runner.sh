@@ -37,6 +37,12 @@ if [[ "$ARGS" == *"--list"* && -n "$ZENITY_LIST_RESPONSE" ]]; then
     exit 0
 fi
 
+# Strict check for Universal Toolbox column printing
+if [[ "$ARGS" == *"Universal FFmpeg Toolbox"* && "$ARGS" != *"--print-column=3"* ]]; then
+    echo "ERROR: Universal Toolbox must use --print-column=3" >&2
+    exit 1
+fi
+
 case "$ARGS" in
     *--scale*) echo "1280" ;;
     *--entry*) echo "9" ;;
@@ -48,6 +54,7 @@ case "$ARGS" in
         ;;
     *--list*)
         case "$ARGS" in
+            *"Universal FFmpeg Toolbox"*) echo "Speed 2x (Fast)|Resolution|Scale 720p|Audio|Mute Audio|Format|Output as H.265" ;;
             *"Target Platform"*|*"H.264 Presets"*) echo "Universal" ;;
             *"Audio Adjustment"*) echo "Normalize" ;;
             *"Speed Control"*) echo "2x Fast" ;;
@@ -125,6 +132,12 @@ validate_media() {
                 local streams=$(ffprobe -v error -show_entries format=nb_streams -of default=noprint_wrappers=1:nokey=1 "$file")
                 local v_streams=$(ffprobe -v error -select_streams v -show_entries stream=index -of default=noprint_wrappers=1:nokey=1 "$file")
                 [[ -n "$v_streams" ]] && { log_fail "Video stream found, expected none"; failed=1; }
+                ;;
+            fps)
+                local fps=$(ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=noprint_wrappers=1:nokey=1 "$file")
+                # Handle fraction like 30/1
+                fps=$(echo "scale=0; $fps" | bc -l)
+                [[ "$fps" != "$val" ]] && { log_fail "FPS mismatch: expected $val, got $fps"; failed=1; }
                 ;;
         esac
     done
@@ -227,6 +240,11 @@ echo -e "\n${YELLOW}=== Running Fix Verification: Speed Limits ===${NC}"
 export ZENITY_LIST_RESPONSE="4x Fast"
 run_test "ffmpeg/4-05 ⏩ Video-Speed-Fast-Slow-Motion.sh" "vcodec=h264" "$TEST_DATA/src.mp4"
 unset ZENITY_LIST_RESPONSE
+
+echo -e "\n${YELLOW}=== Running New: Universal Toolbox ===${NC}"
+# Test combination: Speed 2x + Scale 720p + Mute + H.265
+# User reported "only H265 respects", so we verify everything else failed.
+run_test "ffmpeg/0-00 🧰 Universal-Toolbox.sh" "width=1280,no_audio,vcodec=hevc,fps=30" "$TEST_DATA/src.mp4"
 
 echo -e "\n${YELLOW}=== Running Category: Web & Social ===${NC}"
 run_test "ffmpeg/1-01 🌐 H264-Social-Web-Presets.sh" "vcodec=h264,acodec=aac" "$TEST_DATA/src.mp4"
