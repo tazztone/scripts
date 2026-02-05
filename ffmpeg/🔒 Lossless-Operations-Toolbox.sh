@@ -385,11 +385,156 @@ touch "$HISTORY_FILE"
 
 # Initialize default presets for lossless operations
 if [ ! -s "$PRESET_FILE" ]; then
-    echo "Quick Trim|Trim Video Segment" > "$PRESET_FILE"
-    echo "Format Convert|Remux Container Format" >> "$PRESET_FILE"
-    echo "Merge Videos|Concatenate Compatible Files" >> "$PRESET_FILE"
-    echo "Clean Metadata|Remove Personal Information" >> "$PRESET_FILE"
+    echo "Quick Trim|trim|2|8" > "$PRESET_FILE"
+    echo "MP4 to MKV|remux|mkv" >> "$PRESET_FILE"
+    echo "Remove Audio|stream_edit|remove_audio" >> "$PRESET_FILE"
+    echo "Clean Metadata|metadata|clean_metadata" >> "$PRESET_FILE"
+    echo "Merge Compatible|merge" >> "$PRESET_FILE"
 fi
+
+# --- ARGUMENT PARSING (CLI PRESETS) ---
+PRELOADED_PRESET=""
+if [ "$1" == "--preset" ] && [ -n "$2" ]; then
+    PRESET_NAME="$2"
+    # Read preset line: Name|operation|param1|param2...
+    LINE=$(grep "^$PRESET_NAME|" "$PRESET_FILE")
+    if [ -n "$LINE" ]; then
+        # Check if we have files passed after the preset args
+        shift 2
+        # Extract preset data (everything after first pipe)
+        PRELOADED_PRESET="${LINE#*|}"
+    else
+        echo "Error: Preset '$PRESET_NAME' not found."
+        echo "Available presets:"
+        while IFS='|' read -r name rest; do
+            [ -n "$name" ] && echo "  - $name"
+        done < "$PRESET_FILE"
+        exit 1
+    fi
+elif [ "$1" == "--list-presets" ]; then
+    echo "Available presets:"
+    while IFS='|' read -r name operation params; do
+        [ -n "$name" ] && echo "  $name: $operation $params"
+    done < "$PRESET_FILE"
+    exit 0
+elif [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
+    echo "Lossless Operations Toolbox - FFmpeg stream copy operations"
+    echo ""
+    echo "Usage:"
+    echo "  $0 [files...]                    # Interactive mode"
+    echo "  $0 --preset \"name\" [files...]    # Use saved preset"
+    echo "  $0 --list-presets               # Show available presets"
+    echo "  $0 --help                       # Show this help"
+    echo ""
+    echo "Examples:"
+    echo "  $0 video.mp4                    # Interactive menu"
+    echo "  $0 --preset \"Quick Trim\" *.mp4  # Trim all MP4 files"
+    echo ""
+    exit 0
+fi
+
+# Enhanced input validation functions
+validate_time_format() {
+    local time_input="$1"
+    
+    # Check if it's a number (seconds)
+    if [[ "$time_input" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+        echo "$time_input"
+        return 0
+    fi
+    
+    # Check if it's hh:mm:ss format
+    if [[ "$time_input" =~ ^([0-9]{1,2}):([0-9]{2}):([0-9]{2})(\.[0-9]+)?$ ]]; then
+        local hours=${BASH_REMATCH[1]}
+        local minutes=${BASH_REMATCH[2]}
+        local seconds=${BASH_REMATCH[3]}
+        local fraction=${BASH_REMATCH[4]:-}
+        
+        # Convert to seconds
+        local total_seconds=$((hours * 3600 + minutes * 60 + seconds))
+        echo "${total_seconds}${fraction}"
+        return 0
+    fi
+    
+    # Check if it's mm:ss format
+    if [[ "$time_input" =~ ^([0-9]{1,2}):([0-9]{2})(\.[0-9]+)?$ ]]; then
+        local minutes=${BASH_REMATCH[1]}
+        local seconds=${BASH_REMATCH[2]}
+        local fraction=${BASH_REMATCH[3]:-}
+        
+        # Convert to seconds
+        local total_seconds=$((minutes * 60 + seconds))
+        echo "${total_seconds}${fraction}"
+        return 0
+    fi
+    
+    return 1
+}
+
+# Smart auto-rename function
+generate_safe_filename() {
+    local base_path="$1"
+    local suffix="$2"
+    local extension="$3"
+    
+    local output_file="${base_path}${suffix}.${extension}"
+    
+    # If file doesn't exist, use it as-is
+    if [ ! -f "$output_file" ]; then
+        echo "$output_file"
+        return 0
+    fi
+    
+    # Auto-increment with _v1, _v2, etc.
+    local counter=1
+    while [ -f "${base_path}${suffix}_v${counter}.${extension}" ]; do
+        ((counter++))
+    done
+    
+    echo "${base_path}${suffix}_v${counter}.${extension}"
+}
+
+# History management functions
+add_to_history() {
+    local operation="$1"
+    shift
+    local params="$@"
+    local history_entry="${operation}|${params}"
+    
+    # Check if this exact entry is already the most recent
+    local recent=$(head -n 1 "$HISTORY_FILE" 2>/dev/null)
+    if [ "$history_entry" = "$recent" ]; then
+        return 0
+    fi
+    
+    # Add to top of history
+    echo "$history_entry" | cat - "$HISTORY_FILE" > "${HISTORY_FILE}.tmp" 2>/dev/null
+    
+    # Keep only last 15 entries
+    head -n 15 "${HISTORY_FILE}.tmp" > "$HISTORY_FILE" 2>/dev/null
+    rm -f "${HISTORY_FILE}.tmp"
+}
+
+# Preset management functions
+save_preset() {
+    local name="$1"
+    local operation="$2"
+    shift 2
+    local params="$@"
+    
+    # Remove existing preset with same name
+    grep -v "^$name|" "$PRESET_FILE" > "${PRESET_FILE}.tmp" 2>/dev/null
+    
+    # Add new preset
+    echo "$name|$operation|$params" >> "${PRESET_FILE}.tmp"
+    
+    mv "${PRESET_FILE}.tmp" "$PRESET_FILE"
+}
+
+load_preset() {
+    local name="$1"
+    grep "^$name|" "$PRESET_FILE" | head -n 1 | cut -d'|' -f2-
+}
 
 # Main execution starts here
 echo "Lossless Operations Toolbox - Initializing..."
@@ -476,21 +621,11 @@ execute_remuxing() {
     # Build FFmpeg command with stream copy
     local cmd="ffmpeg -y -nostdin -i \"$input_file\" -c copy"
     
-    # Add container-specific options
-    case "$target_container" in
-        "mp4")
-            cmd="$cmd -movflags +faststart"
-            ;;
-        "mkv")
-            # MKV doesn't need special flags for stream copy
-            ;;
-        "mov")
-            cmd="$cmd -movflags +faststart"
-            ;;
-        "webm")
-            # WebM with stream copy
-            ;;
-    esac
+    # Add container-specific optimization flags
+    local optimization_flags=$(get_container_optimization_flags "$target_container")
+    if [ -n "$optimization_flags" ]; then
+        cmd="$cmd $optimization_flags"
+    fi
     
     cmd="$cmd \"$output_file\""
     
@@ -645,6 +780,49 @@ execute_metadata_editing() {
         echo "ERROR: Metadata editing failed with status $status"
         return 1
     fi
+}
+
+# Subtitle auto-detection function
+detect_subtitles() {
+    local video_file="$1"
+    local base_name="${video_file%.*}"
+    
+    # Common subtitle extensions
+    local subtitle_extensions=("srt" "vtt" "ass" "ssa" "sub")
+    local found_subtitles=()
+    
+    for ext in "${subtitle_extensions[@]}"; do
+        local subtitle_file="${base_name}.${ext}"
+        if [ -f "$subtitle_file" ]; then
+            found_subtitles+=("$subtitle_file")
+        fi
+    done
+    
+    # Return found subtitles (space-separated)
+    echo "${found_subtitles[@]}"
+}
+
+# Enhanced container-specific optimization flags
+get_container_optimization_flags() {
+    local container="$1"
+    
+    case "$container" in
+        "mp4")
+            echo "-movflags +faststart"
+            ;;
+        "mkv")
+            echo "-reserve_index_space 200k"
+            ;;
+        "mov")
+            echo "-movflags +faststart"
+            ;;
+        "webm")
+            echo ""
+            ;;
+        *)
+            echo ""
+            ;;
+    esac
 }
 # ===== BATCH PROCESSING SYSTEM =====
 
@@ -854,24 +1032,99 @@ get_batch_summary() {
 }
 # ===== USER INTERFACE =====
 
-# Main user interface following Universal Toolbox patterns
+# Enhanced main menu with preset and history support
 show_main_menu() {
-    local MENU_ARGS=(
-        "--list" "--width=600" "--height=400"
-        "--title=🔒 Lossless Operations Toolbox" "--print-column=2"
-        "--column=Type" "--column=Operation" "--column=Description"
-        "✂️" "Trim Video" "Extract segments without re-encoding"
-        "📦" "Change Format" "Remux to MP4/MKV/MOV/WebM containers"
-        "🔗" "Merge Videos" "Concatenate files with identical codecs"
-        "🎚️" "Edit Streams" "Remove audio/video tracks losslessly"
-        "📝" "Edit Metadata" "Change file information without re-encoding"
-        "⚡" "Batch Operations" "Process multiple files simultaneously"
-    )
-    
-    zenity "${MENU_ARGS[@]}" --text="Select a lossless operation (no quality loss, fast processing):"
+    while true; do
+        if [ -n "$PRELOADED_PRESET" ]; then
+            # CLI preset mode - return the preset operation directly
+            echo "$PRELOADED_PRESET"
+            return 0
+        fi
+
+        local LAUNCH_ARGS=(
+            "--list" "--width=650" "--height=500"
+            "--title=🔒 Lossless Operations Toolbox" "--print-column=2"
+            "--column=Type" "--column=Name" "--column=Description"
+            "➕" "New Operation" "Select a lossless operation from scratch"
+        )
+
+        # Load Presets (Favorites)
+        if [ -s "$PRESET_FILE" ]; then
+            while IFS='|' read -r name operation params; do
+                [ -z "$name" ] && continue
+                LAUNCH_ARGS+=("⭐" "$name" "Saved Preset")
+            done < "$PRESET_FILE"
+        fi
+
+        # Load History
+        if [ -s "$HISTORY_FILE" ]; then
+            local count=0
+            while read -r line; do
+                [ -z "$line" ] && continue
+                [ $count -ge 5 ] && break  # Limit history display
+                LAUNCH_ARGS+=("🕒" "$line" "Recent Operation")
+                ((count++))
+            done < "$HISTORY_FILE"
+        fi
+
+        local picked=$(zenity "${LAUNCH_ARGS[@]}" --text="Select a starting point for lossless operations:")
+        if [ -z "$picked" ]; then
+            return 1
+        fi
+
+        if [ "$picked" == "New Operation" ]; then
+            # Show traditional operation menu
+            local MENU_ARGS=(
+                "--list" "--width=600" "--height=400"
+                "--title=🔒 Lossless Operations Toolbox" "--print-column=2"
+                "--column=Type" "--column=Operation" "--column=Description"
+                "✂️" "Trim Video" "Extract segments without re-encoding"
+                "📦" "Change Format" "Remux to MP4/MKV/MOV/WebM containers"
+                "🔗" "Merge Videos" "Concatenate files with identical codecs"
+                "🎚️" "Edit Streams" "Remove audio/video tracks losslessly"
+                "📝" "Edit Metadata" "Change file information without re-encoding"
+                "⚡" "Batch Operations" "Process multiple files simultaneously"
+            )
+            
+            local choice=$(zenity "${MENU_ARGS[@]}" --text="Select a lossless operation (no quality loss, fast processing):")
+            if [ -n "$choice" ]; then
+                echo "$choice"
+                return 0
+            fi
+            continue
+
+        elif grep -q "^$picked|" "$PRESET_FILE"; then
+            # Load from Presets
+            local preset_data=$(grep "^$picked|" "$PRESET_FILE" | head -n 1 | cut -d'|' -f2-)
+            echo "$preset_data"
+            return 0
+
+        else
+            # Must be a History Item
+            local action=$(zenity --list --title="History Item" --text="Operation: $picked" \
+                --column="Action" "▶️ Run Now" "⭐ Save as Preset" "❌ Delete")
+            
+            if [ "$action" == "▶️ Run Now" ]; then
+                echo "$picked"
+                return 0
+            elif [ "$action" == "⭐ Save as Preset" ]; then
+                local preset_name=$(zenity --entry --title="Save Preset" --text="Name for this preset:")
+                if [ -n "$preset_name" ]; then
+                    save_preset "$preset_name" "$picked"
+                    zenity --notification --text="Saved as preset '$preset_name'!"
+                fi
+                continue
+            elif [ "$action" == "❌ Delete" ]; then
+                # Remove from history
+                grep -vF "$picked" "$HISTORY_FILE" > "${HISTORY_FILE}.tmp" 2>/dev/null
+                mv "${HISTORY_FILE}.tmp" "$HISTORY_FILE" 2>/dev/null
+                continue
+            fi
+        fi
+    done
 }
 
-# Trimming interface
+# Enhanced trimming interface with smart validation and auto-rename
 show_trimming_interface() {
     local files=("$@")
     
@@ -880,11 +1133,11 @@ show_trimming_interface() {
         return 1
     fi
     
-    # Get trimming parameters
-    local params=$(zenity --forms --title="Trim Video Segments" --width=400 \
+    # Get trimming parameters with enhanced validation
+    local params=$(zenity --forms --title="Trim Video Segments" --width=450 \
         --text="Extract video segments using lossless stream copy:" \
-        --add-entry="Start Time (seconds or hh:mm:ss):" \
-        --add-entry="End Time (seconds or hh:mm:ss):" \
+        --add-entry="Start Time (e.g., 10, 1:30, 01:30:45):" \
+        --add-entry="End Time (e.g., 60, 5:00, 02:15:30):" \
         --separator="|")
     
     if [ -z "$params" ]; then
@@ -892,13 +1145,29 @@ show_trimming_interface() {
     fi
     
     IFS='|' read -ra VALS <<< "$params"
-    local start_time="${VALS[0]}"
-    local end_time="${VALS[1]}"
+    local start_input="${VALS[0]}"
+    local end_input="${VALS[1]}"
     
-    if [ -z "$start_time" ] || [ -z "$end_time" ]; then
+    if [ -z "$start_input" ] || [ -z "$end_input" ]; then
         zenity --error --text="Both start and end times are required."
         return 1
     fi
+    
+    # Validate and convert time formats
+    local start_time=$(validate_time_format "$start_input")
+    if [ $? -ne 0 ]; then
+        zenity --error --text="Invalid start time format: '$start_input'\nUse seconds (e.g., 30) or time format (e.g., 1:30 or 01:30:45)"
+        return 1
+    fi
+    
+    local end_time=$(validate_time_format "$end_input")
+    if [ $? -ne 0 ]; then
+        zenity --error --text="Invalid end time format: '$end_input'\nUse seconds (e.g., 120) or time format (e.g., 2:00 or 00:02:00)"
+        return 1
+    fi
+    
+    # Add to history
+    add_to_history "trim" "$start_time" "$end_time"
     
     # Process files
     (
@@ -916,10 +1185,10 @@ show_trimming_interface() {
                 continue
             fi
             
-            # Generate output filename
+            # Generate smart output filename
             local base="${file%.*}"
             local ext="${file##*.}"
-            local output_file="${base}_trimmed_${start_time}s-${end_time}s.${ext}"
+            local output_file=$(generate_safe_filename "$base" "_trimmed_${start_time}s-${end_time}s" "$ext")
             
             # Execute trimming
             if execute_trimming "$file" "$output_file" "$start_time" "$end_time"; then
@@ -937,7 +1206,7 @@ show_trimming_interface() {
     zenity --notification --text="Trimming completed!"
 }
 
-# Remuxing interface
+# Enhanced remuxing interface with container optimization
 show_remuxing_interface() {
     local files=("$@")
     
@@ -946,23 +1215,29 @@ show_remuxing_interface() {
         return 1
     fi
     
-    # Get target container
-    local container=$(zenity --list --title="Select Target Container" --width=400 --height=300 \
-        --text="Choose output container format:" \
-        --column="Format" --column="Description" \
-        "mp4" "MP4 - Universal compatibility" \
-        "mkv" "MKV - Open format, supports all codecs" \
-        "mov" "MOV - Apple QuickTime format" \
-        "webm" "WebM - Web-optimized format")
+    # Get target container with enhanced descriptions
+    local container=$(zenity --list --title="Select Target Container" --width=500 --height=350 \
+        --text="Choose output container format (lossless stream copy):" \
+        --column="Format" --column="Description" --column="Best For" \
+        "mp4" "MP4 - Universal compatibility" "Most devices, streaming" \
+        "mkv" "MKV - Open format, supports all codecs" "Archival, flexibility" \
+        "mov" "MOV - Apple QuickTime format" "Apple ecosystem, editing" \
+        "webm" "WebM - Web-optimized format" "Web playback, browsers")
     
     if [ -z "$container" ]; then
         return 1
     fi
     
+    # Add to history
+    add_to_history "remux" "$container"
+    
     # Process files
     (
         local total=${#files[@]}
         local current=0
+        local successful=0
+        local failed=0
+        local skipped=0
         
         for file in "${files[@]}"; do
             echo "# Processing $(basename "$file")..."
@@ -971,28 +1246,32 @@ show_remuxing_interface() {
             # Validate operation
             if ! validate_remuxing_operation "$file" "$container"; then
                 echo "# SKIPPED: $(basename "$file") - incompatible codecs"
+                ((skipped++))
                 ((current++))
                 continue
             fi
             
-            # Generate output filename
+            # Generate smart output filename
             local base="${file%.*}"
-            local output_file="${base}_remuxed.${container}"
+            local output_file=$(generate_safe_filename "$base" "_remuxed" "$container")
             
             # Execute remuxing
             if execute_remuxing "$file" "$output_file" "$container"; then
                 echo "# SUCCESS: $(basename "$output_file")"
+                ((successful++))
             else
                 echo "# FAILED: $(basename "$file")"
+                ((failed++))
             fi
             
             ((current++))
         done
         
         echo "100"
-    ) | zenity --progress --title="Remuxing Videos" --auto-close
+        echo "# Completed: $successful successful, $failed failed, $skipped skipped"
+    ) | zenity --progress --title="Remuxing Videos to $container" --auto-close
     
-    zenity --notification --text="Remuxing completed!"
+    zenity --notification --text="Remuxing completed! Check output for details."
 }
 
 # Merging interface
@@ -1100,7 +1379,7 @@ show_stream_editing_interface() {
     zenity --notification --text="Stream editing completed!"
 }
 
-# Metadata editing interface
+# Enhanced metadata editing interface with comprehensive cleaning
 show_metadata_interface() {
     local files=("$@")
     
@@ -1109,27 +1388,41 @@ show_metadata_interface() {
         return 1
     fi
     
-    # Get operation type
-    local operation=$(zenity --list --title="Select Metadata Operation" --width=400 --height=300 \
-        --text="Choose metadata editing operation:" \
-        --column="Operation" --column="Description" \
-        "clean_metadata" "Remove all metadata (privacy)" \
-        "set_rotation" "Set rotation metadata (0°, 90°, 180°, 270°)")
+    # Get operation type with enhanced options
+    local operation=$(zenity --list --title="Select Metadata Operation" --width=500 --height=350 \
+        --text="Choose metadata editing operation (lossless):" \
+        --column="Operation" --column="Description" --column="Privacy Level" \
+        "clean_metadata" "Remove all metadata" "High - Complete privacy" \
+        "set_rotation" "Set rotation metadata only" "Low - Orientation fix" \
+        "set_title" "Set custom title" "Medium - Basic info")
     
     if [ -z "$operation" ]; then
         return 1
     fi
     
     local value=""
-    if [ "$operation" = "set_rotation" ]; then
-        value=$(zenity --list --title="Select Rotation" --width=300 --height=250 \
-            --text="Choose rotation angle:" \
-            --column="Angle" "0" "90" "180" "270")
-        
-        if [ -z "$value" ]; then
-            return 1
-        fi
+    case "$operation" in
+        "set_rotation")
+            value=$(zenity --list --title="Select Rotation" --width=300 --height=250 \
+                --text="Choose rotation angle (metadata only, no re-encoding):" \
+                --column="Angle" --column="Description" \
+                "0" "No rotation (reset)" \
+                "90" "Rotate 90° clockwise" \
+                "180" "Rotate 180° (upside down)" \
+                "270" "Rotate 270° clockwise (90° CCW)")
+            ;;
+        "set_title")
+            value=$(zenity --entry --title="Set Title" --text="Enter new title for the video:" \
+                --entry-text="")
+            ;;
+    esac
+    
+    if [ "$operation" != "clean_metadata" ] && [ -z "$value" ]; then
+        return 1
     fi
+    
+    # Add to history
+    add_to_history "metadata" "$operation" "$value"
     
     # Process files
     (
@@ -1140,11 +1433,16 @@ show_metadata_interface() {
             echo "# Processing $(basename "$file")..."
             echo $(( current * 100 / total ))
             
-            # Generate output filename
+            # Generate smart output filename
             local base="${file%.*}"
             local ext="${file##*.}"
-            local suffix="_metadata_edited"
-            local output_file="${base}${suffix}.${ext}"
+            local suffix=""
+            case "$operation" in
+                "clean_metadata") suffix="_cleaned" ;;
+                "set_rotation") suffix="_rotated_${value}deg" ;;
+                "set_title") suffix="_titled" ;;
+            esac
+            local output_file=$(generate_safe_filename "$base" "$suffix" "$ext")
             
             # Execute metadata editing
             if execute_metadata_editing "$file" "$output_file" "$operation" "$value"; then
@@ -1196,7 +1494,7 @@ show_batch_interface() {
     esac
 }
 
-# Main script execution
+# Enhanced main script execution with preset support
 main() {
     # Check if files were passed as arguments
     if [ $# -eq 0 ]; then
@@ -1206,13 +1504,67 @@ main() {
     
     local files=("$@")
     
-    # Show main menu
+    # Show main menu (handles presets and history internally)
     local choice=$(show_main_menu)
     
     if [ -z "$choice" ]; then
         exit 0
     fi
     
+    # Handle preset data format: operation|param1|param2...
+    if [[ "$choice" == *"|"* ]]; then
+        # This is preset data, parse it
+        IFS='|' read -ra preset_parts <<< "$choice"
+        local operation="${preset_parts[0]}"
+        
+        case "$operation" in
+            "trim")
+                # Preset format: trim|start_time|end_time
+                local start_time="${preset_parts[1]}"
+                local end_time="${preset_parts[2]}"
+                
+                # Execute trimming directly with preset parameters
+                (
+                    local total=${#files[@]}
+                    local current=0
+                    
+                    for file in "${files[@]}"; do
+                        echo "# Processing $(basename "$file")..."
+                        echo $(( current * 100 / total ))
+                        
+                        if validate_trimming_operation "$file" "$start_time" "$end_time"; then
+                            local base="${file%.*}"
+                            local ext="${file##*.}"
+                            local output_file=$(generate_safe_filename "$base" "_trimmed_${start_time}s-${end_time}s" "$ext")
+                            
+                            if execute_trimming "$file" "$output_file" "$start_time" "$end_time"; then
+                                echo "# SUCCESS: $(basename "$output_file")"
+                            else
+                                echo "# FAILED: $(basename "$file")"
+                            fi
+                        else
+                            echo "# SKIPPED: $(basename "$file") - validation failed"
+                        fi
+                        
+                        ((current++))
+                    done
+                    echo "100"
+                ) | zenity --progress --title="Executing Preset: Trim" --auto-close
+                ;;
+            "remux")
+                # Preset format: remux|container
+                local container="${preset_parts[1]}"
+                show_remuxing_interface "${files[@]}"
+                ;;
+            *)
+                zenity --error --text="Unknown preset operation: $operation"
+                ;;
+        esac
+        
+        return 0
+    fi
+    
+    # Handle regular menu choices
     case "$choice" in
         "Trim Video")
             show_trimming_interface "${files[@]}"

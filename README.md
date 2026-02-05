@@ -9,9 +9,11 @@ Powered by `ffmpeg`, `zenity`, and `bc`.
 ## 🚀 Features
 
 - **Smart Compression:** Fit videos to exact sizes (e.g., 9MB for Email, 25MB for Discord) with auto-downscaling logic.
+- **Lossless Operations:** Lightning-fast quality-preserving operations (trimming, remuxing, stream editing) with zero re-encoding.
 - **Instant Conversions:** One-click presets for MP4, WebM, ProRes, and DNxHD.
-- **Workflow Automation:** Trim, scale, and extract audio instantly.
+- **Workflow Automation:** Trim, scale, and extract audio instantly with preset and history systems.
 - **GUI Feedback:** Uses Zenity to provide progress bars, confirmation dialogs, and user input fields.
+- **CLI Integration:** Command-line preset support for automation and batch processing.
 
 ## 🛠️ Prerequisites
 
@@ -50,15 +52,14 @@ sudo apt install ffmpeg zenity bc
     # Create the directory if it doesn't exist
     mkdir -p ~/.local/share/nautilus/scripts/
     
-    # Copy all categories into the Nautilus scripts folder
-    # This preserves the subdirectories to create submenus in Nautilus
-    cp -r ffmpeg/* ~/.local/share/nautilus/scripts/
+    # Copy the toolbox scripts to the Nautilus scripts folder
+    cp ffmpeg/*.sh ~/.local/share/nautilus/scripts/
     ```
 
    2.  **Make them executable:**
     Linux requires scripts to have permission to run.
     ```bash
-    chmod +x ~/.local/share/nautilus/scripts/*/*.sh
+    chmod +x ~/.local/share/nautilus/scripts/*.sh
     ```
 
 ## 🖱️ How to Use
@@ -67,17 +68,19 @@ sudo apt install ffmpeg zenity bc
 2.  Select one or more video/audio files.
 3.  **Right-Click** the selection.
 4.  Navigate to **Scripts** in the context menu.
-5.  Choose the tool you want to run (e.g., `1-11-Custom-Size-MB.sh`).
+5.  Choose the tool you want to run:
+    - **🧰 Universal-Toolbox**: Full-featured video processing with transcoding
+    - **🔒 Lossless-Operations-Toolbox**: Quality-preserving operations only
 
 *A popup window will appear showing the progress, and the new file will be created in the same folder as the original.*
 
-## 📂 Included Scripts
+## 📂 Available Tools
 
-The scripts are now organized into **Master Scripts** to reduce menu clutter. Each script uses a Zenity menu to let you choose specific technical flavors or presets.
+The project has been streamlined into **two powerful master tools** that provide comprehensive video processing capabilities through intelligent, guided interfaces.
 
 ### 0. 🧰 Universal Toolbox (`0-*`)
 *The Swiss Army Knife for FFmpeg. A powerful, workstation-grade tool for all operations.*
-- **0-00 🧰 Universal-Toolbox v3.5**: The ultimate one-stop shop for video editing.
+- **0-00 🧰 Universal-Toolbox v3.5**: The ultimate one-stop shop for video editing. **[📖 Full Documentation](UNIVERSAL_TOOLBOX.md)**
     - **🧙‍♂️ Guided 3-Step Wizard**: 
         1. **Launchpad**: Pick a starting point (Custom, Starred, or History).
         2. **Intent**: Select categories (Speed, Scale, Crop, etc.) to keep the UI clean.
@@ -89,54 +92,62 @@ The scripts are now organized into **Master Scripts** to reduce menu clutter. Ea
     - **💾 Persistent Custom Presets**: Saved favorites now remember your manual entries (e.g. Custom Width, Target Size) and reload them instantly.
     - **📝 Smart Subtitles**: Auto-detects `.srt` files and offers styled **Burn-in** or **Mux** options.
 
-### 1. 🌐 Distribution & Web (`1-*`)
-*Optimized for sharing, compatibility, and platform limits.*
-- **1-01 🌐 H264-Social-Web-Presets**: Integrated presets for Twitter, WhatsApp, and Universal compatibility.
-- **1-02 📦 H265-HEVC-Archive**: Ultra-efficient compression for long-term storage.
-- **1-03 ⚖️ H264-Compress-to-Target-Size**: Auto-calculates bitrate to hit exact MB limits (Discord/Email).
-- **1-04 👻 VP9-WebM-Alpha-Transparency**: Web-friendly video with support for transparency.
-- **1-05 🎞️ GIF-Palette-Optimized**: High-quality GIF generation using two-pass palette analysis.
+- **0-01 🔒 Lossless-Operations-Toolbox**: Specialized tool for quality-preserving operations only. **[📖 Full Documentation](LOSSLESS_TOOLBOX.md)**
+    - **🚀 Zero Quality Loss**: All operations use FFmpeg stream copy - no re-encoding, no quality degradation.
+    - **⚡ Lightning Fast**: Operations complete in seconds, not minutes (no CPU/GPU encoding).
+    - **🎯 Curated Operations**: Only truly lossless operations - trimming, remuxing, stream editing, metadata changes.
+    - **🛡️ Smart Validation**: Prevents incompatible operations with clear error messages and alternatives.
+    - **⭐ Preset System**: CLI support (`--preset "Quick Trim"`) and saved favorites for automation.
+    - **📚 Operation History**: Recent operations accessible from main menu for quick re-use.
+    - **🔧 Enhanced Input**: Flexible time formats (30, 1:30, 01:30:45) with real-time validation.
+    - **📦 Container Optimization**: Format-specific flags for better compatibility (faststart, index space).
+    - **🏷️ Smart Auto-Rename**: Prevents file overwrites with intelligent incremental naming.
 
-### 2. 🎬 Production & Intermediates (`2-*`)
-*High-fidelity formats and repair tools for video editing.*
-- **2-01 🍎 ProRes-Intermediate-Transcoder**: All profiles (Proxy, LT, Standard, HQ, 4444).
-- **2-02 🎬 DNxHD/HR-Intermediate-Transcoder**: Avid-friendly proxies and mastering files.
-- **2-03 🔧 Fix-VFR-Constant-Framerate**: Enforces Constant Framerate to prevent audio drift in editors.
-- **2-04 🎥 H264-All-Intra-Production**: Every frame is a keyframe for instant seeking.
-- **2-05 💎 Uncompressed-Raw-Video**: Bit-for-bit pixel perfect output.
-- **2-06 🎙️ Audio-Internal-Fix-PCM-WAV**: Specialized fix for PCM/WAV synchronization.
-- **2-07 🎁 Container-Remux-Rewrap**: Instant container swaps (MOV/MKV/MP4) without re-encoding.
+### Operation Categories Covered
 
-### 3. 🔊 Audio Operations (`3-*`)
-*Extract, normalize, and manipulate audio tracks.*
-- **3-01 🔊 Audio-Format-Converter**: One-click extraction to MP3, WAV, FLAC, or AAC.
-- **3-02 🎚️ Audio-Normalize-Boost-Mute**: EBU R128 normalization, +6dB boost, or total mute.
-- **3-03 🎧 Audio-Channel-Remix**: Unified Mono-to-Stereo and Stereo-to-Mono tools.
-- **3-04 🔪 Audio-Stem-Extraction-5.1**: Splits surround sound into 6 individual mono WAV tracks.
+Both tools provide comprehensive coverage of video processing needs:
 
-### 4. 📐 Geometry & Time (`4-*`)
-*Resize, rotate, and manipulate video flow.*
-- **4-01 📐 Resolution-Smart-Scaler**: Presets for 720p, 1080p, 4K, or custom width scaling.
-- **4-02 🔄 Geometry-Rotate-Flip**: Rotate (90 CW/CCW, 180) and Mirror/Flip in one tool.
-- **4-03 🔭 VidStab-Video-Stabilization**: Two-pass software analysis to remove camera shake.
-- **4-04 ✂️ Crop-Aspect-Ratios**: Center-crop for 9:16 (Vertical), 16:9, 4:3, or 2.39:1 (Cinema).
-- **4-05 ⏩ Video-Speed-Fast-Slow-Motion**: Variable playback speed with auto-pitch correction.
+#### 🌐 **Distribution & Web**
+*Universal Toolbox: Optimized encoding for sharing, compatibility, and platform limits*
+- Social media optimization (Twitter, WhatsApp, Discord)
+- H.264/H.265 compression with target sizing
+- WebM with transparency support
+- High-quality GIF generation
 
-### 5. 🛠️ Utilities & Editing (`5-*`)
-*Workflow helpers and specialized editing tools.*
-- **5-01 🖼️ Image-Extract-Thumb-Sequence**: Middle snapshots, full sequences, or interval thumbs.
-- **5-02 🎞️ Image-Sequence-to-Video**: Stitches a folder of JPGs into an MP4 video.
-- **5-03 ✒️ Filters-Subtitles-Watermarks**: Burn `.srt` files or overlay image watermarks.
-- **5-04 🔗 Concat-Join-Videos**: Stitches selected files together into one.
-- **5-05 🧹 Metadata-Privacy-Web-Optimize**: Cleans personal info and prepares for web streaming.
-- **5-06 🎬 Scene-Detection-Split**: Automatic cutting based on visual scene changes.
-- **5-07 🎥 Editing-Smart-Trim**: Unified tool for trimming heads, tails, or specific ranges.
+#### 🎬 **Production & Intermediates** 
+*Universal Toolbox: High-fidelity formats and repair tools for video editing*
+- ProRes and DNxHD intermediate formats
+- Constant framerate fixing for editors
+- Uncompressed and PCM workflows
+- Professional broadcast standards
+
+#### 🔊 **Audio Operations**
+*Both Tools: Extract, normalize, and manipulate audio tracks*
+- Format conversion (MP3, WAV, FLAC, AAC)
+- EBU R128 normalization and volume control
+- Channel remixing and surround sound processing
+- Lossless audio track removal/selection
+
+#### 📐 **Geometry & Time**
+*Universal Toolbox: Resize, rotate, and manipulate video flow*
+- Smart scaling with aspect ratio preservation
+- Rotation, flipping, and stabilization
+- Aspect ratio cropping (9:16, 16:9, square, cinema)
+- Variable speed with pitch correction
+
+#### 🛠️ **Utilities & Editing**
+*Both Tools: Workflow helpers and specialized editing tools*
+- **Universal**: Advanced trimming with re-encoding
+- **Lossless**: Instant trimming with stream copy
+- **Universal**: Subtitle burning and watermarking
+- **Lossless**: Metadata cleaning and container remuxing
+- **Both**: File concatenation and batch processing
 
 ## 🧪 Testing Setup
 
-The project includes a unified, automated testing framework to verify all scripts without needing a full Nautilus environment.
+The project includes comprehensive automated testing frameworks to verify all scripts without needing a full Nautilus environment.
 
-### Automated Test Runner (`test_runner.sh`)
+### Universal Scripts Test Runner (`test_runner.sh`)
 The `test_runner.sh` tool provides a robust way to verify script functionality. It automatically handles Zenity mocking for headless environments and uses `ffprobe` to validate the properties of the generated media.
 
 ```bash
@@ -144,23 +155,92 @@ The `test_runner.sh` tool provides a robust way to verify script functionality. 
 bash testing/test_runner.sh
 ```
 
-**What it does:**
+### Lossless Operations Toolbox Tests (`test_lossless_toolbox.sh`)
+Specialized property-based testing for the Lossless Operations Toolbox to ensure stream copy preservation and operation safety.
+
+```bash
+# Run property-based tests for lossless operations
+bash testing/test_lossless_toolbox.sh
+```
+
+**What the tests do:**
 - **Zenity Mocking**: Simulates user interaction so tests run without GUI popups.
 - **Media Validation**: Verifies resolution, codecs, and stream properties using `ffprobe`.
-- **Category Coverage**: Runs representative tests from all 5 categories.
-- **Colorized Reports**: Provides a clear PASS/FAIL summary in the terminal.
+- **Property Testing**: Validates universal correctness properties (stream preservation, codec compatibility).
+- **Category Coverage**: Runs representative tests from all operation categories.
+- **Colorized Reports**: Provides clear PASS/FAIL summaries in the terminal.
 
 ### Syntax Verification
-To check all 50+ scripts for shell syntax errors manually:
+To check all scripts for shell syntax errors manually:
 ```bash
-for f in ffmpeg/*/*.sh; do bash -n "$f" && echo "OK: $f"; done
+for f in ffmpeg/*.sh; do bash -n "$f" && echo "OK: $f"; done
 ```
+
+---
+
+## 🔒 Lossless Operations Toolbox
+
+The **Lossless Operations Toolbox** is a specialized script designed for quality-preserving video operations. Unlike the Universal Toolbox which can perform transcoding, this tool focuses exclusively on operations that use FFmpeg's stream copy functionality.
+
+### Key Benefits
+- **Zero Quality Loss**: All operations preserve original video/audio quality
+- **Lightning Fast**: Operations complete in seconds (no encoding overhead)
+- **Safe Operations**: Prevents accidental transcoding with validation
+- **Automation Ready**: CLI preset support for batch processing
+
+### Usage Examples
+
+#### Interactive Mode
+```bash
+# Right-click on video files and select "🔒 Lossless-Operations-Toolbox"
+# Or run directly:
+./🔒\ Lossless-Operations-Toolbox.sh video.mp4
+```
+
+#### CLI Preset Mode
+```bash
+# Use predefined presets for automation
+./🔒\ Lossless-Operations-Toolbox.sh --preset "Quick Trim" *.mp4
+./🔒\ Lossless-Operations-Toolbox.sh --preset "MP4 to MKV" video.mov
+./🔒\ Lossless-Operations-Toolbox.sh --preset "Clean Metadata" *.mp4
+```
+
+#### Available Commands
+```bash
+# List all available presets
+./🔒\ Lossless-Operations-Toolbox.sh --list-presets
+
+# Show help and usage
+./🔒\ Lossless-Operations-Toolbox.sh --help
+```
+
+### Supported Operations
+- **✂️ Trimming**: Extract segments without re-encoding
+- **📦 Container Remuxing**: Change format (MP4↔MKV↔MOV↔WebM) instantly
+- **🔗 File Merging**: Concatenate compatible files
+- **🎚️ Stream Editing**: Remove audio/video tracks
+- **📝 Metadata Editing**: Clean privacy data, set rotation, add titles
+- **⚡ Batch Processing**: Apply operations to multiple files
+
+### Default Presets
+- **Quick Trim**: Extract 2-8 second segments
+- **MP4 to MKV**: Convert container format
+- **Remove Audio**: Strip audio tracks
+- **Clean Metadata**: Remove privacy information
+- **Merge Compatible**: Concatenate files with matching codecs
 
 ---
 
 ## 🛠️ Development & Testing
 
-This project includes a robust, headless testing suite to ensure all FFmpeg scripts work across different environments. Developers and AI agents should refer to the [Testing Guide](./testing/README.md) for details on:
+This project includes a robust, headless testing suite to ensure all FFmpeg scripts work across different environments. 
+
+### 📖 Detailed Documentation
+For comprehensive guides on specific tools:
+- **🧰 Universal Toolbox**: See [UNIVERSAL_TOOLBOX.md](UNIVERSAL_TOOLBOX.md) for complete feature guide
+- **🔒 Lossless Operations Toolbox**: See [LOSSLESS_TOOLBOX.md](LOSSLESS_TOOLBOX.md) for lossless operations guide
+
+Developers and AI agents should refer to the [Testing Guide](./testing/TESTING.md) for details on:
 
 - Running the automated test runner.
 - Mocking the Zenity GUI.

@@ -1,6 +1,6 @@
 # 🧪 Testing Framework Guide
 
-This repository uses a custom-built, headless testing framework designed to validate Nautilus scripts without requiring a physical display or user interaction.
+This repository uses a custom-built, headless testing framework designed to validate Nautilus scripts without requiring a physical display or user interaction. The framework includes both traditional script testing and specialized property-based testing for the Lossless Operations Toolbox.
 
 ## 🏗️ Architecture: The Zenity Mock
 The core of the testing suite is `testing/test_runner.sh`. It functions by "hijacking" the `zenity` command.
@@ -15,6 +15,8 @@ You can control the mock's behavior for specific tests using environment variabl
 *   `ZENITY_ENTRY_RESPONSE`: Force the mock to return an input string (e.g., `"25"` for Target Size).
 
 ## 🚀 How to Run Tests
+
+### Universal Script Testing
 ```bash
 bash testing/test_runner.sh
 ```
@@ -22,6 +24,19 @@ The runner will:
 1.  Generate dummy media (H.264/AAC) in `/tmp/scripts_test_data`.
 2.  Execute scripts against this data.
 3.  Analyze the output files using `ffprobe` to verify codecs, resolution, and metadata.
+
+### Lossless Operations Toolbox Testing
+```bash
+bash testing/test_lossless_toolbox.sh
+```
+This specialized test suite uses **Property-Based Testing** to validate:
+- **Stream Copy Preservation**: Ensures no re-encoding occurs
+- **Codec Compatibility**: Validates container-codec combinations
+- **Operation Safety**: Prevents destructive operations
+- **Batch Processing**: Multi-file operation integrity
+- **Metadata Handling**: Lossless metadata operations
+
+**Test Coverage**: 12 comprehensive property tests with 100% pass rate validation.
 
 ---
 
@@ -62,3 +77,66 @@ To add a new test case:
 2.  Add a new `run_test` call at the bottom.
 3.  Define validation rules (e.g., `"vcodec=hevc,width=1280"`).
 4.  If the script requires specific user input, `export` the necessary `ZENITY_` variables before calling `run_test`.
+
+---
+
+## 🔒 Lossless Operations Toolbox Testing
+
+The Lossless Operations Toolbox uses a specialized **Property-Based Testing** approach to validate correctness and safety of lossless operations.
+
+### Property-Based Testing Philosophy
+Instead of testing specific input/output combinations, property-based testing validates universal properties that should always hold true:
+
+- **Stream Copy Preservation**: No re-encoding should ever occur
+- **Codec Compatibility**: Container-codec combinations must be valid
+- **Operation Safety**: Destructive operations must be prevented
+- **Metadata Integrity**: Metadata operations must preserve streams
+
+### Test Properties
+The test suite validates 12 comprehensive properties:
+
+1. **Stream Copy Preservation**: Validates FFmpeg commands use `-c copy`
+2. **Lossless Operation Validation**: Ensures only safe operations are allowed
+3. **Trimming Accuracy**: Validates time range and duration handling
+4. **Container Format Remuxing**: Tests format conversion compatibility
+5. **Codec Compatibility Validation**: Multi-file codec matching
+6. **Metadata Preservation**: Lossless metadata handling
+7. **Stream Selection Accuracy**: Track removal/selection validation
+8. **Metadata-Only Rotation**: Rotation without re-encoding
+9. **Alternative Suggestions**: Helpful error messages for invalid operations
+10. **Batch Processing Integrity**: Multi-file operation consistency
+11. **Codec Analysis Accuracy**: FFprobe integration validation
+12. **Multi-File Compatibility Analysis**: Batch operation validation
+
+### Running Lossless Tests
+```bash
+bash testing/test_lossless_toolbox.sh
+```
+
+**Expected Output:**
+```
+=== Lossless Operations Toolbox Property Tests ===
+Feature: lossless-operations-toolbox
+
+Testing Property 1: Stream Copy Preservation
+[PASS] Stream Copy Preservation
+...
+Testing Property 12: Multi-File Compatibility Analysis
+[PASS] Multi-File Compatibility Analysis
+
+=== Test Summary ===
+Total Tests: 12
+Passed: 12
+Failed: 0
+All tests passed!
+```
+
+### Test Data Generation
+The lossless tests use the same test data as the universal tests but focus on validation rather than transcoding:
+
+```bash
+# Test files are created in testing/test_data/
+src.mp4          # H.264/AAC source file
+converted.mkv    # Different container, same codecs
+compressed.mp4   # Different parameters
+```
