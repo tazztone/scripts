@@ -1,6 +1,6 @@
 #!/bin/bash
 # testing/test_image_toolbox.sh
-# Testing framework for ImageMagick Toolbox
+# Testing framework for ImageMagick Toolbox v2.1 (Smart Builder)
 
 # --- Configuration ---
 TEST_DATA="/tmp/image_test_data"
@@ -9,39 +9,37 @@ REPORT_FILE="./image_test_report.log"
 HEADLESS=true
 
 mkdir -p "$TEST_DATA" "$MOCK_BIN"
-echo "Image Test Session Started at $(date)" > "$REPORT_FILE"
+echo "Image Test Session v2.1 Started at $(date)" > "$REPORT_FILE"
 
-# --- Zenity Mocking ---
+# --- Stateful Zenity Mock ---
+# We use a file to queue responses for sequential zenity calls
+RESPONSE_QUEUE="/tmp/zenity_responses"
+touch "$RESPONSE_QUEUE"
+
 setup_mock_zenity() {
     cat <<'EOF' > "$MOCK_BIN/zenity"
 #!/bin/bash
 ARGS="$*"
-echo "MOCK ZENITY: $ARGS" >> "/tmp/zenity_image_mock.log"
+RESPONSE_QUEUE="/tmp/zenity_responses"
 
-if [[ "$ARGS" == *"--list"* ]]; then
-    if [[ "$ARGS" == *"Select a starting point:"* ]]; then
-        echo "New Custom Edit"
-        exit 0
-    fi
-    if [[ "$ARGS" == *"Wizard Step 2"* ]]; then
-        echo "${ZENITY_LIST_RESPONSE:-📐 Scale / Resize|📦 Format Converter|🚀 Optimization}"
-        exit 0
-    fi
-fi
+# Log original call for debugging
+echo "CALL: zenity $ARGS" >> "/tmp/zenity_test.log"
 
-if [[ "$ARGS" == *"--forms"* ]]; then
-    # 0:Resolution, 1:CustomGeom, 2:Format, 3:Optimize, 4:Effects, 5:Canvas, 6:Branding, 7:BrandingPayload
-    echo "${ZENITY_FORM_RESPONSE:-1280x (720p)||WEBP|Web Ready (Quality 85 + Strip)|No Change|(Inactive)|(Inactive)|}"
+# Read next response from queue
+if [ -s "$RESPONSE_QUEUE" ]; then
+    RESPONSE=$(head -n 1 "$RESPONSE_QUEUE")
+    sed -i '1d' "$RESPONSE_QUEUE"
+    echo "$RESPONSE"
     exit 0
 fi
 
-if [[ "$ARGS" == *"--progress"* ]]; then
-    cat > /dev/null
-    exit 0
-fi
-
+# Fallback: Default behaviors
 if [[ "$ARGS" == *"--question"* ]]; then exit 1; fi
-exit 0
+if [[ "$ARGS" == *"--progress"* ]]; then cat > /dev/null; exit 0; fi
+if [[ "$ARGS" == *"--notification"* ]]; then exit 0; fi
+
+echo "MOCK FAIL: No response queued for: $ARGS" >> "/tmp/zenity_test.log"
+exit 1
 EOF
     chmod +x "$MOCK_BIN/zenity"
     export PATH="$MOCK_BIN:$PATH"
@@ -80,63 +78,97 @@ validate_image() {
 
 # --- Test Runs ---
 generate_test_image
-# Use absolute path for script
+rm -f "/tmp/zenity_test.log"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT="$SCRIPT_DIR/../imagemagick/🖼️ Image-Magick-Toolbox.sh"
 
-echo "Running Resize + Convert Test..."
-export ZENITY_LIST_RESPONSE="📐 Scale / Resize|📦 Format Converter"
-export ZENITY_FORM_RESPONSE="1280x (720p)||WEBP|(Inactive)|No Change|(Inactive)|(Inactive)|"
-( cd "$TEST_DATA" && bash "$SCRIPT" "src.jpg" )
+echo "--------------------------------------"
+echo "Test 1: Stacked Scale + BW + WEBP"
+# Sequence:
+# 1. Main Menu -> Add Operation
+# 2. Ops Menu -> Scale & Resize
+# 3. Scale Form -> 1280x||
+# 4. Main Menu -> Add Operation
+# 5. Ops Menu -> Effects & Branding
+# 6. Effects Form -> Black & White||
+# 7. Main Menu -> Add Operation
+# 8. Ops Menu -> Convert Format
+# 9. Convert Form -> WEBP|Web Ready
+# 10. Main Menu -> RUN OPERATIONS
+cat <<EOF > "$RESPONSE_QUEUE"
+Add Operation
+Scale & Resize
+1280x (720p)|
+Add Operation
+Effects & Branding
+Black & White|(Inactive)|
+Add Operation
+Convert Format
+WEBP|Web Ready (Quality 85)
+RUN OPERATIONS
+EOF
 
-if validate_image "$TEST_DATA/src_720p.webp" "width=1280,format=webp"; then
-    echo "[PASS] Resize + Convert"
-else
-    echo "[FAIL] Resize + Convert"
-fi
-
-echo "Running Optimization + Effects Test..."
-export ZENITY_LIST_RESPONSE="🚀 Optimization|🔄 Effects"
-export ZENITY_FORM_RESPONSE="(Inactive)||PNG|Web Ready (Quality 85 + Strip)|Black & White|(Inactive)|(Inactive)|"
 ( cd "$TEST_DATA" && bash "$SCRIPT" "src.jpg" ) > /dev/null 2>&1
 
-if validate_image "$TEST_DATA/src_web_bw.png" "format=png"; then
-    echo "[PASS] Optimization + Effects"
+if validate_image "$TEST_DATA/src_720p_bw_web.webp" "width=1280,format=webp"; then
+    echo "[PASS] Stacked Scale + BW"
 else
-    echo "[FAIL] Optimization + Effects"
+    echo "[FAIL] Stacked Scale + BW (Check /tmp/zenity_test.log)"
 fi
 
-echo "Running Text Annotation Test..."
-export ZENITY_LIST_RESPONSE="🏷️ Branding"
-export ZENITY_FORM_RESPONSE="(Inactive)||JPG|(Inactive)|No Change|(Inactive)|Text Annotation|Hello World"
+echo "Test 2: Square Crop + PNG"
+# Sequence:
+# 1. Main Menu -> Add Operation
+# 2. Ops Menu -> Crop & Geometry
+# 3. Crop List -> Square Crop (Center 1:1)
+# 4. Main Menu -> Add Operation
+# 5. Ops Menu -> Convert Format
+# 6. Convert Form -> PNG|Archive
+# 7. Main Menu -> RUN OPERATIONS
+cat <<EOF > "$RESPONSE_QUEUE"
+Add Operation
+Crop & Geometry
+Square Crop (Center 1:1)
+Add Operation
+Convert Format
+PNG|Archive (Lossless)
+RUN OPERATIONS
+EOF
+
 ( cd "$TEST_DATA" && bash "$SCRIPT" "src.jpg" ) > /dev/null 2>&1
 
-if validate_image "$TEST_DATA/src_text.jpg" "format=jpeg"; then
-    echo "[PASS] Text Annotation"
+if validate_image "$TEST_DATA/src_sq_arch.png" "format=png"; then
+    # Square aspect ratio check
+    W=$(magick identify -format "%w" "$TEST_DATA/src_sq_arch.png")
+    H=$(magick identify -format "%h" "$TEST_DATA/src_sq_arch.png")
+    if [ "$W" -eq "$H" ]; then
+        echo "[PASS] Square Crop"
+    else
+        echo "[FAIL] Square Crop (Ratio: ${W}x${H})"
+    fi
 else
-    echo "[FAIL] Text Annotation"
+    echo "[FAIL] Square Crop"
 fi
 
-echo "Running Montage Test..."
-export ZENITY_LIST_RESPONSE="🖼️ Canvas & Crop"
-export ZENITY_FORM_RESPONSE="(Inactive)||JPG|(Inactive)|No Change|2x Grid|(Inactive)|"
+echo "Test 3: Montage (Terminal Operation)"
+# Sequence:
+# 1. Main Menu -> Add Operation
+# 2. Ops Menu -> Montage & Grid
+# 3. Montage List -> 2x Grid
+# (Montage executes immediately in v2.1)
+cat <<EOF > "$RESPONSE_QUEUE"
+Add Operation
+Montage & Grid
+2x Grid
+EOF
+
 ( cd "$TEST_DATA" && bash "$SCRIPT" "src.jpg" "small.png" ) > /dev/null 2>&1
 
 if [ -f "$TEST_DATA/montage_grid2x.jpg" ]; then
     echo "[PASS] Montage"
 else
     echo "[FAIL] Montage"
-fi
-
-echo "Running PDF Merge Test..."
-export ZENITY_LIST_RESPONSE="📦 Format Converter"
-export ZENITY_FORM_RESPONSE="(Inactive)||PDF|(Inactive)|No Change|(Inactive)|(Inactive)|"
-( cd "$TEST_DATA" && bash "$SCRIPT" "src.jpg" "small.png" ) > /dev/null 2>&1
-
-if [ -f "$TEST_DATA/merged_images.pdf" ]; then
-    echo "[PASS] PDF Merge"
-else
-    echo "[FAIL] PDF Merge"
 fi
 
 # Cleanup
