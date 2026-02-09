@@ -39,12 +39,12 @@ fi
 if [[ "$ARGS" == *"--checklist"* ]]; then
     case "$ARGS" in
         *"Universal Toolbox Wizard"*)
-            # Return format: TYPE|NAME|TYPE|NAME
-            echo "${ZENITY_LIST_RESPONSE:-INTENT|Speed Control|INTENT|Scale / Resize|INTENT|Audio Tools}"
+            # Return format: Name|Name|...
+            echo "${ZENITY_LIST_RESPONSE:-⏪ Speed Control|📐 Scale / Resize|🔊 Audio Tools}"
             exit 0
             ;;
         *) 
-            echo "${ZENITY_LIST_RESPONSE:-INTENT|Action}"
+            echo "${ZENITY_LIST_RESPONSE:-Action}"
             exit 0
             ;;
     esac
@@ -246,7 +246,7 @@ run_test "ffmpeg/🧰 Universal-Toolbox.sh" "width=1280,no_audio,vcodec=h264,fps
 echo -e "\n${YELLOW}=== Running New: Universal Toolbox v2 (Features) ===${NC}"
 # 1. Subtitle Burn-in Test
 touch "$TEST_DATA/src.srt"
-export ZENITY_LIST_RESPONSE="INTENT|Subtitles"
+export ZENITY_LIST_RESPONSE="📝 Subtitles"
 run_test "ffmpeg/🧰 Universal-Toolbox.sh" "vcodec=h264" "$TEST_DATA/src.mp4"
 rm "$TEST_DATA/src.srt"
 unset ZENITY_LIST_RESPONSE
@@ -254,7 +254,7 @@ unset ZENITY_LIST_RESPONSE
 # 2. Target Size (2-Pass) Test
 # We don't have a specific INTENT for Target Size anymore, it's always in the form.
 # But we can test if selecting an intent still shows the form.
-export ZENITY_LIST_RESPONSE="INTENT|Speed Control"
+export ZENITY_LIST_RESPONSE="⏪ Speed Control"
 run_test "ffmpeg/🧰 Universal-Toolbox.sh" "vcodec=h264" "$TEST_DATA/src.mp4"
 unset ZENITY_LIST_RESPONSE
 

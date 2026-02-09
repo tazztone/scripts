@@ -157,36 +157,26 @@ show_main_menu() {
         local PICKED_RAW=$(show_unified_wizard "Image-Magick-Toolbox v2.1" "$INTENTS" "$PRESET_FILE" "$HISTORY_FILE")
         [ -z "$PICKED_RAW" ] && exit 0
 
+        # Result format: "Name|Name|..."
         IFS='|' read -ra PARTS <<< "$PICKED_RAW"
         
         local LOAD_PRESET=""
         local LOAD_HISTORY=""
         local SELECTED_INTENTS=()
 
-        for ((i=0; i<${#PARTS[@]}; i+=2)); do
-            TYPE="${PARTS[i]}"
-            VALUE="${PARTS[i+1]}"
-            
-            if [ "$TYPE" == "INTENT" ]; then
-                # Strip icon if present
+        for VALUE in "${PARTS[@]}"; do
+            if [[ "$VALUE" == "---" ]]; then
+                continue
+            elif [[ "$VALUE" == "⭐ "* ]]; then
+                LOAD_PRESET="${VALUE#* }"
+            elif [[ "$VALUE" == "🕒 "* ]]; then
+                LOAD_HISTORY="${VALUE#* }"
+            else
+                # INTENT
                 if [[ "$VALUE" =~ ^[^[:alnum:]]+[[:space:]] ]]; then
                     SELECTED_INTENTS+=("${VALUE#* }")
                 else
                     SELECTED_INTENTS+=("$VALUE")
-                fi
-            elif [ "$TYPE" == "PRESET" ]; then
-                # Strip ⭐ icon
-                if [[ "$VALUE" == "⭐ "* ]]; then
-                    LOAD_PRESET="${VALUE#* }"
-                else
-                    LOAD_PRESET="$VALUE"
-                fi
-            elif [ "$TYPE" == "HISTORY" ]; then
-                # Strip 🕒 icon
-                if [[ "$VALUE" == "🕒 "* ]]; then
-                    LOAD_HISTORY="${VALUE#* }"
-                else
-                    LOAD_HISTORY="$VALUE"
                 fi
             fi
         done

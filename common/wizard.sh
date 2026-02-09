@@ -11,28 +11,30 @@ show_unified_wizard() {
     local HISTORY_FILE="$4"
     
     local ARGS=(
-        "--list" "--checklist" "--width=650" "--height=550"
-        "--title=$TITLE" "--print-column=2,3" "--separator=|"
-        "--column=Pick" "--column=Type" "--column=Name" "--column=Description"
+        "--list" "--checklist" "--width=700" "--height=550"
+        "--title=$TITLE" "--separator=|"
+        "--text=Select fixes/edits OR load a preset below:"
+        "--column=Pick" "--column=Action" "--column=Description"
+        "--"
     )
 
     # 1. Add Intents
     IFS=';' read -ra INTENTS <<< "$INTENTS_RAW"
     for item in "${INTENTS[@]}"; do
         IFS='|' read -r icon name desc <<< "$item"
-        ARGS+=(FALSE "INTENT" "$icon $name" "$desc")
+        ARGS+=(FALSE "$icon $name" "$desc")
     done
 
     # 2. Add Presets Divider if they exist
     if [ -s "$PRESET_FILE" ] || [ -s "$HISTORY_FILE" ]; then
-        ARGS+=(FALSE "SEP" "---" "----------------------------------")
+        ARGS+=(FALSE "---" "..................................")
     fi
 
     # 3. Add Presets
     if [ -s "$PRESET_FILE" ]; then
         while IFS='|' read -r name options; do
             [ -z "$name" ] && continue
-            ARGS+=(FALSE "PRESET" "⭐ $name" "Saved Favorite")
+            ARGS+=(FALSE "⭐ $name" "Saved Favorite")
         done < "$PRESET_FILE"
     fi
 
@@ -43,12 +45,12 @@ show_unified_wizard() {
             [ -z "$line" ] && continue
             [ $h_count -ge 8 ] && break
             # Raw options or Name
-            ARGS+=(FALSE "HISTORY" "🕒 $line" "Recent Activity")
+            ARGS+=(FALSE "🕒 $line" "Recent Activity")
             ((h_count++))
         done < "$HISTORY_FILE"
     fi
 
     local RESULT
-    RESULT=$(zenity "${ARGS[@]}" --text="Select fixes/edits OR load a preset below:")
+    RESULT=$(zenity "${ARGS[@]}")
     echo "$RESULT"
 }

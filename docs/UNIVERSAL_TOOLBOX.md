@@ -22,7 +22,7 @@ The Universal Toolbox follows the principle of **"Everything in One Pass"** - co
 ## 🚀 Features
 
 ### Core Capabilities
-- **🧙‍♂️ 3-Step Guided Wizard**: Streamlined workflow from intent to execution
+- **🧙‍♂️ 2-Step Guided Wizard**: Streamlined workflow from intent to execution
 - **🏎️ Smart Hardware Acceleration**: Auto-detection and optimization for NVENC, QSV, VAAPI
 - **⚖️ Precision Target Sizing**: 2-pass encoding to hit exact file size limits
 - **🎨 Advanced Filtering**: Speed, scale, crop, rotate, flip, and audio processing
@@ -44,27 +44,26 @@ The Universal Toolbox follows the principle of **"Everything in One Pass"** - co
 
 ## 📖 Usage Guide
 
-### The 3-Step Wizard
+### The 2-Step Wizard
 
-#### Step 1: Launchpad
-Choose your starting point from three options:
+#### Step 1: Unified Wizard
+The Unified Wizard combines starting point selection and operation intent in a single checklist interface:
 
-1. **➕ New Custom Edit**: Build a selection from scratch
-2. **⭐ Saved Favorites**: Use previously saved presets
-3. **🕒 Recent History**: Repeat recent operations
+1. **Pick a Starting Point**:
+    - **➕ New Custom Edit**: Build a selection from scratch.
+    - **⭐ Saved Favorites**: Use previously saved presets.
+    - **🕒 Recent History**: Repeat recent operations.
 
-#### Step 2: Intent Selection
-Select operation categories to keep the interface clean:
+2. **Select Operation Intents**:
+    - **⏩ Speed Control**: Change playback speed (fast/slow motion).
+    - **📐 Scale / Resize**: Change resolution (1080p, 720p, 4K, custom).
+    - **🖼️ Crop / Aspect Ratio**: Vertical (9:16), Square (1:1), Cinema (21:9).
+    - **🔄 Rotate & Flip**: Fix orientation issues.
+    - **⏱️ Trim (Cut Time)**: Select specific start/end segments.
+    - **🔊 Audio Tools**: Normalize, boost, mute, extract, remix.
+    - **📝 Subtitles**: Burn-in or mux external subtitle files.
 
-- **⏩ Speed Control**: Change playback speed (fast/slow motion)
-- **📐 Scale / Resize**: Change resolution (1080p, 720p, 4K, custom)
-- **🖼️ Crop / Aspect Ratio**: Vertical (9:16), Square (1:1), Cinema (21:9)
-- **🔄 Rotate & Flip**: Fix orientation issues
-- **⏱️ Trim (Cut Time)**: Select specific start/end segments
-- **🔊 Audio Tools**: Normalize, boost, mute, extract, remix
-- **📝 Subtitles**: Burn-in or mux external subtitle files
-
-#### Step 3: Configuration Dashboard
+#### Step 2: Configuration Dashboard
 Unified configuration window with dynamic fields based on selected intents:
 
 ```

@@ -1053,23 +1053,31 @@ show_main_menu() {
     # If PRESET/HISTORY selected: return data
     # If INTENT selected: return choice name
     
+    # Result format: "Name|Name|..."
     IFS='|' read -ra PARTS <<< "$PICKED_RAW"
     
     local SELECTED_INTENT=""
-    for ((i=0; i<${#PARTS[@]}; i+=2)); do
-        TYPE="${PARTS[i]}"
-        VALUE="${PARTS[i+1]}"
-        
-        if [ "$TYPE" == "INTENT" ]; then
-            SELECTED_INTENT="${VALUE#* }"
-        elif [ "$TYPE" == "PRESET" ]; then
-            # Load preset data and return pipe-delimited
+    for VALUE in "${PARTS[@]}"; do
+        if [[ "$VALUE" == "---" ]]; then
+            continue
+        elif [[ "$VALUE" == "⭐ "* ]]; then
+            # Preset
             local pd=$(grep "^${VALUE#* }|" "$PRESET_FILE" | head -n 1 | cut -d'|' -f2-)
-            echo "$pd"
-            return 0
-        elif [ "$TYPE" == "HISTORY" ]; then
-            echo "${VALUE#* }"
-            return 0
+            if [ -n "$pd" ]; then
+                echo "$pd"
+                return 0
+            fi
+        elif [[ "$VALUE" == "🕒 "* ]]; then
+            # History
+             echo "${VALUE#* }"
+             return 0
+        else
+            # Intent
+            if [[ "$VALUE" =~ ^[^[:alnum:]]+[[:space:]] ]]; then
+                SELECTED_INTENT="${VALUE#* }"
+            else
+                SELECTED_INTENT="$VALUE"
+            fi
         fi
     done
 

@@ -80,37 +80,29 @@ while true; do
     PICKED_RAW=$(show_unified_wizard "Universal Toolbox Wizard" "$INTENTS_STR" "$PRESET_FILE" "$HISTORY_FILE")
     [ -z "$PICKED_RAW" ] && exit 0
 
-    # Parse results. Result format: "TYPE|NAME|TYPE|NAME..."
+    # Parse results. Result format: "Name|Name|..."
     IFS='|' read -ra PARTS <<< "$PICKED_RAW"
     
     INTENTS=""
     LOAD_PRESET=""
     LOAD_HISTORY=""
 
-    for ((i=0; i<${#PARTS[@]}; i+=2)); do
-        TYPE="${PARTS[i]}"
-        VALUE="${PARTS[i+1]}"
-        
-        if [ "$TYPE" == "INTENT" ]; then
-            # Strip icon if present (matches emoji or special char followed by space)
+    for VALUE in "${PARTS[@]}"; do
+        if [[ "$VALUE" == "---" ]]; then
+            continue
+        elif [[ "$VALUE" == "⭐ "* ]]; then
+            # PRESET detected
+            LOAD_PRESET="${VALUE#* }"
+        elif [[ "$VALUE" == "🕒 "* ]]; then
+            # HISTORY detected
+            LOAD_HISTORY="${VALUE#* }"
+        else
+            # Assume INTENT
+            # Strip icon if present
             if [[ "$VALUE" =~ ^[^[:alnum:]]+[[:space:]] ]]; then
                 INTENTS+="${VALUE#* }|"
             else
                 INTENTS+="$VALUE|"
-            fi
-        elif [ "$TYPE" == "PRESET" ]; then
-            # Strip ⭐ icon
-            if [[ "$VALUE" == "⭐ "* ]]; then
-                LOAD_PRESET="${VALUE#* }"
-            else
-                LOAD_PRESET="$VALUE"
-            fi
-        elif [ "$TYPE" == "HISTORY" ]; then
-            # Strip 🕒 icon
-            if [[ "$VALUE" == "🕒 "* ]]; then
-                LOAD_HISTORY="${VALUE#* }"
-            else
-                LOAD_HISTORY="$VALUE"
             fi
         fi
     done

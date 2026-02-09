@@ -97,7 +97,7 @@ echo "Test 1: Stacked Scale + BW + WEBP"
 # 9. Convert Form -> WEBP|Web Ready
 # 10. Main Menu -> RUN OPERATIONS
 cat <<EOF > "$RESPONSE_QUEUE"
-INTENT|Scale & Resize|INTENT|Effects & Branding|INTENT|Convert Format
+📏 Scale & Resize|✨ Effects & Branding|📦 Convert Format
 1280x (720p)|
 Black & White|(Inactive)|
 WEBP|Web Ready (Quality 85)
@@ -121,7 +121,7 @@ echo "Test 2: Square Crop + PNG"
 # 6. Convert Form -> PNG|Archive
 # 7. Main Menu -> RUN OPERATIONS
 cat <<EOF > "$RESPONSE_QUEUE"
-INTENT|Crop & Geometry|INTENT|Convert Format
+✂️ Crop & Geometry|📦 Convert Format
 Square Crop (Center 1:1)
 PNG|Archive (Lossless)
 EOF
@@ -148,7 +148,7 @@ echo "Test 3: Montage (Terminal Operation)"
 # 3. Montage List -> 2x Grid
 # (Montage executes immediately in v2.1)
 cat <<EOF > "$RESPONSE_QUEUE"
-INTENT|Montage & Grid
+🖼️ Montage & Grid
 2x Grid
 EOF
 

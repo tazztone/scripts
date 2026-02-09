@@ -81,10 +81,9 @@ The project has been streamlined into **two powerful master tools** that provide
 ### 0. 🧰 Universal Toolbox (`0-*`)
 *The Swiss Army Knife for FFmpeg. A powerful, workstation-grade tool for all operations.*
 - **0-00 🧰 Universal-Toolbox v3.5**: The ultimate one-stop shop for video editing. **[📖 Full Documentation](docs/UNIVERSAL_TOOLBOX.md)**
-    - **🧙‍♂️ Guided 3-Step Wizard**: 
-        1. **Launchpad**: Pick a starting point (Custom, Starred, or History).
-        2. **Intent**: Select categories (Speed, Scale, Crop, etc.) to keep the UI clean.
-        3. **Dashboard**: Configure everything in a single, unified window with dynamic fields.
+    - **🧙‍♂️ Guided 2-Step Wizard**: 
+        1. **Unified Wizard**: Pick a starting point (Custom, Starred, or History) AND select categories (Speed, Scale, Crop, etc.) in a single, streamlined interface.
+        2. **Dashboard**: Configure everything in a single, unified window with dynamic fields.
     - **🏎️ Smart Hardware Auto-Probe**: Performs a silent 1-frame dummy encode at startup to detect and **automatically enable** NVENC (Nvidia), QSV (Intel), or VAAPI (AMD), hiding broken options.
     - **⚖️ Integrated Target Size**: Accurate 2-pass encoding to hit exact MB limits (e.g., 25MB for Discord) directly in the tool.
     - **🛡️ Auto-Rename Safety**: Never overwrites files. Automatically increments names (`_v1`, `_v2`) if the output target already exists.
