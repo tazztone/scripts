@@ -54,3 +54,36 @@ show_unified_wizard() {
     RESULT=$(zenity "${ARGS[@]}")
     echo "$RESULT"
 }
+
+# save_to_history "HistoryFile" "ChoiceString"
+save_to_history() {
+    local HISTORY_FILE="$1"
+    local CHOICES="$2"
+    [ -z "$CHOICES" ] && return
+    
+    # 1. De-duplicate: If choices match the most recent entry, do nothing.
+    local RECENT=$(head -n 1 "$HISTORY_FILE" 2>/dev/null)
+    if [ "$CHOICES" != "$RECENT" ]; then
+        # 2. Add to top
+        echo "$CHOICES" | cat - "$HISTORY_FILE" > "${HISTORY_FILE}.tmp"
+        # 3. Keep last 15
+        head -n 15 "${HISTORY_FILE}.tmp" > "$HISTORY_FILE"
+        rm "${HISTORY_FILE}.tmp"
+    fi
+}
+
+# prompt_save_preset "PresetFile" "Choices" "SuggestedName"
+prompt_save_preset() {
+    local PRESET_FILE="$1"
+    local CHOICES="$2"
+    local SUGGESTED_NAME="$3"
+    
+    if zenity --question --title="Save as Favorite?" --text="Would you like to save this configuration as a permanent favorite?" --ok-label="Save" --cancel-label="Just Run Once"; then
+        local PNAME
+        PNAME=$(zenity --entry --title="Save Favorite" --text="Enter a name for this recipe:" --entry-text="$SUGGESTED_NAME")
+        if [ -n "$PNAME" ]; then
+            echo "$PNAME|$CHOICES" >> "$PRESET_FILE"
+            zenity --notification --text="Saved as '$PNAME'!"
+        fi
+    fi
+}

@@ -251,10 +251,7 @@ CHOICES=$(show_main_menu "$1")
 [ -z "$CHOICES" ] && exit 0
 
 # Save to History
-RECENT=$(head -n 1 "$HISTORY_FILE")
-if [ "$CHOICES" != "$RECENT" ]; then
-    echo "$CHOICES" | cat - "$HISTORY_FILE" | head -n 15 > "${HISTORY_FILE}.tmp" && mv "${HISTORY_FILE}.tmp" "$HISTORY_FILE"
-fi
+save_to_history "$HISTORY_FILE" "$CHOICES"
 
 # Build IM Arguments (Sorting by priority)
 # 1. Crop, 2. Scale, 3. Effects, 4. Format
@@ -426,9 +423,9 @@ fi
 rm -f "$ERR_LOG"
 
 if [[ "$CHOICES" != *"Recent Recipe"* ]]; then
-    if zenity --question --text="Processing complete. Save this recipe as a favorite?" --title="Save Favorite"; then
-        FAV_NAME=$(zenity --entry --text="Enter name for Favorite:" --title="Save Favorite")
-        [ -n "$FAV_NAME" ] && echo "$FAV_NAME|$CHOICES" >> "$PRESET_FILE"
-    fi
+
+    prompt_save_preset "$PRESET_FILE" "$CHOICES" "My-Recipe"
+
 fi
+
 zenity --notification --text="Image Processing Finished!"

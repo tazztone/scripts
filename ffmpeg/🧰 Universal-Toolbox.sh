@@ -2,39 +2,12 @@
 # Universal FFmpeg Toolbox
 # Combine multiple operations (Speed, Scale, Crop, Audio, Format) in one pass.
 
-# Function to get video duration
-get_duration() {
-    ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$1" | cut -d. -f1
-}
-
-# Source wizard logic
+# Source shared logic
 SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+source "$SCRIPT_DIR/common.sh"
 source "$SCRIPT_DIR/../common/wizard.sh"
 
 # --- GPU PROBE (Run once at startup) ---
-GPU_CACHE="/tmp/scripts-sh-gpu-cache"
-probe_gpu() {
-    # Skip if fresh cache exists (<24h)
-    if [ -f "$GPU_CACHE" ] && [ $(( $(date +%s) - $(stat -c %Y "$GPU_CACHE") )) -lt 86400 ]; then
-        return 0
-    fi
-    echo "" > "$GPU_CACHE"
-    
-    # 1. NVENC Probe
-    if ffmpeg -v error -nostdin -f lavfi -i color=black:s=1280x720 -vframes 1 -an -c:v h264_nvenc -f null - 2>/dev/null; then
-        echo "nvenc" >> "$GPU_CACHE"
-    fi
-    
-    # 2. QSV Probe
-    if ffmpeg -v error -nostdin -f lavfi -i color=black:s=1280x720 -vframes 1 -an -c:v h264_qsv -f null - 2>/dev/null; then
-        echo "qsv" >> "$GPU_CACHE"
-    fi
-    
-    # 3. VAAPI Probe (Needs valid device)
-    if ffmpeg -v error -nostdin -f lavfi -i color=black:s=1280x720 -vframes 1 -an -c:v h264_vaapi -f null - 2>/dev/null; then
-        echo "vaapi" >> "$GPU_CACHE"
-    fi
-}
 probe_gpu </dev/null >/dev/null 2>&1 &
 
 # --- CONFIG & PRESETS ---
@@ -238,13 +211,7 @@ while true; do
         
         SLUG=$(echo "$CHOICES" | sed 's/[^[:alnum:]| ]//g' | sed 's/Speed //g; s/Scale //g; s/Rotate //g; s/Flip //g; s/Crop //g; s/Trim //g; s/Output //g; s/Subtitles //g; s/Use //g; s/Fast//g; s/Slow//g; s/pixels//g; s/Quality //g; s/TargetSizeMB //g; s/|/_/g; s/ //g' | tr '[:upper:]' '[:lower:]')
         
-        if zenity --question --title="Save as Favorite?" --text="Would you like to save this configuration as a permanent favorite?" --ok-label="Save" --cancel-label="Just Run Once"; then
-            PNAME=$(zenity --entry --title="Save Favorite" --text="Enter a name for this recipe:" --entry-text="$SLUG")
-            if [ -n "$PNAME" ]; then
-                echo "$PNAME|$CHOICES" >> "$PRESET_FILE"
-                zenity --notification --text="Saved as '$PNAME'!"
-            fi
-        fi
+        prompt_save_preset "$PRESET_FILE" "$CHOICES" "$SLUG"
         break
     else
         # No selection
@@ -253,15 +220,7 @@ while true; do
 done
 
 # --- AUTOMATED HISTORY TRACKING ---
-# 1. De-duplicate: If choices match the most recent entry, do nothing.
-RECENT=$(head -n 1 "$HISTORY_FILE")
-if [ "$CHOICES" != "$RECENT" ]; then
-    # 2. Add to top
-    echo "$CHOICES" | cat - "$HISTORY_FILE" > "${HISTORY_FILE}.tmp"
-    # 3. Keep last 15
-    head -n 15 "${HISTORY_FILE}.tmp" > "$HISTORY_FILE"
-    rm "${HISTORY_FILE}.tmp"
-fi
+save_to_history "$HISTORY_FILE" "$CHOICES"
 
 # --- TARGET SIZE PROMPT ---
 TARGET_MB="${USER_TARGET_MB}"
@@ -589,24 +548,15 @@ for f in "$@"; do
     if [ -z "$FILE_TAG" ] || [ "$FILE_TAG" == "_" ]; then FILE_TAG="_edit"; fi
     
     BASE="${f%.*}"
-    OUT_FILE="${BASE}${FILE_TAG}.${EXT}"
-    
-    # --- AUTO-RENAME PROTECTION ---
-    # Don't overwrite. Increment _v1, _v2 etc.
-    CTR=1
-    while [ -f "$OUT_FILE" ]; do
-        OUT_FILE="${BASE}${FILE_TAG}_v${CTR}.${EXT}"
-        ((CTR++))
-    done
+    OUT_FILE=$(generate_safe_filename "$BASE" "$FILE_TAG" "$EXT")
     
     echo "# Processing $f..."
     
     # --- TARGET SIZE (2-PASS) EXECUTION ---
     if [ -n "$TARGET_MB" ]; then
         echo "# Calculating Bitrate for Target Size..." >> "$LOG_FILE"
-        DUR_RAW=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$f")
-        DUR=$(echo "$DUR_RAW" | cut -d. -f1)
-        if [ "$DUR" -le 0 ]; then DUR=1; fi
+        DUR=$(get_duration "$f" | cut -d. -f1)
+        if [ -z "$DUR" ] || [ "$DUR" -le 0 ]; then DUR=1; fi
         
         ABR=192
         if [[ "$ACODEC_OPTS" == *"-b:a 128k"* ]]; then ABR=128; fi

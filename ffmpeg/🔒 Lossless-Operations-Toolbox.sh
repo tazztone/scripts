@@ -2,13 +2,9 @@
 # Lossless Operations Toolbox
 # Specialized script for lossless video operations using FFmpeg stream copy only
 
-# Function to get video duration
-get_duration() {
-    ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$1" | cut -d. -f1
-}
-
-# Source wizard logic
+# Source shared logic
 SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+source "$SCRIPT_DIR/common.sh"
 source "$SCRIPT_DIR/../common/wizard.sh"
 
 # Function to analyze codec information
@@ -438,86 +434,13 @@ elif [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
 fi
 
 # Enhanced input validation functions
-validate_time_format() {
-    local time_input="$1"
-    
-    # Check if it's a number (seconds)
-    if [[ "$time_input" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
-        echo "$time_input"
-        return 0
-    fi
-    
-    # Check if it's hh:mm:ss format
-    if [[ "$time_input" =~ ^([0-9]{1,2}):([0-9]{2}):([0-9]{2})(\.[0-9]+)?$ ]]; then
-        local hours=${BASH_REMATCH[1]}
-        local minutes=${BASH_REMATCH[2]}
-        local seconds=${BASH_REMATCH[3]}
-        local fraction=${BASH_REMATCH[4]:-}
-        
-        # Convert to seconds
-        local total_seconds=$((hours * 3600 + minutes * 60 + seconds))
-        echo "${total_seconds}${fraction}"
-        return 0
-    fi
-    
-    # Check if it's mm:ss format
-    if [[ "$time_input" =~ ^([0-9]{1,2}):([0-9]{2})(\.[0-9]+)?$ ]]; then
-        local minutes=${BASH_REMATCH[1]}
-        local seconds=${BASH_REMATCH[2]}
-        local fraction=${BASH_REMATCH[3]:-}
-        
-        # Convert to seconds
-        local total_seconds=$((minutes * 60 + seconds))
-        echo "${total_seconds}${fraction}"
-        return 0
-    fi
-    
-    return 1
-}
+# (Using shared validate_time_format from common.sh)
 
 # Smart auto-rename function
-generate_safe_filename() {
-    local base_path="$1"
-    local suffix="$2"
-    local extension="$3"
-    
-    local output_file="${base_path}${suffix}.${extension}"
-    
-    # If file doesn't exist, use it as-is
-    if [ ! -f "$output_file" ]; then
-        echo "$output_file"
-        return 0
-    fi
-    
-    # Auto-increment with _v1, _v2, etc.
-    local counter=1
-    while [ -f "${base_path}${suffix}_v${counter}.${extension}" ]; do
-        ((counter++))
-    done
-    
-    echo "${base_path}${suffix}_v${counter}.${extension}"
-}
+# (Using shared generate_safe_filename from common.sh)
 
 # History management functions
-add_to_history() {
-    local operation="$1"
-    shift
-    local params="$@"
-    local history_entry="${operation}|${params}"
-    
-    # Check if this exact entry is already the most recent
-    local recent=$(head -n 1 "$HISTORY_FILE" 2>/dev/null)
-    if [ "$history_entry" = "$recent" ]; then
-        return 0
-    fi
-    
-    # Add to top of history
-    echo "$history_entry" | cat - "$HISTORY_FILE" > "${HISTORY_FILE}.tmp" 2>/dev/null
-    
-    # Keep only last 15 entries
-    head -n 15 "${HISTORY_FILE}.tmp" > "$HISTORY_FILE" 2>/dev/null
-    rm -f "${HISTORY_FILE}.tmp"
-}
+# (Using shared save_to_history from wizard.sh)
 
 # Preset management functions
 save_preset() {
@@ -1128,7 +1051,7 @@ show_trimming_interface() {
     fi
     
     # Add to history
-    add_to_history "trim" "$start_time" "$end_time"
+    save_to_history "$HISTORY_FILE" "trim|$start_time|$end_time"
     
     # Process files
     (
@@ -1190,7 +1113,7 @@ show_remuxing_interface() {
     fi
     
     # Add to history
-    add_to_history "remux" "$container"
+    save_to_history "$HISTORY_FILE" "remux|$container"
     
     # Process files
     (
@@ -1383,7 +1306,7 @@ show_metadata_interface() {
     fi
     
     # Add to history
-    add_to_history "metadata" "$operation" "$value"
+    save_to_history "$HISTORY_FILE" "metadata|$operation|$value"
     
     # Process files
     (
