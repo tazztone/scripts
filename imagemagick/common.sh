@@ -2,7 +2,7 @@
 # Common utility functions for Nautilus ImageMagick Scripts
 
 # Ensure dependencies
-DEPENDENCIES=(zenity bc)
+DEPENDENCIES=(zenity)
 
 # Check for ImageMagick v7 (magick) or v6 (convert)
 if command -v magick &> /dev/null; then

@@ -1,6 +1,6 @@
 #!/bin/bash
-# 🖼️ Image-Magick-Toolbox v1.0
-# Comprehensive image manipulation via Zenity and ImageMagick
+# 🖼️ Image-Magick-Toolbox v2.0
+# Improved UX: Menu-driven operations (aligned with Lossless Toolbox)
 
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 source "$SCRIPT_DIR/common.sh"
@@ -12,121 +12,151 @@ HISTORY_FILE="$CONFIG_DIR/history.conf"
 mkdir -p "$CONFIG_DIR"
 touch "$PRESET_FILE" "$HISTORY_FILE"
 
-# --- LAUNCHPAD (MAIN MENU) ---
-while true; do
-    LAUNCH_ARGS=(
-        "--list" "--width=600" "--height=500"
-        "--title=🖼️ Image-Magick-Toolbox Launchpad" "--print-column=2"
-        "--column=Type" "--column=Name" "--column=Description"
-        "➕" "New Custom Edit" "Build a selection from scratch"
-    )
+# --- UI FUNCTIONS ---
 
-    # Load Presets
-    if [ -s "$PRESET_FILE" ]; then
-        while IFS='|' read -r name options; do
-            [ -z "$name" ] && continue
-            LAUNCH_ARGS+=("⭐" "$name" "Saved Favorite")
-        done < "$PRESET_FILE"
-    fi
+show_scale_interface() {
+    zenity --forms --title="📏 Scale & Resize" --width=450 \
+        --text="Select scaling options:" \
+        --add-combo="Resolution" --combo-values="1920x (HD)|3840x (4K)|1280x (720p)|640x|50%|Custom" \
+        --add-entry="Custom Geometry (e.g. 800x600)"
+}
 
-    # Load History
-    if [ -s "$HISTORY_FILE" ]; then
-        while read -r line; do
-            [ -z "$line" ] && continue
-            LAUNCH_ARGS+=("🕒" "$line" "Recent History")
-        done < "$HISTORY_FILE"
-    fi
+show_crop_interface() {
+    zenity --list --title="✂️ Crop & Geometry" --width=500 --height=400 \
+        --text="Select a cropping operation:" \
+        --column="Type" --column="Operation" --column="Description" \
+        "🔲" "Square Crop (Center 1:1)" "Automatic 1:1 center crop" \
+        "📱" "Vertical (9:16)" "Standard mobile aspect ratio" \
+        "🖥️" "Landscape (16:9)" "Standard widescreen aspect ratio" \
+        "✍️" "Custom Crop" "Specify manual crop geometry"
+}
 
-    PICKED=$(zenity "${LAUNCH_ARGS[@]}" --text="Select a starting point:")
-    if [ -z "$PICKED" ]; then exit 0; fi
+show_convert_interface() {
+    zenity --forms --title="📦 Convert & Optimize" --width=450 \
+        --text="Select format and quality:" \
+        --add-combo="Output Format" --combo-values="JPG|PNG|WEBP|TIFF|PDF" \
+        --add-combo="Optimize Strategy" --combo-values="Web Ready (Quality 85)|Max Compression|Archive (Lossless)"
+}
 
-    if [ "$PICKED" == "New Custom Edit" ]; then
-        # --- STEP 2: INTENT CHECKLIST ---
-        ZENITY_INTENTS=(
-            "--list" "--checklist" "--width=600" "--height=500"
-            "--title=Wizard Step 2: What do you want to fix?" "--print-column=2"
-            "--column=Pick" "--column=Action" "--column=Description"
-            FALSE "📐 Scale / Resize" "Change dimensions (1080p, 50%, etc)"
-            FALSE "📦 Format Converter" "Convert to JPG, PNG, WEBP, PDF"
-            FALSE "🚀 Optimization" "Web Ready, Strip Metadata, Compress"
-            FALSE "🖼️ Canvas & Crop" "Montage Grid, Square Crop, Border"
-            FALSE "🏷️ Branding" "Add Watermark or Text"
-            FALSE "🔄 Effects" "Rotate, Flip, Greyscale"
+show_montage_interface() {
+    zenity --list --title="🖼️ Montage & Grid" --width=500 --height=400 \
+        --text="Select a montage layout:" \
+        --column="Type" --column="Layout" --column="Description" \
+        "🏁" "2x Grid" "2-column grid layout" \
+        "🎲" "3x Grid" "3-column grid layout" \
+        "📑" "Contact Sheet" "Labeled thumbnail grid" \
+        "➡" "Single Row" "Stitch images side-by-side" \
+        "⬇" "Single Column" "Stitch images vertically"
+}
+
+show_effects_interface() {
+    zenity --forms --title="✨ Effects & Branding" --width=450 \
+        --text="Apply effects or watermarks:" \
+        --add-combo="Visual Effect" --combo-values="No Change|Rotate 90 CW|Rotate 90 CCW|Flip Horizontal|Black & White" \
+        --add-combo="Branding" --combo-values="(Inactive)|Watermark PNG|Text Annotation" \
+        --add-entry="Watermark Path / Text Content"
+}
+
+# --- MAIN MENU (LAUNCHPAD) ---
+
+show_main_menu() {
+    while true; do
+        LAUNCH_ARGS=(
+            "--list" "--width=650" "--height=500"
+            "--title=🖼️ Image-Magick-Toolbox" "--print-column=2"
+            "--column=Type" "--column=Name" "--column=Description"
+            "➕" "New Operation" "Select an operation from scratch"
         )
-        
-        INTENTS=$(zenity "${ZENITY_INTENTS[@]}" --separator="|")
-        [ -z "$INTENTS" ] && continue
 
-        # --- STEP 3: CONFIGURATION FORM ---
-        ZENITY_FORMS=(
-            "--forms" "--title=Wizard Step 3: Configure & Run"
-            "--width=500" "--separator=|" 
-            "--text=Finalize your image recipe:"
-        )
-
-        # 1. SCALE
-        VAL_ires=" (Inactive)"
-        [[ "$INTENTS" == *"Scale"* ]] && VAL_ires="1920x (HD)"
-        ZENITY_FORMS+=( "--add-combo=📐 Resolution" "--combo-values=$VAL_ires|3840x (4K)|1280x (720p)|640x|50%|Custom" )
-        ZENITY_FORMS+=( "--add-entry=✍️ Custom Geometry (e.g. 800x600)" )
-
-        # 2. FORMAT
-        VAL_ifmt=" (Inactive)"
-        [[ "$INTENTS" == *"Format"* ]] && VAL_ifmt="JPG"
-        ZENITY_FORMS+=( "--add-combo=📦 Output Format" "--combo-values=$VAL_ifmt|PNG|WEBP|TIFF|PDF" )
-
-        # 3. OPTIMIZATION
-        VAL_iopt=" (Inactive)"
-        [[ "$INTENTS" == *"Optimization"* ]] && VAL_iopt="Web Ready (Quality 85 + Strip)"
-        ZENITY_FORMS+=( "--add-combo=🚀 Optimize Strategy" "--combo-values=$VAL_iopt|Max Compression|Archive (Lossless+Keep Metadata)" )
-
-        # 4. EFFECTS & BRANDING
-        VAL_ieff=" (Inactive)"
-        [[ "$INTENTS" == *"Effects"* ]] && VAL_ieff="No Change"
-        ZENITY_FORMS+=( "--add-combo=🔄 Effects" "--combo-values=$VAL_ieff|Rotate 90 CW|Rotate 90 CCW|Flip Horizontal|Black & White" )
-
-        # 5. ADVANCED TOOLS (Montage / PDF / Watermark)
-        VAL_imnt=" (Inactive)"
-        [[ "$INTENTS" == *"Canvas"* ]] && VAL_imnt="2x Grid"
-        ZENITY_FORMS+=( "--add-combo=🖼️ Canvas/Montage" "--combo-values=$VAL_imnt|3x Grid|Contact Sheet|Single Row|Single Column" )
-        
-        VAL_iwm=" (Inactive)"
-        [[ "$INTENTS" == *"Branding"* ]] && VAL_iwm="Watermark PNG"
-        ZENITY_FORMS+=( "--add-combo=🏷️ Branding" "--combo-values=$VAL_iwm|Text Annotation" )
-        ZENITY_FORMS+=( "--add-entry=✍️ Text/Watermark Path (or 'watermark.png')" )
-
-        CONFIG_RESULT=$(zenity "${ZENITY_FORMS[@]}")
-        [ -z "$CONFIG_RESULT" ] && continue 
-
-        # --- EXTRACT CONFIG ---
-        IFS='|' read -ra VALS <<< "$CONFIG_RESULT"
-        CHOICES=""
-        
-        [[ "${VALS[0]}" != *"Inactive"* ]] && CHOICES+="Scale: ${VALS[0]}|"
-        [ -n "${VALS[1]}" ] && CHOICES+="CustomGeometry: ${VALS[1]}|"
-        [[ "${VALS[2]}" != *"Inactive"* ]] && CHOICES+="Format: ${VALS[2]}|"
-        [[ "${VALS[3]}" != *"Inactive"* ]] && CHOICES+="Optimize: ${VALS[3]}|"
-        [[ "${VALS[4]}" != *"Inactive"* && "${VALS[4]}" != "No Change" ]] && CHOICES+="Effect: ${VALS[4]}|"
-        [[ "${VALS[5]}" != *"Inactive"* ]] && CHOICES+="Canvas: ${VALS[5]}|"
-        [[ "${VALS[6]}" != *"Inactive"* ]] && CHOICES+="Branding: ${VALS[6]}|"
-        [ -n "${VALS[7]}" ] && CHOICES+="BrandingPayload: ${VALS[7]}|"
-
-        CHOICES=$(echo "$CHOICES" | sed 's/|$//')
-        break
-
-    else
-        # Handle Favs/History
-        PRESET_MATCH=$(grep "^$PICKED|" "$PRESET_FILE" | cut -d'|' -f2-)
-        if [ -n "$PRESET_MATCH" ]; then
-            CHOICES="$PRESET_MATCH"
-        else
-            CHOICES="$PICKED"
+        # Load Presets
+        if [ -s "$PRESET_FILE" ]; then
+            while IFS='|' read -r name options; do
+                [ -z "$name" ] && continue
+                LAUNCH_ARGS+=("⭐" "$name" "Saved Preset")
+            done < "$PRESET_FILE"
         fi
-        break
-    fi
-done
 
-# --- PROCESSING LOGIC (PHASE 2) ---
+        # Load History
+        if [ -s "$HISTORY_FILE" ]; then
+            local h_count=0
+            while read -r line; do
+                [ -z "$line" ] && continue
+                [ $h_count -ge 5 ] && break
+                LAUNCH_ARGS+=("🕒" "$line" "Recent Operation")
+                ((h_count++))
+            done < "$HISTORY_FILE"
+        fi
+
+        PICKED=$(zenity "${LAUNCH_ARGS[@]}" --text="Select a starting point:")
+        if [ -z "$PICKED" ]; then exit 0; fi
+
+        if [ "$PICKED" == "New Operation" ]; then
+            OP_PICK=(
+                "--list" "--width=600" "--height=450"
+                "--title=Select Operation" "--print-column=2"
+                "--column=Icon" "--column=Operation" "--column=Description"
+                "📏" "Scale & Resize" "Change image dimensions"
+                "✂️" "Crop & Geometry" "Square crop or aspect ratios"
+                "📦" "Convert Format" "JPG, PNG, WEBP, PDF + Optimization"
+                "🖼️" "Montage & Grid" "Combine images into grids or rows"
+                "✨" "Effects & Branding" "Rotation, Watermarks, BW"
+            )
+            CHOICE=$(zenity "${OP_PICK[@]}" --text="What do you want to do?")
+            [ -z "$CHOICE" ] && continue
+
+            case "$CHOICE" in
+                "Scale & Resize")
+                    RES=$(show_scale_interface)
+                    [ -z "$RES" ] && continue
+                    IFS='|' read -ra VALS <<< "$RES"
+                    CHOICES="Scale: ${VALS[0]}|CustomGeometry: ${VALS[1]}"
+                    ;;
+                "Crop & Geometry")
+                    RES=$(show_crop_interface)
+                    [ -z "$RES" ] && continue
+                    CHOICES="Canvas: $RES"
+                    ;;
+                "Convert Format")
+                    RES=$(show_convert_interface)
+                    [ -z "$RES" ] && continue
+                    IFS='|' read -ra VALS <<< "$RES"
+                    CHOICES="Format: ${VALS[0]}|Optimize: ${VALS[1]}"
+                    ;;
+                "Montage & Grid")
+                    RES=$(show_montage_interface)
+                    [ -z "$RES" ] && continue
+                    CHOICES="Canvas: $RES"
+                    ;;
+                "Effects & Branding")
+                    RES=$(show_effects_interface)
+                    [ -z "$RES" ] && continue
+                    IFS='|' read -ra VALS <<< "$RES"
+                    CHOICES="Effect: ${VALS[0]}|Branding: ${VALS[1]}|BrandingPayload: ${VALS[2]}"
+                    ;;
+            esac
+            echo "$CHOICES"
+            return 0
+
+        elif grep -q "^$PICKED|" "$PRESET_FILE"; then
+            echo $(grep "^$PICKED|" "$PRESET_FILE" | cut -d'|' -f2-)
+            return 0
+        else
+            # History item
+            echo "$PICKED"
+            return 0
+        fi
+    done
+}
+
+# --- MAIN EXECUTION ---
+
+if [ $# -eq 0 ]; then
+    zenity --error --text="No files selected."
+    exit 1
+fi
+
+CHOICES=$(show_main_menu)
+[ -z "$CHOICES" ] && exit 0
 
 # Save to History
 if [ -n "$CHOICES" ]; then
@@ -138,6 +168,7 @@ fi
 
 # Prepare ImageMagick Arguments
 IM_ARGS=()
+ERR_LOG=$(mktemp /tmp/im_toolbox_errors_XXXXX.log)
 OUT_EXT=""
 TAG=""
 DO_MONTAGE=false
@@ -158,7 +189,7 @@ for opt in "${CHOICE_ARR[@]}"; do
             ;;
         CustomGeometry:*)
             VAL=$(echo "$opt" | cut -d' ' -f2)
-            IM_ARGS+=("-resize" "$VAL"); TAG="${TAG}_${VAL}"
+            [ -n "$VAL" ] && { IM_ARGS+=("-resize" "$VAL"); TAG="${TAG}_${VAL}"; }
             ;;
         Format:*)
             OUT_EXT=$(echo "$opt" | cut -d' ' -f2 | tr '[:upper:]' '[:lower:]')
@@ -169,10 +200,12 @@ for opt in "${CHOICE_ARR[@]}"; do
                 IM_ARGS+=("-quality" "85" "-strip"); TAG="${TAG}_web"
             elif [[ "$VAL" == *"Max Compression"* ]]; then
                 IM_ARGS+=("-quality" "60" "-strip"); TAG="${TAG}_min"
+            elif [[ "$VAL" == *"Archive"* ]]; then
+                TAG="${TAG}_arch"
             fi
             ;;
         Effect:*)
-            VAL=$(echo "$opt" | cut -d':' -f2)
+            VAL=$(echo "$opt" | cut -d':' -f2 | sed 's/^ //')
             case "$VAL" in
                 *"Rotate 90 CW"*)  IM_ARGS+=("-rotate" "90"); TAG="${TAG}_90cw" ;;
                 *"Rotate 90 CCW"*) IM_ARGS+=("-rotate" "-90"); TAG="${TAG}_90ccw" ;;
@@ -194,12 +227,26 @@ for opt in "${CHOICE_ARR[@]}"; do
             fi
             ;;
         Canvas:*)
-            VAL=$(echo "$opt" | cut -d':' -f2)
+            VAL=$(echo "$opt" | cut -d':' -f2 | sed 's/^ //')
             case "$VAL" in
-               *"2x Grid"*) IM_ARGS+=("-tile" "2x"); TAG="${TAG}_grid2x" ;;
-               *"3x Grid"*) IM_ARGS+=("-tile" "3x"); TAG="${TAG}_grid3x" ;;
+               *"Square Crop"*) 
+                   IM_ARGS+=("-set" "option:distort:viewport" "%[fx:min(w,h)]x%[fx:min(w,h)]" "-distort" "SRT" "0" "+repage")
+                   TAG="${TAG}_sq" 
+                   ;;
+               *"Vertical (9:16)"*)
+                   IM_ARGS+=("-set" "option:distort:viewport" "%[fx:min(w,h*9/16)]x%[fx:min(w*16/9,h)]" "-distort" "SRT" "0" "+repage")
+                   TAG="${TAG}_9x16"
+                   ;;
+               *"Landscape (16:9)"*)
+                   IM_ARGS+=("-set" "option:distort:viewport" "%[fx:min(w,h*16/9)]x%[fx:min(w*9/16,h)]" "-distort" "SRT" "0" "+repage")
+                   TAG="${TAG}_16x9"
+                   ;;
+               *"2x Grid"*) IM_ARGS+=("-tile" "2x" "-geometry" "+0+0"); TAG="${TAG}_grid2x"; DO_MONTAGE=true ;;
+               *"3x Grid"*) IM_ARGS+=("-tile" "3x" "-geometry" "+0+0"); TAG="${TAG}_grid3x"; DO_MONTAGE=true ;;
+               *"Single Row"*) IM_ARGS+=("-tile" "x1" "-geometry" "+0+0" "-background" "none"); TAG="${TAG}_row"; DO_MONTAGE=true ;;
+               *"Single Column"*) IM_ARGS+=("-tile" "1x" "-geometry" "+0+0" "-background" "none"); TAG="${TAG}_col"; DO_MONTAGE=true ;;
+               *"Contact Sheet"*) IM_ARGS+=("-thumbnail" "200x200>" "-geometry" "+10+10" "-tile" "4x"); TAG="${TAG}_sheet"; DO_MONTAGE=true ;;
             esac
-            DO_MONTAGE=true
             ;;
     esac
 done
@@ -208,9 +255,9 @@ done
 if [ "$DO_MONTAGE" = true ]; then
     OUT_FILE=$(generate_safe_filename "montage" "$TAG" "${OUT_EXT:-jpg}")
     (
-    echo "10"
-    echo "# Creating Montage..."
-    $IM_MONTAGE "$@" "${IM_ARGS[@]}" "$OUT_FILE"
+        echo "10"
+        echo "# Creating Montage..."
+        $IM_MONTAGE "$@" "${IM_ARGS[@]}" "$OUT_FILE"
     ) | zenity --progress --title="Creating Montage" --auto-close --pulsate
     zenity --notification --text="Montage Finished: $OUT_FILE"
     exit 0
@@ -220,9 +267,9 @@ fi
 if [[ "$OUT_EXT" == "pdf" && $# -gt 1 ]]; then
     OUT_FILE=$(generate_safe_filename "merged_images" "$TAG" "pdf")
     (
-    echo "10"
-    echo "# Merging into PDF..."
-    $IM_EXE "$@" "${IM_ARGS[@]}" "$OUT_FILE"
+        echo "10"
+        echo "# Merging into PDF..."
+        $IM_EXE "$@" "${IM_ARGS[@]}" "$OUT_FILE"
     ) | zenity --progress --title="Creating PDF" --auto-close --pulsate
     zenity --notification --text="PDF Created: $OUT_FILE"
     exit 0
@@ -230,56 +277,56 @@ fi
 
 # --- EXECUTION LOOP (PARALLEL) ---
 (
-TOTAL=$#
-COUNT=0
-MAX_JOBS=$(nproc)
-[ "$MAX_JOBS" -gt 4 ] && MAX_JOBS=4 # Cap at 4 for UI responsiveness
+    TOTAL=$#
+    COUNT=0
+    MAX_JOBS=$(nproc)
+    [ "$MAX_JOBS" -gt 4 ] && MAX_JOBS=4 
 
-for f in "$@"; do
-    ((COUNT++))
-    PERCENT=$((COUNT * 100 / TOTAL))
-    echo "$PERCENT"
-    echo "# Processing ($COUNT/$TOTAL): $(basename "$f")..."
-    
-    BASE="${f%.*}"
-    IN_EXT="${f##*.}"
-    [ -z "$OUT_EXT" ] && CURRENT_EXT="$IN_EXT" || CURRENT_EXT="$OUT_EXT"
-    
-    OUT_FILE=$(generate_safe_filename "$BASE" "$TAG" "$CURRENT_EXT")
-    
-    {
-        # 0. PDF Extraction Special handling
-        if [[ "$IN_EXT" == "pdf" && "$OUT_EXT" != "pdf" ]]; then
-            $IM_EXE -density 300 "$f" "${IM_ARGS[@]}" "${BASE}${TAG}-%d.${OUT_EXT:-jpg}"
-        # 1. Watermark logic
-        elif [[ "$CHOICES" == *"Branding: Watermark PNG"* ]]; then
-            WM_PATH="${BRAND_PAYLOAD:-watermark.png}"
-            [ ! -f "$WM_PATH" ] && [ -f "$SCRIPT_DIR/$WM_PATH" ] && WM_PATH="$SCRIPT_DIR/$WM_PATH"
-            if [ -f "$WM_PATH" ]; then
-                $IM_EXE "$f" "${IM_ARGS[@]}" miff:- | $IM_COMPOSITE -dissolve 30 -gravity Southeast "$WM_PATH" - "$OUT_FILE"
+    for f in "$@"; do
+        ((COUNT++))
+        PERCENT=$((COUNT * 100 / TOTAL))
+        echo "$PERCENT"
+        echo "# Processing ($COUNT/$TOTAL): $(basename "$f")..."
+        
+        BASE="${f%.*}"
+        IN_EXT="${f##*.}"
+        [ -z "$OUT_EXT" ] && CURRENT_EXT="$IN_EXT" || CURRENT_EXT="$OUT_EXT"
+        
+        OUT_FILE=$(generate_safe_filename "$BASE" "$TAG" "$CURRENT_EXT")
+        
+        {
+            if [[ "$IN_EXT" == "pdf" && "$OUT_EXT" != "pdf" ]]; then
+                $IM_EXE -density 300 "$f" "${IM_ARGS[@]}" "${BASE}${TAG}-%d.${OUT_EXT:-jpg}" 2>>"$ERR_LOG"
+            elif [[ "$CHOICES" == *"Branding: Watermark PNG"* ]]; then
+                WM_PATH="${BRAND_PAYLOAD:-watermark.png}"
+                [ ! -f "$WM_PATH" ] && [ -f "$SCRIPT_DIR/$WM_PATH" ] && WM_PATH="$SCRIPT_DIR/$WM_PATH"
+                if [ -f "$WM_PATH" ]; then
+                    $IM_EXE "$f" "${IM_ARGS[@]}" miff:- | $IM_COMPOSITE -dissolve 30 -gravity Southeast "$WM_PATH" - "$OUT_FILE" 2>>"$ERR_LOG"
+                else
+                    $IM_EXE "$f" "${IM_ARGS[@]}" "$OUT_FILE" 2>>"$ERR_LOG"
+                fi
             else
-                $IM_EXE "$f" "${IM_ARGS[@]}" "$OUT_FILE"
+                $IM_EXE "$f" "${IM_ARGS[@]}" "$OUT_FILE" 2>>"$ERR_LOG"
             fi
-        else
-            $IM_EXE "$f" "${IM_ARGS[@]}" "$OUT_FILE" 2>/tmp/im_error.log
-        fi
-    } &
-    
-    # Manage job queue
-    if [[ $(jobs -r | wc -l) -ge $MAX_JOBS ]]; then
-        wait -n
-    fi
-done
-wait
+            
+            [ $? -ne 0 ] && echo "Error processing file: $f" >> "$ERR_LOG"
+        } &
+        
+        [[ $(jobs -r | wc -l) -ge $MAX_JOBS ]] && wait -n
+    done
+    wait
 ) | zenity --progress --title="Image-Magick-Toolbox" --auto-close --percentage=0
 
 # --- FINALIZE ---
-if [ "$PICKED" == "New Custom Edit" ] && [ -n "$CHOICES" ]; then
+if [ -s "$ERR_LOG" ]; then
+    zenity --text-info --title="Processing Issues" --filename="$ERR_LOG" --width=500 --height=300
+fi
+rm -f "$ERR_LOG"
+
+if [[ "$CHOICES" != *"Recent Operation"* ]]; then
     if zenity --question --text="Processing complete. Save this configuration to Favorites?" --title="Save Favorite"; then
         FAV_NAME=$(zenity --entry --text="Enter name for Favorite:" --title="Save Favorite")
-        if [ -n "$FAV_NAME" ]; then
-            echo "$FAV_NAME|$CHOICES" >> "$PRESET_FILE"
-        fi
+        [ -n "$FAV_NAME" ] && echo "$FAV_NAME|$CHOICES" >> "$PRESET_FILE"
     fi
 fi
 

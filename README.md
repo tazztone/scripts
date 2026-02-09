@@ -80,7 +80,7 @@ The project has been streamlined into **two powerful master tools** that provide
 
 ### 0. 🧰 Universal Toolbox (`0-*`)
 *The Swiss Army Knife for FFmpeg. A powerful, workstation-grade tool for all operations.*
-- **0-00 🧰 Universal-Toolbox v3.5**: The ultimate one-stop shop for video editing. **[📖 Full Documentation](UNIVERSAL_TOOLBOX.md)**
+- **0-00 🧰 Universal-Toolbox v3.5**: The ultimate one-stop shop for video editing. **[📖 Full Documentation](docs/UNIVERSAL_TOOLBOX.md)**
     - **🧙‍♂️ Guided 3-Step Wizard**: 
         1. **Launchpad**: Pick a starting point (Custom, Starred, or History).
         2. **Intent**: Select categories (Speed, Scale, Crop, etc.) to keep the UI clean.
@@ -92,7 +92,7 @@ The project has been streamlined into **two powerful master tools** that provide
     - **💾 Persistent Custom Presets**: Saved favorites now remember your manual entries (e.g. Custom Width, Target Size) and reload them instantly.
     - **📝 Smart Subtitles**: Auto-detects `.srt` files and offers styled **Burn-in** or **Mux** options.
 
-- **0-01 🔒 Lossless-Operations-Toolbox**: Specialized tool for quality-preserving operations only. **[📖 Full Documentation](LOSSLESS_TOOLBOX.md)**
+- **0-01 🔒 Lossless-Operations-Toolbox**: Specialized tool for quality-preserving operations only. **[📖 Full Documentation](docs/LOSSLESS_TOOLBOX.md)**
     - **🚀 Zero Quality Loss**: All operations use FFmpeg stream copy - no re-encoding, no quality degradation.
     - **⚡ Lightning Fast**: Operations complete in seconds, not minutes (no CPU/GPU encoding).
     - **🎯 Curated Operations**: Only truly lossless operations - trimming, remuxing, stream editing, metadata changes.
@@ -105,7 +105,7 @@ The project has been streamlined into **two powerful master tools** that provide
 
 ### 1. 🖼️ ImageMagick Toolbox (`1-*`)
 *High-performance batch image processing directly from Nautilus.*
-- **1-00 🖼️ Image-Magick-Toolbox**: Comprehensive image manipulation with "Smart" logic.
+- **1-00 🖼️ Image-Magick-Toolbox**: Comprehensive image manipulation with "Smart" logic. **[📖 Full Documentation](docs/IMAGEMAGICK_TOOLBOX.md)**
     - **⚡ Parallel Batch Processing**: Uses background jobs to process image libraries at maximum CPU speed.
     - **📱 Modern Format Support**: Automated handling of **HEIC/RAW** to sRGB JPG conversion.
     - **📐 Smart Resizing**: Aspect ratio preservation with "Fit to Height/Width" and HD presets.
@@ -249,8 +249,9 @@ This project includes a robust, headless testing suite to ensure all FFmpeg scri
 
 ### 📖 Detailed Documentation
 For comprehensive guides on specific tools:
-- **🧰 Universal Toolbox**: See [UNIVERSAL_TOOLBOX.md](UNIVERSAL_TOOLBOX.md) for complete feature guide
-- **🔒 Lossless Operations Toolbox**: See [LOSSLESS_TOOLBOX.md](LOSSLESS_TOOLBOX.md) for lossless operations guide
+- **🧰 Universal Toolbox**: See [UNIVERSAL_TOOLBOX.md](docs/UNIVERSAL_TOOLBOX.md) for complete feature guide
+- **🔒 Lossless Operations Toolbox**: See [LOSSLESS_TOOLBOX.md](docs/LOSSLESS_TOOLBOX.md) for lossless operations guide
+- **🖼️ Image Magick Toolbox**: See [IMAGEMAGICK_TOOLBOX.md](docs/IMAGEMAGICK_TOOLBOX.md) for image processing guide
 
 Developers and AI agents should refer to the [Testing Guide](./testing/TESTING.md) for details on:
 

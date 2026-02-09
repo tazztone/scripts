@@ -4,9 +4,9 @@
 FFMPEG_TARGET="$HOME/.local/share/nautilus/scripts/ffmpeg"
 IMAGE_TARGET="$HOME/.local/share/nautilus/scripts/imagemagick"
 
-# Define the source directories
-FFMPEG_SOURCE="$(dirname "$0")/ffmpeg"
-IMAGE_SOURCE="$(dirname "$0")/imagemagick"
+# Define the source directories (absolute paths)
+FFMPEG_SOURCE="$(cd "$(dirname "$0")/ffmpeg" && pwd)"
+IMAGE_SOURCE="$(cd "$(dirname "$0")/imagemagick" && pwd)"
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -50,18 +50,20 @@ fi
 
 # Install FFmpeg Scripts
 if [ -d "$FFMPEG_SOURCE" ]; then
-    echo -e "${YELLOW}Installing FFmpeg scripts to $FFMPEG_TARGET...${NC}"
+    echo -e "${YELLOW}Symlinking FFmpeg scripts to $FFMPEG_TARGET...${NC}"
     mkdir -p "$FFMPEG_TARGET"
-    cp -r "$FFMPEG_SOURCE"/* "$FFMPEG_TARGET/"
-    chmod +x "$FFMPEG_TARGET"/*.sh
+    for script in "$FFMPEG_SOURCE"/*.sh; do
+        ln -sf "$script" "$FFMPEG_TARGET/$(basename "$script")"
+    done
 fi
 
 # Install ImageMagick Scripts
 if [ -d "$IMAGE_SOURCE" ]; then
-    echo -e "${YELLOW}Installing ImageMagick scripts to $IMAGE_TARGET...${NC}"
+    echo -e "${YELLOW}Symlinking ImageMagick scripts to $IMAGE_TARGET...${NC}"
     mkdir -p "$IMAGE_TARGET"
-    cp -r "$IMAGE_SOURCE"/* "$IMAGE_TARGET/"
-    chmod +x "$IMAGE_TARGET"/*.sh
+    for script in "$IMAGE_SOURCE"/*.sh; do
+        ln -sf "$script" "$IMAGE_TARGET/$(basename "$script")"
+    done
 fi
 
 echo -e "${GREEN}Installation complete!${NC}"
