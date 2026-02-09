@@ -103,6 +103,18 @@ The project has been streamlined into **two powerful master tools** that provide
     - **📦 Container Optimization**: Format-specific flags for better compatibility (faststart, index space).
     - **🏷️ Smart Auto-Rename**: Prevents file overwrites with intelligent incremental naming.
 
+### 1. 🖼️ ImageMagick Toolbox (`1-*`)
+*High-performance batch image processing directly from Nautilus.*
+- **1-00 🖼️ Image-Magick-Toolbox**: Comprehensive image manipulation with "Smart" logic.
+    - **⚡ Parallel Batch Processing**: Uses background jobs to process image libraries at maximum CPU speed.
+    - **📱 Modern Format Support**: Automated handling of **HEIC/RAW** to sRGB JPG conversion.
+    - **📐 Smart Resizing**: Aspect ratio preservation with "Fit to Height/Width" and HD presets.
+    - **📦 Format Conversion**: Instant conversion between JPG, PNG, WEBP, and TIFF with intelligent transparency handling.
+    - **🚀 One-Click Optimization**: "Make Web Ready" preset (quality 85 + metadata stripping).
+    - **🖼️ Canvas & Grid**: Create **2x2 / 3x3 grids** or contact sheets from selected images instantly.
+    - **📄 PDF Utilities**: Combine multiple images into a single PDF or extract pages as high-DPI images.
+    - **🏷️ Branded Output**: Auto-watermarking with `watermark.png` detection and Southeast orientation.
+
 ### Operation Categories Covered
 
 Both tools provide comprehensive coverage of video processing needs:

@@ -1,10 +1,12 @@
 #!/bin/bash
 
-# Define the target directory for Nautilus scripts
-TARGET_DIR="$HOME/.local/share/nautilus/scripts/ffmpeg"
+# Define the target directories for Nautilus scripts
+FFMPEG_TARGET="$HOME/.local/share/nautilus/scripts/ffmpeg"
+IMAGE_TARGET="$HOME/.local/share/nautilus/scripts/imagemagick"
 
-# Define the source directory (adjust if running from a different location)
-SOURCE_DIR="$(dirname "$0")/ffmpeg"
+# Define the source directories
+FFMPEG_SOURCE="$(dirname "$0")/ffmpeg"
+IMAGE_SOURCE="$(dirname "$0")/imagemagick"
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -12,12 +14,22 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}Starting installation of Nautilus FFmpeg Scripts...${NC}"
+echo -e "${GREEN}Starting installation of Nautilus Media Scripts...${NC}"
 
 # Check for prerequisites
 echo -e "${YELLOW}Checking for prerequisites...${NC}"
 MISSING_DEPS=0
-for cmd in ffmpeg ffprobe zenity bc; do
+# Common deps + ffmpeg/imagemagick specifics
+for cmd in ffmpeg ffprobe magick zenity bc; do
+    # Handle both IM v7 (magick) and v6 (convert)
+    if [[ "$cmd" == "magick" ]]; then
+        if ! command -v magick &> /dev/null && ! command -v convert &> /dev/null; then
+            echo -e "${RED}Error: ImageMagick is not installed.${NC}"
+            MISSING_DEPS=1
+        fi
+        continue
+    fi
+
     if ! command -v $cmd &> /dev/null; then
         echo -e "${RED}Error: $cmd is not installed.${NC}"
         MISSING_DEPS=1
@@ -28,7 +40,7 @@ done
 
 if [ $MISSING_DEPS -eq 1 ]; then
     echo -e "${RED}Please install missing dependencies manually:${NC}"
-    echo "  sudo apt update && sudo apt install ffmpeg zenity bc"
+    echo "  sudo apt update && sudo apt install ffmpeg imagemagick zenity bc"
     read -p "Do you want to continue installation anyway? (y/N) " confirm
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
         echo "Installation aborted."
@@ -36,24 +48,21 @@ if [ $MISSING_DEPS -eq 1 ]; then
     fi
 fi
 
-# Ensure source directory exists
-if [ ! -d "$SOURCE_DIR" ]; then
-    echo -e "${RED}Error: Source directory '$SOURCE_DIR' not found.${NC}"
-    echo "Please run this script from the root of the repository."
-    exit 1
+# Install FFmpeg Scripts
+if [ -d "$FFMPEG_SOURCE" ]; then
+    echo -e "${YELLOW}Installing FFmpeg scripts to $FFMPEG_TARGET...${NC}"
+    mkdir -p "$FFMPEG_TARGET"
+    cp -r "$FFMPEG_SOURCE"/* "$FFMPEG_TARGET/"
+    chmod +x "$FFMPEG_TARGET"/*.sh
 fi
 
-# Create target directory
-echo -e "${YELLOW}Creating target directory: $TARGET_DIR${NC}"
-mkdir -p "$TARGET_DIR"
-
-# Copy scripts
-echo -e "${YELLOW}Copying scripts...${NC}"
-cp -r "$SOURCE_DIR"/* "$TARGET_DIR/"
-
-# Set executable permissions
-echo -e "${YELLOW}Setting executable permissions...${NC}"
-chmod +x "$TARGET_DIR"/*.sh
+# Install ImageMagick Scripts
+if [ -d "$IMAGE_SOURCE" ]; then
+    echo -e "${YELLOW}Installing ImageMagick scripts to $IMAGE_TARGET...${NC}"
+    mkdir -p "$IMAGE_TARGET"
+    cp -r "$IMAGE_SOURCE"/* "$IMAGE_TARGET/"
+    chmod +x "$IMAGE_TARGET"/*.sh
+fi
 
 echo -e "${GREEN}Installation complete!${NC}"
-echo -e "You can now right-click video files in Nautilus -> Scripts -> ffmpeg"
+echo -e "You can now right-click files in Nautilus -> Scripts"

@@ -260,13 +260,13 @@ generate_test_media
 echo -e "\n${YELLOW}=== Running New: Universal Toolbox ===${NC}"
 # Test combination: Speed 2x + Scale 720p + Mute + Medium Quality + H.265
 # Wizard Mock in Step 3 is currently set to return Auto/MP4 (H264)
-run_test "ffmpeg/0-00 🧰 Universal-Toolbox.sh" "width=1280,no_audio,vcodec=h264,fps=30" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/🧰 Universal-Toolbox.sh" "width=1280,no_audio,vcodec=h264,fps=30" "$TEST_DATA/src.mp4"
 
 echo -e "\n${YELLOW}=== Running New: Universal Toolbox v2 (Features) ===${NC}"
 # 1. Subtitle Burn-in Test
 touch "$TEST_DATA/src.srt"
 export ZENITY_LIST_RESPONSE="📝 Subtitles"
-run_test "ffmpeg/0-00 🧰 Universal-Toolbox.sh" "vcodec=h264" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/🧰 Universal-Toolbox.sh" "vcodec=h264" "$TEST_DATA/src.mp4"
 rm "$TEST_DATA/src.srt"
 unset ZENITY_LIST_RESPONSE
 
@@ -274,7 +274,7 @@ unset ZENITY_LIST_RESPONSE
 export ZENITY_LIST_RESPONSE="💾 Target Size (MB)"
 # Wizard Step 3 Mock will still return defaults unless we override FORMS response
 # For now, we trust the logic bridge since main flow passes.
-run_test "ffmpeg/0-00 🧰 Universal-Toolbox.sh" "vcodec=h264" "$TEST_DATA/src.mp4"
+run_test "ffmpeg/🧰 Universal-Toolbox.sh" "vcodec=h264" "$TEST_DATA/src.mp4"
 unset ZENITY_LIST_RESPONSE
 
 mkdir -p "$HOME/.config/scripts-sh"
@@ -282,7 +282,7 @@ echo "TestPreset|Speed: 2x (Fast)|Scale: 720p" > "$HOME/.config/scripts-sh/prese
 echo "Testing CLI Preset..."
 ( 
     cd "$TEST_DATA"
-    bash "$HOME/_coding/scripts-sh/ffmpeg/0-00 🧰 Universal-Toolbox.sh" --preset "TestPreset" "src.mp4"
+    bash "$HOME/_coding/scripts-sh/ffmpeg/🧰 Universal-Toolbox.sh" --preset "TestPreset" "src.mp4"
 ) > /dev/null 2>&1
 # Check if output exists (Universal-Toolbox now uses Smart Tagging e.g. _2x_1280p)
 if [ -f "$TEST_DATA/src_2x_1280p.mp4" ]; then
@@ -292,6 +292,8 @@ else
     log_fail "CLI Preset failed to generate output"
 fi
 
+echo -e "\n${YELLOW}=== Running Image Toolbox Tests ===${NC}"
+bash testing/test_image_toolbox.sh
 
 # --- Summary ---
 echo -e "\n${YELLOW}=== Test Summary ===${NC}"
