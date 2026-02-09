@@ -1,58 +1,73 @@
-# 🗺️ Toolbox Comparison & Roadmap
+# 🗺️ Toolbox Ecosystem Roadmap (2026)
 
-## 📊 Script Comparison
+This roadmap outlines the strategic evolution of the three core toolboxes: **Universal** (Video Transcode), **Lossless** (Video Stream Copy), and **ImageMagick** (Image Raster).
 
-| Feature | 🔒 Lossless Operations (FFmpeg) | 🖼️ Image Magick Toolbox |
-| :--- | :--- | :--- |
-| **UX Pattern** | **Menu-Driven** (Select Operation -> Config -> Run) | **Wizard-Driven** (Launchpad -> Checklist -> Giant Form -> Run) |
-| **Task Focus** | **Singular** (Do one thing well) | **Composite** (Do multiple things at once) |
-| **Input Validation** | ✅ **High** (Pre-flight codec checks, container compatibility) | ⚠️ **Medium** (Basic file checks) |
-| **Error Handling** | ✅ **Robust** (Detailed checks per file) | ✅ **Improved** (Session logs, but still catching up) |
-| **Presets** | ✅ **Granular** (Saved per operation) | ✅ **Snapshot** (Saves the entire "Giant Form" state) |
-| **Modular Code** | ✅ **High** (Functions for every specific operation) | ⚠️ **Medium** (Monolithic processing loop) |
+## 🎯 North Star Vision
+Create a **Unified Creative Suite** for Linux users that acts as a **Smart Assistant**, continuously analyzing your media to offer *only* the relevant tools.
 
-### 🧠 UX Analysis: Why Lossless Feels Better
-The **Lossless Toolbox** feels "sensical" because it reduces cognitive load.
-1.  **Decision Segmentation**: You first decide *what* to do (Trim), then *how* (Start/End). You aren't bombarded with unused options (Crop? Format? Effects?).
-2.  **Context-Aware Config**: The "Trim" interface looks different from the "Remux" interface. Each is tailored to the task.
-3.  **Linear Flow**: `Menu -> Config -> Action` is a predictable loop. The ImageMagick script's `Checklist -> Config` requires you to remember what you checked in the previous screen.
+---
 
-## 🛤️ Unified Roadmap (2026)
+## 🏗️ Phase 1: Foundation & Standardization (Complete)
+*Goal: Ensure all tools share a common design language and core reliability.*
+- [x] **UX Alignment**: Refactored ImageMagick to match Lossless Menu pattern.
+- [x] **Safe Filenaming**: smart conflict resolution.
+- [x] **Documentation**: Centralized docs.
 
-### 🎨 Phase 1: UX Standardization (Immediate)
-**Goal:** Align Image Magick Toolbox with the superior Lossless Toolbox architecture.
+---
 
-- [ ] **Refactor ImageMagick to Menu-Driven UI**
-    - Replace "Wizard Checklist" with a "Primary Operation" menu.
-    - Top-Level Options: `Scale`, `Crop`, `Convert`, `Montage`, `Effects`.
-    - **Crucial**: Bring "Square Crop" and "Montage" to the top level.
-- [ ] **Standardize Visuals**
-    - Use compatible icons and terminology across both scripts.
-    - Ensure progress bars and success/fail dialogs look identical.
+## 🧩 Phase 2: The "Smart Builder" Architecture (Q2 2026)
+*Goal: Enable complex workflows that adapt to the user.*
 
-### 🏗️ Phase 2: Architectural Consistency
-**Goal:** Create a shared library for core functions.
+### 🔄 The "Context-Aware" Loop
+Migrate all tools to a **Dynamic Recipe Builder** backed by **Deep Analysis**:
 
-- [ ] **Create `lib/common.sh`**
-    - Move `generate_safe_filename` (both have it!) to a shared library.
-    - Move `check_dependencies` to shared.
-    - Move `history_management` to shared.
-- [ ] **Unified Error Logging**
-    - Adopt the `mktemp` error log pattern from ImageMagick for Lossless (if missing).
-    - Create a standard "Run Summary" reporter for batch jobs in both.
+#### 1. Pre-Flight Deep Scan
+Before showing the menu, run `ffprobe` or `identify` to build a **Media Profile**:
+- **Tracks**: Does it have Audio? Subtitles? Chapters?
+- **Visuals**: Is it HDR? CMYK? Transparent (Alpha)?
+- **Metadata**: Does it have GPS info? Rotation flags?
 
-### 🚀 Phase 3: Major Feature Expansions
+#### 2. Dynamic Option Filtering (The "Grey Out" Logic)
+- **Audio Logic**:
+    - *No Audio Track found?* -> **Hide** "Remove Audio", "Normalize", "Extract MP3".
+- **Subtitle Logic**:
+    - *No Subtitles found?* -> **Hide** "Burn-in Subs", "Extract SRT".
+- **Image Logic**:
+    - *Has Alpha Channel?* -> **Show** "Flatten Background" or "Shadow Effect".
+    - *Is CMYK?* -> **Show** "Fix Colors (to sRGB)".
+    - *Has GPS Data?* -> **Show** "Privacy Scrub (Remove Location)".
+- **Video Logic**:
+    - *Is HDR10/Dolby?* -> **Show** "Tone Map to SDR".
+    - *Is Vertical (9:16)?* -> **Show** "Blur-Pad to Landscape".
 
-#### 🖼️ Image Magick Improvements
-- [ ] **Smart Crop / Content-Aware**: Use ImageMagick's `entropy` or `attention` features to crop to the *interesting* part of the photo, not just center.
-- [ ] **Text Overlay Wizard**: A dedicated interface for watermarking/text that allows positioning (North, South, Center) and styling (Font, Color).
-- [ ] **PDF Manipulator**: Dedicated menu for PDF tools (Extract Pages vs Merge Images).
+### 🛠️ Tasks
+- [ ] **Analysis Engine**: Create `analyze_media_deep(file)` function returning a state object.
+- [ ] **UI Engine**: Update Zenity generator to read this state and filter list items.
 
-#### 🔒 Lossless Improvements
-- [ ] **"Smart Cut" (Lossy/Lossless Hybrid)**: Allow frame-accurate trimming by re-encoding *only* the GOP boundaries and stream-copying the middle. (Advanced FFmpeg tech).
-- [ ] **Audio/Subtitle Track Selector**: A GUI to list specific tracks (Stream 0:1 vs 0:2) and keep/discard them selectively.
-- [ ] **Chapter Editor**: Simple GUI to add/edit chapter markers in MKV/MP4.
+---
 
-### 📦 Phase 4: Distribution & Polish
-- [ ] **Installer Update**: Ensure `install.sh` handles the new `lib/` structure correctly.
-- [ ] **Desktop Integration**: Add `.desktop` files so these can be launched from the App Grid, not just Nautilus.
+## ⚡ Phase 3: Performance & Intelligence (Q3 2026)
+*Goal: Make the tools faster and smarter.*
+
+### 🏎️ Performance
+- [ ] **Smart Parallelism**: Auto-detect CPU cores.
+- [ ] **GPU Auto-Switch**: Self-healing fallback to CPU on error.
+
+### 🧠 Intelligence
+- [ ] **Content-Aware Crop**: Auto-crop to subject (entropy/attention).
+- [ ] **Scene Splitter**: Auto-cut at scene changes.
+- [ ] **Silence Trimmer**: Remove silent segments.
+
+---
+
+## 📦 Phase 4: Distribution & Integration (Q4 2026)
+*Goal: Move beyond "Scripts" to "Applications".*
+
+- [ ] **Desktop Entry Generator**: Create `.desktop` files.
+- [ ] **Auto-Updater**: Built-in `--update` flag.
+- [ ] **Interactive Tour**: First-run explanation of features.
+
+---
+
+## 🧪 Experimental
+- [ ] **AI Tagging**: Local LLM description/renaming.
