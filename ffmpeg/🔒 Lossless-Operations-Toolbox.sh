@@ -7,6 +7,10 @@ get_duration() {
     ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$1" | cut -d. -f1
 }
 
+# Source wizard logic
+SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+source "$SCRIPT_DIR/../common/wizard.sh"
+
 # Function to analyze codec information
 analyze_codec() {
     local file="$1"
@@ -1032,96 +1036,45 @@ get_batch_summary() {
 }
 # ===== USER INTERFACE =====
 
-# Enhanced main menu with preset and history support
+# Enhanced main menu with unified wizard
+# Enhanced main menu with unified wizard
 show_main_menu() {
-    while true; do
-        if [ -n "$PRELOADED_PRESET" ]; then
-            # CLI preset mode - return the preset operation directly
-            echo "$PRELOADED_PRESET"
+    if [ -n "$PRELOADED_PRESET" ]; then
+        echo "$PRELOADED_PRESET"
+        return 0
+    fi
+
+    local INTENTS="✂️|Trim Video|Extract segments;📦|Change Format|Remux to MP4/MKV/MOV/WebM;🔗|Merge Videos|Concatenate identical codecs;🎚️|Edit Streams|Remove audio/video tracks;📝|Edit Metadata|Change file info;⚡|Batch Operations|Process multiple files"
+    
+    local PICKED_RAW=$(show_unified_wizard "Lossless Toolbox Wizard" "$INTENTS" "$PRESET_FILE" "$HISTORY_FILE")
+    [ -z "$PICKED_RAW" ] && return 1
+
+    # Format return for main()
+    # If PRESET/HISTORY selected: return data
+    # If INTENT selected: return choice name
+    
+    IFS='|' read -ra PARTS <<< "$PICKED_RAW"
+    
+    local SELECTED_INTENT=""
+    for ((i=0; i<${#PARTS[@]}; i+=2)); do
+        TYPE="${PARTS[i]}"
+        VALUE="${PARTS[i+1]}"
+        
+        if [ "$TYPE" == "INTENT" ]; then
+            SELECTED_INTENT="${VALUE#* }"
+        elif [ "$TYPE" == "PRESET" ]; then
+            # Load preset data and return pipe-delimited
+            local pd=$(grep "^${VALUE#* }|" "$PRESET_FILE" | head -n 1 | cut -d'|' -f2-)
+            echo "$pd"
             return 0
-        fi
-
-        local LAUNCH_ARGS=(
-            "--list" "--width=650" "--height=500"
-            "--title=🔒 Lossless Operations Toolbox" "--print-column=2"
-            "--column=Type" "--column=Name" "--column=Description"
-            "➕" "New Operation" "Select a lossless operation from scratch"
-        )
-
-        # Load Presets (Favorites)
-        if [ -s "$PRESET_FILE" ]; then
-            while IFS='|' read -r name operation params; do
-                [ -z "$name" ] && continue
-                LAUNCH_ARGS+=("⭐" "$name" "Saved Preset")
-            done < "$PRESET_FILE"
-        fi
-
-        # Load History
-        if [ -s "$HISTORY_FILE" ]; then
-            local count=0
-            while read -r line; do
-                [ -z "$line" ] && continue
-                [ $count -ge 5 ] && break  # Limit history display
-                LAUNCH_ARGS+=("🕒" "$line" "Recent Operation")
-                ((count++))
-            done < "$HISTORY_FILE"
-        fi
-
-        local picked=$(zenity "${LAUNCH_ARGS[@]}" --text="Select a starting point for lossless operations:")
-        if [ -z "$picked" ]; then
-            return 1
-        fi
-
-        if [ "$picked" == "New Operation" ]; then
-            # Show traditional operation menu
-            local MENU_ARGS=(
-                "--list" "--width=600" "--height=400"
-                "--title=🔒 Lossless Operations Toolbox" "--print-column=2"
-                "--column=Type" "--column=Operation" "--column=Description"
-                "✂️" "Trim Video" "Extract segments without re-encoding"
-                "📦" "Change Format" "Remux to MP4/MKV/MOV/WebM containers"
-                "🔗" "Merge Videos" "Concatenate files with identical codecs"
-                "🎚️" "Edit Streams" "Remove audio/video tracks losslessly"
-                "📝" "Edit Metadata" "Change file information without re-encoding"
-                "⚡" "Batch Operations" "Process multiple files simultaneously"
-            )
-            
-            local choice=$(zenity "${MENU_ARGS[@]}" --text="Select a lossless operation (no quality loss, fast processing):")
-            if [ -n "$choice" ]; then
-                echo "$choice"
-                return 0
-            fi
-            continue
-
-        elif grep -q "^$picked|" "$PRESET_FILE"; then
-            # Load from Presets
-            local preset_data=$(grep "^$picked|" "$PRESET_FILE" | head -n 1 | cut -d'|' -f2-)
-            echo "$preset_data"
+        elif [ "$TYPE" == "HISTORY" ]; then
+            echo "${VALUE#* }"
             return 0
-
-        else
-            # Must be a History Item
-            local action=$(zenity --list --title="History Item" --text="Operation: $picked" \
-                --column="Action" "▶️ Run Now" "⭐ Save as Preset" "❌ Delete")
-            
-            if [ "$action" == "▶️ Run Now" ]; then
-                echo "$picked"
-                return 0
-            elif [ "$action" == "⭐ Save as Preset" ]; then
-                local preset_name=$(zenity --entry --title="Save Preset" --text="Name for this preset:")
-                if [ -n "$preset_name" ]; then
-                    save_preset "$preset_name" "$picked"
-                    zenity --notification --text="Saved as preset '$preset_name'!"
-                fi
-                continue
-            elif [ "$action" == "❌ Delete" ]; then
-                # Remove from history
-                grep -vF "$picked" "$HISTORY_FILE" > "${HISTORY_FILE}.tmp" 2>/dev/null
-                mv "${HISTORY_FILE}.tmp" "$HISTORY_FILE" 2>/dev/null
-                continue
-            fi
         fi
     done
+
+    echo "$SELECTED_INTENT"
+    return 0
 }
 
 # Enhanced trimming interface with smart validation and auto-rename

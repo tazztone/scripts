@@ -7,6 +7,10 @@ get_duration() {
     ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$1" | cut -d. -f1
 }
 
+# Source wizard logic
+SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+source "$SCRIPT_DIR/../common/wizard.sh"
+
 # --- GPU PROBE (Run once at startup) ---
 GPU_CACHE="/tmp/scripts-sh-gpu-cache"
 probe_gpu() {
@@ -63,83 +67,82 @@ if [ "$1" == "--preset" ] && [ -n "$2" ]; then
     fi
 fi
 
-# --- LAUNCHPAD (MAIN MENU) ---
+# --- UNIFIED LAUNCHPAD ---
 while true; do
     if [ -n "$PRELOADED_CHOICES" ]; then
         CHOICES="$PRELOADED_CHOICES"
-        # We need to jump straight to processing
         break
     fi
 
-    LAUNCH_ARGS=(
-        "--list" "--width=600" "--height=500"
-        "--title=Universal Toolbox Launchpad" "--print-column=2"
-        "--column=Type" "--column=Name" "--column=Description"
-        "➕" "New Custom Edit" "Build a selection from scratch"
-    )
+    INTENTS_STR="⏪|Speed Control|Change playback speed;📐|Scale / Resize|Change resolution;🖼️|Crop / Aspect Ratio|Vertical/Square/etc;🔄|Rotate & Flip|Fix orientation;⏱️|Trim (Cut Time)|Select segment;🔊|Audio Tools|Normalize/Boost/Mute"
+    [ -f "${1%.*}.srt" ] && INTENTS_STR+=";📝|Subtitles|Burn-in or Mux .srt"
 
-    # 1. Load Favorites (Presets)
-    if [ -s "$PRESET_FILE" ]; then
-        while IFS='|' read -r name options; do
-            [ -z "$name" ] && continue
-            # Name already contains info for auto-slugs, keep description minimal
-            LAUNCH_ARGS+=("⭐" "$name" "Saved Favorite")
-        done < "$PRESET_FILE"
-    fi
+    PICKED_RAW=$(show_unified_wizard "Universal Toolbox Wizard" "$INTENTS_STR" "$PRESET_FILE" "$HISTORY_FILE")
+    [ -z "$PICKED_RAW" ] && exit 0
 
-    # 2. Load History
-    if [ -s "$HISTORY_FILE" ]; then
-        while read -r line; do
-            [ -z "$line" ] && continue
-            # Raw options are already the Name, description is redundant
-            LAUNCH_ARGS+=("🕒" "$line" "Recent History")
-        done < "$HISTORY_FILE"
-    fi
+    # Parse results. Result format: "TYPE|NAME|TYPE|NAME..."
+    IFS='|' read -ra PARTS <<< "$PICKED_RAW"
+    
+    INTENTS=""
+    LOAD_PRESET=""
+    LOAD_HISTORY=""
 
-    PICKED=$(zenity "${LAUNCH_ARGS[@]}" --text="Select a starting point:")
-    if [ -z "$PICKED" ]; then exit 0; fi
-
-    if [ "$PICKED" == "New Custom Edit" ]; then
-        # --- STEP 2: BROAD INTENT CHECKLIST ---
-        ZENITY_INTENTS=(
-            "--list" "--checklist" "--width=600" "--height=500"
-            "--title=Wizard Step 2: What do you want to fix?" "--print-column=2"
-            "--column=Pick" "--column=Action" "--column=Description"
-            FALSE "⏩ Speed Control" "Change video playback speed (Fast/Slow)"
-            FALSE "📐 Scale / Resize" "Change resolution (1080p, 720p, etc)"
-            FALSE "🖼️ Crop / Aspect Ratio" "Vertical (9:16), Square (1:1), etc"
-            FALSE "🔄 Rotate & Flip" "Fix orientation issues"
-            FALSE "⏱️ Trim (Cut Time)" "Select a specific start/end segment"
-            FALSE "🔊 Audio Tools" "Normalize, Volume Boost, Mute, Extract"
-        )
-        # Conditional Subtitles
-        if [ -f "${1%.*}.srt" ]; then
-            ZENITY_INTENTS+=(FALSE "📝 Subtitles" "Burn-in or Mux sidecar .srt")
-        fi
+    for ((i=0; i<${#PARTS[@]}; i+=2)); do
+        TYPE="${PARTS[i]}"
+        VALUE="${PARTS[i+1]}"
         
+        if [ "$TYPE" == "INTENT" ]; then
+            # Strip icon if present (matches emoji or special char followed by space)
+            if [[ "$VALUE" =~ ^[^[:alnum:]]+[[:space:]] ]]; then
+                INTENTS+="${VALUE#* }|"
+            else
+                INTENTS+="$VALUE|"
+            fi
+        elif [ "$TYPE" == "PRESET" ]; then
+            # Strip ⭐ icon
+            if [[ "$VALUE" == "⭐ "* ]]; then
+                LOAD_PRESET="${VALUE#* }"
+            else
+                LOAD_PRESET="$VALUE"
+            fi
+        elif [ "$TYPE" == "HISTORY" ]; then
+            # Strip 🕒 icon
+            if [[ "$VALUE" == "🕒 "* ]]; then
+                LOAD_HISTORY="${VALUE#* }"
+            else
+                LOAD_HISTORY="$VALUE"
+            fi
+        fi
+    done
 
-        INTENTS=$(zenity "${ZENITY_INTENTS[@]}" --separator="|")
-        # --- STEP 3: UNIFIED CONFIG & SAVE ---
-        # We build a single Form based on selected intents
+    if [ -n "$LOAD_PRESET" ]; then
+        CHOICES=$(grep "^$LOAD_PRESET|" "$PRESET_FILE" | head -n 1 | cut -d'|' -f2-)
+        [ -n "$CHOICES" ] && break
+    elif [ -n "$LOAD_HISTORY" ]; then
+        CHOICES="$LOAD_HISTORY"
+        break
+    elif [ -n "$INTENTS" ]; then
+        # --- CONFIG & SAVE (Step 2) ---
+        # Build same single Form as before, but mapped to selected intents
         ZENITY_FORMS=(
-            "--forms" "--title=Wizard Step 3: Configure & Run"
+            "--forms" "--title=Universal Toolbox: Configure"
             "--width=500" "--separator=|" 
             "--text=Finalize your recipe settings below:"
         )
 
-        # 1. SPEED (Index: 0, 1)
-        VAL_ispd=" (Inactive)"; VAL_icspd=""
+        # 1. SPEED
+        VAL_ispd=" (Inactive)"
         [[ "$INTENTS" == *"Speed"* ]] && VAL_ispd="1x (Normal)"
         ZENITY_FORMS+=( "--add-combo=⏩ Speed" "--combo-values=$VAL_ispd|2x (Fast)|4x (Super Fast)|0.5x (Slow)|0.25x (Very Slow)" )
         ZENITY_FORMS+=( "--add-entry=✍️ Custom Speed" )
 
-        # 2. SCALE (Index: 2, 3) - Custom Width overrides combo
-        VAL_ires=" (Inactive)"; VAL_icw=""
+        # 2. SCALE
+        VAL_ires=" (Inactive)"
         [[ "$INTENTS" == *"Scale"* ]] && VAL_ires="1080p"
         ZENITY_FORMS+=( "--add-combo=📐 Resolution" "--combo-values=$VAL_ires|1440p|720p|4k|480p|360p|50%" )
         ZENITY_FORMS+=( "--add-entry=✍️ Custom Width (overrides)" )
 
-        # 3. GEOMETRY & TIME (Index: 4, 5, 6, 7)
+        # 3. GEOMETRY & TIME
         VAL_icrp=" (Inactive)"
         [[ "$INTENTS" == *"Crop"* ]] && VAL_icrp="16:9 (Landscape)"
         ZENITY_FORMS+=( "--add-combo=🖼️ Crop/Aspect" "--combo-values=$VAL_icrp|9:16 (Vertical)|Square 1:1|4:3 (Classic)|21:9 (Cinema)" )
@@ -150,7 +153,7 @@ while true; do
         
         ZENITY_FORMS+=( "--add-entry=⏱️ Trim Start" "--add-entry=⏱️ Trim End" )
 
-        # 4. AUDIO & SUBS (Index: 8, 9)
+        # 4. AUDIO & SUBS
         VAL_iaud=" (Inactive)"
         [[ "$INTENTS" == *"Audio"* ]] && VAL_iaud="No Change"
         ZENITY_FORMS+=( "--add-combo=🔊 Audio Action" "--combo-values=$VAL_iaud|Remove Audio Track|Normalize (R128)|Boost Volume (+6dB)|Downmix to Stereo|Recode to PCM (for Linux)|Extract MP3|Extract WAV" )
@@ -159,7 +162,7 @@ while true; do
         [[ "$INTENTS" == *"Subtitles"* ]] && VAL_isub="Burn-in"
         ZENITY_FORMS+=( "--add-combo=📝 Subtitles" "--combo-values=$VAL_isub|Burn-in|Mux (Softsub)" )
 
-        # 5. EXPORT (Always active) (Index: 10, 11, 12, 13) - Target Size overrides Quality
+        # 5. EXPORT (Always active)
         ZENITY_FORMS+=( "--add-combo=💎 Quality Strategy" "--combo-values=Medium (CRF 23)|High (CRF 18)|Low (CRF 28)|Lossless (CRF 0)" )
         ZENITY_FORMS+=( "--add-entry=💾 Target Size MB (overrides)" )
         ZENITY_FORMS+=( "--add-combo=📦 Output Format" "--combo-values=Auto/MP4|H.265|AV1|WebM|ProRes|MOV|MKV|GIF" )
@@ -174,15 +177,10 @@ while true; do
         ZENITY_FORMS+=( "--add-combo=🏎️ Hardware" "--combo-values=$HW_OPTS" )
 
         CONFIG_RESULT=$(zenity "${ZENITY_FORMS[@]}")
-        [ -z "$CONFIG_RESULT" ] && continue # Back to Launchpad
+        [ -z "$CONFIG_RESULT" ] && continue 
 
         # --- EXTRACT CONFIG & MAP TO CHOICES ---
-        # This is where we bridge the Wizard Form back to the existing FFmpeg builder logic
         CHOICES=""
-        
-        # Read CONFIG_RESULT based on positions
-        IFS='|' read -ra VALS <<< "$CONFIG_RESULT"
-        # Read CONFIG_RESULT based on FIXED positions
         IFS='|' read -ra VALS <<< "$CONFIG_RESULT"
 
         # 0. Speed
@@ -191,10 +189,9 @@ while true; do
             [ -n "$CUST_spd" ] && CHOICES+="Speed: ${CUST_spd}x|" || CHOICES+="Speed: ${PICK_spd}|"
         fi
 
-        # 2. Scale - Custom Width OVERRIDES Resolution combo
+        # 2. Scale
         PICK_res="${VALS[2]}"; CUST_W="${VALS[3]}"
         if [ -n "$CUST_W" ]; then
-            # Persist custom value in choice string for reload
             CHOICES+="Custom Scale Width:$CUST_W|"
             USER_W="$CUST_W"
         elif [[ "$PICK_res" != *"Inactive"* ]]; then
@@ -222,18 +219,17 @@ while true; do
         PICK_sub="${VALS[9]}"
         [[ "$PICK_sub" != *"Inactive"* ]] && CHOICES+="Subtitles: $PICK_sub|"
 
-        # EXPORT (Fixed Indices)
+        # EXPORT
         Q_STRAT="${VALS[10]}"; T_MB="${VALS[11]}"; O_FMT="${VALS[12]}"; H_ACCEL="${VALS[13]}"
 
-        # Target Size entry OVERRIDES Quality combo
         if [ -n "$T_MB" ]; then
             CHOICES+="Target Size:$T_MB|"
             USER_TARGET_MB="$T_MB"
         else
             case "$Q_STRAT" in
-                *"High"*|*"CRF 18"*) CHOICES+="Quality: High|" ;;
-                *"Low"*|*"CRF 28"*) CHOICES+="Quality: Low|" ;;
-                *"Lossless"*|*"CRF 0"*) CHOICES+="Quality: Lossless|" ;;
+                *"High"*) CHOICES+="Quality: High|" ;;
+                *"Low"*) CHOICES+="Quality: Low|" ;;
+                *"Lossless"*) CHOICES+="Quality: Lossless|" ;;
                 *) CHOICES+="Quality: Medium|" ;;
             esac
         fi
@@ -244,18 +240,12 @@ while true; do
         if [[ "$H_ACCEL" == *"QSV"* ]]; then CHOICES+="🏎️ Use QSV (Intel)|"; fi
         if [[ "$H_ACCEL" == *"VAAPI"* ]]; then CHOICES+="🏎️ Use VAAPI (AMD/Intel)|"; fi
 
-        # Remove trailing pipe
         CHOICES=$(echo "$CHOICES" | sed 's/|$//')
         
-        # --- END WIZARD FLOW ---
+        [ -z "$CHOICES" ] && continue
         
-        [ -z "$CHOICES" ] && continue # Back to Launchpad
-        
-        # GENERATE SMART SLUG FOR PRE-FILL
-        # Remove emojis, categories, and keep core tags
         SLUG=$(echo "$CHOICES" | sed 's/[^[:alnum:]| ]//g' | sed 's/Speed //g; s/Scale //g; s/Rotate //g; s/Flip //g; s/Crop //g; s/Trim //g; s/Output //g; s/Subtitles //g; s/Use //g; s/Fast//g; s/Slow//g; s/pixels//g; s/Quality //g; s/TargetSizeMB //g; s/|/_/g; s/ //g' | tr '[:upper:]' '[:lower:]')
         
-        # PROMPT TO SAVE AS FAVORITE
         if zenity --question --title="Save as Favorite?" --text="Would you like to save this configuration as a permanent favorite?" --ok-label="Save" --cancel-label="Just Run Once"; then
             PNAME=$(zenity --entry --title="Save Favorite" --text="Enter a name for this recipe:" --entry-text="$SLUG")
             if [ -n "$PNAME" ]; then
@@ -264,33 +254,9 @@ while true; do
             fi
         fi
         break
-
-    elif grep -q "^$PICKED|" "$PRESET_FILE"; then
-        # Load from Presets
-        CHOICES=$(grep "^$PICKED|" "$PRESET_FILE" | head -n 1 | cut -d'|' -f2-)
-        break
-
     else
-        # Must be a History Item
-        ACT=$(zenity --list --title="History Item" --text="Settings: $(echo "$PICKED" | sed 's/|/, /g')" \
-            --column="Action" "▶️ Run Now" "⭐ Star as Favorite" "❌ Delete")
-        
-        if [ "$ACT" == "▶️ Run Now" ]; then
-            CHOICES="$PICKED"
-            break
-        elif [ "$ACT" == "⭐ Star as Favorite" ]; then
-            PNAME=$(zenity --entry --title="Save Favorite" --text="Name for this recipe:")
-            if [ -n "$PNAME" ]; then
-                echo "$PNAME|$PICKED" >> "$PRESET_FILE"
-                zenity --notification --text="Saved to favorites!"
-            fi
-            continue # Back to Launchpad to see the new Star
-        elif [ "$ACT" == "❌ Delete" ]; then
-            # Safe delete from history
-            grep -vF "$PICKED" "$HISTORY_FILE" > "${HISTORY_FILE}.tmp"
-            mv "${HISTORY_FILE}.tmp" "$HISTORY_FILE"
-            continue
-        fi
+        # No selection
+        exit 0
     fi
 done
 

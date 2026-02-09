@@ -5,7 +5,7 @@
 # --- Configuration ---
 TEST_DATA="/tmp/image_test_data"
 MOCK_BIN="/tmp/image_mock_bin"
-REPORT_FILE="./image_test_report.log"
+REPORT_FILE="testing/output/image_test_report.log"
 HEADLESS=true
 
 mkdir -p "$TEST_DATA" "$MOCK_BIN"
@@ -97,16 +97,10 @@ echo "Test 1: Stacked Scale + BW + WEBP"
 # 9. Convert Form -> WEBP|Web Ready
 # 10. Main Menu -> RUN OPERATIONS
 cat <<EOF > "$RESPONSE_QUEUE"
-Add Operation
-Scale & Resize
+INTENT|Scale & Resize|INTENT|Effects & Branding|INTENT|Convert Format
 1280x (720p)|
-Add Operation
-Effects & Branding
 Black & White|(Inactive)|
-Add Operation
-Convert Format
 WEBP|Web Ready (Quality 85)
-RUN OPERATIONS
 EOF
 
 ( cd "$TEST_DATA" && bash "$SCRIPT" "src.jpg" ) > /dev/null 2>&1
@@ -127,13 +121,9 @@ echo "Test 2: Square Crop + PNG"
 # 6. Convert Form -> PNG|Archive
 # 7. Main Menu -> RUN OPERATIONS
 cat <<EOF > "$RESPONSE_QUEUE"
-Add Operation
-Crop & Geometry
+INTENT|Crop & Geometry|INTENT|Convert Format
 Square Crop (Center 1:1)
-Add Operation
-Convert Format
 PNG|Archive (Lossless)
-RUN OPERATIONS
 EOF
 
 ( cd "$TEST_DATA" && bash "$SCRIPT" "src.jpg" ) > /dev/null 2>&1
@@ -158,12 +148,11 @@ echo "Test 3: Montage (Terminal Operation)"
 # 3. Montage List -> 2x Grid
 # (Montage executes immediately in v2.1)
 cat <<EOF > "$RESPONSE_QUEUE"
-Add Operation
-Montage & Grid
+INTENT|Montage & Grid
 2x Grid
 EOF
 
-( cd "$TEST_DATA" && bash "$SCRIPT" "src.jpg" "small.png" ) > /dev/null 2>&1
+( cd "$TEST_DATA" && bash "$SCRIPT" "src.jpg" "small.png" )
 
 if [ -f "$TEST_DATA/montage_grid2x.jpg" ]; then
     echo "[PASS] Montage"

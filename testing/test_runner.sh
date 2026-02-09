@@ -5,7 +5,7 @@
 # --- Configuration ---
 TEST_DATA="/tmp/scripts_test_data"
 MOCK_BIN="/tmp/scripts_mock_bin"
-REPORT_FILE="./test_report.log"
+REPORT_FILE="testing/output/test_report.log"
 HEADLESS=true
 STRICT=true
 
@@ -28,26 +28,44 @@ setup_mock_zenity() {
 # Headless Zenity Mock
 ARGS="$*"
 echo "MOCK ZENITY CALLED WITH: $ARGS" >> "/tmp/zenity_mock.log"
-# Allow dynamic overrides via environment variables
+
+# 1. Handle Response Overrides
 if [[ "$ARGS" == *"--entry"* && -n "$ZENITY_ENTRY_RESPONSE" ]]; then
     echo "$ZENITY_ENTRY_RESPONSE"
     exit 0
 fi
-if [[ "$ARGS" == *"--list"* ]]; then
-    if [[ "$ARGS" == *"Select a starting point:"* ]]; then
-        echo "New Custom Edit"
-        exit 0
-    fi
-    if [[ -n "$ZENITY_LIST_RESPONSE" ]]; then
-        echo "$ZENITY_LIST_RESPONSE"
-        exit 0
-    fi
+
+# 2. Handle Checklist (Step 1)
+if [[ "$ARGS" == *"--checklist"* ]]; then
+    case "$ARGS" in
+        *"Universal Toolbox Wizard"*)
+            # Return format: TYPE|NAME|TYPE|NAME
+            echo "${ZENITY_LIST_RESPONSE:-INTENT|Speed Control|INTENT|Scale / Resize|INTENT|Audio Tools}"
+            exit 0
+            ;;
+        *) 
+            echo "${ZENITY_LIST_RESPONSE:-INTENT|Action}"
+            exit 0
+            ;;
+    esac
 fi
 
-# Strict check for Universal Toolbox column printing
-if [[ "$ARGS" == *"Universal Edit Builder"* && "$ARGS" != *"--print-column=2"* ]]; then
-    echo "ERROR: Universal Toolbox must use --print-column=2" >&2
-    exit 1
+# 3. Handle Forms (Step 2)
+if [[ "$ARGS" == *"--forms"* ]]; then
+    case "$ARGS" in
+        *"Universal Toolbox: Configure"*)
+            # Default Test Set: 2x (Fast), blank, 720p, blank, Inactive, No Change, blank, blank, Inactive, Inactive, Medium Default, blank, Auto/MP4, None
+            echo "2x (Fast)||720p|| (Inactive)|No Change||| (Inactive)| (Inactive)|Medium Default||Auto/MP4|None (CPU Only)"
+            exit 0
+            ;;
+        *) echo ""; exit 0 ;;
+    esac
+fi
+
+# 4. Handle Simple Lists (History/Presets if they were separate, but now they are combined)
+if [[ "$ARGS" == *"--list"* ]]; then
+    echo "${ZENITY_LIST_RESPONSE:-New Custom Edit}"
+    exit 0
 fi
 
 case "$ARGS" in
@@ -59,43 +77,6 @@ case "$ARGS" in
         while read -r line; do
             [[ "$line" == "#"* ]] && echo "$line"
         done
-        ;;
-    *--list*)
-        case "$ARGS" in
-            *"Universal Toolbox Launchpad"*|*"Select a starting point:"*) 
-                echo "${ZENITY_LIST_RESPONSE:-New Custom Edit}" ;;
-            *"Wizard Step 2: What do you want to fix?"*) 
-                echo "${ZENITY_LIST_RESPONSE:-⏩ Speed Control|📐 Scale / Resize|🔊 Audio Tools}" ;;
-            *"Universal Edit Builder"*) 
-                echo "${ZENITY_LIST_RESPONSE:-⏩ Speed Control|📐 Scale / Resize|🔇 Mute Audio|⚖️ Quality: Medium|📦 Output: H.265}" ;;
-            *"Target Platform"*|*"H.264 Presets"*) echo "Universal" ;;
-            *"Audio Adjustment"*) echo "Normalize" ;;
-            *"Speed Control"*) echo "2x Fast" ;;
-            *"Image Extraction"*) echo "Thumbnail" ;;
-            *"File Polish"*) echo "Strip Metadata" ;;
-            *"Target Size"*) echo "25" ;;
-            *"Target Format"*) echo "MP3" ;;
-            *"ProRes Profile"*) echo "Standard" ;;
-            *"Geometric Transform"*) echo "90 CW" ;;
-            *"Target Resolution"*) echo "1080p" ;;
-            *"Target Container"*) echo "MOV" ;;
-            *"Trim Operation"*) echo "Start" ;;
-            *"Channel Remix"*) echo "Mono to Stereo" ;;
-            *"Avid DNx Profile"*) echo "DNxHD 36" ;;
-            *"Target Aspect Ratio"*) echo "16:9" ;;
-            *"Overlay Selection"*) echo "Burn Subtitles" ;;
-            *) echo "" ;;
-        esac
-        ;;
-    *--forms*)
-        case "$ARGS" in
-            *"Wizard Step 3: Configure & Run"*) 
-                # FIXED INDEX MAPPING (14 Fields):
-                # 0:Speed, 1:CustomSpeed, 2:Resolution, 3:CustomWidth, 4:Crop, 5:Rotate, 6:TrimS, 7:TrimE, 8:Audio, 9:Subs, 10:Quality, 11:Size, 12:Format, 13:Hardware
-                # Default Test Set: 2x (Fast), blank, 720p, blank, Inactive, No Change, blank, blank, Inactive, Inactive, Medium Default, blank, Auto/MP4, None
-                echo "2x (Fast)||720p|| (Inactive)|No Change||| (Inactive)| (Inactive)|Medium Default||Auto/MP4|None (CPU Only)" ;;
-            *) echo "" ;;
-        esac
         ;;
     *) exit 0 ;;
 esac
@@ -265,15 +246,15 @@ run_test "ffmpeg/🧰 Universal-Toolbox.sh" "width=1280,no_audio,vcodec=h264,fps
 echo -e "\n${YELLOW}=== Running New: Universal Toolbox v2 (Features) ===${NC}"
 # 1. Subtitle Burn-in Test
 touch "$TEST_DATA/src.srt"
-export ZENITY_LIST_RESPONSE="📝 Subtitles"
+export ZENITY_LIST_RESPONSE="INTENT|Subtitles"
 run_test "ffmpeg/🧰 Universal-Toolbox.sh" "vcodec=h264" "$TEST_DATA/src.mp4"
 rm "$TEST_DATA/src.srt"
 unset ZENITY_LIST_RESPONSE
 
 # 2. Target Size (2-Pass) Test
-export ZENITY_LIST_RESPONSE="💾 Target Size (MB)"
-# Wizard Step 3 Mock will still return defaults unless we override FORMS response
-# For now, we trust the logic bridge since main flow passes.
+# We don't have a specific INTENT for Target Size anymore, it's always in the form.
+# But we can test if selecting an intent still shows the form.
+export ZENITY_LIST_RESPONSE="INTENT|Speed Control"
 run_test "ffmpeg/🧰 Universal-Toolbox.sh" "vcodec=h264" "$TEST_DATA/src.mp4"
 unset ZENITY_LIST_RESPONSE
 
@@ -297,7 +278,15 @@ bash testing/test_image_toolbox.sh
 
 # --- Summary ---
 echo -e "\n${YELLOW}=== Test Summary ===${NC}"
-grep "FAIL" "$REPORT_FILE" && echo -e "${RED}Some tests failed! See test_report.log${NC}" || echo -e "${GREEN}All tests passed!${NC}"
+FAILED_ANY=0
+grep -q "FAIL" "testing/output/test_report.log" 2>/dev/null && FAILED_ANY=1
+grep -q "FAIL" "testing/output/image_test_report.log" 2>/dev/null && FAILED_ANY=1
+
+if [ $FAILED_ANY -eq 1 ]; then
+    echo -e "${RED}Some tests failed! Check testing/output/ for details.${NC}"
+else
+    echo -e "${GREEN}All tests passed!${NC}"
+fi
 
 # Cleanup
 # rm -rf "$TEST_DATA" "$MOCK_BIN"

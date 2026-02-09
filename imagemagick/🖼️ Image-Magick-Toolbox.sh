@@ -2,8 +2,9 @@
 # 🖼️ Image-Magick-Toolbox v2.1
 # Smart Recipe Builder - Stack edits and Context-Aware UI
 
-SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 source "$SCRIPT_DIR/common.sh"
+source "$SCRIPT_DIR/../common/wizard.sh"
 
 # --- CONFIG ---
 CONFIG_DIR="$HOME/.config/scripts-sh/imagemagick"
@@ -130,142 +131,120 @@ get_valid_operations() {
     fi
 }
 
-# --- MAIN MENU (BUILDER LOOP) ---
-
+# --- UNIFIED MAIN MENU ---
 show_main_menu() {
-    local recipe_list=()
-    local display_recipe=""
-    
     # Run analysis on the first file to set context
     analyze_media "$1"
 
+    local INTENTS=""
+    # 1. Standard Image Ops
+    if [[ "$MEDIA_FORMAT" != "PDF" && "$MEDIA_FORMAT" != "VIDEO" ]]; then
+        INTENTS+="📏|Scale & Resize|Change image dimensions;"
+        INTENTS+="✂️|Crop & Geometry|Square crop or aspect ratios;"
+    fi
+
+    # 2. Contextual Image Ops
+    [[ "$HAS_ALPHA" -eq 1 ]] && INTENTS+="🎨|Flatten Background|Remove transparency;"
+    [[ "$IS_CMYK" -eq 1 ]] && INTENTS+="🌈|Convert to sRGB|Fix colors for web;"
+    [[ "$MEDIA_FORMAT" == "PDF" ]] && INTENTS+="📄|Extract Pages|Convert PDF to images;"
+
+    # 3. Standard Global Ops
+    INTENTS+="📦|Convert Format|JPG/PNG/WEBP/PDF;✨|Effects & Branding|Rotation, Watermarks, BW"
+    [[ "$MEDIA_FORMAT" != "VIDEO" ]] && INTENTS+=";🖼️|Montage & Grid|Combine images into grids"
+    [[ "$HAS_AUDIO" -eq 1 ]] && INTENTS+=";🔇|Remove Audio|Strip audio from video"
+
     while true; do
-        LAUNCH_ARGS=(
-            "--list" "--width=700" "--height=550"
-            "--title=🖼️ Image-Magick-Toolbox v2.1 (Smart Builder)" "--print-column=2"
-            "--column=Status" "--column=Name" "--column=Description"
-        )
+        local PICKED_RAW=$(show_unified_wizard "Image-Magick-Toolbox v2.1" "$INTENTS" "$PRESET_FILE" "$HISTORY_FILE")
+        [ -z "$PICKED_RAW" ] && exit 0
 
-        # Show Current Recipe if any
-        if [ -n "$display_recipe" ]; then
-            LAUNCH_ARGS+=("▶️" "RUN OPERATIONS" "Execute: ${display_recipe# → }")
-            LAUNCH_ARGS+=("🗑️" "Clear Recipe" "Start over")
-            LAUNCH_ARGS+=("---" "------------------" "------------------")
-        fi
+        IFS='|' read -ra PARTS <<< "$PICKED_RAW"
+        
+        local LOAD_PRESET=""
+        local LOAD_HISTORY=""
+        local SELECTED_INTENTS=()
 
-        # Add Operation Selector
-        LAUNCH_ARGS+=("➕" "Add Operation" "Choose a step to add to your recipe")
+        for ((i=0; i<${#PARTS[@]}; i+=2)); do
+            TYPE="${PARTS[i]}"
+            VALUE="${PARTS[i+1]}"
+            
+            if [ "$TYPE" == "INTENT" ]; then
+                # Strip icon if present
+                if [[ "$VALUE" =~ ^[^[:alnum:]]+[[:space:]] ]]; then
+                    SELECTED_INTENTS+=("${VALUE#* }")
+                else
+                    SELECTED_INTENTS+=("$VALUE")
+                fi
+            elif [ "$TYPE" == "PRESET" ]; then
+                # Strip ⭐ icon
+                if [[ "$VALUE" == "⭐ "* ]]; then
+                    LOAD_PRESET="${VALUE#* }"
+                else
+                    LOAD_PRESET="$VALUE"
+                fi
+            elif [ "$TYPE" == "HISTORY" ]; then
+                # Strip 🕒 icon
+                if [[ "$VALUE" == "🕒 "* ]]; then
+                    LOAD_HISTORY="${VALUE#* }"
+                else
+                    LOAD_HISTORY="$VALUE"
+                fi
+            fi
+        done
 
-        # Load Presets
-        if [ -s "$PRESET_FILE" ]; then
-            while IFS='|' read -r name options; do
-                [ -z "$name" ] && continue
-                LAUNCH_ARGS+=("⭐" "$name" "Saved Recipe")
-            done < "$PRESET_FILE"
-        fi
-
-        # Load History
-        if [ -s "$HISTORY_FILE" ]; then
-            local h_count=0
-            while read -r line; do
-                [ -z "$line" ] && continue
-                [ $h_count -ge 5 ] && break
-                LAUNCH_ARGS+=("🕒" "$line" "Recent Recipe")
-                ((h_count++))
-            done < "$HISTORY_FILE"
-        fi
-
-        PICKED=$(zenity "${LAUNCH_ARGS[@]}" --text="Recipe Builder: Build your stacking edit below.")
-        if [ -z "$PICKED" ]; then exit 0; fi
-
-        if [ "$PICKED" == "Add Operation" ]; then
-            local valid_ops=$(get_valid_operations)
-            OP_PICK=(
-                "--list" "--width=600" "--height=450"
-                "--title=Select Operation" "--print-column=2"
-                "--column=Icon" "--column=Operation" "--column=Description"
-            )
-            while IFS='|' read -r icon op desc; do
-                OP_PICK+=("$icon" "$op" "$desc")
-            done <<< "$valid_ops"
-
-            CHOICE=$(zenity "${OP_PICK[@]}" --text="What do you want to add?")
-            [ -z "$CHOICE" ] && continue
-
-            case "$CHOICE" in
-                "Scale & Resize")
-                    RES=$(show_scale_interface)
-                    [ -z "$RES" ] && continue
-                    IFS='|' read -ra VALS <<< "$RES"
-                    recipe_list+=("Scale: ${VALS[0]}|CustomGeometry: ${VALS[1]}")
-                    display_recipe+=" → Scale"
-                    ;;
-                "Crop & Geometry")
-                    RES=$(show_crop_interface)
-                    [ -z "$RES" ] && continue
-                    recipe_list+=("Canvas: $RES")
-                    display_recipe+=" → Crop"
-                    ;;
-                "Convert Format")
-                    RES=$(show_convert_interface)
-                    [ -z "$RES" ] && continue
-                    IFS='|' read -ra VALS <<< "$RES"
-                    recipe_list+=("Format: ${VALS[0]}|Optimize: ${VALS[1]}")
-                    display_recipe+=" → Convert"
-                    ;;
-                "Montage & Grid")
-                    RES=$(show_montage_interface)
-                    [ -z "$RES" ] && continue
-                    # Montage is terminal/special
-                    echo "Canvas: $RES"
-                    return 0
-                    ;;
-                "Effects & Branding")
-                    RES=$(show_effects_interface)
-                    [ -z "$RES" ] && continue
-                    IFS='|' read -ra VALS <<< "$RES"
-                    recipe_list+=("Effect: ${VALS[0]}|Branding: ${VALS[1]}|BrandingPayload: ${VALS[2]}")
-                    display_recipe+=" → Effects"
-                    ;;
-                "Flatten Background")
-                    recipe_list+=("Effect: Flatten")
-                    display_recipe+=" → Flatten"
-                    ;;
-                "Convert to sRGB")
-                    recipe_list+=("Effect: sRGB")
-                    display_recipe+=" → sRGB"
-                    ;;
-                "Remove Audio")
-                    recipe_list+=("Effect: Mute")
-                    display_recipe+=" → Mute"
-                    ;;
-                "Extract Pages")
-                    recipe_list+=("Action: ExtractPDF")
-                    display_recipe+=" → Extract"
-                    ;;
-            esac
-            continue
-
-        elif [ "$PICKED" == "RUN OPERATIONS" ]; then
-            # Build the final choice string
+        if [ -n "$LOAD_PRESET" ]; then
+            echo $(grep "^$LOAD_PRESET|" "$PRESET_FILE" | cut -d'|' -f2-)
+            return 0
+        elif [ -n "$LOAD_HISTORY" ]; then
+            echo "$LOAD_HISTORY"
+            return 0
+        elif [ ${#SELECTED_INTENTS[@]} -gt 0 ]; then
+            # Build recipe from intents
+            local recipe_list=()
+            for CHOICE in "${SELECTED_INTENTS[@]}"; do
+                case "$CHOICE" in
+                    "Scale & Resize")
+                        RES=$(show_scale_interface)
+                        [ -z "$RES" ] && continue
+                        IFS='|' read -ra VALS <<< "$RES"
+                        recipe_list+=("Scale: ${VALS[0]}|CustomGeometry: ${VALS[1]}")
+                        ;;
+                    "Crop & Geometry")
+                        RES=$(show_crop_interface)
+                        [ -z "$RES" ] && continue
+                        recipe_list+=("Canvas: $RES")
+                        ;;
+                    "Convert Format")
+                        RES=$(show_convert_interface)
+                        [ -z "$RES" ] && continue
+                        IFS='|' read -ra VALS <<< "$RES"
+                        recipe_list+=("Format: ${VALS[0]}|Optimize: ${VALS[1]}")
+                        ;;
+                    "Effects & Branding")
+                        RES=$(show_effects_interface)
+                        [ -z "$RES" ] && continue
+                        IFS='|' read -ra VALS <<< "$RES"
+                        recipe_list+=("Effect: ${VALS[0]}|Branding: ${VALS[1]}|BrandingPayload: ${VALS[2]}")
+                        ;;
+                    "Montage & Grid")
+                        RES=$(show_montage_interface)
+                        [ -z "$RES" ] && continue
+                        # Montage is terminal/special
+                        echo "Canvas: $RES"
+                        return 0
+                        ;;
+                    "Flatten Background") recipe_list+=("Effect: Flatten") ;;
+                    "Convert to sRGB") recipe_list+=("Effect: sRGB") ;;
+                    "Remove Audio") recipe_list+=("Effect: Mute") ;;
+                    "Extract Pages") recipe_list+=("Action: ExtractPDF") ;;
+                esac
+            done
+            
+            # Combine recipe_list into final string
             local final_choices=""
             for item in "${recipe_list[@]}"; do
                 final_choices+="$item|"
             done
             echo "${final_choices%|}"
-            return 0
-
-        elif [ "$PICKED" == "Clear Recipe" ]; then
-            recipe_list=()
-            display_recipe=""
-            continue
-
-        elif grep -q "^$PICKED|" "$PRESET_FILE"; then
-            echo $(grep "^$PICKED|" "$PRESET_FILE" | cut -d'|' -f2-)
-            return 0
-        else
-            # History item
-            echo "$PICKED"
             return 0
         fi
     done
