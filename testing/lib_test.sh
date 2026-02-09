@@ -5,7 +5,7 @@
 # --- Configuration ---
 TEST_DATA="/tmp/scripts_test_data"
 MOCK_BIN="/tmp/scripts_mock_bin"
-REPORT_FILE="testing/output/test_report.log"
+REPORT_FILE="$(pwd)/testing/output/test_report.log"
 HEADLESS=true
 STRICT=true
 
@@ -35,31 +35,39 @@ if [ -s "$RESPONSE_QUEUE" ]; then
     RESPONSE=$(head -n 1 "$RESPONSE_QUEUE")
     sed -i '1d' "$RESPONSE_QUEUE"
     echo "$RESPONSE"
+    echo "MOCK RESPONSE (QUEUE): $RESPONSE" >> "/tmp/zenity_mock.log"
     exit 0
 fi
 
 # 2. Handle Entry Response
 if [[ "$ARGS" == *"--entry"* && -n "$ZENITY_ENTRY_RESPONSE" ]]; then
-    echo "$ZENITY_ENTRY_RESPONSE"
+    RESPONSE="$ZENITY_ENTRY_RESPONSE"
+    echo "$RESPONSE"
+    echo "MOCK RESPONSE (ENTRY): $RESPONSE" >> "/tmp/zenity_mock.log"
     exit 0
 fi
 
 # 3. Handle Checklist
 if [[ "$ARGS" == *"--checklist"* ]]; then
-    echo "${ZENITY_LIST_RESPONSE:-Action}"
+    RESPONSE="${ZENITY_LIST_RESPONSE:-}"
+    echo "$RESPONSE"
+    echo "MOCK RESPONSE (LIST): $RESPONSE" >> "/tmp/zenity_mock.log"
     exit 0
 fi
 
 # 4. Handle Forms
 if [[ "$ARGS" == *"--forms"* ]]; then
-    # Default behavior if queue is empty
-    echo ""
+    RESPONSE=""
+    echo "$RESPONSE"
+    echo "MOCK RESPONSE (FORM): $RESPONSE" >> "/tmp/zenity_mock.log"
     exit 0
 fi
 
 # 5. Handle Simple Lists
 if [[ "$ARGS" == *"--list"* ]]; then
-    echo "${ZENITY_LIST_RESPONSE:-New Custom Edit}"
+    RESPONSE="${ZENITY_LIST_RESPONSE:-}"
+    echo "$RESPONSE"
+    echo "MOCK RESPONSE (LIST): $RESPONSE" >> "/tmp/zenity_mock.log"
     exit 0
 fi
 
@@ -70,9 +78,8 @@ case "$ARGS" in
     *--entry*) echo "9" ;;
     *--file-selection*) echo "/tmp/scripts_test_data/test.srt" ;;
     *--progress*) 
-        while read -r line; do
-            [[ "$line" == "#"* ]] && echo "$line"
-        done
+        cat > /dev/null
+        exit 0
         ;;
     *) exit 0 ;;
 esac
@@ -148,7 +155,7 @@ validate_media() {
             format)
                 # For images
                 if command -v magick &>/dev/null; then
-                    local f=$(magick identify -format "%m" "$file" | tr '[:upper:]' '[:lower:]')
+                    local f=$(magick identify -format "%m\n" "$file[0]" | head -n 1 | tr '[:upper:]' '[:lower:]')
                     [[ "$f" != "$val" ]] && { log_fail "Format mismatch: expected $val, got $f"; failed=1; }
                 fi
                 ;;
@@ -165,7 +172,7 @@ run_test() {
     
     log_info "Testing: $(basename "$script_path") with [${input_files[*]}]"
     
-    # Clean output data but keep sources
+    # 0. Clean test data but NOT response queue (test caller sets it)
     find "$TEST_DATA" -type f -not \( -name "src.mp4" -o -name "src.jpg" -o -name "test.srt" -o -name "*'*.mp4" \) -delete
     
     local before=$(mktemp)
@@ -199,8 +206,10 @@ run_test() {
 
     if [ -z "$new_files" ]; then
         log_fail "No output file detected"
+        echo "--- Script Log ---"
         cat "$script_log"
-        rm "$script_log"
+        echo "------------------"
+        # rm "$script_log"
         return 1
     fi
 
@@ -208,15 +217,16 @@ run_test() {
     local output_file="$TEST_DATA/$newest"
     log_info "Detected output: $newest"
 
+    # Clean up any leftover responses for this test
+    rm -f "/tmp/zenity_responses"
+
     if [ -n "$validation_rules" ]; then
         validate_media "$output_file" "$validation_rules"
         local val_status=$?
         [[ $val_status -eq 0 ]] && log_pass "$(basename "$script_path") validated successfully"
-        rm "$script_log"
         return $val_status
     else
         log_pass "$(basename "$script_path") ran without error"
-        rm "$script_log"
         return 0
     fi
 }

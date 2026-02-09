@@ -21,24 +21,24 @@ probe_gpu() {
     echo "" > "$GPU_CACHE"
     
     # 1. NVENC Probe
-    if ffmpeg -v error -f lavfi -i color=black:s=1280x720 -vframes 1 -an -c:v h264_nvenc -f null - 2>/dev/null; then
+    if ffmpeg -v error -nostdin -f lavfi -i color=black:s=1280x720 -vframes 1 -an -c:v h264_nvenc -f null - 2>/dev/null; then
         echo "nvenc" >> "$GPU_CACHE"
     fi
     
     # 2. QSV Probe
-    if ffmpeg -v error -f lavfi -i color=black:s=1280x720 -vframes 1 -an -c:v h264_qsv -f null - 2>/dev/null; then
+    if ffmpeg -v error -nostdin -f lavfi -i color=black:s=1280x720 -vframes 1 -an -c:v h264_qsv -f null - 2>/dev/null; then
         echo "qsv" >> "$GPU_CACHE"
     fi
     
     # 3. VAAPI Probe (Needs valid device)
-    if ffmpeg -v error -f lavfi -i color=black:s=1280x720 -vframes 1 -an -c:v h264_vaapi -f null - 2>/dev/null; then
+    if ffmpeg -v error -nostdin -f lavfi -i color=black:s=1280x720 -vframes 1 -an -c:v h264_vaapi -f null - 2>/dev/null; then
         echo "vaapi" >> "$GPU_CACHE"
     fi
 }
-probe_gpu &
+probe_gpu </dev/null >/dev/null 2>&1 &
 
 # --- CONFIG & PRESETS ---
-CONFIG_DIR="$HOME/.config/scripts-sh"
+CONFIG_DIR="$HOME/.config/scripts-sh/ffmpeg"
 PRESET_FILE="$CONFIG_DIR/presets.conf"
 HISTORY_FILE="$CONFIG_DIR/history.conf"
 mkdir -p "$CONFIG_DIR"
@@ -391,21 +391,47 @@ if [[ "$CHOICES" == *"Flip: Horizontal"* ]]; then add_vf "hflip"; TAG="${TAG}_fl
 if [[ "$CHOICES" == *"Flip: Vertical"* ]]; then add_vf "vflip"; TAG="${TAG}_flipV"; fi
 
 # --- AUDIO ---
-REMOVE_AUDIO=false
+AUDIO_OPTS=""
 if [[ "$CHOICES" == *"Remove Audio Track"* ]]; then 
+    AUDIO_OPTS="-an"
     REMOVE_AUDIO=true
     TAG="${TAG}_noaudio"
 else
-    if [[ "$CHOICES" == *"Downmix to Stereo"* ]]; then ACODEC_OPTS="$ACODEC_OPTS -ac 2"; TAG="${TAG}_stereo"; fi
+    if [[ "$CHOICES" == *"Downmix to Stereo"* ]]; then AUDIO_OPTS="-ac 2"; TAG="${TAG}_stereo"; fi
     if [[ "$CHOICES" == *"Normalize"* ]]; then add_af "loudnorm=I=-23:LRA=7:TP=-1.5"; TAG="${TAG}_norm"; fi
     if [[ "$CHOICES" == *"Boost Volume"* ]]; then add_af "volume=6dB"; TAG="${TAG}_boost"; fi
-    if [[ "$CHOICES" == *"Recode to PCM"* ]]; then ACODEC_OPTS="-c:a pcm_s16le"; TAG="${TAG}_pcm"; fi
+    if [[ "$CHOICES" == *"Recode to PCM"* ]]; then AUDIO_OPTS="-c:a pcm_s16le"; TAG="${TAG}_pcm"; fi
 fi
 
 # --- GPU LOGIC ---
 if [[ "$CHOICES" == *"Use NVENC"* ]]; then USE_GPU=true; GPU_TYPE="nvenc"; TAG="${TAG}_nvenc"; fi
 if [[ "$CHOICES" == *"Use QSV"* ]]; then USE_GPU=true; GPU_TYPE="qsv"; TAG="${TAG}_qsv"; fi
 if [[ "$CHOICES" == *"Use VAAPI"* ]]; then USE_GPU=true; GPU_TYPE="vaapi"; TAG="${TAG}_vaapi"; fi
+
+# --- TAG PARSING ---
+SPEED_VAL=""
+if [[ "$CHOICES" == *"Speed: "* ]]; then
+    SPEED_VAL=$(echo "$CHOICES" | grep -o "Speed: [^|]*" | cut -d: -f2 | xargs | cut -dx -f1)
+elif [[ "$CHOICES" == *"2x (Fast)"* ]]; then SPEED_VAL="2"
+elif [[ "$CHOICES" == *"4x (Super Fast)"* ]]; then SPEED_VAL="4"
+elif [[ "$CHOICES" == *"0.5x (Slow)"* ]]; then SPEED_VAL="0.5"
+elif [[ "$CHOICES" == *"0.25x (Very Slow)"* ]]; then SPEED_VAL="0.25"
+fi
+
+SCALE_W=""
+if [[ "$CHOICES" == *"Res: "* ]]; then
+    SCALE_W=$(echo "$CHOICES" | grep -o "Res: [^|]*" | cut -d: -f2 | xargs | cut -dp -f1)
+elif [[ "$CHOICES" == *"1.44k"* ]]; then SCALE_W="1440"
+elif [[ "$CHOICES" == *"1080p"* ]]; then SCALE_W="1080"
+elif [[ "$CHOICES" == *"720p"* ]]; then SCALE_W="720"
+elif [[ "$CHOICES" == *"4k"* ]]; then SCALE_W="2160"
+elif [[ "$CHOICES" == *"480p"* ]]; then SCALE_W="480"
+elif [[ "$CHOICES" == *"360p"* ]]; then SCALE_W="360"
+elif [[ "$CHOICES" == *"50%"* ]]; then SCALE_W="50%"
+fi
+
+CUSTOM_W=$(echo "$CHOICES" | grep -o "CustomW: [^|]*" | cut -d: -f2 | xargs 2>/dev/null || true)
+[ -n "$CUSTOM_W" ] && SCALE_W="$CUSTOM_W"
 
 # --- FORMAT OVERRIDES ---
 IS_audio_only=false
@@ -431,9 +457,9 @@ elif [[ "$CHOICES" == *"Output: ProRes"* ]]; then
     ACODEC_OPTS="-c:a pcm_s16le"
     EXT="mov"
     TAG="${TAG}_prores"
-elif [[ "$CHOICES" == *"Extract Audio (MP3)"* ]]; then
+elif [[ "$CHOICES" == *"Extract MP3"* ]]; then
     VCODEC_OPTS="-vn"
-    ACODEC_OPTS="-c:a libmp3lame -q:a 2"
+    AUDIO_OPTS="-c:a libmp3lame -q:a 2"
     EXT="mp3"
     TAG="${TAG}_audio"
     IS_audio_only=true
@@ -545,9 +571,9 @@ for f in "$@"; do
         CURRENT_ACORE="-an"
     else
         if [ -n "$AF_CHAIN" ] && [ "$IS_audio_only" = false ]; then 
-            CURRENT_ACORE="-af \"$AF_CHAIN\" $ACODEC_OPTS"
+            CURRENT_ACORE="-af \"$AF_CHAIN\" $ACODEC_OPTS $AUDIO_OPTS"
         else
-            CURRENT_ACORE="$ACODEC_OPTS"
+            CURRENT_ACORE="$ACODEC_OPTS $AUDIO_OPTS"
         fi
     fi
     
@@ -616,12 +642,16 @@ for f in "$@"; do
     elif [ "$IS_gif" = true ]; then
         PALETTE="/tmp/palette_$(basename "$f").png"
         echo "Generating palette..." >> "$LOG_FILE"
-        CMD1="ffmpeg -y -nostdin $INPUT_OPTS -i \"$f\" -vf \"$FULL_VF,palettegen\" \"$PALETTE\""
+        VF_GIF="palettegen"
+        [ -n "$FULL_VF" ] && VF_GIF="$FULL_VF,palettegen"
+        CMD1="ffmpeg -y -nostdin $INPUT_OPTS -i \"$f\" -vf \"$VF_GIF\" \"$PALETTE\""
         echo "$CMD1" >> "$LOG_FILE"
         eval $CMD1
         
         echo "Creating GIF..." >> "$LOG_FILE"
-        CMD2="ffmpeg -y -nostdin $INPUT_OPTS -i \"$f\" -i \"$PALETTE\" -lavfi \"$FULL_VF [x]; [x][1:v] paletteuse\" $FPS_ARG \"$OUT_FILE\""
+        LAVFI_GIF="[0:v][1:v] paletteuse"
+        [ -n "$FULL_VF" ] && LAVFI_GIF="$FULL_VF [x]; [x][1:v] paletteuse"
+        CMD2="ffmpeg -y -nostdin $INPUT_OPTS -i \"$f\" -i \"$PALETTE\" -lavfi \"$LAVFI_GIF\" $FPS_ARG \"$OUT_FILE\""
         echo "$CMD2" >> "$LOG_FILE"
         eval $CMD2
         rm "$PALETTE"
