@@ -16,219 +16,34 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# --- Initialization ---
-mkdir -p "$TEST_DATA"
-mkdir -p "$MOCK_BIN"
-echo "Test Session Started at $(date)" > "$REPORT_FILE"
+# --- Library ---
+source "$(dirname "${BASH_SOURCE[0]}")/lib_test.sh"
 
-# --- Zenity Mocking ---
-setup_mock_zenity() {
-    cat <<'EOF' > "$MOCK_BIN/zenity"
-#!/bin/bash
-# Headless Zenity Mock
-ARGS="$*"
-echo "MOCK ZENITY CALLED WITH: $ARGS" >> "/tmp/zenity_mock.log"
-
-# 1. Handle Response Overrides
-if [[ "$ARGS" == *"--entry"* && -n "$ZENITY_ENTRY_RESPONSE" ]]; then
-    echo "$ZENITY_ENTRY_RESPONSE"
-    exit 0
-fi
-
-# 2. Handle Checklist (Step 1)
-if [[ "$ARGS" == *"--checklist"* ]]; then
-    case "$ARGS" in
-        *"Universal Toolbox Wizard"*)
-            # Return format: Name|Name|...
-            echo "${ZENITY_LIST_RESPONSE:-⏪ Speed Control|📐 Scale / Resize|🔊 Audio Tools}"
-            exit 0
-            ;;
-        *) 
-            echo "${ZENITY_LIST_RESPONSE:-Action}"
-            exit 0
-            ;;
-    esac
-fi
-
-# 3. Handle Forms (Step 2)
-if [[ "$ARGS" == *"--forms"* ]]; then
-    case "$ARGS" in
-        *"Universal Toolbox: Configure"*)
-            # Default Test Set: 2x (Fast), blank, 720p, blank, Inactive, No Change, blank, blank, Inactive, Inactive, Medium Default, blank, Auto/MP4, None
-            echo "2x (Fast)||720p|| (Inactive)|No Change||| (Inactive)| (Inactive)|Medium Default||Auto/MP4|None (CPU Only)"
-            exit 0
-            ;;
-        *) echo ""; exit 0 ;;
-    esac
-fi
-
-# 4. Handle Simple Lists (History/Presets if they were separate, but now they are combined)
-if [[ "$ARGS" == *"--list"* ]]; then
-    echo "${ZENITY_LIST_RESPONSE:-New Custom Edit}"
-    exit 0
-fi
-
-case "$ARGS" in
-    *--question*) exit 1 ;; # Always say "No" to Save Favorite in tests
-    *--scale*) echo "1280" ;;
-    *--entry*) echo "9" ;;
-    *--file-selection*) echo "/tmp/scripts_test_data/test.srt" ;;
-    *--progress*) 
-        while read -r line; do
-            [[ "$line" == "#"* ]] && echo "$line"
-        done
-        ;;
-    *) exit 0 ;;
-esac
-EOF
-    chmod +x "$MOCK_BIN/zenity"
-    export PATH="$MOCK_BIN:$PATH"
-}
-
+# --- Main Execution ---
 if [ "$HEADLESS" = true ]; then
     setup_mock_zenity
 fi
 
-# --- Helper Functions ---
-log_pass() { echo -e "${GREEN}[PASS]${NC} $1"; }
-log_fail() { echo -e "${RED}[FAIL]${NC} $1"; echo "FAIL: $1" >> "$REPORT_FILE"; }
-log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
+generate_test_media
 
-generate_test_media() {
-    log_info "Generating test media..."
-    ffmpeg -f lavfi -i testsrc=duration=2:size=1920x1080:rate=30 -f lavfi -i sine=frequency=1000:duration=2 -c:v libx264 -c:a aac -shortest -y "$TEST_DATA/src.mp4" > /dev/null 2>&1
-    touch "$TEST_DATA/test.srt"
-}
+echo -e "\n${YELLOW}=== Running New: Universal Toolbox ===${NC}"
+# Test combination: Speed 2x + Scale 720p + Mute + Medium Quality + H.264
+# We use the response queue for complex flows if needed, but here simple overrides work
+export ZENITY_LIST_RESPONSE="⏪ Speed Control|📐 Scale / Resize|🔊 Audio Tools"
+# Forms responses are harder to override via env, so we use the queue for the forms call
+echo "2x (Fast)||720p|| (Inactive)|No Change||| (Inactive)| (Inactive)|Medium Default||Auto/MP4|None (CPU Only)" > /tmp/zenity_responses
+run_test "ffmpeg/🧰 Universal-Toolbox.sh" "width=1280,no_audio,vcodec=h264,fps=30" "$TEST_DATA/src.mp4"
+unset ZENITY_LIST_RESPONSE
 
-validate_media() {
-    local file="$1"
-    local rules="$2" # comma separated rules: width=1280,codec=h264,no_video
-    
-    if [ ! -f "$file" ]; then
-        log_fail "Output file missing: $file"
-        return 1
-    fi
-
-    local failed=0
-    IFS=',' read -ra ADDR <<< "$rules"
-    for rule in "${ADDR[@]}"; do
-        local key="${rule%%=*}"
-        local val="${rule#*=}"
-        
-        case $key in
-            width)
-                local w=$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of default=noprint_wrappers=1:nokey=1 "$file")
-                [[ "$w" != "$val" ]] && { log_fail "Width mismatch: expected $val, got $w"; failed=1; }
-                ;;
-            height)
-                local h=$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of default=noprint_wrappers=1:nokey=1 "$file")
-                [[ "$h" != "$val" ]] && { log_fail "Height mismatch: expected $val, got $h"; failed=1; }
-                ;;
-            vcodec)
-                local c=$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "$file")
-                [[ "$c" != "$val" ]] && { log_fail "V-Codec mismatch: expected $val, got $c"; failed=1; }
-                ;;
-            acodec)
-                local c=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "$file")
-                [[ "$c" != "$val" ]] && { log_fail "A-Codec mismatch: expected $val, got $c"; failed=1; }
-                ;;
-            no_video)
-                local streams=$(ffprobe -v error -show_entries format=nb_streams -of default=noprint_wrappers=1:nokey=1 "$file")
-                local v_streams=$(ffprobe -v error -select_streams v -show_entries stream=index -of default=noprint_wrappers=1:nokey=1 "$file")
-                [[ -n "$v_streams" ]] && { log_fail "Video stream found, expected none"; failed=1; }
-                ;;
-            fps)
-                local fps=$(ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=noprint_wrappers=1:nokey=1 "$file")
-                # Handle fraction like 30/1
-                fps=$(echo "scale=0; $fps" | bc -l)
-                [[ "$fps" != "$val" ]] && { log_fail "FPS mismatch: expected $val, got $fps"; failed=1; }
-                ;;
-        esac
-    done
-    
-    return $failed
-}
-
-run_test() {
-    local script_path="$1"
-    local validation_rules="$2"
-    local input_file="$3"
-    
-    log_info "Testing: $(basename "$script_path")"
-    
-    # 0. Clean test data of any previous outputs (but keep src.mp4 and other sources)
-    # We want to keep src.mp4, test.srt, and specifically named test files
-    find "$TEST_DATA" -type f -not \( -name "src.mp4" -o -name "test.srt" -o -name "*'*.mp4" \) -delete
-    
-    # 1. Capture current files
-    local before=$(mktemp)
-    ls -1 "$TEST_DATA" | sort > "$before"
-
-    # 2. Run the script
-    local script_log=$(mktemp)
-    # CD to the directory of the input file to mimic Nautilus behavior
-    local input_dir=$(dirname "$input_file")
-    local input_base=$(basename "$input_file")
-    
-    # We need to resolve script path to absolute because we are changing dir
-    local abs_script_path=$(readlink -f "$script_path")
-
-    ( cd "$input_dir" && timeout 60s bash "$abs_script_path" "$input_base" ) > "$script_log" 2>&1
-    local exit_code=$?
-    
-    if [ $exit_code -ne 0 ]; then
-        log_fail "Script exited with code $exit_code"
-        cat "$script_log"
-        rm "$before" "$script_log"
-        return 1
-    fi
-
-    # 3. Find the NEW file created (preferring newest)
-    local output_file=""
-    local newest=$(ls -t "$TEST_DATA" | head -n 1)
-    
-    # Verify it's not one of our sources (simple check, could be better)
-    if [[ "$newest" == "src.mp4" || "$newest" == "test.srt" || "$newest" == *"'"* ]]; then
-        # If the newest file is a source, maybe the script didn't produce anything?
-        # Or maybe it modified in place (scripts usually don't).
-        # Let's check diff against 'before'
-        local after=$(mktemp)
-        ls -1 "$TEST_DATA" | sort > "$after"
-        local diff_file=$(comm -13 "$before" "$after")
-        if [ -n "$diff_file" ]; then
-             newest=$(echo "$diff_file" | head -n 1)
-        fi
-        rm "$after"
-    fi
-
-    # Final check if we found a new file
-    if [[ -z "$newest" || "$newest" == "src.mp4" || "$newest" == "test.srt" || "$newest" == "User's Video.mp4" ]]; then
-        # One last check: did we rename/modify?
-        # For now assume failure if no new file appears
-        log_fail "No output file detected for $(basename "$script_path")"
-        echo "Files in $TEST_DATA:"
-        ls -l "$TEST_DATA"
-        echo "Script Log:"
-        cat "$script_log"
-        rm "$before" "$script_log"
-        return 1
-    fi
-
-    rm "$before" "$script_log"
-    output_file="$TEST_DATA/$newest"
-    log_info "Detected output: $newest"
-
-    if [ -n "$validation_rules" ]; then
-        validate_media "$output_file" "$validation_rules"
-        local val_status=$?
-        # Stay clean
-        rm -rf "$output_file"
-        [[ $val_status -eq 0 ]] && log_pass "$(basename "$script_path") validated successfully"
-    else
-        log_pass "$(basename "$script_path") ran without error"
-        rm -rf "$output_file"
-    fi
-}
+echo -e "\n${YELLOW}=== Running New: Universal Toolbox v2 (Features) ===${NC}"
+# 1. Subtitle Burn-in Test
+touch "$TEST_DATA/src.srt"
+export ZENITY_LIST_RESPONSE="📝 Subtitles"
+# For subtitles: configure form needs to return "Burn-in"
+echo " (Inactive)|| (Inactive)|| (Inactive)|No Change||| (Inactive)|Burn-in|Medium Default||Auto/MP4|None (CPU Only)" > /tmp/zenity_responses
+run_test "ffmpeg/🧰 Universal-Toolbox.sh" "vcodec=h264" "$TEST_DATA/src.mp4"
+rm "$TEST_DATA/src.srt"
+unset ZENITY_LIST_RESPONSE
 
 # --- Main Execution ---
 if [[ "$*" == *"--no-run"* ]]; then
