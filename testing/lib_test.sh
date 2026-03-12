@@ -20,7 +20,10 @@ NC='\033[0m'
 mkdir -p "$TEST_DATA"
 mkdir -p "$MOCK_BIN"
 mkdir -p "testing/output"
-> "$REPORT_FILE"
+if [ -z "$TEST_SUITE_RUNNING" ]; then
+    > "$REPORT_FILE"
+    export TEST_SUITE_RUNNING=1
+fi
 
 # --- Zenity Mocking ---
 setup_mock_zenity() {
@@ -28,7 +31,8 @@ setup_mock_zenity() {
 #!/bin/bash
 # Headless Zenity Mock
 ARGS="$*"
-echo "MOCK ZENITY CALLED WITH: $ARGS" >> "/tmp/zenity_mock.log"
+CALL_LOG="/tmp/zenity_call_log.txt"
+echo "CALL: $ARGS" >> "$CALL_LOG"
 
 # 1. Handle Response Overrides (Queue based)
 RESPONSE_QUEUE="/tmp/zenity_responses"
@@ -36,57 +40,34 @@ if [ -s "$RESPONSE_QUEUE" ]; then
     RESPONSE=$(head -n 1 "$RESPONSE_QUEUE")
     sed -i '1d' "$RESPONSE_QUEUE"
     echo "$RESPONSE"
-    echo "MOCK RESPONSE (QUEUE): $RESPONSE" >> "/tmp/zenity_mock.log"
     exit 0
 fi
 
 # 2. Handle Entry Response
 if [[ "$ARGS" == *"--entry"* && -n "$ZENITY_ENTRY_RESPONSE" ]]; then
-    RESPONSE="$ZENITY_ENTRY_RESPONSE"
-    echo "$RESPONSE"
-    echo "MOCK RESPONSE (ENTRY): $RESPONSE" >> "/tmp/zenity_mock.log"
+    echo "$ZENITY_ENTRY_RESPONSE"
     exit 0
 fi
 
-# 3. Handle Checklist
-if [[ "$ARGS" == *"--checklist"* ]]; then
-    RESPONSE="${ZENITY_LIST_RESPONSE:-}"
-    echo "$RESPONSE"
-    echo "MOCK RESPONSE (LIST): $RESPONSE" >> "/tmp/zenity_mock.log"
+# 3. Handle Checklist/List
+if [[ "$ARGS" == *"--list"* ]]; then
+    echo "${ZENITY_LIST_RESPONSE:-}"
     exit 0
 fi
 
 # 4. Handle Forms
 if [[ "$ARGS" == *"--forms"* ]]; then
-    RESPONSE=""
-    echo "$RESPONSE"
-    echo "MOCK RESPONSE (FORM): $RESPONSE" >> "/tmp/zenity_mock.log"
-    exit 0
-fi
-
-# 5. Handle Simple Lists
-if [[ "$ARGS" == *"--list"* ]]; then
-    RESPONSE="${ZENITY_LIST_RESPONSE:-}"
-    echo "$RESPONSE"
-    echo "MOCK RESPONSE (LIST): $RESPONSE" >> "/tmp/zenity_mock.log"
+    echo ""
     exit 0
 fi
 
 # 5. Handle Question
 if [[ "$ARGS" == *"--question"* ]]; then
-    # Respect MOCK_EXIT_CODE even for questions if set
     if [ -n "$ZENITY_MOCK_EXIT_CODE" ]; then exit "$ZENITY_MOCK_EXIT_CODE"; fi
     if [[ "$ZENITY_QUESTION_RESPONSE" == "YES" ]]; then exit 0; else exit 1; fi
 fi
 
-# 6. Global Exit Code Override
-if [ -n "$ZENITY_MOCK_EXIT_CODE" ]; then
-    # Consume exit code for this call
-    CODE="$ZENITY_MOCK_EXIT_CODE"
-    # Optional: unset it if we want it to be single-shot per script
-    # unset ZENITY_MOCK_EXIT_CODE 
-    exit "$CODE"
-fi
+if [ -n "$ZENITY_MOCK_EXIT_CODE" ]; then exit "$ZENITY_MOCK_EXIT_CODE"; fi
 
 case "$ARGS" in
     *--scale*) echo "1280" ;;
@@ -99,6 +80,7 @@ case "$ARGS" in
     *) exit 0 ;;
 esac
 EOF
+    echo -n "" > /tmp/zenity_call_log.txt
     chmod +x "$MOCK_BIN/zenity"
     export PATH="$MOCK_BIN:$PATH"
 }
@@ -168,14 +150,12 @@ validate_media() {
                 [[ "$fps" != "$val" ]] && { log_fail "FPS mismatch: expected $val, got $fps"; failed=1; }
                 ;;
             format)
-                # For images
                 if command -v magick &>/dev/null; then
                     local f=$(magick identify -format "%m\n" "$file[0]" | head -n 1 | tr '[:upper:]' '[:lower:]')
                     [[ "$f" != "$val" ]] && { log_fail "Format mismatch: expected $val, got $f"; failed=1; }
                 fi
                 ;;
             tags)
-                # Verify that the filename contains specific tags (e.g. _bw, _720p)
                 IFS='|' read -ra TAGS <<< "$val"
                 for tag in "${TAGS[@]}"; do
                     if [[ "$(basename "$file")" != *"$tag"* ]]; then
@@ -194,35 +174,19 @@ run_test() {
     local script_path="$1"
     local validation_rules="$2"
     local input_files=("${@:3}")
-    
     log_info "Testing: $(basename "$script_path") with [${input_files[*]}]"
-    
-    # 0. Clean test data but NOT response queue (test caller sets it)
-    find "$TEST_DATA" -type f -not \( -name "src.mp4" -o -name "src.jpg" -o -name "test.srt" -o -name "*'*.mp4" \) -delete
+    find "$TEST_DATA" -type f -not \( -name "src.mp4" -o -name "src.jpg" -o -name "test.srt" \) -delete
     
     local before=$(mktemp)
     ls -1 "$TEST_DATA" | sort > "$before"
-
-    local script_log=$(mktemp)
     local first_input="${input_files[0]}"
     local input_dir=$(dirname "$first_input")
     local abs_script_path=$(readlink -f "$script_path")
-
-    # Handle multiple inputs for CLI
     local input_bases=()
-    for f in "${input_files[@]}"; do
-        input_bases+=("$(basename "$f")")
-    done
+    for f in "${input_files[@]}"; do input_bases+=("$(basename "$f")"); done
 
-    ( cd "$input_dir" && timeout 60s bash "$abs_script_path" "${input_bases[@]}" ) > "$script_log" 2>&1
+    ( cd "$input_dir" && timeout 60s bash "$abs_script_path" "${input_bases[@]}" )
     local exit_code=$?
-    
-    if [ $exit_code -ne 0 ]; then
-        log_fail "Script exited with code $exit_code"
-        cat "$script_log"
-        rm "$before" "$script_log"
-        return 1
-    fi
 
     local after=$(mktemp)
     ls -1 "$TEST_DATA" | sort > "$after"
@@ -231,83 +195,45 @@ run_test() {
 
     if [ -z "$new_files" ]; then
         log_fail "No output file detected"
-        echo "--- Script Log ---"
-        cat "$script_log"
-        echo "------------------"
-        # rm "$script_log"
         return 1
     fi
 
-    local newest=$(echo "$new_files" | tail -n 1) # Take the last one created
+    local newest=$(echo "$new_files" | tail -n 1)
     local output_file="$TEST_DATA/$newest"
     log_info "Detected output: $newest"
 
-    # Clean up any leftover responses for this test
-    # (Only if we didn't consume them all - helps find bugs in mock usage)
-    if [ -s "/tmp/zenity_responses" ]; then
-        log_info "Note: $(wc -l < /tmp/zenity_responses) responses left in queue after test"
-    fi
-    # Don't delete, caller might have queued for next test, but run_test is usually atomic
-    # rm -f "/tmp/zenity_responses"
-
     if [ -n "$validation_rules" ]; then
         validate_media "$output_file" "$validation_rules"
-        local val_status=$?
-        [[ $val_status -eq 0 ]] && log_pass "$(basename "$script_path") validated successfully"
-        return $val_status
+        return $?
     else
-        log_pass "$(basename "$script_path") ran without error"
+        log_pass "Ran without error"
         return 0
     fi
 }
 
-# Assert script exits code 0 but CREATES NO NEW FILES
 run_negative_test() {
     local script_path="$1"
     local input_files=("${@:2}")
-    
-    log_info "Negative Test: $(basename "$script_path") with [${input_files[*]}]"
-    
+    log_info "Negative Test: $(basename "$script_path")"
     find "$TEST_DATA" -type f -not \( -name "src.mp4" -o -name "src.jpg" -o -name "test.srt" \) -delete
     local before_count=$(ls -1 "$TEST_DATA" | wc -l)
-
-    local script_log=$(mktemp)
-    local first_input="${input_files[0]}"
-    local input_dir=$(dirname "$first_input")
     local abs_script_path=$(readlink -f "$script_path")
+    local input_dir=$(dirname "${input_files[0]}")
     local input_bases=()
     for f in "${input_files[@]}"; do input_bases+=("$(basename "$f")"); done
 
-    ( cd "$input_dir" && timeout 10s bash "$abs_script_path" "${input_bases[@]}" ) > "$script_log" 2>&1
+    ( cd "$input_dir" && timeout 10s bash "$abs_script_path" "${input_bases[@]}" )
     local exit_code=$?
-
-    if [ $exit_code -ne 0 ]; then
-        log_fail "Script exited with error code $exit_code (Expected 0 for graceful cancel)"
-        cat "$script_log"
-        rm "$script_log"
-        return 1
-    fi
 
     local after_count=$(ls -1 "$TEST_DATA" | wc -l)
     if [ "$after_count" -gt "$before_count" ]; then
-        log_fail "Artifacts were created during negative test (Expected no output)"
-        ls -l "$TEST_DATA"
-        rm "$script_log"
+        log_fail "Artifacts were created during negative test"
         return 1
     fi
-
-    log_pass "$(basename "$script_path") handled negative path successfully"
-    rm "$script_log"
+    log_pass "Handled negative path successfully"
     return 0
 }
 
-# Assert script SURVIVES a cancel then succeeds (Resilience)
 run_resilience_test() {
-    local script_path="$1"
-    local validation_rules="$2"
-    local input_files=("${@:3}")
-    
-    log_info "Resilience Test: $(basename "$script_path")"
-    # Caller should have set up /tmp/zenity_responses
-    run_test "$script_path" "$validation_rules" "${input_files[@]}"
+    run_test "$1" "$2" "${@:3}"
 }

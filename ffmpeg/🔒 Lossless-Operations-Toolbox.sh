@@ -981,26 +981,24 @@ show_main_menu() {
     
     local SELECTED_INTENT=""
     for VALUE in "${PARTS[@]}"; do
-        if [[ "$VALUE" == "---" ]]; then
+        VALUE=$(echo -n "$VALUE" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        if [[ -z "$VALUE" || "$VALUE" == "---" ]]; then
             continue
-        elif [[ "$VALUE" == "⭐ "* ]]; then
+        elif [[ "$VALUE" == "PRESET:"* ]]; then
             # Preset
-            local pd=$(grep "^${VALUE#* }|" "$PRESET_FILE" | head -n 1 | cut -d'|' -f2-)
+            local p_name="${VALUE#PRESET:}"
+            local pd=$(grep "^$p_name|" "$PRESET_FILE" | head -n 1 | cut -d'|' -f2-)
             if [ -n "$pd" ]; then
                 echo "$pd"
                 return 0
             fi
-        elif [[ "$VALUE" == "🕒 "* ]]; then
+        elif [[ "$VALUE" == "HISTORY:"* ]]; then
             # History
-             echo "${VALUE#* }"
+             echo "${VALUE#HISTORY:}"
              return 0
         else
-            # Intent
-            if [[ "$VALUE" =~ ^[^[:alnum:]]+[[:space:]] ]]; then
-                SELECTED_INTENT="${VALUE#* }"
-            else
-                SELECTED_INTENT="$VALUE"
-            fi
+            # Intent (Always clean name from wizard.sh)
+            SELECTED_INTENT="$VALUE"
         fi
     done
 
