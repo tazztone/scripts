@@ -35,29 +35,49 @@ CALL_LOG="/tmp/zenity_call_log.txt"
 echo "CALL: $ARGS" >> "$CALL_LOG"
 
 # 1. Handle Response Overrides (Queue based)
-RESPONSE_QUEUE="/tmp/zenity_responses"
-if [ -s "$RESPONSE_QUEUE" ]; then
-    RESPONSE=$(head -n 1 "$RESPONSE_QUEUE")
-    sed -i '1d' "$RESPONSE_QUEUE"
-    echo "$RESPONSE"
-    exit 0
-fi
+get_queue_response() {
+    RESPONSE_QUEUE="/tmp/zenity_responses"
+    if [ -s "$RESPONSE_QUEUE" ]; then
+        RESPONSE=$(head -n 1 "$RESPONSE_QUEUE")
+        sed -i '1d' "$RESPONSE_QUEUE"
+        echo "$RESPONSE"
+        return 0
+    fi
+    return 1
+}
 
 # 2. Handle Entry Response
-if [[ "$ARGS" == *"--entry"* && -n "$ZENITY_ENTRY_RESPONSE" ]]; then
-    echo "$ZENITY_ENTRY_RESPONSE"
-    exit 0
+if [[ "$ARGS" == *"--entry"* ]]; then
+    if get_queue_response; then exit 0; fi
+    if [ -n "$ZENITY_ENTRY_RESPONSE" ]; then
+        echo "$ZENITY_ENTRY_RESPONSE"
+        exit 0
+    fi
 fi
 
 # 3. Handle Checklist/List
 if [[ "$ARGS" == *"--list"* ]]; then
-    echo "${ZENITY_LIST_RESPONSE:-}"
+    if get_queue_response; then exit 0; fi
+    RESP="${ZENITY_LIST_RESPONSE:-}"
+    # If a profile is set and the response is a simple string, we can transform it
+    if [[ -n "$ZENITY_PROFILE" && "$RESP" != *"|"* ]]; then
+        case "$ZENITY_PROFILE" in
+            zenity4) RESP="TRUE|$RESP|$RESP|Description|$RESP" ;;
+            ghost)   RESP="FALSE|$RESP|$RESP|Description|$RESP" ;;
+        esac
+    fi
+    echo "$RESP"
     exit 0
 fi
 
 # 4. Handle Forms
 if [[ "$ARGS" == *"--forms"* ]]; then
-    echo ""
+    if get_queue_response; then exit 0; fi
+    if [ -n "$ZENITY_FORMS_RESPONSE" ]; then
+        echo "$ZENITY_FORMS_RESPONSE"
+    else
+        echo ""
+    fi
     exit 0
 fi
 
@@ -74,7 +94,13 @@ case "$ARGS" in
     *--entry*) echo "9" ;;
     *--file-selection*) echo "/tmp/scripts_test_data/test.srt" ;;
     *--progress*) 
+        # For progress bars, we SHOULD NOT consume the mock response queue
+        # as the progress bar is usually secondary/informative
         cat > /dev/null
+        exit 0
+        ;;
+    *--notification*)
+        # Same for notifications
         exit 0
         ;;
     *) exit 0 ;;
@@ -112,6 +138,7 @@ validate_media() {
         log_fail "Output file missing: $file"
         return 1
     fi
+    log_info "Validating file: $file"
 
     local failed=0
     IFS=',' read -ra ADDR <<< "$rules"

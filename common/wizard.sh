@@ -66,39 +66,46 @@ show_unified_wizard() {
         local -a ALL_PARTS
         IFS='|' read -ra ALL_PARTS <<< "$RESULT"
         
-        # We search for markers and take the very next item as the ID
-        for (( i=0; i<${#ALL_PARTS[@]}; i++ )); do
-            local ITEM="${ALL_PARTS[i]}"
-            # Case-insensitive check for TRUE or FALSE
-            local UP_ITEM=$(echo "$ITEM" | tr '[:lower:]' '[:upper:]')
-            
-            if [[ "$UP_ITEM" == "TRUE" ]]; then
-                local VAL="${ALL_PARTS[i+1]}"
-                if [[ -n "$VAL" && "$VAL" != "---" ]]; then
-                    CLEAN_RESULT+="$VAL|"
-                    # Skip the ID we just took to avoid false booleans if ID is "TRUE" (unlikely)
-                    ((i++))
-                fi
-            fi
-        done
-        
-        # Fallback: If no explicit TRUE found, check for the "Last Interacted Row" (FALSE prefix)
-        # This occurs on double-clicks or Enter key in Zenity 4.x
-        if [[ -z "$CLEAN_RESULT" ]]; then
+        # Check if the FIRST element is a known Zenity 4 marker (TRUE/FALSE)
+        local FIRST_UP=$(echo "${ALL_PARTS[0]}" | tr '[:lower:]' '[:upper:]')
+        if [[ "$FIRST_UP" == "TRUE" || "$FIRST_UP" == "FALSE" ]]; then
+            # 1. First pass: Handle standard checkbox selections
             for (( i=0; i<${#ALL_PARTS[@]}; i++ )); do
                 local ITEM="${ALL_PARTS[i]}"
+                # Case-insensitive check for TRUE or FALSE
                 local UP_ITEM=$(echo "$ITEM" | tr '[:lower:]' '[:upper:]')
-                if [[ "$UP_ITEM" == "FALSE" ]]; then
+                
+                if [[ "$UP_ITEM" == "TRUE" ]]; then
                     local VAL="${ALL_PARTS[i+1]}"
                     if [[ -n "$VAL" && "$VAL" != "---" ]]; then
                         CLEAN_RESULT+="$VAL|"
-                        break # Only take the first one for implicit selection
+                        # Skip the ID we just took to avoid false booleans if ID is "TRUE" (unlikely)
+                        ((i++))
                     fi
                 fi
             done
+            
+            # Fallback: If no explicit TRUE found, check for the "Last Interacted Row" (FALSE prefix)
+            # This occurs on double-clicks or Enter key in Zenity 4.x
+            if [[ -z "$CLEAN_RESULT" ]]; then
+                for (( i=0; i<${#ALL_PARTS[@]}; i++ )); do
+                    local ITEM="${ALL_PARTS[i]}"
+                    local UP_ITEM=$(echo "$ITEM" | tr '[:lower:]' '[:upper:]')
+                    if [[ "$UP_ITEM" == "FALSE" ]]; then
+                        local VAL="${ALL_PARTS[i+1]}"
+                        if [[ -n "$VAL" && "$VAL" != "---" ]]; then
+                            CLEAN_RESULT+="$VAL|"
+                            break # Only take the first one for implicit selection
+                        fi
+                    fi
+                done
+            fi
+            RESULT="${CLEAN_RESULT%|}"
+        else
+            # Not a Zenity 4 marker? It's likely a Zenity 3 multi-select return (item1|item2)
+            # We keep it as is.
+            :
         fi
-        
-        RESULT="${CLEAN_RESULT%|}"
     elif [[ "$RESULT" =~ ^(TRUE|FALSE|true|false)$ ]]; then
         # Discard pure boolean returns with no data
         RESULT=""

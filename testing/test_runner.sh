@@ -12,6 +12,12 @@ fi
 
 generate_test_media
 
+echo -e "\n${YELLOW}=== Static Syntax Analysis (Linting) ===${NC}"
+bash testing/test_lint.sh
+
+echo -e "\n${YELLOW}=== Isolated Wizard Parser Tests ===${NC}"
+bash testing/test_wizard_unit.sh
+
 echo -e "\n${YELLOW}=== Universal Toolbox Core Tests ===${NC}"
 
 # 1. Basic Suite: Speed 2x + Scale 720p + Mute + Medium Quality + H.264
