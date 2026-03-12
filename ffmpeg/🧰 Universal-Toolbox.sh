@@ -375,29 +375,31 @@ if [[ "$CHOICES" == *"Use QSV"* ]]; then USE_GPU=true; GPU_TYPE="qsv"; TAG="${TA
 if [[ "$CHOICES" == *"Use VAAPI"* ]]; then USE_GPU=true; GPU_TYPE="vaapi"; TAG="${TAG}_vaapi"; fi
 
 # --- TAG PARSING ---
-SPEED_VAL=""
-if [[ "$CHOICES" == *"Speed: "* ]]; then
-    SPEED_VAL=$(echo "$CHOICES" | grep -o "Speed: [^|]*" | cut -d: -f2 | xargs | cut -dx -f1)
-elif [[ "$CHOICES" == *"2x (Fast)"* ]]; then SPEED_VAL="2"
-elif [[ "$CHOICES" == *"4x (Super Fast)"* ]]; then SPEED_VAL="4"
-elif [[ "$CHOICES" == *"0.5x (Slow)"* ]]; then SPEED_VAL="0.5"
-elif [[ "$CHOICES" == *"0.25x (Very Slow)"* ]]; then SPEED_VAL="0.25"
-fi
+# This block is now redundant as parsing is done earlier and more robustly.
+# Keeping it commented out for historical context if needed, but it's not used.
+# SPEED_VAL=""
+# if [[ "$CHOICES" == *"Speed: "* ]]; then
+#     SPEED_VAL=$(echo "$CHOICES" | grep -o "Speed: [^|]*" | cut -d: -f2 | xargs | cut -dx -f1)
+# elif [[ "$CHOICES" == *"2x (Fast)"* ]]; then SPEED_VAL="2"
+# elif [[ "$CHOICES" == *"4x (Super Fast)"* ]]; then SPEED_VAL="4"
+# elif [[ "$CHOICES" == *"0.5x (Slow)"* ]]; then SPEED_VAL="0.5"
+# elif [[ "$CHOICES" == *"0.25x (Very Slow)"* ]]; then SPEED_VAL="0.25"
+# fi
 
-SCALE_W=""
-if [[ "$CHOICES" == *"Res: "* ]]; then
-    SCALE_W=$(echo "$CHOICES" | grep -o "Res: [^|]*" | cut -d: -f2 | xargs | cut -dp -f1)
-elif [[ "$CHOICES" == *"1.44k"* ]]; then SCALE_W="1440"
-elif [[ "$CHOICES" == *"1080p"* ]]; then SCALE_W="1080"
-elif [[ "$CHOICES" == *"720p"* ]]; then SCALE_W="720"
-elif [[ "$CHOICES" == *"4k"* ]]; then SCALE_W="2160"
-elif [[ "$CHOICES" == *"480p"* ]]; then SCALE_W="480"
-elif [[ "$CHOICES" == *"360p"* ]]; then SCALE_W="360"
-elif [[ "$CHOICES" == *"50%"* ]]; then SCALE_W="50%"
-fi
+# SCALE_W=""
+# if [[ "$CHOICES" == *"Res: "* ]]; then
+#     SCALE_W=$(echo "$CHOICES" | grep -o "Res: [^|]*" | cut -d: -f2 | xargs | cut -dp -f1)
+# elif [[ "$CHOICES" == *"1.44k"* ]]; then SCALE_W="1440"
+# elif [[ "$CHOICES" == *"1080p"* ]]; then SCALE_W="1080"
+# elif [[ "$CHOICES" == *"720p"* ]]; then SCALE_W="720"
+# elif [[ "$CHOICES" == *"4k"* ]]; then SCALE_W="2160"
+# elif [[ "$CHOICES" == *"480p"* ]]; then SCALE_W="480"
+# elif [[ "$CHOICES" == *"360p"* ]]; then SCALE_W="360"
+# elif [[ "$CHOICES" == *"50%"* ]]; then SCALE_W="50%"
+# fi
 
-CUSTOM_W=$(echo "$CHOICES" | grep -o "CustomW: [^|]*" | cut -d: -f2 | xargs 2>/dev/null || true)
-[ -n "$CUSTOM_W" ] && SCALE_W="$CUSTOM_W"
+# CUSTOM_W=$(echo "$CHOICES" | grep -o "CustomW: [^|]*" | cut -d: -f2 | xargs 2>/dev/null || true)
+# [ -n "$CUSTOM_W" ] && SCALE_W="$CUSTOM_W"
 
 # --- FORMAT OVERRIDES ---
 IS_audio_only=false
@@ -482,10 +484,6 @@ fi
 # Handled inside the loop now
 
 # --- EXECUTION ---
-LOG_FILE="/tmp/ffmpeg_universal_last_run.log"
-echo "--- Universal Toolbox Run $(date) ---" > "$LOG_FILE"
-echo "Options: $CHOICES" >> "$LOG_FILE"
-
 (
 for f in "$@"; do
     FILE_TAG="$TAG"

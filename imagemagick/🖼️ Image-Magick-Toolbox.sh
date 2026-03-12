@@ -160,13 +160,9 @@ show_main_menu() {
             elif [[ "$VALUE" == "HISTORY:"* ]]; then
                 LOAD_HISTORY="${VALUE#HISTORY:}"
             else
-                # INTENT (Clean name from wizard.sh)
-                echo "[DEBUG] Adding intent: [$VALUE]" >> /tmp/scripts_debug.log
                 SELECTED_INTENTS+=("$VALUE")
             fi
         done
-
-        echo "[DEBUG] Final SELECTED_INTENTS: [${SELECTED_INTENTS[*]}]" >> /tmp/scripts_debug.log
 
         if [ -n "$LOAD_PRESET" ]; then
             echo $(grep "^$LOAD_PRESET|" "$PRESET_FILE" | cut -d'|' -f2-)
@@ -178,7 +174,6 @@ show_main_menu() {
             # Build recipe from intents
             local recipe_list=()
             for CHOICE in "${SELECTED_INTENTS[@]}"; do
-                echo "[DEBUG] Processing choice: [$CHOICE]" >> /tmp/scripts_debug.log
                 case "$CHOICE" in
                     *"Scale"*)
                         RES=$(show_scale_interface)
@@ -219,9 +214,6 @@ show_main_menu() {
                     *"sRGB"*) recipe_list+=("Effect: sRGB") ;;
                     *"Remove Audio"*) recipe_list+=("Effect: Mute") ;;
                     *"Extract Pages"*) recipe_list+=("Action: ExtractPDF") ;;
-                    *)
-                        echo "[DEBUG] UNHANDLED INTENT: [$CHOICE]" >> /tmp/scripts_debug.log
-                        ;;
                 esac
             done
             
@@ -297,13 +289,13 @@ for opt in "${CHOICE_ARR[@]}"; do
         
         # --- SCALE (PRIORITY 2) ---
         Scale:*)
-            VAL=$(echo "$opt" | cut -d' ' -f2)
+            VAL=$(echo "$opt" | cut -d':' -f2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
             case "$VAL" in
-                "1920x") SCALE_ARGS+=("-resize" "1920x"); TAG="${TAG}_1920p" ;;
-                "3840x") SCALE_ARGS+=("-resize" "3840x"); TAG="${TAG}_4k" ;;
-                "1280x") SCALE_ARGS+=("-resize" "1280x"); TAG="${TAG}_720p" ;;
-                "640x")  SCALE_ARGS+=("-resize" "640x"); TAG="${TAG}_640p" ;;
-                "50%")   SCALE_ARGS+=("-resize" "50%"); TAG="${TAG}_half" ;;
+                *"1920x"*) SCALE_ARGS+=("-resize" "1920x"); TAG="${TAG}_1920p" ;;
+                *"3840x"*) SCALE_ARGS+=("-resize" "3840x"); TAG="${TAG}_4k" ;;
+                *"1280x"*) SCALE_ARGS+=("-resize" "1280x"); TAG="${TAG}_720p" ;;
+                *"640x"*)  SCALE_ARGS+=("-resize" "640x"); TAG="${TAG}_640p" ;;
+                *"50%"*)   SCALE_ARGS+=("-resize" "50%"); TAG="${TAG}_half" ;;
             esac
             ;;
         CustomGeometry:*)
@@ -356,8 +348,12 @@ for opt in "${CHOICE_ARR[@]}"; do
     esac
 done
 
-# Combine in priority order
-IM_ARGS=("${CROP_ARGS[@]}" "${SCALE_ARGS[@]}" "${EFFECT_ARGS[@]}" "${FORMAT_ARGS[@]}")
+# Combine in priority order - safely to preserve element integrity
+IM_ARGS=()
+[ ${#CROP_ARGS[@]} -gt 0 ] && IM_ARGS+=("${CROP_ARGS[@]}")
+[ ${#SCALE_ARGS[@]} -gt 0 ] && IM_ARGS+=("${SCALE_ARGS[@]}")
+[ ${#EFFECT_ARGS[@]} -gt 0 ] && IM_ARGS+=("${EFFECT_ARGS[@]}")
+[ ${#FORMAT_ARGS[@]} -gt 0 ] && IM_ARGS+=("${FORMAT_ARGS[@]}")
 
 # --- SPECIAL MODE: MONTAGE ---
 if [ "$DO_MONTAGE" = true ]; then
@@ -412,10 +408,11 @@ fi
                 RET=$?
             fi
             [ $RET -ne 0 ] && echo "Error processing file: $f" >> "$ERR_LOG"
-        } &
+        }
         
-        [[ $(jobs -r | wc -l) -ge $MAX_JOBS ]] && wait -n
+        # In sequential mode we don't need wait -n or jobs
     done
+    # Final wait is redundant in sequential but safe
     wait
 ) | zenity --progress --title="Image-Magick-Toolbox" --auto-close --percentage=0
 
