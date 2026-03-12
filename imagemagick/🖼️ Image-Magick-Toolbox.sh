@@ -229,6 +229,11 @@ show_main_menu() {
                 esac
             done
             
+            # If the user cancelled all sub-dialogs, return to the main menu instead of exiting
+            if [ ${#recipe_list[@]} -eq 0 ]; then
+                continue
+            fi
+            
             # Combine recipe_list into final string
             local final_choices=""
             for item in "${recipe_list[@]}"; do

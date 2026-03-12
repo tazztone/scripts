@@ -63,13 +63,32 @@ The **Universal Toolbox** uses a Launchpad menu.
 
 ---
 
+##  rockets New: Negative Path & Resilience Testing
+As of v2.6, the framework supports testing "unhappy paths" such as user cancellations and empty forms.
+
+### 1. Simulating Cancellations
+Use the `ZENITY_MOCK_EXIT_CODE` environment variable to force the mock to return a specific exit status (e.g., `1` for Cancel).
+```bash
+export ZENITY_MOCK_EXIT_CODE=1
+run_negative_test "myscript.sh" "input.mp4"
+unset ZENITY_MOCK_EXIT_CODE
+```
+
+### 2. Testing Resilience
+Use `run_resilience_test` when you want to verify that a script survives a cancellation mid-flow but eventually produces a valid output.
+- Set up a `/tmp/zenity_responses` queue with mixed "cancel" strings (empty) and valid selections.
+- The test succeeds only if an output file is correctly generated despite the internal "continue" loops.
+
+---
+
 ## 🤖 Guide for AI Agents
 When modifying these scripts, follow these strict rules to keep the test suite green:
 
 1.  **Verify UI Strings**: If you add an emoji or change a label prefix (like adding a colon), you **MUST** update both the logic in the script and the `ZENITY_ARGS` inside `test_runner.sh`.
 2.  **Use -nostdin**: Every new FFmpeg command added must include `-nostdin`.
-3.  **Mock Context**: If you add a new Zenity dialog type (e.g., `--calendar`), you must update the mock script inside `test_runner.sh` to handle that flag, or it will return an empty string and potentially crash the test.
-4.  **Column Accuracy**: The Universal Toolbox uses `--print-column=2`. Never change this to `1` or `3` without updating the `test_runner`'s strict verification check.
+3.  **Mock Context**: If you add a new Zenity dialog type (e.g., `--calendar`), you must update the mock script inside `test_runner.sh` to handle that flag.
+4.  **Handle Cancellations**: Every Zenity call should be checked for cancellation. Ensure that clicking "Cancel" in a sub-dialog returns the user to the main menu rather than exiting the script (unless it's the top-level menu).
+5.  **Test Negative Paths**: When adding new UI features, add a corresponding test in `testing/test_ui_resilience.sh`.
 
 ## 📈 Expansion
 To add a new test case:
