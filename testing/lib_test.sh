@@ -71,9 +71,23 @@ if [[ "$ARGS" == *"--list"* ]]; then
     exit 0
 fi
 
+# 5. Handle Question
+if [[ "$ARGS" == *"--question"* ]]; then
+    # Respect MOCK_EXIT_CODE even for questions if set
+    if [ -n "$ZENITY_MOCK_EXIT_CODE" ]; then exit "$ZENITY_MOCK_EXIT_CODE"; fi
+    if [[ "$ZENITY_QUESTION_RESPONSE" == "YES" ]]; then exit 0; else exit 1; fi
+fi
+
+# 6. Global Exit Code Override
+if [ -n "$ZENITY_MOCK_EXIT_CODE" ]; then
+    # Consume exit code for this call
+    CODE="$ZENITY_MOCK_EXIT_CODE"
+    # Optional: unset it if we want it to be single-shot per script
+    # unset ZENITY_MOCK_EXIT_CODE 
+    exit "$CODE"
+fi
+
 case "$ARGS" in
-    *--question*) 
-        if [[ "$ZENITY_QUESTION_RESPONSE" == "YES" ]]; then exit 0; else exit 1; fi ;;
     *--scale*) echo "1280" ;;
     *--entry*) echo "9" ;;
     *--file-selection*) echo "/tmp/scripts_test_data/test.srt" ;;
@@ -229,4 +243,56 @@ run_test() {
         log_pass "$(basename "$script_path") ran without error"
         return 0
     fi
+}
+
+# Assert script exits code 0 but CREATES NO NEW FILES
+run_negative_test() {
+    local script_path="$1"
+    local input_files=("${@:2}")
+    
+    log_info "Negative Test: $(basename "$script_path") with [${input_files[*]}]"
+    
+    find "$TEST_DATA" -type f -not \( -name "src.mp4" -o -name "src.jpg" -o -name "test.srt" \) -delete
+    local before_count=$(ls -1 "$TEST_DATA" | wc -l)
+
+    local script_log=$(mktemp)
+    local first_input="${input_files[0]}"
+    local input_dir=$(dirname "$first_input")
+    local abs_script_path=$(readlink -f "$script_path")
+    local input_bases=()
+    for f in "${input_files[@]}"; do input_bases+=("$(basename "$f")"); done
+
+    ( cd "$input_dir" && timeout 10s bash "$abs_script_path" "${input_bases[@]}" ) > "$script_log" 2>&1
+    local exit_code=$?
+
+    if [ $exit_code -ne 0 ]; then
+        log_fail "Script exited with error code $exit_code (Expected 0 for graceful cancel)"
+        cat "$script_log"
+        rm "$script_log"
+        return 1
+    fi
+
+    local after_count=$(ls -1 "$TEST_DATA" | wc -l)
+    if [ "$after_count" -gt "$before_count" ]; then
+        log_fail "Artifacts were created during negative test (Expected no output)"
+        ls -l "$TEST_DATA"
+        rm "$script_log"
+        return 1
+    fi
+
+    log_pass "$(basename "$script_path") handled negative path successfully"
+    rm "$script_log"
+    return 0
+}
+
+# Assert script SURVIVES a cancel then succeeds (Resilience)
+run_resilience_test() {
+    local script_path="$1"
+    local validation_rules="$2"
+    local input_files=("${@:3}")
+    
+    log_info "Resilience Test: $(basename "$script_path")"
+    rm -f "/tmp/zenity_responses"
+    # Caller must have set up /tmp/zenity_responses with intentional fails/cancels followed by success
+    run_test "$script_path" "$validation_rules" "${input_files[@]}"
 }
