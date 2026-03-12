@@ -2,6 +2,21 @@
 
 A specialized FFmpeg tool focused exclusively on quality-preserving video operations using stream copy functionality. No re-encoding, no quality loss, lightning-fast processing.
 
+## 📋 Table of Contents
+
+- [Philosophy](#-philosophy)
+- [Architecture](#-architecture)
+- [Features](#-features)
+- [Usage Guide](#-usage-guide)
+- [Operation Details](#-operation-details)
+- [Preset System](#-preset-system)
+- [Technical Details](#-technical-details)
+- [Testing & Validation](#-testing--validation)
+- [Troubleshooting](#-troubleshooting)
+- [Gotchas & Warnings](#-gotchas--warnings)
+- [Quick Reference](#-quick-reference)
+- [Common Workflows](#-common-workflows)
+
 ## 🎯 Philosophy
 
 The Lossless Operations Toolbox follows the principle that **not every video operation requires transcoding**. Many common tasks like trimming, format conversion, and metadata editing can be performed instantly without touching the actual video/audio streams.
@@ -18,6 +33,31 @@ The Lossless Operations Toolbox follows the principle that **not every video ope
 | Change resolution | ❌ Not possible | ✅ Required |
 | Add filters/effects | ❌ Not possible | ✅ Required |
 | Change codecs | ❌ Not possible | ✅ Required |
+
+---
+
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    LOSSLESS_TOOLBOX                             │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐   │
+│  │   Presets    │  │   History    │  │   Context-Aware UI   │   │
+│  │              │  │              │  │                      │   │
+│  │ • Remuxing   │  │ • Session    │  │ • Stream Detection   │   │
+│  │ • Trimming   │  │ • Smart      │  │ • Codec Validation  │   │
+│  │ • Metadata   │  │   Conflict   │  │ • Progress bars     │   │
+│  └──────────────┘  └──────────────┘  └──────────────────────┘   │
+├─────────────────────────────────────────────────────────────────┤
+│                    FFmpeg Core                                  │
+│              (Stream Copy -c copy)                              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+> 💡 **Why This Architecture?** By isolating lossless operations into a dedicated tool, we avoid the overhead of complex filtergraph construction and ensure that bit-for-bit stream preservation is the default state, rather than an option.
+
+---
 
 ## 🚀 Features
 
@@ -42,6 +82,8 @@ The Lossless Operations Toolbox follows the principle that **not every video ope
 - **🎯 Codec Validation**: Comprehensive compatibility checking
 - **📦 Container Optimization**: Format-specific flags for better compatibility
 - **🔍 Smart Detection**: Automatic subtitle and metadata detection
+
+---
 
 ## 📖 Usage Guide
 
@@ -88,6 +130,8 @@ Start: 01:30:45
 End: 02:15:30
 ```
 
+---
+
 ## 🔧 Operation Details
 
 ### Trimming (✂️)
@@ -103,6 +147,8 @@ Extract video segments without re-encoding. Perfect for creating clips, removing
 - Checks file duration and time ranges
 - Prevents invalid start/end times
 - Warns about keyframe accuracy limitations
+
+> 💡 **Why Lossless Trimming?** Unlike re-encoding, stream copy trimming reads only the needed bytes from the source file. A 1-hour video trimmed to 30 seconds takes the same 2-3 seconds regardless of source duration.
 
 ### Container Remuxing (📦)
 Change video container format instantly while preserving all streams and quality.
@@ -131,28 +177,9 @@ Concatenate multiple video files with identical codec parameters.
 - Clear error messages for incompatible files
 - Suggestions for resolving compatibility issues
 
-### Stream Editing (🎚️)
-Remove or select specific streams without affecting remaining content.
+> 💡 **Why Smart Validation?** FFmpeg's `concat` demuxer is notoriously picky. Our validation engine pre-checks stream properties (profile, level, framerate) to guarantee a stable output before the process even starts.
 
-**Operations:**
-- Remove audio track (video-only output)
-- Remove video track (audio-only output)
-- Select specific streams
-- Preserve metadata and chapters
-
-### Metadata Editing (📝)
-Modify file information without touching video/audio streams.
-
-**Privacy Levels:**
-- **High**: Complete metadata removal
-- **Medium**: Basic info changes (title, rotation)
-- **Low**: Orientation fixes only
-
-**Operations:**
-- Clean all metadata (privacy)
-- Set custom video title
-- Set rotation metadata (0°, 90°, 180°, 270°)
-- Preserve stream integrity
+---
 
 ## 🎛️ Preset System
 
@@ -171,13 +198,47 @@ Merge Compatible # Concatenate matching files
 3. Enter a descriptive name
 4. Use via CLI: `--preset "Your Preset Name"`
 
-### Preset Format
-Presets are stored in `~/.config/lossless-toolbox/presets.conf`:
+---
+
+## 🔧 Technical Details
+
+### Processing Pipeline
+
 ```
-Name|operation|param1|param2
-Quick Trim|trim|2|8
-MP4 to MKV|remux|mkv
+    ┌─────────────┐
+    │   Input     │
+    │   Files     │
+    └──────┬──────┘
+           ▼
+    ┌─────────────┐
+    │  Deep Scan  │ ← Analyze streams (Video/Audio/Sub)
+    └──────┬──────┘
+           ▼
+    ┌─────────────┐
+    │  Validation │ ← Check codec compatibility for -c copy
+    └──────┬──────┘
+           ▼
+    ┌─────────────┐
+    │  Remuxing   │ ← Stream copy to target container
+    └──────┬──────┘
+           ▼
+    ┌─────────────┐
+    │  Output     │ ← Bit-perfect lossless result
+    └─────────────┘
 ```
+
+> 💡 **Why Stream Copy?** Unlike traditional transcoding that decodes and re-encodes every frame, the Lossless Toolbox simply "re-wraps" existing data into new containers. This preserves original quality and is limited only by disk I/O speed.
+
+### Configuration
+
+```bash
+Config Directory: ~/.config/scripts-sh/lossless/
+Presets: presets.conf
+History: history.conf (last 15 operations)
+Format: Pipe-separated values for easy parsing
+```
+
+---
 
 ## 🧪 Testing & Validation
 
@@ -199,6 +260,8 @@ bash testing/test_lossless_toolbox.sh
 # Expected output: 12/12 tests passed
 ```
 
+---
+
 ## 🔍 Troubleshooting
 
 ### Common Issues
@@ -215,62 +278,42 @@ bash testing/test_lossless_toolbox.sh
 - Ensure FFmpeg and FFprobe are installed
 - Check file permissions and paths
 
-### Getting Help
+---
 
-1. **Built-in Help**: `--help` flag shows usage and examples
-2. **Preset List**: `--list-presets` shows available operations
-3. **Error Messages**: Include specific suggestions and alternatives
-4. **Validation**: Clear feedback on why operations fail
+## ⚠️ Gotchas & Warnings
 
-## 🚀 Performance Characteristics
+- **Keyframe Trimming**: Lossless cuts can only happen at keyframes — expect ±1 frame inaccuracy
+- **Merge Limitations**: Files MUST have identical codecs, resolution, and framerate
+- **Subtitle Handling**: Embedded subtitles are preserved but external .srt files are not auto-detected
+- **Chapter Markers**: May be lost during remuxing depending on container format
+- **HDR Content**: HDR metadata is preserved but tone mapping requires re-encoding (use Universal Toolbox)
 
-### Speed Comparison
-| Operation | Lossless Toolbox | Universal Toolbox | Speedup |
-|-----------|------------------|-------------------|---------|
-| 10min trim | 2-3 seconds | 5-15 minutes | 100-300x |
-| Format change | 5-10 seconds | 10-30 minutes | 120-360x |
-| Remove audio | 1-2 seconds | 5-15 minutes | 150-450x |
-| Clean metadata | 1-2 seconds | 5-15 minutes | 150-450x |
+---
 
-### Resource Usage
-- **CPU**: Minimal (no encoding)
-- **Memory**: Low (stream copy only)
-- **Disk I/O**: Optimized sequential read/write
-- **Quality**: Perfect (bit-for-bit preservation)
+## 📇 Quick Reference
 
-## 🔮 Future Enhancements
+### Common Commands
 
-### Planned Features
-- **Subtitle Integration**: Mux external subtitle files
-- **Chapter Editing**: Add/remove/modify chapters
-- **Stream Mapping**: Advanced stream selection
-- **Batch Presets**: Multi-operation workflows
+| Goal | Command |
+|------|----------|
+| Trim first 30 seconds | `./🔒\ Lossless-Operations-Toolbox.sh --preset "Quick Trim" video.mp4` |
+| Convert to MKV | `./🔒\ Lossless-Operations-Toolbox.sh --preset "MP4 to MKV" *.mp4` |
+| Remove audio track | `./🔒\ Lossless-Operations-Toolbox.sh --preset "Remove Audio" video.mp4` |
+| Clean metadata | `./🔒\ Lossless-Operations-Toolbox.sh --preset "Clean Metadata" video.mp4` |
 
-### Technical Improvements
-- **Progress Estimation**: Better progress reporting for large files
-- **Parallel Processing**: Multi-file batch optimization
-- **Format Detection**: Enhanced container-codec validation
-- **Error Recovery**: Graceful handling of edge cases
+---
 
-## 📜 Technical Specifications
+## 📚 Common Workflows
 
-### Dependencies
-- **FFmpeg**: Core media processing (stream copy operations)
-- **FFprobe**: Media analysis and validation
-- **Zenity**: GUI dialogs and progress bars
-- **Bash**: Shell scripting environment
+### Social Media Content Creator
+1. **Record long video** → Lossless: Trim to highlight segment
+2. **Remove metadata** → Lossless: Clean Metadata (privacy)
+3. **Convert format** → Lossless: MP4 to MKV (if needed)
 
-### Compatibility
-- **Containers**: MP4, MKV, MOV, WebM, AVI
-- **Video Codecs**: H.264, H.265, VP8, VP9, AV1, ProRes
-- **Audio Codecs**: AAC, MP3, Opus, FLAC, Vorbis, PCM
-- **Platforms**: Linux (Ubuntu/Debian tested)
-
-### Configuration
-- **Config Directory**: `~/.config/lossless-toolbox/`
-- **Presets**: `presets.conf`
-- **History**: `history.conf` (last 15 operations)
-- **Format**: Pipe-separated values for easy parsing
+### Video Archival
+1. **Collect recordings** → Lossless: Merge Compatible
+2. **Clean up** → Lossless: Clean Metadata
+3. **Repackage** → Lossless: Remux to MKV (preserves all streams)
 
 ---
 
