@@ -60,25 +60,20 @@ while true; do
     LOAD_PRESET=""
     LOAD_HISTORY=""
 
-    for VALUE in "${PARTS[@]}"; do
-        if [[ "$VALUE" == "---" ]]; then
-            continue
-        elif [[ "$VALUE" == "⭐ "* ]]; then
-            # PRESET detected
-            LOAD_PRESET="${VALUE#* }"
-        elif [[ "$VALUE" == "🕒 "* ]]; then
-            # HISTORY detected
-            LOAD_HISTORY="${VALUE#* }"
-        else
-            # Assume INTENT
-            # Strip icon if present
-            if [[ "$VALUE" =~ ^[^[:alnum:]]+[[:space:]] ]]; then
-                INTENTS+="${VALUE#* }|"
+        for VALUE in "${PARTS[@]}"; do
+            if [[ "$VALUE" == "---" ]]; then
+                continue
+            elif [[ "$VALUE" == "⭐ "* ]]; then
+                # PRESET detected
+                LOAD_PRESET="${VALUE#* }"
+            elif [[ "$VALUE" == "🕒 "* ]]; then
+                # HISTORY detected
+                LOAD_HISTORY="${VALUE#* }"
             else
+                # Assume INTENT (Clean name from wizard.sh)
                 INTENTS+="$VALUE|"
             fi
-        fi
-    done
+        done
 
     if [ -n "$LOAD_PRESET" ]; then
         CHOICES=$(grep "^$LOAD_PRESET|" "$PRESET_FILE" | head -n 1 | cut -d'|' -f2-)

@@ -46,6 +46,9 @@ analyze_media() {
     fi
 }
 
+DO_MUTE=false
+DO_TEXT_ANNOTATION=false
+
 # --- UI INTERFACES ---
 
 show_scale_interface() {
@@ -58,7 +61,7 @@ show_scale_interface() {
 show_crop_interface() {
     zenity --list --title="✂️ Crop & Geometry" --width=500 --height=400 \
         --text="Select a cropping operation:" \
-        --column="Type" --column="Operation" --column="Description" \
+        --column="Type" --column="Operation" --column="Description" --print-column=2 \
         "🔲" "Square Crop (Center 1:1)" "Automatic 1:1 center crop" \
         "📱" "Vertical (9:16)" "Standard mobile aspect ratio" \
         "🖥️" "Landscape (16:9)" "Standard widescreen aspect ratio" \
@@ -75,7 +78,7 @@ show_convert_interface() {
 show_montage_interface() {
     zenity --list --title="🖼️ Montage & Grid" --width=500 --height=400 \
         --text="Select a montage layout:" \
-        --column="Type" --column="Layout" --column="Description" \
+        --column="Type" --column="Layout" --column="Description" --print-column=2 \
         "🏁" "2x Grid" "2-column grid layout" \
         "🎲" "3x Grid" "3-column grid layout" \
         "📑" "Contact Sheet" "Labeled thumbnail grid" \
@@ -92,44 +95,7 @@ show_effects_interface() {
         --add-entry="Watermark Path / Text Content"
 }
 
-# --- DYNAMIC MENU GENERATION ---
-
-get_valid_operations() {
-    # Returns rows for zenity list: Icon | Operation | Description
-    # We only show operations that make sense for the input type
-    
-    # 1. Standard Image Ops
-    if [[ "$MEDIA_FORMAT" != "PDF" && "$MEDIA_FORMAT" != "VIDEO" ]]; then
-        echo "📏|Scale & Resize|Change image dimensions"
-        echo "✂️|Crop & Geometry|Square crop or aspect ratios"
-    fi
-
-    # 2. Contextual Image Ops
-    if [[ "$HAS_ALPHA" -eq 1 ]]; then
-        echo "🎨|Flatten Background|Remove transparency (replace with white)"
-    fi
-    if [[ "$IS_CMYK" -eq 1 ]]; then
-        echo "🌈|Convert to sRGB|Fix colors for web viewing"
-    fi
-
-    # 3. PDF Ops
-    if [[ "$MEDIA_FORMAT" == "PDF" ]]; then
-        echo "📄|Extract Pages|Convert PDF pages to individual images"
-    fi
-
-    # 4. Standard Global Ops
-    echo "📦|Convert Format|JPG, PNG, WEBP, PDF + Optimization"
-    
-    if [[ "$MEDIA_FORMAT" != "VIDEO" ]]; then
-        echo "🖼️|Montage & Grid|Combine images into grids or rows"
-    fi
-
-    echo "✨|Effects & Branding|Rotation, Watermarks, BW"
-
-    if [[ "$HAS_AUDIO" -eq 1 ]]; then
-        echo "🔇|Remove Audio|Strip audio from video"
-    fi
-}
+# Remove obsolete intent functions
 
 # --- UNIFIED MAIN MENU ---
 show_main_menu() {
@@ -164,20 +130,18 @@ show_main_menu() {
         local LOAD_HISTORY=""
         local SELECTED_INTENTS=()
 
-        for VALUE in "${PARTS[@]}"; do
-            if [[ "$VALUE" == "---" ]]; then
+        for VALUE_RAW in "${PARTS[@]}"; do
+            # Strip whitespace/newlines
+            VALUE=$(echo -n "$VALUE_RAW" | xargs)
+            if [[ -z "$VALUE" || "$VALUE" == "---" ]]; then
                 continue
             elif [[ "$VALUE" == "⭐ "* ]]; then
                 LOAD_PRESET="${VALUE#* }"
             elif [[ "$VALUE" == "🕒 "* ]]; then
                 LOAD_HISTORY="${VALUE#* }"
             else
-                # INTENT
-                if [[ "$VALUE" =~ ^[^[:alnum:]]+[[:space:]] ]]; then
-                    SELECTED_INTENTS+=("${VALUE#* }")
-                else
-                    SELECTED_INTENTS+=("$VALUE")
-                fi
+                # INTENT (Clean name from wizard.sh)
+                SELECTED_INTENTS+=("$VALUE")
             fi
         done
 
@@ -196,7 +160,9 @@ show_main_menu() {
                         RES=$(show_scale_interface)
                         [ -z "$RES" ] && continue
                         IFS='|' read -ra VALS <<< "$RES"
-                        recipe_list+=("Scale: ${VALS[0]}|CustomGeometry: ${VALS[1]}")
+                        # Extract raw value (strip labels like "(HD)")
+                        RAW_VAL=$(echo "${VALS[0]}" | awk '{print $1}')
+                        recipe_list+=("Scale: $RAW_VAL|CustomGeometry: ${VALS[1]}")
                         ;;
                     "Crop & Geometry")
                         RES=$(show_crop_interface)
@@ -213,7 +179,10 @@ show_main_menu() {
                         RES=$(show_effects_interface)
                         [ -z "$RES" ] && continue
                         IFS='|' read -ra VALS <<< "$RES"
-                        recipe_list+=("Effect: ${VALS[0]}|Branding: ${VALS[1]}|BrandingPayload: ${VALS[2]}")
+                        # Only add if not "No Change" or "(Inactive)"
+                        if [[ "${VALS[0]}" != "No Change" || "${VALS[1]}" != "(Inactive)" ]]; then
+                            recipe_list+=("Effect: ${VALS[0]}|Branding: ${VALS[1]}|BrandingPayload: ${VALS[2]}")
+                        fi
                         ;;
                     "Montage & Grid")
                         RES=$(show_montage_interface)
@@ -409,11 +378,13 @@ fi
             if [ "$DO_MUTE" = true ] && command -v ffmpeg &>/dev/null; then
                 ffmpeg -v error -i "$f" -an -c:v copy "/tmp/tmp_mute_${COUNT}.${IN_EXT}"
                 $IM_EXE "/tmp/tmp_mute_${COUNT}.${IN_EXT}" "${IM_ARGS[@]}" "$OUT_FILE" 2>>"$ERR_LOG"
+                RET=$?
                 rm "/tmp/tmp_mute_${COUNT}.${IN_EXT}"
             else
                 $IM_EXE "$f" "${IM_ARGS[@]}" "$OUT_FILE" 2>>"$ERR_LOG"
+                RET=$?
             fi
-            [ $? -ne 0 ] && echo "Error processing file: $f" >> "$ERR_LOG"
+            [ $RET -ne 0 ] && echo "Error processing file: $f" >> "$ERR_LOG"
         } &
         
         [[ $(jobs -r | wc -l) -ge $MAX_JOBS ]] && wait -n

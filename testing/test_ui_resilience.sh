@@ -18,7 +18,7 @@ unset ZENITY_MOCK_EXIT_CODE
 # 2. Image-Magick: Cancel Sub-dialog (Returns to menu, then we cancel menu)
 echo "Test 2: Image-Magick - Cancel Sub-dialog (Verifying return to menu)"
 # Queue: 1. Main Menu (Select Scale), 2. Sub-dialog (Cancel), 3. Main Menu (Cancel)
-printf "📏 Scale & Resize\n\n\n" > /tmp/zenity_responses
+printf "Scale & Resize\n\n\n" > /tmp/zenity_responses
 run_negative_test "imagemagick/🖼️ Image-Magick-Toolbox.sh" "$TEST_DATA/src.jpg"
 
 # 3. Universal Toolbox: Cancel Main Wizard
@@ -30,13 +30,13 @@ unset ZENITY_MOCK_EXIT_CODE
 # 4. Universal Toolbox: Cancel Config Form
 echo "Test 4: Universal Toolbox - Cancel Config Form"
 # Queue: 1. Main Menu (Select Scale), 2. Config Form (Cancel)
-printf "📐 Scale / Resize\n\n" > /tmp/zenity_responses
+printf "Scale / Resize\n\n" > /tmp/zenity_responses
 run_negative_test "ffmpeg/🧰 Universal-Toolbox.sh" "$TEST_DATA/src.mp4"
 
 # 5. Resilience: Image-Magick - Cancel Scale, then select BW and finish
 echo "Test 5: Image-Magick Resilience (Cancel Scale -> BW -> Success)"
 # Queue: 1. Menu (Scale), 2. Scale Dialog (Cancel), 3. Menu (Effects), 4. Effects Dialog (BW)
-printf "📏 Scale & Resize\n\n✨ Effects & Branding\nBlack & White| (Inactive)|\n" > /tmp/zenity_responses
+printf "Scale & Resize\n\nEffects & Branding\nBlack & White| (Inactive)|\n" > /tmp/zenity_responses
 export ZENITY_QUESTION_RESPONSE="NO"
 run_resilience_test "imagemagick/🖼️ Image-Magick-Toolbox.sh" "format=jpeg" "$TEST_DATA/src.jpg"
 unset ZENITY_QUESTION_RESPONSE
