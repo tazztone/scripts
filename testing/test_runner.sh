@@ -17,7 +17,7 @@ echo -e "\n${YELLOW}=== Universal Toolbox Core Tests ===${NC}"
 # 1. Basic Suite: Speed 2x + Scale 720p + Mute + Medium Quality + H.264
 echo "Test 1: Core Recipe"
 cat <<EOF > /tmp/zenity_responses
-⏪ Speed Control|📐 Scale / Resize|🔊 Audio Tools
+Speed Control|Scale / Resize|Audio Tools
 2x (Fast)||720p|| (Inactive)|No Change||| (Inactive)| (Inactive)|Medium Default||Auto/MP4|None (CPU Only)
 EOF
 run_test "ffmpeg/🧰 Universal-Toolbox.sh" "vcodec=h264,fps=30" "$TEST_DATA/src.mp4"
@@ -26,7 +26,7 @@ run_test "ffmpeg/🧰 Universal-Toolbox.sh" "vcodec=h264,fps=30" "$TEST_DATA/src
 echo "Test 2: Subtitle Burn-in"
 touch "$TEST_DATA/src.srt"
 cat <<EOF > /tmp/zenity_responses
-📝 Subtitles
+Subtitles
  (Inactive)|| (Inactive)|| (Inactive)|No Change||| (Inactive)|Burn-in|Medium Default||Auto/MP4|None (CPU Only)
 EOF
 run_test "ffmpeg/🧰 Universal-Toolbox.sh" "vcodec=h264" "$TEST_DATA/src.mp4"

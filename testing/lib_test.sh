@@ -20,6 +20,7 @@ NC='\033[0m'
 mkdir -p "$TEST_DATA"
 mkdir -p "$MOCK_BIN"
 mkdir -p "testing/output"
+> "$REPORT_FILE"
 
 # --- Zenity Mocking ---
 setup_mock_zenity() {
@@ -173,6 +174,16 @@ validate_media() {
                     [[ "$f" != "$val" ]] && { log_fail "Format mismatch: expected $val, got $f"; failed=1; }
                 fi
                 ;;
+            tags)
+                # Verify that the filename contains specific tags (e.g. _bw, _720p)
+                IFS='|' read -ra TAGS <<< "$val"
+                for tag in "${TAGS[@]}"; do
+                    if [[ "$(basename "$file")" != *"$tag"* ]]; then
+                        log_fail "Filename missing required tag: $tag (Filename: $(basename "$file"))"
+                        failed=1
+                    fi
+                done
+                ;;
         esac
     done
     
@@ -232,7 +243,12 @@ run_test() {
     log_info "Detected output: $newest"
 
     # Clean up any leftover responses for this test
-    rm -f "/tmp/zenity_responses"
+    # (Only if we didn't consume them all - helps find bugs in mock usage)
+    if [ -s "/tmp/zenity_responses" ]; then
+        log_info "Note: $(wc -l < /tmp/zenity_responses) responses left in queue after test"
+    fi
+    # Don't delete, caller might have queued for next test, but run_test is usually atomic
+    # rm -f "/tmp/zenity_responses"
 
     if [ -n "$validation_rules" ]; then
         validate_media "$output_file" "$validation_rules"
@@ -292,7 +308,6 @@ run_resilience_test() {
     local input_files=("${@:3}")
     
     log_info "Resilience Test: $(basename "$script_path")"
-    rm -f "/tmp/zenity_responses"
-    # Caller must have set up /tmp/zenity_responses with intentional fails/cancels followed by success
+    # Caller should have set up /tmp/zenity_responses
     run_test "$script_path" "$validation_rules" "${input_files[@]}"
 }
