@@ -13,9 +13,10 @@ show_unified_wizard() {
     
     local ARGS=(
         "--list" "--checklist" "--width=700" "--height=550"
-        "--title=$TITLE" "--separator=|" "--print-column=ALL" "--hide-column=2,5"
+        "--title=$TITLE" "--separator=|" "--print-column=ALL"
+        "--hide-column=4" "--hide-column=5"
         "--text=Select fixes/edits OR load a preset below:"
-        "--column=Pick" "--column=ID" "--column=Display" "--column=Description" "--column=RawID"
+        "--column=Pick" "--column=Action" "--column=Description" "--column=ID" "--column=RawID"
         "--"
     )
 
@@ -23,20 +24,20 @@ show_unified_wizard() {
     IFS=';' read -ra INTENTS_ARR <<< "$INTENTS_RAW"
     for item in "${INTENTS_ARR[@]}"; do
         IFS='|' read -r icon name desc <<< "$item"
-        # 1:Pick, 2:ID(name), 3:Display(icon+name), 4:Description, 5:RawID(name)
-        ARGS+=(FALSE "$name" "$icon $name" "$desc" "$name")
+        # ChecklistState(Visual1), Action(Visual2), Description(Visual3), ID(Hidden), RawID(Hidden)
+        ARGS+=(FALSE "$icon $name" "$desc" "$name" "$name")
     done
 
     # 2. Add Presets Divider if they exist
     if [ -s "$PRESET_FILE" ] || [ -s "$HISTORY_FILE" ]; then
-        ARGS+=(FALSE "---" "---" ".................................." "---")
+        ARGS+=(FALSE "---" ".................................." "---" "---")
     fi
 
     # 3. Add Presets
     if [ -s "$PRESET_FILE" ]; then
         while IFS='|' read -r name options; do
             [ -z "$name" ] && continue
-            ARGS+=(FALSE "PRESET:$name" "⭐ $name" "Saved Favorite" "PRESET:$name")
+            ARGS+=(FALSE "⭐ $name" "Saved Favorite" "PRESET:$name" "PRESET:$name")
         done < "$PRESET_FILE"
     fi
 
@@ -46,7 +47,7 @@ show_unified_wizard() {
         while read -r line; do
             [ -z "$line" ] && continue
             [ $h_count -ge 8 ] && break
-            ARGS+=(FALSE "HISTORY:$line" "🕒 $line" "Recent Activity" "HISTORY:$line")
+            ARGS+=(FALSE "🕒 $line" "Recent Activity" "HISTORY:$line" "HISTORY:$line")
             ((h_count++))
         done < "$HISTORY_FILE"
     fi
@@ -76,11 +77,12 @@ show_unified_wizard() {
                 local UP_ITEM=$(echo "$ITEM" | tr '[:lower:]' '[:upper:]')
                 
                 if [[ "$UP_ITEM" == "TRUE" ]]; then
-                    local VAL="${ALL_PARTS[i+1]}"
+                    # ALL_PARTS: [TRUE, Pick(Data1), Action(Data2), Description(Data3), ID(Data4), RawID(Data5), ...]
+                    local VAL="${ALL_PARTS[i+4]}"
                     if [[ -n "$VAL" && "$VAL" != "---" ]]; then
                         CLEAN_RESULT+="$VAL|"
-                        # Skip the ID we just took to avoid false booleans if ID is "TRUE" (unlikely)
-                        ((i++))
+                        # Skip row: TRUE + 5 data cols = 6 elements
+                        ((i+=6))
                     fi
                 fi
             done
@@ -92,7 +94,7 @@ show_unified_wizard() {
                     local ITEM="${ALL_PARTS[i]}"
                     local UP_ITEM=$(echo "$ITEM" | tr '[:lower:]' '[:upper:]')
                     if [[ "$UP_ITEM" == "FALSE" ]]; then
-                        local VAL="${ALL_PARTS[i+1]}"
+                        local VAL="${ALL_PARTS[i+4]}"
                         if [[ -n "$VAL" && "$VAL" != "---" ]]; then
                             CLEAN_RESULT+="$VAL|"
                             break # Only take the first one for implicit selection
