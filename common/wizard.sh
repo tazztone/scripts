@@ -13,30 +13,30 @@ show_unified_wizard() {
     
     local ARGS=(
         "--list" "--checklist" "--width=700" "--height=550"
-        "--title=$TITLE" "--separator=|" "--print-column=4" "--hide-column=4"
+        "--title=$TITLE" "--separator=|" "--print-column=ALL" "--hide-column=2,5"
         "--text=Select fixes/edits OR load a preset below:"
-        "--column=Pick" "--column=Display" "--column=Description" "--column=ID"
+        "--column=Pick" "--column=ID" "--column=Display" "--column=Description" "--column=RawID"
         "--"
     )
 
     # 1. Add Intents
-    IFS=';' read -ra INTENTS <<< "$INTENTS_RAW"
-    for item in "${INTENTS[@]}"; do
+    IFS=';' read -ra INTENTS_ARR <<< "$INTENTS_RAW"
+    for item in "${INTENTS_ARR[@]}"; do
         IFS='|' read -r icon name desc <<< "$item"
-        # Column 2: "Icon Name", Column 4: "Name" (Clean ID)
-        ARGS+=(FALSE "$icon $name" "$desc" "$name")
+        # 1:Pick, 2:ID(name), 3:Display(icon+name), 4:Description, 5:RawID(name)
+        ARGS+=(FALSE "$name" "$icon $name" "$desc" "$name")
     done
 
     # 2. Add Presets Divider if they exist
     if [ -s "$PRESET_FILE" ] || [ -s "$HISTORY_FILE" ]; then
-        ARGS+=(FALSE "---" ".................................." "---")
+        ARGS+=(FALSE "---" "---" ".................................." "---")
     fi
 
     # 3. Add Presets
     if [ -s "$PRESET_FILE" ]; then
         while IFS='|' read -r name options; do
             [ -z "$name" ] && continue
-            ARGS+=(FALSE "⭐ $name" "Saved Favorite" "⭐ $name")
+            ARGS+=(FALSE "PRESET:$name" "⭐ $name" "Saved Favorite" "PRESET:$name")
         done < "$PRESET_FILE"
     fi
 
@@ -46,7 +46,7 @@ show_unified_wizard() {
         while read -r line; do
             [ -z "$line" ] && continue
             [ $h_count -ge 8 ] && break
-            ARGS+=(FALSE "🕒 $line" "Recent Activity" "🕒 $line")
+            ARGS+=(FALSE "HISTORY:$line" "🕒 $line" "Recent Activity" "HISTORY:$line")
             ((h_count++))
         done < "$HISTORY_FILE"
     fi
@@ -54,7 +54,57 @@ show_unified_wizard() {
     local RESULT
     RESULT=$(zenity "${ARGS[@]}")
     # Strip any trailing newlines or junk
-    RESULT=$(echo -n "$RESULT" | tr -d '\n\r')
+    RESULT=$(echo -n "$RESULT" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    echo "[DEBUG] wizard raw return: [$RESULT]" >> /tmp/scripts_debug.log
+
+    echo "[DEBUG] wizard raw return: [$RESULT]" >> /tmp/scripts_debug.log
+
+    # --- Bulletproof Result Parser (Zenity 4.x compliant) ---
+    local CLEAN_RESULT=""
+    if [[ "$RESULT" == *"|"* ]]; then
+        # Explicitly set IFS and read into array
+        local -a ALL_PARTS
+        IFS='|' read -ra ALL_PARTS <<< "$RESULT"
+        
+        # We search for markers and take the very next item as the ID
+        for (( i=0; i<${#ALL_PARTS[@]}; i++ )); do
+            local ITEM="${ALL_PARTS[i]}"
+            # Case-insensitive check for TRUE or FALSE
+            local UP_ITEM=$(echo "$ITEM" | tr '[:lower:]' '[:upper:]')
+            
+            if [[ "$UP_ITEM" == "TRUE" ]]; then
+                local VAL="${ALL_PARTS[i+1]}"
+                if [[ -n "$VAL" && "$VAL" != "---" ]]; then
+                    CLEAN_RESULT+="$VAL|"
+                    # Skip the ID we just took to avoid false booleans if ID is "TRUE" (unlikely)
+                    ((i++))
+                fi
+            fi
+        done
+        
+        # Fallback: If no explicit TRUE found, check for the "Last Interacted Row" (FALSE prefix)
+        # This occurs on double-clicks or Enter key in Zenity 4.x
+        if [[ -z "$CLEAN_RESULT" ]]; then
+            for (( i=0; i<${#ALL_PARTS[@]}; i++ )); do
+                local ITEM="${ALL_PARTS[i]}"
+                local UP_ITEM=$(echo "$ITEM" | tr '[:lower:]' '[:upper:]')
+                if [[ "$UP_ITEM" == "FALSE" ]]; then
+                    local VAL="${ALL_PARTS[i+1]}"
+                    if [[ -n "$VAL" && "$VAL" != "---" ]]; then
+                        CLEAN_RESULT+="$VAL|"
+                        break # Only take the first one for implicit selection
+                    fi
+                fi
+            done
+        fi
+        
+        RESULT="${CLEAN_RESULT%|}"
+    elif [[ "$RESULT" =~ ^(TRUE|FALSE|true|false)$ ]]; then
+        # Discard pure boolean returns with no data
+        RESULT=""
+    fi
+
+    echo "[DEBUG] wizard clean return: [$RESULT]" >> /tmp/scripts_debug.log
     echo "$RESULT"
 }
 

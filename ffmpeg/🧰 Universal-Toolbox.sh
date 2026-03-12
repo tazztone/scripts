@@ -41,19 +41,31 @@ if [ "$1" == "--preset" ] && [ -n "$2" ]; then
 fi
 
 # --- UNIFIED LAUNCHPAD ---
+# 🧰 Universal-Toolbox v3.1
+echo "[DEBUG] Universal-Toolbox started with args: [$*]" > /tmp/scripts_debug.log
+
+INTENTS_STR="⏪|Speed Control|Change playback speed;📐|Scale / Resize|Change resolution;🖼️|Crop / Aspect Ratio|Vertical/Square/etc;🔄|Rotate & Flip|Fix orientation;⏱️|Trim (Cut Time)|Select segment;🔊|Audio Tools|Normalize/Boost/Mute"
+[ -f "${1%.*}.srt" ] && INTENTS_STR+=";📝|Subtitles|Burn-in or Mux .srt"
+
+LOOP_COUNT=0
 while true; do
+    LOOP_COUNT=$((LOOP_COUNT + 1))
+    if [ $LOOP_COUNT -gt 5 ]; then
+        echo "[DEBUG] RECURSION GUARD TRIGGERED" >> /tmp/scripts_debug.log
+        zenity --error --text="Recursive UI loop detected ($LOOP_COUNT attempts). Check /tmp/scripts_debug.log"
+        exit 1
+    fi
+
     if [ -n "$PRELOADED_CHOICES" ]; then
         CHOICES="$PRELOADED_CHOICES"
         break
     fi
 
-    INTENTS_STR="⏪|Speed Control|Change playback speed;📐|Scale / Resize|Change resolution;🖼️|Crop / Aspect Ratio|Vertical/Square/etc;🔄|Rotate & Flip|Fix orientation;⏱️|Trim (Cut Time)|Select segment;🔊|Audio Tools|Normalize/Boost/Mute"
-    [ -f "${1%.*}.srt" ] && INTENTS_STR+=";📝|Subtitles|Burn-in or Mux .srt"
-
     PICKED_RAW=$(show_unified_wizard "Universal Toolbox Wizard" "$INTENTS_STR" "$PRESET_FILE" "$HISTORY_FILE")
     [ -z "$PICKED_RAW" ] && exit 0
+    echo "[DEBUG] wizard returned: [$PICKED_RAW]" >> /tmp/scripts_debug.log
 
-    # Parse results. Result format: "Name|Name|..."
+    # Parse results
     IFS='|' read -ra PARTS <<< "$PICKED_RAW"
     
     INTENTS=""
@@ -61,14 +73,14 @@ while true; do
     LOAD_HISTORY=""
 
         for VALUE in "${PARTS[@]}"; do
-            if [[ "$VALUE" == "---" ]]; then
+            VALUE=$(echo -n "$VALUE" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            if [[ -z "$VALUE" || "$VALUE" == "---" ]]; then
                 continue
-            elif [[ "$VALUE" == "⭐ "* ]]; then
-                # PRESET detected
-                LOAD_PRESET="${VALUE#* }"
-            elif [[ "$VALUE" == "🕒 "* ]]; then
-                # HISTORY detected
-                LOAD_HISTORY="${VALUE#* }"
+            elif [[ "$VALUE" == "PRESET:"* ]]; then
+                LOAD_PRESET="${VALUE#PRESET:}"
+            elif [[ "$VALUE" == "HISTORY:"* ]]; then
+                # For history, the ID is the same as the full string
+                LOAD_HISTORY="${VALUE#HISTORY:}"
             else
                 # Assume INTENT (Clean name from wizard.sh)
                 INTENTS+="$VALUE|"

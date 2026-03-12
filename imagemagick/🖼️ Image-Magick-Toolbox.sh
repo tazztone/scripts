@@ -61,11 +61,11 @@ show_scale_interface() {
 show_crop_interface() {
     zenity --list --title="✂️ Crop & Geometry" --width=500 --height=400 \
         --text="Select a cropping operation:" \
-        --column="Type" --column="Operation" --column="Description" --print-column=2 \
-        "🔲" "Square Crop (Center 1:1)" "Automatic 1:1 center crop" \
-        "📱" "Vertical (9:16)" "Standard mobile aspect ratio" \
-        "🖥️" "Landscape (16:9)" "Standard widescreen aspect ratio" \
-        "✍️" "Custom Crop" "Specify manual crop geometry"
+        --column="Operation" --column="Description" \
+        "🔲 Square Crop (Center 1:1)" "Automatic 1:1 center crop" \
+        "📱 Vertical (9:16)" "Standard mobile aspect ratio" \
+        "🖥️ Landscape (16:9)" "Standard widescreen aspect ratio" \
+        "✍️ Custom Crop" "Specify manual crop geometry"
 }
 
 show_convert_interface() {
@@ -78,12 +78,12 @@ show_convert_interface() {
 show_montage_interface() {
     zenity --list --title="🖼️ Montage & Grid" --width=500 --height=400 \
         --text="Select a montage layout:" \
-        --column="Type" --column="Layout" --column="Description" --print-column=2 \
-        "🏁" "2x Grid" "2-column grid layout" \
-        "🎲" "3x Grid" "3-column grid layout" \
-        "📑" "Contact Sheet" "Labeled thumbnail grid" \
-        "➡" "Single Row" "Stitch images side-by-side" \
-        "⬇" "Single Column" "Stitch images vertically"
+        --column="Layout" --column="Description" \
+        "🏁 2x Grid" "2-column grid layout" \
+        "🎲 3x Grid" "3-column grid layout" \
+        "📑 Contact Sheet" "Labeled thumbnail grid" \
+        "➡ Single Row" "Stitch images side-by-side" \
+        "⬇ Single Column" "Stitch images vertically"
 }
 
 show_effects_interface() {
@@ -99,8 +99,20 @@ show_effects_interface() {
 
 # --- UNIFIED MAIN MENU ---
 show_main_menu() {
+    # 0. System Check & Diagnostics
+    {
+        echo "--- NEW DIAGNOSTIC RUN ---"
+        echo "Timestamp: $(date)"
+        echo "User: $(whoami)"
+        echo "PWD: $(pwd)"
+        echo "File Checked: $1"
+        echo "BASH_VERSION: $BASH_VERSION"
+        echo "IM Version: $(magick -version | head -n 1)"
+    } > /tmp/scripts_debug.log
+
     # Run analysis on the first file to set context
     analyze_media "$1"
+    echo "[DEBUG] MEDIA_FORMAT: [$MEDIA_FORMAT], HAS_ALPHA: [$HAS_ALPHA], IS_CMYK: [$IS_CMYK]" >> /tmp/scripts_debug.log
 
     local INTENTS=""
     # 1. Standard Image Ops
@@ -119,7 +131,15 @@ show_main_menu() {
     [[ "$MEDIA_FORMAT" != "VIDEO" ]] && INTENTS+=";🖼️|Montage & Grid|Combine images into grids"
     [[ "$HAS_AUDIO" -eq 1 ]] && INTENTS+=";🔇|Remove Audio|Strip audio from video"
 
+    local LOOP_COUNT=0
     while true; do
+        LOOP_COUNT=$((LOOP_COUNT + 1))
+        if [ $LOOP_COUNT -gt 5 ]; then
+            echo "[DEBUG] RECURSION GUARD TRIGGERED - Too many reloads" >> /tmp/scripts_debug.log
+            zenity --error --text="Recursive UI loop detected ($LOOP_COUNT attempts). Selection might not be matching. Please check /tmp/scripts_debug.log"
+            exit 1
+        fi
+        
         local PICKED_RAW=$(show_unified_wizard "Image-Magick-Toolbox v2.1" "$INTENTS" "$PRESET_FILE" "$HISTORY_FILE")
         [ -z "$PICKED_RAW" ] && exit 0
 
@@ -132,18 +152,21 @@ show_main_menu() {
 
         for VALUE_RAW in "${PARTS[@]}"; do
             # Strip whitespace/newlines
-            VALUE=$(echo -n "$VALUE_RAW" | xargs)
+            VALUE=$(echo -n "$VALUE_RAW" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
             if [[ -z "$VALUE" || "$VALUE" == "---" ]]; then
                 continue
-            elif [[ "$VALUE" == "⭐ "* ]]; then
-                LOAD_PRESET="${VALUE#* }"
-            elif [[ "$VALUE" == "🕒 "* ]]; then
-                LOAD_HISTORY="${VALUE#* }"
+            elif [[ "$VALUE" == "PRESET:"* ]]; then
+                LOAD_PRESET="${VALUE#PRESET:}"
+            elif [[ "$VALUE" == "HISTORY:"* ]]; then
+                LOAD_HISTORY="${VALUE#HISTORY:}"
             else
                 # INTENT (Clean name from wizard.sh)
+                echo "[DEBUG] Adding intent: [$VALUE]" >> /tmp/scripts_debug.log
                 SELECTED_INTENTS+=("$VALUE")
             fi
         done
+
+        echo "[DEBUG] Final SELECTED_INTENTS: [${SELECTED_INTENTS[*]}]" >> /tmp/scripts_debug.log
 
         if [ -n "$LOAD_PRESET" ]; then
             echo $(grep "^$LOAD_PRESET|" "$PRESET_FILE" | cut -d'|' -f2-)
@@ -155,8 +178,9 @@ show_main_menu() {
             # Build recipe from intents
             local recipe_list=()
             for CHOICE in "${SELECTED_INTENTS[@]}"; do
+                echo "[DEBUG] Processing choice: [$CHOICE]" >> /tmp/scripts_debug.log
                 case "$CHOICE" in
-                    "Scale & Resize")
+                    *"Scale"*)
                         RES=$(show_scale_interface)
                         [ -z "$RES" ] && continue
                         IFS='|' read -ra VALS <<< "$RES"
@@ -164,18 +188,18 @@ show_main_menu() {
                         RAW_VAL=$(echo "${VALS[0]}" | awk '{print $1}')
                         recipe_list+=("Scale: $RAW_VAL|CustomGeometry: ${VALS[1]}")
                         ;;
-                    "Crop & Geometry")
+                    *"Crop"*)
                         RES=$(show_crop_interface)
                         [ -z "$RES" ] && continue
                         recipe_list+=("Canvas: $RES")
                         ;;
-                    "Convert Format")
+                    *"Convert Format"*)
                         RES=$(show_convert_interface)
                         [ -z "$RES" ] && continue
                         IFS='|' read -ra VALS <<< "$RES"
                         recipe_list+=("Format: ${VALS[0]}|Optimize: ${VALS[1]}")
                         ;;
-                    "Effects & Branding")
+                    *"Effects"*)
                         RES=$(show_effects_interface)
                         [ -z "$RES" ] && continue
                         IFS='|' read -ra VALS <<< "$RES"
@@ -184,17 +208,20 @@ show_main_menu() {
                             recipe_list+=("Effect: ${VALS[0]}|Branding: ${VALS[1]}|BrandingPayload: ${VALS[2]}")
                         fi
                         ;;
-                    "Montage & Grid")
+                    *"Montage"*)
                         RES=$(show_montage_interface)
                         [ -z "$RES" ] && continue
                         # Montage is terminal/special
                         echo "Canvas: $RES"
                         return 0
                         ;;
-                    "Flatten Background") recipe_list+=("Effect: Flatten") ;;
-                    "Convert to sRGB") recipe_list+=("Effect: sRGB") ;;
-                    "Remove Audio") recipe_list+=("Effect: Mute") ;;
-                    "Extract Pages") recipe_list+=("Action: ExtractPDF") ;;
+                    *"Flatten"*) recipe_list+=("Effect: Flatten") ;;
+                    *"sRGB"*) recipe_list+=("Effect: sRGB") ;;
+                    *"Remove Audio"*) recipe_list+=("Effect: Mute") ;;
+                    *"Extract Pages"*) recipe_list+=("Action: ExtractPDF") ;;
+                    *)
+                        echo "[DEBUG] UNHANDLED INTENT: [$CHOICE]" >> /tmp/scripts_debug.log
+                        ;;
                 esac
             done
             
