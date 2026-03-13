@@ -1,8 +1,9 @@
 #!/bin/bash
 
-# Target directories for Nautilus scripts
-FFMPEG_TARGET="$HOME/.local/share/nautilus/scripts/ffmpeg"
-IMAGE_TARGET="$HOME/.local/share/nautilus/scripts/imagemagick"
+# Target directory for Nautilus scripts
+SCRIPTS_ROOT="$HOME/.local/share/nautilus/scripts"
+FFMPEG_TARGET="$SCRIPTS_ROOT/ffmpeg"
+IMAGE_TARGET="$SCRIPTS_ROOT/imagemagick"
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -15,15 +16,14 @@ echo -e "${GREEN}Starting uninstallation of Nautilus Media Scripts...${NC}"
 # Absolute path of the project root
 PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
 
-remove_links() {
+remove_project_links() {
     local TARGET_DIR="$1"
-    local NAME="$2"
-
+    
     if [ -d "$TARGET_DIR" ]; then
-        echo -e "${YELLOW}Cleaning $NAME scripts from $TARGET_DIR...${NC}"
+        echo -e "${YELLOW}Cleaning project scripts from $TARGET_DIR...${NC}"
         local found=0
-        for link in "$TARGET_DIR"/*.sh; do
-            [ -e "$link" ] || continue
+        for link in "$TARGET_DIR"/*; do
+            [ -e "$link" ] || [ -L "$link" ] || continue
             # Check if it's a symlink and where it points
             if [ -L "$link" ]; then
                 local target
@@ -39,20 +39,22 @@ remove_links() {
         if [ $found -eq 0 ]; then
             echo "  No project symlinks found in $TARGET_DIR."
         else
-            echo -e "${GREEN}  Removed $found symlinks.${NC}"
+            echo -e "${GREEN}  Removed $found symlinks from $TARGET_DIR.${NC}"
         fi
 
-        # Remove directory if empty
-        if [ -z "$(ls -A "$TARGET_DIR" 2>/dev/null)" ]; then
-            echo "  Removing empty directory: $TARGET_DIR"
+        # Remove directory if empty and it's not the root SCRIPTS_ROOT
+        if [[ "$TARGET_DIR" != "$SCRIPTS_ROOT" ]] && [ -d "$TARGET_DIR" ] && [ -z "$(ls -A "$TARGET_DIR" 2>/dev/null)" ]; then
+            echo "  Removing empty legacy directory: $TARGET_DIR"
             rmdir "$TARGET_DIR"
         fi
-    else
-        echo "  $NAME target directory does not exist. Skipping."
     fi
 }
 
-remove_links "$FFMPEG_TARGET" "FFmpeg"
-remove_links "$IMAGE_TARGET" "ImageMagick"
+# 1. Clean from root directory
+remove_project_links "$SCRIPTS_ROOT"
+
+# 2. Clean from legacy subdirectories
+remove_project_links "$FFMPEG_TARGET"
+remove_project_links "$IMAGE_TARGET"
 
 echo -e "${GREEN}Uninstallation complete!${NC}"
