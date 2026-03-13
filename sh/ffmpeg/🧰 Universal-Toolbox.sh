@@ -42,7 +42,7 @@ fi
 
 # --- UNIFIED LAUNCHPAD ---
 # 🧰 Universal-Toolbox v3.1
-echo "[DEBUG] Universal-Toolbox started with args: [$*]" > /tmp/scripts_debug.log
+_wizard_log "Universal-Toolbox started with args: [$*]"
 
 INTENTS_STR="⏪|Speed Control|Change playback speed;📐|Scale / Resize|Change resolution;🖼️|Crop / Aspect Ratio|Vertical/Square/etc;🔄|Rotate & Flip|Fix orientation;⏱️|Trim (Cut Time)|Select segment;🔊|Audio Tools|Normalize/Boost/Mute"
 [ -f "${1%.*}.srt" ] && INTENTS_STR+=";📝|Subtitles|Burn-in or Mux .srt"
@@ -493,7 +493,7 @@ for f in "$@"; do
         IN_FPS=$(ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=noprint_wrappers=1:nokey=1 "$f")
         if [ -n "$IN_FPS" ]; then
             FPS_ARG="-r $IN_FPS"
-            echo "Detecting FPS: $IN_FPS for $f" >> "$LOG_FILE"
+            _wizard_log "Detecting FPS: $IN_FPS for $f"
         fi
     fi
 
@@ -543,11 +543,7 @@ for f in "$@"; do
     
     # --- SMART FILENAMING ---
     # Construct tag from active filters
-    FILE_TAG=""
-    [ -n "$SPEED_VAL" ] && FILE_TAG="${FILE_TAG}_${SPEED_VAL}x"
-    [ -n "$SCALE_W" ] && FILE_TAG="${FILE_TAG}_${SCALE_W}p"
-    [ "$REMOVE_AUDIO" = true ] && FILE_TAG="${FILE_TAG}_noaudio"
-    [ -n "$GPU_TYPE" ] && FILE_TAG="${FILE_TAG}_${GPU_TYPE}"
+    # TAG is already built globally, FILE_TAG is initialized from it.
     
     # Fallback if empty or generic
     if [ -z "$FILE_TAG" ] || [ "$FILE_TAG" == "_" ]; then FILE_TAG="_edit"; fi
@@ -559,7 +555,7 @@ for f in "$@"; do
     
     # --- TARGET SIZE (2-PASS) EXECUTION ---
     if [ -n "$TARGET_MB" ]; then
-        echo "# Calculating Bitrate for Target Size..." >> "$LOG_FILE"
+        _wizard_log "Calculating Bitrate for Target Size..."
         DUR=$(get_duration "$f" | cut -d. -f1)
         if [ -z "$DUR" ] || [ "$DUR" -le 0 ]; then DUR=1; fi
         
@@ -583,31 +579,31 @@ for f in "$@"; do
         # PASS 1 (Fast & Silent)
         echo "# Pass 1: Analyzing..."
         CMD1="ffmpeg -y -nostdin $INPUT_OPTS -i \"$f\" $SUB_MAPPING $CMD_FILTERS $VCODEC_2PASS -b:v ${V_BR}k -pass 1 -passlogfile \"$PASS_LOG\" -preset fast -an -f null /dev/null"
-        echo "Pass 1: $CMD1" >> "$LOG_FILE"
+        _wizard_log "Pass 1: $CMD1"
         eval $CMD1
         
         # PASS 2 (Actual Encode)
         echo "# Pass 2: Finalizing size..."
         CMD2="ffmpeg -y -nostdin $INPUT_OPTS -i \"$f\" $SUB_MAPPING $CMD_FILTERS $VCODEC_2PASS -b:v ${V_BR}k -pass 2 -passlogfile \"$PASS_LOG\" $CURRENT_ACORE $FPS_ARG $GLOBAL_OPTS \"$OUT_FILE\""
-        echo "Pass 2: $CMD2" >> "$LOG_FILE"
+        _wizard_log "Pass 2: $CMD2"
         eval $CMD2
         
         STATUS=$?
         rm -f "${PASS_LOG}"*
     elif [ "$IS_gif" = true ]; then
         PALETTE="/tmp/palette_$(basename "$f").png"
-        echo "Generating palette..." >> "$LOG_FILE"
+        _wizard_log "Generating palette..."
         VF_GIF="palettegen"
         [ -n "$FULL_VF" ] && VF_GIF="$FULL_VF,palettegen"
         CMD1="ffmpeg -y -nostdin $INPUT_OPTS -i \"$f\" -vf \"$VF_GIF\" \"$PALETTE\""
-        echo "$CMD1" >> "$LOG_FILE"
+        _wizard_log "$CMD1"
         eval $CMD1
         
-        echo "Creating GIF..." >> "$LOG_FILE"
+        _wizard_log "Creating GIF..."
         LAVFI_GIF="[0:v][1:v] paletteuse"
         [ -n "$FULL_VF" ] && LAVFI_GIF="$FULL_VF [x]; [x][1:v] paletteuse"
         CMD2="ffmpeg -y -nostdin $INPUT_OPTS -i \"$f\" -i \"$PALETTE\" -lavfi \"$LAVFI_GIF\" $FPS_ARG \"$OUT_FILE\""
-        echo "$CMD2" >> "$LOG_FILE"
+        _wizard_log "$CMD2"
         eval $CMD2
         rm "$PALETTE"
         STATUS=$?
@@ -616,14 +612,14 @@ for f in "$@"; do
         # Standard Video/Audio (CRF/CQ Mode)
         # Note: SUB_MAPPING has -i inside it, so it essentially adds a second input if muxing
         CMD="ffmpeg -y -nostdin $INPUT_OPTS -i \"$f\" $SUB_MAPPING $CMD_FILTERS $VCODEC_OPTS $CURRENT_ACORE $FPS_ARG $GLOBAL_OPTS \"$OUT_FILE\""
-        echo "$CMD" >> "$LOG_FILE"
+        _wizard_log "$CMD"
         eval $CMD
         STATUS=$?
     fi
     
     # --- GRACEFUL RETRY (Fallback to CPU) ---
     if [ $STATUS -ne 0 ] && [ "$USE_GPU" = true ]; then
-        echo "GPU Encoding failed. Retrying with CPU..." >> "$LOG_FILE"
+        _wizard_log "GPU Encoding failed. Retrying with CPU..."
         echo "# GPU failed. Retrying with CPU..." # Update progress bar
         
         # Reset VCODEC to safe CPU defaults
@@ -636,13 +632,13 @@ for f in "$@"; do
         if [ "$GPU_TYPE" = "vaapi" ]; then GLOBAL_OPTS="-movflags +faststart -map_metadata -1"; fi
 
         CMD_RETRY="ffmpeg -y $INPUT_OPTS -i \"$f\" $SUB_MAPPING $CMD_FILTERS $VCODEC_OPTS $CURRENT_ACORE $FPS_ARG $GLOBAL_OPTS \"$OUT_FILE\""
-        echo "$CMD_RETRY" >> "$LOG_FILE"
+        _wizard_log "$CMD_RETRY"
         eval $CMD_RETRY
         STATUS=$?
     fi
 
     if [ $STATUS -ne 0 ]; then
-        echo "ERROR: Failed on file $f" >> "$LOG_FILE"
+        _wizard_log "ERROR: Failed on file $f"
         zenity --error --text="FFmpeg failed on $(basename "$f").\nCheck logs details." --ok-label="Close" --extra-button="Details" --title="Error" < "$LOG_FILE"
     fi
 done

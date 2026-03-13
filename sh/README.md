@@ -272,7 +272,7 @@ Contributions are welcome! Please follow these guidelines:
 
 - Use GitHub Issues for bug reports and feature requests.
 - Include steps to reproduce and expected vs. actual behavior.
-- Attach relevant logs from `/tmp/scripts_debug.log` when applicable.
+- Attach relevant logs from `~/.local/share/scripts-sh/debug.log` when applicable.
 
 ## 📜 License
 

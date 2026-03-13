@@ -100,19 +100,13 @@ show_effects_interface() {
 # --- UNIFIED MAIN MENU ---
 show_main_menu() {
     # 0. System Check & Diagnostics
-    {
-        echo "--- NEW DIAGNOSTIC RUN ---"
-        echo "Timestamp: $(date)"
-        echo "User: $(whoami)"
-        echo "PWD: $(pwd)"
-        echo "File Checked: $1"
-        echo "BASH_VERSION: $BASH_VERSION"
-        echo "IM Version: $(magick -version | head -n 1)"
-    } > /tmp/scripts_debug.log
+    _wizard_log "--- NEW DIAGNOSTIC RUN ---"
+    _wizard_log "File Checked: $1"
+    _wizard_log "IM Version: $(magick -version | head -n 1)"
 
     # Run analysis on the first file to set context
     analyze_media "$1"
-    echo "[DEBUG] MEDIA_FORMAT: [$MEDIA_FORMAT], HAS_ALPHA: [$HAS_ALPHA], IS_CMYK: [$IS_CMYK]" >> /tmp/scripts_debug.log
+    _wizard_log "MEDIA_FORMAT: [$MEDIA_FORMAT], HAS_ALPHA: [$HAS_ALPHA], IS_CMYK: [$IS_CMYK]"
 
     local INTENTS=""
     # 1. Standard Image Ops
@@ -135,8 +129,8 @@ show_main_menu() {
     while true; do
         LOOP_COUNT=$((LOOP_COUNT + 1))
         if [ $LOOP_COUNT -gt 5 ]; then
-            echo "[DEBUG] RECURSION GUARD TRIGGERED - Too many reloads" >> /tmp/scripts_debug.log
-            zenity --error --text="Recursive UI loop detected ($LOOP_COUNT attempts). Selection might not be matching. Please check /tmp/scripts_debug.log"
+            _wizard_log "RECURSION GUARD TRIGGERED - Too many reloads"
+            zenity --error --text="Recursive UI loop detected ($LOOP_COUNT attempts). Selection might not be matching. Please check $LOG_FILE"
             exit 1
         fi
         

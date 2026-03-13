@@ -226,7 +226,9 @@ bash testing/test_lint.sh
 ```bash
 # Enable verbose output and check logs
 bash -x testing/test_runner.sh 2>&1 | tee /tmp/test_debug.log
-cat /tmp/scripts_debug.log
+
+# To check unified wizard logs (if DEBUG_MODE=1)
+cat ~/.local/share/scripts-sh/debug.log
 ```
 
 ---
