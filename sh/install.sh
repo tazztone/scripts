@@ -1,8 +1,7 @@
 #!/bin/bash
 
-# Define the target directories for Nautilus scripts
-FFMPEG_TARGET="$HOME/.local/share/nautilus/scripts/ffmpeg"
-IMAGE_TARGET="$HOME/.local/share/nautilus/scripts/imagemagick"
+# Define the target directory for Nautilus scripts
+SCRIPTS_TARGET="$HOME/.local/share/nautilus/scripts"
 
 # Define the source directories (absolute paths)
 FFMPEG_SOURCE="$(cd "$(dirname "$0")/ffmpeg" && pwd)"
@@ -48,33 +47,36 @@ if [ $MISSING_DEPS -eq 1 ]; then
     fi
 fi
 
-# Install FFmpeg Scripts
-if [ -d "$FFMPEG_SOURCE" ]; then
-    echo -e "${YELLOW}Symlinking FFmpeg scripts to $FFMPEG_TARGET...${NC}"
-    mkdir -p "$FFMPEG_TARGET"
-    for script in "$FFMPEG_SOURCE"/*.sh; do
-        TARGET_LINK="$FFMPEG_TARGET/$(basename "$script")"
-        if [ -d "$TARGET_LINK" ]; then
-            echo -e "${RED}Warning: $TARGET_LINK is a directory. Skipping.${NC}"
-            continue
-        fi
-        ln -sf "$script" "$TARGET_LINK"
-    done
-fi
+# Ensure target root directory exists
+mkdir -p "$SCRIPTS_TARGET"
 
-# Install ImageMagick Scripts
-if [ -d "$IMAGE_SOURCE" ]; then
-    echo -e "${YELLOW}Symlinking ImageMagick scripts to $IMAGE_TARGET...${NC}"
-    mkdir -p "$IMAGE_TARGET"
-    for script in "$IMAGE_SOURCE"/*.sh; do
-        TARGET_LINK="$IMAGE_TARGET/$(basename "$script")"
-        if [ -d "$TARGET_LINK" ]; then
-            echo -e "${RED}Warning: $TARGET_LINK is a directory. Skipping.${NC}"
-            continue
-        fi
-        ln -sf "$script" "$TARGET_LINK"
-    done
-fi
+install_scripts() {
+    local SOURCE_DIR="$1"
+    local NAME="$2"
+    
+    if [ -d "$SOURCE_DIR" ]; then
+        echo -e "${YELLOW}Symlinking $NAME scripts to $SCRIPTS_TARGET...${NC}"
+        for script in "$SOURCE_DIR"/*.sh; do
+            [ -e "$script" ] || continue
+            # Skip library files
+            if [[ "$(basename "$script")" == "common.sh" ]]; then
+                continue
+            fi
+            
+            TARGET_LINK="$SCRIPTS_TARGET/$(basename "$script")"
+            if [ -d "$TARGET_LINK" ]; then
+                echo -e "${RED}Warning: $TARGET_LINK is a directory. Skipping.${NC}"
+                continue
+            fi
+            ln -sf "$script" "$TARGET_LINK"
+            echo "  Created symlink: $(basename "$script")"
+        done
+    fi
+}
+
+# Install Scripts from both sources to the root
+install_scripts "$FFMPEG_SOURCE" "FFmpeg"
+install_scripts "$IMAGE_SOURCE" "ImageMagick"
 
 echo -e "${GREEN}Installation complete!${NC}"
 echo -e "You can now right-click files in Nautilus -> Scripts"
