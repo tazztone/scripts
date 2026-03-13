@@ -205,3 +205,22 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Media files
+*.mp4
+*.mkv
+*.avi
+*.mov
+*.mp3
+*.aac
+*.wav
+*.flac
+
+# Test outputs
+output_*
+test_src.*
+
+# OS files
+.DS_Store
+Thumbs.db
+sh/testing/output/
