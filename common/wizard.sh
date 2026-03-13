@@ -57,7 +57,7 @@ _wizard_build_args() {
         "--list" "--checklist" "--width" "700" "--height" "550"
         "--title" "$TITLE" "--separator" "|" "--print-column" "ALL"
         "--text" "Select fixes/edits OR load a preset below:"
-        "--column" "Action" "--column" "Description" "--column" "ID" "--column" "RawID"
+        "--column" "" "--column" "Action" "--column" "Description" "--column" "ID" "--column" "RawID"
     )
 
     # 1. Add Intents
@@ -95,7 +95,7 @@ _wizard_build_args() {
     fi
 
     # 5. Hide columns (must come after headers, safer at the end)
-    _ARGS+=("--hide-column" "3" "--hide-column" "4")
+    _ARGS+=("--hide-column" "4" "--hide-column" "5")
 }
 
 _wizard_parse_result() {

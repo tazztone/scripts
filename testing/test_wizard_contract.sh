@@ -49,12 +49,12 @@ check_contract() {
     echo "  Detected Columns: $COLS"
     echo "  Detected Data Items (total): $DATA"
     
-    local EXPECTED_PER_ROW=$((COLS + 1)) # Checklist State + N Columns
-    echo "  Expected Items Per Row (including state): $EXPECTED_PER_ROW"
+    local EXPECTED_PER_ROW=$COLS # All data items correspond to explicitly declared columns
+    echo "  Expected Items Per Row: $EXPECTED_PER_ROW"
     echo "  Internal WIZARD_ROW_SIZE: $WIZARD_ROW_SIZE"
     
     if [ "$EXPECTED_PER_ROW" -ne "$WIZARD_ROW_SIZE" ]; then
-        log_fail "Contract Mismatch: WIZARD_ROW_SIZE ($WIZARD_ROW_SIZE) does not match Headers+1 ($EXPECTED_PER_ROW)"
+        log_fail "Contract Mismatch: WIZARD_ROW_SIZE ($WIZARD_ROW_SIZE) does not match Headers ($EXPECTED_PER_ROW)"
         return 1
     fi
     
