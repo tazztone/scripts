@@ -1,0 +1,93 @@
+README – duplicate_scanner_improved.py
+======================================
+
+Overview
+--------
+`duplicate_scanner_improved.py` is a CLI utility that finds duplicate files in your Google Drive and (optionally) moves selected copies to the Trash.  
+Duplicates are detected with the `md5Checksum` value that Google Drive supplies for every binary file.
+
+Key features
+------------
+-  Works on the entire drive or any single folder (`--folder`)  
+-  Optional recursion into all sub-folders (`--recursive`)  
+-  Multiple “keep one, trash the rest” policies: `oldest`, `newest`, `smallest`, `largest`, `shortest_name`, `longest_name`  
+-  Ability to trash duplicates only if they live in a given folder (`--trash-folder-id`)  
+-  Safe preview mode (`--dry-run`) that overrides every deletion request  
+-  Exponential back-off on API calls to survive temporary quota / network errors  
+-  Logs to both `drive_scanner.log` and the console  
+-  Uses Google’s current OAuth flow (`Credentials` JSON, no pickles)
+
+Prerequisites
+-------------
+1. Python 3.8+  
+2. Pip packages:  
+   ```
+   pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib
+   ```
+3. A Google Cloud “OAuth client ID” of type *Desktop application*.  
+   -  Download the file, rename it `credentials.json` and place it next to the script.  
+4. First run will open a browser window; after successful consent a `token.json` file is written for future runs.
+
+Quick start
+-----------
+1. Show help:
+   ```
+   python duplicate_scanner_improved.py -h
+   ```
+2. List duplicates (no deletion):
+   ```
+   python duplicate_scanner_improved.py
+   ```
+3. Dry-run: keep only the newest copy in every duplicate group:
+   ```
+   python duplicate_scanner_improved.py --keep-strategy newest --dry-run
+   ```
+4. Actually delete per the same strategy (remove `--dry-run`):
+   ```
+   python duplicate_scanner_improved.py --keep-strategy newest
+   ```
+5. Scan a folder (non-recursive) and trash duplicates that live *inside* it:
+   ```
+   python duplicate_scanner_improved.py --folder  --trash-folder-id  --dry-run
+   ```
+6. Recursively scan a folder tree but only *list* duplicates:
+   ```
+   python duplicate_scanner_improved.py --folder  --recursive
+   ```
+
+Flags in detail
+---------------
+-  `--delete`              Move files that match other criteria to trash  
+-  `--dry-run`             List what *would* be trashed; overrides every delete request  
+-  `--folder ID`           Scope the scan to a single folder  
+-  `--recursive`           When `--folder` is set, include all nested folders  
+-  `--keep-strategy STR`   Choose 1 file to keep per duplicate group, trash the others (implies `--delete`)  
+-  `--trash-folder-id ID`  Trash duplicates that reside in this folder (implies `--delete`)
+
+How it works
+------------
+1. The script authenticates and retrieves file metadata (name, size, md5, modifiedTime, parents).  
+2. Files are grouped by their `md5Checksum`; groups of size >1 are duplicates.  
+3. A `SelectionAssistant` builds the final trash list according to the CLI flags.  
+4. If deletion is active and not suppressed by `--dry-run`, each selected file is moved to Trash via the Drive API.
+
+Log file
+--------
+All actions and errors are appended to `drive_scanner.log` in the current directory.  
+Transient 429 / 5xx responses are retried automatically with exponential back-off.
+
+Limitations & notes
+-------------------
+-  Google native formats (Docs, Sheets, Slides, etc.) have no MD5 hash and are ignored.  
+-  The script loads all matching files into memory; for very large drives you may need a streaming redesign.  
+-  A file with multiple parents is considered a duplicate in every parent; `--trash-folder-id` checks only immediate parents.  
+-  Deleting moves items to Trash, not permanent deletion; you can restore them from the Drive UI.
+
+Changelog vs. original scripts
+------------------------------
+-  Replaced pickle token storage with JSON credentials handling  
+-  Added recursion, folder scoping and automated keep strategies  
+-  Implemented `--dry-run`, better logging, back-off, and correct modifiedTime retrieval  
+-  Ensured HTML escape artefacts were removed and size/modifiedTime guards added
+
+supplied as-is; use at your own risk.
