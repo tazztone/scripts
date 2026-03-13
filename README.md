@@ -7,6 +7,7 @@ A unified collection of utilities and automation scripts for Windows, Linux, and
 - **[bat/](bat/)**: Windows Batch scripts for file organization and media processing.
 - **[sh/](sh/)**: Bash scripts including the Universal Toolbox, Image Magick Toolbox, and Lossless Operations Toolbox.
 - **[python/](python/)**: Python-based tools and generators.
+  - **[google_drive_remove_duplicates/](python/google_drive_remove_duplicates/)**: Google Drive duplicate file scanner and remover.
   - **[lora_remove_te_weights/](python/lora_remove_te_weights/)**: Tool for removing TE weights from LoRA models.
   - **[put_files_into_folder_by_extension/](python/put_files_into_folder_by_extension/)**: Automatic file organization utility.
 
