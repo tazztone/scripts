@@ -224,3 +224,5 @@ test_src.*
 .DS_Store
 Thumbs.db
 sh/testing/output/
+.vscode/settings.json
+.kiro/
