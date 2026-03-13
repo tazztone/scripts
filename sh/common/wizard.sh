@@ -67,7 +67,12 @@ _wizard_build_args() {
         _ARGS+=(FALSE "$icon $name" "$desc" "$name" "$name")
     done
 
-    # 2. Add Presets Divider if they exist
+    # 2. Add Special Actions
+    if [ -n "$PRESET_FILE" ]; then
+        _ARGS+=(FALSE "⭐ Save as Favorite" "Save current recipe to favorites" "ACTION:SAVE" "ACTION:SAVE")
+    fi
+
+    # 3. Add Presets Divider if they exist
     if [ -s "$PRESET_FILE" ] || [ -s "$HISTORY_FILE" ]; then
         _ARGS+=(FALSE "═══" ".................................." "═══" "═══")
     fi
@@ -158,13 +163,14 @@ save_to_history() {
     fi
 }
 
-# prompt_save_preset "PresetFile" "Choices" "SuggestedName"
+# prompt_save_preset "PresetFile" "Choices" "SuggestedName" "Force"
 prompt_save_preset() {
     local PRESET_FILE="$1"
     local CHOICES="$2"
     local SUGGESTED_NAME="$3"
+    local FORCE="${4:-false}"
     
-    if zenity --question --title="Save as Favorite?" --text="Would you like to save this configuration as a permanent favorite?" --ok-label="Save" --cancel-label="Just Run Once"; then
+    if [ "$FORCE" = "true" ] || zenity --question --title="Save as Favorite?" --text="Would you like to save this configuration as a permanent favorite?" --ok-label="Save" --cancel-label="Just Run Once"; then
         local PNAME
         PNAME=$(zenity --entry --title="Save Favorite" --text="Enter a name for this recipe:" --entry-text="$SUGGESTED_NAME")
         if [ -n "$PNAME" ]; then

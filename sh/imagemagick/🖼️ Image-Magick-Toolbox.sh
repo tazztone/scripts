@@ -111,7 +111,10 @@ show_main_menu() {
     local INTENTS=""
     # 1. Standard Image Ops
     if [[ "$MEDIA_FORMAT" != "PDF" && "$MEDIA_FORMAT" != "VIDEO" ]]; then
-        INTENTS+="📏|Scale & Resize|Change image dimensions;"
+        INTENTS+="📏|Scale: 50%|Quick half-size resize;"
+        INTENTS+="📏|Scale: 1920x|Resize to HD width;"
+        INTENTS+="📏|Scale: 3840x|Resize to 4K width;"
+        INTENTS+="📏|Scale: Custom|Specify manual dimensions;"
         INTENTS+="✂️|Crop & Geometry|Square crop or aspect ratios;"
     fi
 
@@ -143,6 +146,7 @@ show_main_menu() {
         local LOAD_PRESET=""
         local LOAD_HISTORY=""
         local SELECTED_INTENTS=()
+        local DO_SAVE=false
 
         for VALUE_RAW in "${PARTS[@]}"; do
             # Strip whitespace/newlines
@@ -153,6 +157,8 @@ show_main_menu() {
                 LOAD_PRESET="${VALUE#PRESET:}"
             elif [[ "$VALUE" == "HISTORY:"* ]]; then
                 LOAD_HISTORY="${VALUE#HISTORY:}"
+            elif [[ "$VALUE" == "ACTION:SAVE" ]]; then
+                DO_SAVE=true
             else
                 SELECTED_INTENTS+=("$VALUE")
             fi
@@ -169,13 +175,12 @@ show_main_menu() {
             local recipe_list=()
             for CHOICE in "${SELECTED_INTENTS[@]}"; do
                 case "$CHOICE" in
-                    *"Scale"*)
-                        RES=$(show_scale_interface)
-                        [ -z "$RES" ] && continue
-                        IFS='|' read -ra VALS <<< "$RES"
-                        # Extract raw value (strip labels like "(HD)")
-                        RAW_VAL=$(echo "${VALS[0]}" | awk '{print $1}')
-                        recipe_list+=("Scale: $RAW_VAL|CustomGeometry: ${VALS[1]}")
+                    *"Scale: 50%"*) recipe_list+=("Scale: 50%") ;;
+                    *"Scale: 1920x"*) recipe_list+=("Scale: 1920x") ;;
+                    *"Scale: 3840x"*) recipe_list+=("Scale: 3840x") ;;
+                    *"Scale: Custom"*) 
+                        RES=$(zenity --entry --title="Scale Width" --text="Enter target width (e.g. 1280) or geometry (800x600):" --entry-text="1920")
+                        [ -n "$RES" ] && recipe_list+=("CustomGeometry:$RES")
                         ;;
                     *"Crop"*)
                         RES=$(show_crop_interface)
@@ -221,7 +226,14 @@ show_main_menu() {
             for item in "${recipe_list[@]}"; do
                 final_choices+="$item|"
             done
-            echo "${final_choices%|}"
+            final_choices="${final_choices%|}"
+            
+            # Handle inline save if requested
+            if [ "$DO_SAVE" = true ]; then
+                 prompt_save_preset "$PRESET_FILE" "$final_choices" "My-Recipe" "true"
+            fi
+            
+            echo "$final_choices"
             return 0
         fi
     done
@@ -293,7 +305,7 @@ for opt in "${CHOICE_ARR[@]}"; do
             esac
             ;;
         CustomGeometry:*)
-            VAL=$(echo "$opt" | cut -d' ' -f2)
+            VAL=$(echo "$opt" | cut -d':' -f2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
             [ -n "$VAL" ] && { SCALE_ARGS+=("-resize" "$VAL"); TAG="${TAG}_${VAL}"; }
             ;;
 
@@ -369,8 +381,6 @@ fi
 (
     TOTAL=$#
     COUNT=0
-    MAX_JOBS=4
-    [ $(nproc) -lt 4 ] && MAX_JOBS=$(nproc)
 
     for f in "$@"; do
         ((COUNT++))
@@ -416,10 +426,6 @@ if [ -s "$ERR_LOG" ]; then
 fi
 rm -f "$ERR_LOG"
 
-if [[ "$CHOICES" != *"Recent Recipe"* ]]; then
-
-    prompt_save_preset "$PRESET_FILE" "$CHOICES" "My-Recipe"
-
-fi
+# prompt_save_preset logic already handled inline in show_main_menu
 
 zenity --notification --text="Image Processing Finished!"
