@@ -1,0 +1,4 @@
+torch
+safetensors
+numpy
+git init
