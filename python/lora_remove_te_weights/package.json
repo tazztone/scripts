@@ -1,0 +1,12 @@
+{
+  "name": "lora-remove-te-weights",
+  "version": "1.0.0",
+  "description": "Script to filter LoRA .safetensors files to keep only U-Net weights.",
+  "main": "script.py",
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {},
+  "scripts": {
+    "start": "python script.py"
+  }
+}
