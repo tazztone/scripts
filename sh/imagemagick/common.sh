@@ -19,7 +19,7 @@ else
 fi
 
 for cmd in "${DEPENDENCIES[@]}"; do
-    if ! command -v $cmd &> /dev/null; then
+    if ! command -v "$cmd" &> /dev/null; then
         zenity --error --text="Missing dependency: $cmd\nPlease install it."
         exit 1
     fi
