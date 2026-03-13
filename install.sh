@@ -30,7 +30,7 @@ for cmd in ffmpeg ffprobe magick zenity bc; do
         continue
     fi
 
-    if ! command -v $cmd &> /dev/null; then
+    if ! command -v "$cmd" &> /dev/null; then
         echo -e "${RED}Error: $cmd is not installed.${NC}"
         MISSING_DEPS=1
     else
@@ -53,7 +53,12 @@ if [ -d "$FFMPEG_SOURCE" ]; then
     echo -e "${YELLOW}Symlinking FFmpeg scripts to $FFMPEG_TARGET...${NC}"
     mkdir -p "$FFMPEG_TARGET"
     for script in "$FFMPEG_SOURCE"/*.sh; do
-        ln -sf "$script" "$FFMPEG_TARGET/$(basename "$script")"
+        TARGET_LINK="$FFMPEG_TARGET/$(basename "$script")"
+        if [ -d "$TARGET_LINK" ]; then
+            echo -e "${RED}Warning: $TARGET_LINK is a directory. Skipping.${NC}"
+            continue
+        fi
+        ln -sf "$script" "$TARGET_LINK"
     done
 fi
 
@@ -62,7 +67,12 @@ if [ -d "$IMAGE_SOURCE" ]; then
     echo -e "${YELLOW}Symlinking ImageMagick scripts to $IMAGE_TARGET...${NC}"
     mkdir -p "$IMAGE_TARGET"
     for script in "$IMAGE_SOURCE"/*.sh; do
-        ln -sf "$script" "$IMAGE_TARGET/$(basename "$script")"
+        TARGET_LINK="$IMAGE_TARGET/$(basename "$script")"
+        if [ -d "$TARGET_LINK" ]; then
+            echo -e "${RED}Warning: $TARGET_LINK is a directory. Skipping.${NC}"
+            continue
+        fi
+        ln -sf "$script" "$TARGET_LINK"
     done
 fi
 

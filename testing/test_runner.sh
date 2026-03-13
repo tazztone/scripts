@@ -3,7 +3,8 @@
 # A unified testing framework for scripts-sh
 
 # --- Library ---
-source "$(dirname "${BASH_SOURCE[0]}")/lib_test.sh"
+SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+source "$SCRIPT_DIR/lib_test.sh"
 
 # --- Main Execution ---
 if [ "$HEADLESS" = true ]; then
@@ -15,8 +16,10 @@ generate_test_media
 echo -e "\n${YELLOW}=== Static Syntax Analysis (Linting) ===${NC}"
 bash testing/test_lint.sh
 
-echo -e "\n${YELLOW}=== Isolated Wizard Parser Tests ===${NC}"
-bash testing/test_wizard_unit.sh
+echo -e "\n${YELLOW}=== Isolated Wizard Parser & Contract Tests ===${NC}"
+bash testing/test_wizard_robust.sh || FAILED=$((FAILED+1))
+bash testing/test_wizard_contract.sh || FAILED=$((FAILED+1))
+bash testing/test_zenity_smoke.sh || FAILED=$((FAILED+1))
 
 echo -e "\n${YELLOW}=== Universal Toolbox Core Tests ===${NC}"
 
@@ -41,8 +44,8 @@ rm "$TEST_DATA/src.srt"
 # 3. CLI Preset Test
 echo "Test 3: CLI Preset"
 mkdir -p "$HOME/.config/scripts-sh/ffmpeg"
-# Realistic choice string (14 parts): Speed|Custom|Res|CustomW|Crop|Rotate|TrimS|TrimE|Audio|Subs|Quality|TargSize|Format|HW
-echo "TestPreset|2x (Fast)||720p|| (Inactive)|No Change||| (Inactive)| (Inactive)|Medium (CRF 23)||Auto/MP4|None (CPU Only)" > "$HOME/.config/scripts-sh/ffmpeg/presets.conf"
+# Realistic choice string (mapped CHOICES): Speed: 2x (Fast)|Scale: 720p|Quality: Medium
+echo "TestPreset|Speed: 2x (Fast)|Scale: 720p|Quality: Medium" > "$HOME/.config/scripts-sh/ffmpeg/presets.conf"
 ( 
     cd "$TEST_DATA"
     bash "$HOME/_coding/scripts-sh/ffmpeg/🧰 Universal-Toolbox.sh" --preset "TestPreset" "src.mp4"

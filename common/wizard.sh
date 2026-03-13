@@ -1,43 +1,85 @@
-#!/bin/bash
 # Shared Wizard Logic for scripts-sh
+
+# --- Logging & Security ---
+LOG_DIR="$HOME/.local/share/scripts-sh"
+LOG_FILE="$LOG_DIR/debug.log"
+DEBUG_MODE="${DEBUG_MODE:-0}"
+
+# --- Constants ---
+readonly WIZARD_ROW_SIZE=5
+readonly WIZARD_COL_RAWID=4 # Offset from row start (including boolean)
+readonly MAX_HISTORY=8
+readonly MAX_PRESETS=20
+
+_wizard_log() {
+    if [[ "$DEBUG_MODE" == "1" ]]; then
+        mkdir -p "$LOG_DIR"
+        chmod 700 "$LOG_DIR" 2>/dev/null
+        echo "[DEBUG] $(date '+%Y-%m-%d %H:%M:%S') $1" >> "$LOG_FILE"
+    fi
+}
 
 # show_unified_wizard "Title" "Intents..." "PresetsFile" "HistoryFile"
 # Intents format: "Icon|Name|Description"
 # Returns choice string (e.g. "INTENT:Speed|INTENT:Scale" or "PRESET:My Custom")
+# show_unified_wizard "Title" "Intents..." "PresetsFile" "HistoryFile"
 show_unified_wizard() {
     local TITLE="$1"
     local INTENTS_RAW="$2"
     local PRESET_FILE="$3"
     local HISTORY_FILE="$4"
-    local IFS
     
-    local ARGS=(
-        "--list" "--checklist" "--width=700" "--height=550"
-        "--title=$TITLE" "--separator=|" "--print-column=ALL"
-        "--hide-column=4" "--hide-column=5"
-        "--text=Select fixes/edits OR load a preset below:"
-        "--column=Pick" "--column=Action" "--column=Description" "--column=ID" "--column=RawID"
-        "--"
+    local ARGS=()
+    _wizard_build_args ARGS "$TITLE" "$INTENTS_RAW" "$PRESET_FILE" "$HISTORY_FILE"
+
+    local RESULT
+    RESULT=$(zenity "${ARGS[@]}")
+    # Strip any trailing newlines or junk
+    RESULT=$(echo -n "$RESULT" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    _wizard_log "wizard raw return: [$RESULT]"
+
+    local CLEANED
+    CLEANED=$(_wizard_parse_result "$RESULT")
+    
+    _wizard_log "wizard clean return: [$CLEANED]"
+    echo "$CLEANED"
+}
+
+_wizard_build_args() {
+    local -n _ARGS=$1
+    local TITLE="$2"
+    local INTENTS_RAW="$3"
+    local PRESET_FILE="$4"
+    local HISTORY_FILE="$5"
+    local IFS
+
+    _ARGS+=(
+        "--list" "--checklist" "--width" "700" "--height" "550"
+        "--title" "$TITLE" "--separator" "|" "--print-column" "ALL"
+        "--text" "Select fixes/edits OR load a preset below:"
+        "--column" "Action" "--column" "Description" "--column" "ID" "--column" "RawID"
     )
 
     # 1. Add Intents
     IFS=';' read -ra INTENTS_ARR <<< "$INTENTS_RAW"
     for item in "${INTENTS_ARR[@]}"; do
         IFS='|' read -r icon name desc <<< "$item"
-        # ChecklistState(Visual1), Action(Visual2), Description(Visual3), ID(Hidden), RawID(Hidden)
-        ARGS+=(FALSE "$icon $name" "$desc" "$name" "$name")
+        _ARGS+=(FALSE "$icon $name" "$desc" "$name" "$name")
     done
 
     # 2. Add Presets Divider if they exist
     if [ -s "$PRESET_FILE" ] || [ -s "$HISTORY_FILE" ]; then
-        ARGS+=(FALSE "---" ".................................." "---" "---")
+        _ARGS+=(FALSE "═══" ".................................." "═══" "═══")
     fi
 
     # 3. Add Presets
     if [ -s "$PRESET_FILE" ]; then
+        local p_count=0
         while IFS='|' read -r name options; do
             [ -z "$name" ] && continue
-            ARGS+=(FALSE "⭐ $name" "Saved Favorite" "PRESET:$name" "PRESET:$name")
+            [ "$p_count" -ge "$MAX_PRESETS" ] && break
+            _ARGS+=(FALSE "⭐ $name" "Saved Favorite" "PRESET:$name" "PRESET:$name")
+            ((p_count++))
         done < "$PRESET_FILE"
     fi
 
@@ -46,74 +88,56 @@ show_unified_wizard() {
         local h_count=0
         while read -r line; do
             [ -z "$line" ] && continue
-            [ $h_count -ge 8 ] && break
-            ARGS+=(FALSE "🕒 $line" "Recent Activity" "HISTORY:$line" "HISTORY:$line")
+            [ "$h_count" -ge "$MAX_HISTORY" ] && break
+            _ARGS+=(FALSE "🕒 $line" "Recent Activity" "HISTORY:$line" "HISTORY:$line")
             ((h_count++))
         done < "$HISTORY_FILE"
     fi
 
-    local RESULT
-    RESULT=$(zenity "${ARGS[@]}")
-    # Strip any trailing newlines or junk
-    RESULT=$(echo -n "$RESULT" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-    echo "[DEBUG] wizard raw return: [$RESULT]" >> /tmp/scripts_debug.log
+    # 5. Hide columns (must come after headers, safer at the end)
+    _ARGS+=("--hide-column" "3" "--hide-column" "4")
+}
 
-    echo "[DEBUG] wizard raw return: [$RESULT]" >> /tmp/scripts_debug.log
-
-    # --- Bulletproof Result Parser (Zenity 4.x compliant) ---
+_wizard_parse_result() {
+    local RESULT="$1"
     local CLEAN_RESULT=""
+
     if [[ "$RESULT" == *"|"* ]]; then
-        # Explicitly set IFS and read into array
         local -a ALL_PARTS
         IFS='|' read -ra ALL_PARTS <<< "$RESULT"
         
-        # Check if the FIRST element is a known Zenity 4 marker (TRUE/FALSE)
         local FIRST_UP=$(echo "${ALL_PARTS[0]}" | tr '[:lower:]' '[:upper:]')
         if [[ "$FIRST_UP" == "TRUE" || "$FIRST_UP" == "FALSE" ]]; then
-            # 1. First pass: Handle standard checkbox selections
             for (( i=0; i<${#ALL_PARTS[@]}; i++ )); do
                 local ITEM="${ALL_PARTS[i]}"
-                # Case-insensitive check for TRUE or FALSE
                 local UP_ITEM=$(echo "$ITEM" | tr '[:lower:]' '[:upper:]')
                 
                 if [[ "$UP_ITEM" == "TRUE" ]]; then
-                    # ALL_PARTS: [TRUE, Pick(Data1), Action(Data2), Description(Data3), ID(Data4), RawID(Data5), ...]
-                    local VAL="${ALL_PARTS[i+4]}"
-                    if [[ -n "$VAL" && "$VAL" != "---" ]]; then
+                    local VAL="${ALL_PARTS[i+WIZARD_COL_RAWID]}"
+                    if [[ -n "$VAL" && "$VAL" != "---" && "$VAL" != "═══" ]]; then
                         CLEAN_RESULT+="$VAL|"
-                        # Skip row: TRUE + 5 data cols = 6 elements
-                        ((i+=6))
+                        ((i+=WIZARD_ROW_SIZE-1))
                     fi
                 fi
             done
             
-            # Fallback: If no explicit TRUE found, check for the "Last Interacted Row" (FALSE prefix)
-            # This occurs on double-clicks or Enter key in Zenity 4.x
             if [[ -z "$CLEAN_RESULT" ]]; then
                 for (( i=0; i<${#ALL_PARTS[@]}; i++ )); do
-                    local ITEM="${ALL_PARTS[i]}"
-                    local UP_ITEM=$(echo "$ITEM" | tr '[:lower:]' '[:upper:]')
+                    local UP_ITEM=$(echo "${ALL_PARTS[i]}" | tr '[:lower:]' '[:upper:]')
                     if [[ "$UP_ITEM" == "FALSE" ]]; then
-                        local VAL="${ALL_PARTS[i+4]}"
-                        if [[ -n "$VAL" && "$VAL" != "---" ]]; then
+                        local VAL="${ALL_PARTS[i+WIZARD_COL_RAWID]}"
+                        if [[ -n "$VAL" && "$VAL" != "---" && "$VAL" != "═══" ]]; then
                             CLEAN_RESULT+="$VAL|"
-                            break # Only take the first one for implicit selection
+                            break
                         fi
                     fi
                 done
             fi
             RESULT="${CLEAN_RESULT%|}"
-        else
-            # Not a Zenity 4 marker? It's likely a Zenity 3 multi-select return (item1|item2)
-            # We keep it as is.
-            :
         fi
     elif [[ "$RESULT" =~ ^(TRUE|FALSE|true|false)$ ]]; then
-        # Discard pure boolean returns with no data
         RESULT=""
     fi
-
-    echo "[DEBUG] wizard clean return: [$RESULT]" >> /tmp/scripts_debug.log
     echo "$RESULT"
 }
 
@@ -144,6 +168,7 @@ prompt_save_preset() {
         local PNAME
         PNAME=$(zenity --entry --title="Save Favorite" --text="Enter a name for this recipe:" --entry-text="$SUGGESTED_NAME")
         if [ -n "$PNAME" ]; then
+            PNAME="${PNAME//|/}" # Sanitize: remove pipes
             echo "$PNAME|$CHOICES" >> "$PRESET_FILE"
             zenity --notification --text="Saved as '$PNAME'!"
         fi
