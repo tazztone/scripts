@@ -1,3 +1,4 @@
+#!/bin/bash
 # Common utility functions for Nautilus FFmpeg Scripts
 
 # Ensure dependencies

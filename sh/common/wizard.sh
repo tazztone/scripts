@@ -180,7 +180,8 @@ prompt_save_preset() {
                 if ! zenity --question --title="Overwrite?" --text="A favorite named '$PNAME' already exists.\nOverwrite it?" --ok-label="Overwrite" --cancel-label="Cancel"; then
                     return 0
                 fi
-                sed -i "/^${PNAME}|/d" "$PRESET_FILE"
+                local ESC_PNAME=$(printf '%s\n' "$PNAME" | sed 's/[.[\*^$]/\\&/g')
+                sed -i "/^${ESC_PNAME}|/d" "$PRESET_FILE"
             fi
             echo "$PNAME|$CHOICES" >> "$PRESET_FILE"
             zenity --notification --text="Saved as '$PNAME'!"
