@@ -2,8 +2,6 @@
 
 # Target directory for Nautilus scripts
 SCRIPTS_ROOT="$HOME/.local/share/nautilus/scripts"
-FFMPEG_TARGET="$SCRIPTS_ROOT/ffmpeg"
-IMAGE_TARGET="$SCRIPTS_ROOT/imagemagick"
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -53,8 +51,8 @@ remove_project_links() {
 # 1. Clean from root directory
 remove_project_links "$SCRIPTS_ROOT"
 
-# 2. Clean from legacy subdirectories
-remove_project_links "$FFMPEG_TARGET"
-remove_project_links "$IMAGE_TARGET"
+# 2. Clean from legacy subdirectories (if they exist)
+[ -d "$SCRIPTS_ROOT/ffmpeg" ] && remove_project_links "$SCRIPTS_ROOT/ffmpeg"
+[ -d "$SCRIPTS_ROOT/imagemagick" ] && remove_project_links "$SCRIPTS_ROOT/imagemagick"
 
 echo -e "${GREEN}Uninstallation complete!${NC}"

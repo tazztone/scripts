@@ -28,7 +28,7 @@ analyze_media() {
     # Image Analysis
     if [[ "$ext" =~ ^(jpg|jpeg|png|gif|tiff|webp)$ ]]; then
         # Try to get format, alpha existence, and colorspace
-        local info=$(magick identify -format "%m %A %[colorspace]" "$f" 2>/dev/null)
+        local info=$($IM_IDENTIFY -format "%m %A %[colorspace]" "$f" 2>/dev/null)
         if [ -n "$info" ]; then
             read -r MEDIA_FORMAT alpha colorspace <<< "$info"
             [[ "$alpha" == "True" || "$alpha" == "Blend" ]] && HAS_ALPHA=1 || HAS_ALPHA=0
@@ -102,7 +102,7 @@ show_main_menu() {
     # 0. System Check & Diagnostics
     _wizard_log "--- NEW DIAGNOSTIC RUN ---"
     _wizard_log "File Checked: $1"
-    _wizard_log "IM Version: $(magick -version | head -n 1)"
+    _wizard_log "IM EXE: $IM_EXE, Version: $($IM_EXE -version | head -n 1)"
 
     # Run analysis on the first file to set context
     analyze_media "$1"
@@ -111,6 +111,7 @@ show_main_menu() {
     local INTENTS=""
     # 1. Standard Image Ops
     if [[ "$MEDIA_FORMAT" != "PDF" && "$MEDIA_FORMAT" != "VIDEO" ]]; then
+        INTENTS+="📏|Scale & Resize|Advanced scaling options;"
         INTENTS+="📏|Scale: 50%|Quick half-size resize;"
         INTENTS+="📏|Scale: 1920x|Resize to HD width;"
         INTENTS+="📏|Scale: 3840x|Resize to 4K width;"
@@ -175,11 +176,20 @@ show_main_menu() {
             local recipe_list=()
             for CHOICE in "${SELECTED_INTENTS[@]}"; do
                 case "$CHOICE" in
+                    *"Scale & Resize"*)
+                        RES=$(show_scale_interface)
+                        [ -z "$RES" ] && continue
+                        IFS='|' read -ra VALS <<< "$RES"
+                        if [[ "${VALS[0]}" == "50%" ]]; then recipe_list+=("Scale: 50%")
+                        elif [[ "${VALS[0]}" == "Custom" ]]; then recipe_list+=("CustomGeometry:${VALS[1]}")
+                        else recipe_list+=("Scale: ${VALS[0]}")
+                        fi
+                        ;;
                     *"Scale: 50%"*) recipe_list+=("Scale: 50%") ;;
                     *"Scale: 1920x"*) recipe_list+=("Scale: 1920x") ;;
                     *"Scale: 3840x"*) recipe_list+=("Scale: 3840x") ;;
                     *"Scale: Custom"*) 
-                        RES=$(zenity --entry --title="Scale Width" --text="Enter target width (e.g. 1280) or geometry (800x600):" --entry-text="1920")
+                        RES=$(zenity --entry --title="Scale Width" --text="Enter target width (e.g. 1280) or geometry (800x600):" --entry-text="1920" --cancel-label="Cancel")
                         [ -n "$RES" ] && recipe_list+=("CustomGeometry:$RES")
                         ;;
                     *"Crop"*)
@@ -285,6 +295,13 @@ for opt in "${CHOICE_ARR[@]}"; do
                    CROP_ARGS+=("-set" "option:distort:viewport" "%[fx:min(w,h*16/9)]x%[fx:min(w*9/16,h)]" "-distort" "SRT" "0" "+repage")
                    TAG="${TAG}_16x9"
                    ;;
+               *"Custom Crop"*)
+                   GEOM=$(zenity --entry --title="Custom Crop" --text="Enter geometry (widthxheight+x+y):" --entry-text="800x600+10+10" --cancel-label="Cancel")
+                   if [ -n "$GEOM" ]; then
+                       CROP_ARGS+=("-crop" "$GEOM" "+repage")
+                       TAG="${TAG}_crop"
+                   fi
+                   ;;
                *"2x Grid"*) IM_ARGS+=("-tile" "2x" "-geometry" "+0+0"); TAG="${TAG}_grid2x"; DO_MONTAGE=true ;;
                *"3x Grid"*) IM_ARGS+=("-tile" "3x" "-geometry" "+0+0"); TAG="${TAG}_grid3x"; DO_MONTAGE=true ;;
                *"Single Row"*) IM_ARGS+=("-tile" "x1" "-geometry" "+0+0" "-background" "none"); TAG="${TAG}_row"; DO_MONTAGE=true ;;
@@ -336,7 +353,8 @@ for opt in "${CHOICE_ARR[@]}"; do
         
         # --- FORMAT/ACTION (PRIORITY 4) ---
         Format:*)
-            OUT_EXT=$(echo "$opt" | cut -d' ' -f2 | tr '[:upper:]' '[:lower:]')
+            # Extract just the extension, even if piped (e.g. Format: WEBP|Optimize: ...)
+            OUT_EXT=$(echo "$opt" | cut -d':' -f2- | cut -d'|' -f1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | tr '[:upper:]' '[:lower:]')
             ;;
         Optimize:*)
             VAL=$(echo "$opt" | cut -d':' -f2)

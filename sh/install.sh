@@ -45,6 +45,7 @@ if [ $MISSING_DEPS -eq 1 ]; then
         echo "Installation aborted."
         exit 1
     fi
+    echo -e "${YELLOW}Continuing installation with missing dependencies...${NC}"
 fi
 
 # Ensure target root directory exists
@@ -64,10 +65,31 @@ install_scripts() {
             fi
             
             TARGET_LINK="$SCRIPTS_TARGET/$(basename "$script")"
-            if [ -d "$TARGET_LINK" ]; then
-                echo -e "${RED}Warning: $TARGET_LINK is a directory. Skipping.${NC}"
+            if [ -d "$TARGET_LINK" ] && [ ! -L "$TARGET_LINK" ]; then
+                echo -e "${RED}Warning: $TARGET_LINK is a real directory. Skipping.${NC}"
                 continue
             fi
+
+            # Overwrite confirmation
+            if [ -L "$TARGET_LINK" ]; then
+                # If it's already linked to the same file, skip silently
+                if [[ "$(readlink -f "$TARGET_LINK")" == "$(readlink -f "$script")" ]]; then
+                    continue
+                fi
+                
+                if command -v zenity &> /dev/null; then
+                     if ! zenity --question --title="Overwrite?" --text="Existing link found for '$(basename "$script")'.\nPoints to: $(readlink -f "$TARGET_LINK")\n\nOverwrite with this version?" --ok-label="Overwrite" --cancel-label="Keep Original"; then
+                         echo "  Skipped: $(basename "$script") (kept existing)"
+                         continue
+                     fi
+                else
+                     read -p "Overwrite existing link for $(basename "$script")? (y/N) " confirm
+                     [[ ! "$confirm" =~ ^[Yy]$ ]] || { echo "  Skipped: $(basename "$script")"; continue; }
+                fi
+            fi
+
+            # Ensure source is executable
+            chmod +x "$script"
             ln -sf "$script" "$TARGET_LINK"
             echo "  Created symlink: $(basename "$script")"
         done

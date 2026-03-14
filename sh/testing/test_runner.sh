@@ -43,12 +43,13 @@ rm "$TEST_DATA/src.srt"
 
 # 3. CLI Preset Test
 echo "Test 3: CLI Preset"
+U_TOOLBOX="$SCRIPT_DIR/../ffmpeg/🧰 Universal-Toolbox.sh"
 mkdir -p "$HOME/.config/scripts-sh/ffmpeg"
 # Realistic choice string (mapped CHOICES): Speed: 2x (Fast)|Scale: 720p|Quality: Medium
 echo "TestPreset|Speed: 2x (Fast)|Scale: 720p|Quality: Medium" > "$HOME/.config/scripts-sh/ffmpeg/presets.conf"
 ( 
     cd "$TEST_DATA"
-    bash "$HOME/_coding/scripts-sh/ffmpeg/🧰 Universal-Toolbox.sh" --preset "TestPreset" "src.mp4"
+    bash "$U_TOOLBOX" --preset "TestPreset" "src.mp4"
 ) > /dev/null 2>&1
 
 if [ -f "$TEST_DATA/src_2x_720p.mp4" ]; then
