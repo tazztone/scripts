@@ -227,7 +227,7 @@ while true; do
         SLUG=$(echo "$CHOICES" | sed 's/[^[:alnum:]| ]//g' | sed 's/Speed //g; s/Scale //g; s/Rotate //g; s/Flip //g; s/Crop //g; s/Trim //g; s/Output //g; s/Subtitles //g; s/Use //g; s/Fast//g; s/Slow//g; s/pixels//g; s/Quality //g; s/TargetSizeMB //g; s/|/_/g; s/ //g' | tr '[:upper:]' '[:lower:]')
         
         # If user selected ⭐ Save as Favorite in the wizard, force the prompt
-        local FORCE_SAVE="false"
+        FORCE_SAVE="false"
         [ "$DO_SAVE" = true ] && FORCE_SAVE="true"
         prompt_save_preset "$PRESET_FILE" "$CHOICES" "$SLUG" "$FORCE_SAVE"
         break
@@ -266,6 +266,7 @@ EXT="mp4"
 TAG=""
 FILTER_COUNT=0
 FPS_OVERRIDE=""
+REMOVE_AUDIO=false
 USE_GPU=false
 GPU_TYPE=""
 
@@ -507,7 +508,7 @@ if [[ "$CHOICES" == *"Subtitles: Mux"* ]]; then HAS_SUBS=true; SUB_TYPE="mux"; T
 
 # --- METADATA ---
 if [[ "$CHOICES" == *"Clean Metadata"* ]]; then
-    GLOBAL_OPTS="$GLOBAL_OPTS -map_metadata -1"
+    GLOBAL_OPTS+=("-map_metadata" "-1")
 fi
 
 # --- SMART FILENAMING ---
@@ -601,9 +602,9 @@ for f in "$@"; do
             zenity --warning --text="Target size ($TARGET_MB MB) is too small for this duration ($DUR sec).\n\nCalculated Video Bitrate: ${V_BR}k."
         fi
         
-        # Use safer get_sys_temp which now returns a real file path (but we will use it as a prefix/base)
+        # Use safer get_sys_temp which now returns a real file path
         PASS_LOG=$(get_sys_temp "ffmpeg2pass")
-        rm -f "$PASS_LOG" # We want the prefix
+        # We use the file path as the logfile prefix (ffmpeg appends extensions like -0.log)
         
         # STRIP QUALITY FLAGS FOR 2-PASS (Bitrate Priority)
         # We remove -crf, -cq, -global_quality, -qp
