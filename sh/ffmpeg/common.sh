@@ -1,8 +1,13 @@
-#!/bin/bash
 # Common utility functions for Nautilus FFmpeg Scripts
 
 # Ensure dependencies
-for cmd in ffmpeg ffprobe zenity bc; do
+# Check zenity first to use it for errors
+if ! command -v zenity &> /dev/null; then
+    printf "Error: zenity is not installed. Please install it (sudo apt install zenity).\n" >&2
+    exit 1
+fi
+
+for cmd in ffmpeg ffprobe bc; do
     if ! command -v "$cmd" &> /dev/null; then
         zenity --error --text="Missing dependency: $cmd\nPlease install it."
         exit 1
@@ -31,7 +36,7 @@ get_duration() {
 }
 
 # --- GPU PROBE (Run once at startup) ---
-GPU_CACHE="/tmp/scripts-sh-gpu-cache"
+GPU_CACHE="/tmp/scripts-sh-gpu-cache-$(id -u)"
 probe_gpu() {
     # Skip if fresh cache exists (<24h)
     if [ -f "$GPU_CACHE" ] && [ $(( $(date +%s) - $(stat -c %Y "$GPU_CACHE") )) -lt 86400 ]; then
@@ -118,5 +123,5 @@ get_cwd_temp() {
 # Generate unique temp file in /tmp (for large logs/transforms)
 # Usage: get_sys_temp "prefix"
 get_sys_temp() {
-    mktemp -u "/tmp/${1:-tmp}_XXXXXX"
+    mktemp "/tmp/${1:-tmp}_XXXXXX"
 }

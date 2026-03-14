@@ -1,3 +1,4 @@
+#!/bin/bash
 # Shared Wizard Logic for scripts-sh
 
 # --- Logging & Security ---
@@ -8,7 +9,7 @@ DEBUG_MODE="${DEBUG_MODE:-0}"
 # --- Constants ---
 readonly WIZARD_ROW_SIZE=5
 readonly WIZARD_COL_RAWID=4 # Offset from row start (including boolean)
-readonly MAX_HISTORY=8
+readonly MAX_HISTORY=10
 readonly MAX_PRESETS=20
 
 _wizard_log() {
@@ -157,8 +158,8 @@ save_to_history() {
     if [ "$CHOICES" != "$RECENT" ]; then
         # 2. Add to top
         echo "$CHOICES" | cat - "$HISTORY_FILE" > "${HISTORY_FILE}.tmp"
-        # 3. Keep last 15
-        head -n 15 "${HISTORY_FILE}.tmp" > "$HISTORY_FILE"
+        # 3. Keep last MAX_HISTORY
+        head -n "$MAX_HISTORY" "${HISTORY_FILE}.tmp" > "$HISTORY_FILE"
         rm "${HISTORY_FILE}.tmp"
     fi
 }
@@ -172,9 +173,15 @@ prompt_save_preset() {
     
     if [ "$FORCE" = "true" ] || zenity --question --title="Save as Favorite?" --text="Would you like to save this configuration as a permanent favorite?" --ok-label="Save" --cancel-label="Just Run Once"; then
         local PNAME
-        PNAME=$(zenity --entry --title="Save Favorite" --text="Enter a name for this recipe:" --entry-text="$SUGGESTED_NAME")
+        PNAME=$(zenity --entry --title="Save Favorite" --text="Enter a name for this recipe:" --entry-text="$SUGGESTED_NAME" --cancel-label="Cancel")
         if [ -n "$PNAME" ]; then
             PNAME="${PNAME//|/}" # Sanitize: remove pipes
+            if grep -q "^$PNAME|" "$PRESET_FILE"; then
+                if ! zenity --question --title="Overwrite?" --text="A favorite named '$PNAME' already exists.\nOverwrite it?" --ok-label="Overwrite" --cancel-label="Cancel"; then
+                    return 0
+                fi
+                sed -i "/^${PNAME}|/d" "$PRESET_FILE"
+            fi
             echo "$PNAME|$CHOICES" >> "$PRESET_FILE"
             zenity --notification --text="Saved as '$PNAME'!"
         fi

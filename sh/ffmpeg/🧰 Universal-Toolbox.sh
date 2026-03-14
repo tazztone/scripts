@@ -25,13 +25,18 @@ fi
 
 # --- ARGUMENT PARSING (CLI PRESETS) ---
 PRELOADED_CHOICES=""
-if [ "$1" == "--preset" ] && [ -n "$2" ]; then
+if [[ "$1" == "preset="* ]]; then
+    PRESET_NAME="${1#preset=}"
+    shift 1
+elif [ "$1" == "--preset" ] && [ -n "$2" ]; then
     PRESET_NAME="$2"
+    shift 2
+fi
+
+if [ -n "$PRESET_NAME" ]; then
     # Read preset line: Name|Choice1|Choice2...
     LINE=$(grep "^$PRESET_NAME|" "$PRESET_FILE")
     if [ -n "$LINE" ]; then
-        # Check if we have files passed after the preset args
-        shift 2
         # Extract choices (everything after first pipe)
         PRELOADED_CHOICES="${LINE#*|}"
     else
@@ -71,6 +76,7 @@ while true; do
     INTENTS=""
     LOAD_PRESET=""
     LOAD_HISTORY=""
+    DO_SAVE=false
 
         for VALUE in "${PARTS[@]}"; do
             VALUE=$(echo -n "$VALUE" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
@@ -81,6 +87,8 @@ while true; do
             elif [[ "$VALUE" == "HISTORY:"* ]]; then
                 # For history, the ID is the same as the full string
                 LOAD_HISTORY="${VALUE#HISTORY:}"
+            elif [[ "$VALUE" == "ACTION:SAVE" ]]; then
+                DO_SAVE=true
             else
                 # Assume INTENT (Clean name from wizard.sh)
                 INTENTS+="$VALUE|"
@@ -218,7 +226,10 @@ while true; do
         
         SLUG=$(echo "$CHOICES" | sed 's/[^[:alnum:]| ]//g' | sed 's/Speed //g; s/Scale //g; s/Rotate //g; s/Flip //g; s/Crop //g; s/Trim //g; s/Output //g; s/Subtitles //g; s/Use //g; s/Fast//g; s/Slow//g; s/pixels//g; s/Quality //g; s/TargetSizeMB //g; s/|/_/g; s/ //g' | tr '[:upper:]' '[:lower:]')
         
-        prompt_save_preset "$PRESET_FILE" "$CHOICES" "$SLUG"
+        # If user selected ⭐ Save as Favorite in the wizard, force the prompt
+        local FORCE_SAVE="false"
+        [ "$DO_SAVE" = true ] && FORCE_SAVE="true"
+        prompt_save_preset "$PRESET_FILE" "$CHOICES" "$SLUG" "$FORCE_SAVE"
         break
     else
         # No selection
@@ -239,7 +250,7 @@ fi
 
 if [[ "$CHOICES" == *"Target Size"* ]]; then
     if [ -z "$TARGET_MB" ]; then
-        TARGET_MB=$(zenity --entry --title="Target Size" --text="Total file size (MB):" --entry-text="25")
+        TARGET_MB=$(zenity --entry --title="Target Size" --text="Total file size (MB):" --entry-text="25" --cancel-label="Cancel")
     fi
     [ -z "$TARGET_MB" ] && exit 0
 fi
@@ -247,10 +258,10 @@ fi
 # 2. Logic & Prompts
 VF_CHAIN=""
 AF_CHAIN=""
-INPUT_OPTS=""
-VCODEC_OPTS=""
-ACODEC_OPTS="-c:a aac -b:a 192k"
-GLOBAL_OPTS="-movflags +faststart"
+INPUT_OPTS=()
+VCODEC_OPTS=()
+ACODEC_OPTS=("-c:a" "aac" "-b:a" "192k")
+GLOBAL_OPTS=("-movflags" "+faststart")
 EXT="mp4"
 TAG=""
 FILTER_COUNT=0
@@ -278,23 +289,42 @@ add_af() {
 # --- CUSTOM INPUTS ---
 if [[ "$CHOICES" == *"Trim: Start"* ]]; then
     START="${USER_TRIM_S}"
-    if [ -z "$START" ]; then
-        START=$(zenity --entry --title="Trim Start" --text="Start time (seconds or hh:mm:ss):" --entry-text="00:00:10")
+    if [ -n "$START" ]; then 
+        VALID_S=$(validate_time_format "$START")
+        if [ $? -eq 0 ]; then
+            INPUT_OPTS+=( "-ss" "$VALID_S" )
+            TAG="${TAG}_cut"
+            ((FILTER_COUNT++))
+        else
+            zenity --error --text="Invalid Trim Start format: $START"
+        fi
     fi
-    if [ -n "$START" ]; then INPUT_OPTS="$INPUT_OPTS -ss $START"; TAG="${TAG}_cut"; ((FILTER_COUNT++)); fi
 fi
 if [[ "$CHOICES" == *"Trim: End"* ]]; then
     DUR="${USER_TRIM_E}"
     if [ -z "$DUR" ]; then
-        DUR=$(zenity --entry --title="Trim Duration" --text="Duration to keep (seconds or hh:mm:ss):" --entry-text="00:01:00")
+        DUR=$(zenity --entry --title="Trim End" --text="Trim End time / Duration to keep (seconds or hh:mm:ss):" --entry-text="00:01:00" --cancel-label="Cancel")
     fi
-    if [ -n "$DUR" ]; then INPUT_OPTS="$INPUT_OPTS -t $DUR"; TAG="${TAG}_len"; ((FILTER_COUNT++)); fi
+    if [ -n "$DUR" ]; then 
+        VALID_E=$(validate_time_format "$DUR")
+        if [ $? -eq 0 ]; then
+            INPUT_OPTS+=( "-t" "$VALID_E" )
+            TAG="${TAG}_len"
+            ((FILTER_COUNT++))
+        else
+            zenity --error --text="Invalid Trim End format: $DUR"
+        fi
+    fi
 fi
 
 # --- SPEED ---
 SPEED_VAL=""
 if [[ "$CHOICES" =~ Speed:\ ([0-9.]+)x ]]; then
     SPEED_VAL="${BASH_REMATCH[1]}"
+    if (( $(echo "$SPEED_VAL <= 0" | bc -l) )); then
+        zenity --error --text="Invalid Speed: $SPEED_VAL (Must be greater than 0)"
+        SPEED_VAL="1.0"
+    fi
     TAG="${TAG}_${SPEED_VAL}x"
     PTS=$(echo "scale=4; 1/$SPEED_VAL" | bc)
     ATEMPO="$SPEED_VAL"
@@ -336,7 +366,7 @@ if [[ "$CHOICES" == *"Scale: 50%"* ]]; then SCALE_W="iw*0.5"; TAG="${TAG}_half";
 if [[ "$CHOICES" == *"Custom Scale Width"* ]]; then
     W="${USER_W}"
     if [ -z "$W" ]; then
-        W=$(zenity --entry --title="Scale Width" --text="Target Width (px):" --entry-text="1280")
+        W=$(zenity --entry --title="Scale Width" --text="Target Width (px):" --entry-text="1280" --cancel-label="Cancel")
     fi
     if [ -n "$W" ]; then SCALE_W="$W"; TAG="${TAG}_${W}w"; fi
 fi
@@ -357,16 +387,16 @@ if [[ "$CHOICES" == *"Flip: Horizontal"* ]]; then add_vf "hflip"; TAG="${TAG}_fl
 if [[ "$CHOICES" == *"Flip: Vertical"* ]]; then add_vf "vflip"; TAG="${TAG}_flipV"; fi
 
 # --- AUDIO ---
-AUDIO_OPTS=""
+AUDIO_OPTS=()
 if [[ "$CHOICES" == *"Remove Audio Track"* ]]; then 
-    AUDIO_OPTS="-an"
+    AUDIO_OPTS=("-an")
     REMOVE_AUDIO=true
     TAG="${TAG}_noaudio"
 else
-    if [[ "$CHOICES" == *"Downmix to Stereo"* ]]; then AUDIO_OPTS="-ac 2"; TAG="${TAG}_stereo"; fi
+    if [[ "$CHOICES" == *"Downmix to Stereo"* ]]; then AUDIO_OPTS+=("-ac" "2"); TAG="${TAG}_stereo"; fi
     if [[ "$CHOICES" == *"Normalize"* ]]; then add_af "loudnorm=I=-23:LRA=7:TP=-1.5"; TAG="${TAG}_norm"; fi
     if [[ "$CHOICES" == *"Boost Volume"* ]]; then add_af "volume=6dB"; TAG="${TAG}_boost"; fi
-    if [[ "$CHOICES" == *"Recode to PCM"* ]]; then AUDIO_OPTS="-c:a pcm_s16le"; TAG="${TAG}_pcm"; fi
+    if [[ "$CHOICES" == *"Recode to PCM"* ]]; then AUDIO_OPTS+=("-c:a" "pcm_s16le"); TAG="${TAG}_pcm"; fi
 fi
 
 # --- GPU LOGIC ---
@@ -407,33 +437,33 @@ IS_gif=false
 
 if [[ "$CHOICES" == *"Output: H.265"* ]]; then 
     if [ "$USE_GPU" = true ]; then
-        if [ "$GPU_TYPE" = "nvenc" ]; then VCODEC_OPTS="-c:v hevc_nvenc -preset slow -rc vbr -cq $CQ_NV -pix_fmt yuv420p"; fi
-        if [ "$GPU_TYPE" = "qsv" ]; then VCODEC_OPTS="-c:v hevc_qsv -load_plugin hevc_hw -preset medium -global_quality $GQ_QSV -pix_fmt yuv420p"; fi
-        if [ "$GPU_TYPE" = "vaapi" ]; then VCODEC_OPTS="-c:v hevc_vaapi -rc_mode CQP -qp $QP_VA"; GLOBAL_OPTS="$GLOBAL_OPTS -vaapi_device /dev/dri/renderD128 -vf format=nv12,hwupload"; fi
+        if [ "$GPU_TYPE" = "nvenc" ]; then VCODEC_OPTS=("-c:v" "hevc_nvenc" "-preset" "slow" "-rc" "vbr" "-cq" "$CQ_NV" "-pix_fmt" "yuv420p"); fi
+        if [ "$GPU_TYPE" = "qsv" ]; then VCODEC_OPTS=("-c:v" "hevc_qsv" "-load_plugin" "hevc_hw" "-preset" "medium" "-global_quality" "$GQ_QSV" "-pix_fmt" "yuv420p"); fi
+        if [ "$GPU_TYPE" = "vaapi" ]; then VCODEC_OPTS=("-c:v" "hevc_vaapi" "-rc_mode" "CQP" "-qp" "$QP_VA"); GLOBAL_OPTS+=("-vaapi_device" "/dev/dri/renderD128" "-vf" "format=nv12,hwupload"); fi
     else
-        VCODEC_OPTS="-c:v libx265 -crf $CRF_CPU -preset medium"
+        VCODEC_OPTS=("-c:v" "libx265" "-crf" "$CRF_CPU" "-preset" "medium")
     fi
-    ACODEC_OPTS="-c:a aac -b:a 128k"
+    ACODEC_OPTS=("-c:a" "aac" "-b:a" "128k")
     TAG="${TAG}_h265"
 elif [[ "$CHOICES" == *"Output: WebM"* ]]; then 
-    VCODEC_OPTS="-c:v libvpx-vp9 -b:v 0 -crf $CRF_CPU"
-    ACODEC_OPTS="-c:a libopus"
+    VCODEC_OPTS=("-c:v" "libvpx-vp9" "-b:v" "0" "-crf" "$CRF_CPU")
+    ACODEC_OPTS=("-c:a" "libopus")
     EXT="webm"
     TAG="${TAG}_vp9"
 elif [[ "$CHOICES" == *"Output: ProRes"* ]]; then 
-    VCODEC_OPTS="-c:v prores_ks -profile:v 3 -vendor apl0 -bits_per_mb 8000 -pix_fmt yuv422p10le"
-    ACODEC_OPTS="-c:a pcm_s16le"
+    VCODEC_OPTS=("-c:v" "prores_ks" "-profile:v" "3" "-vendor" "apl0" "-bits_per_mb" "8000" "-pix_fmt" "yuv422p10le")
+    ACODEC_OPTS=("-c:a" "pcm_s16le")
     EXT="mov"
     TAG="${TAG}_prores"
 elif [[ "$CHOICES" == *"Extract MP3"* ]]; then
-    VCODEC_OPTS="-vn"
-    AUDIO_OPTS="-c:a libmp3lame -q:a 2"
+    VCODEC_OPTS=("-vn")
+    AUDIO_OPTS=("-c:a" "libmp3lame" "-q:a" "2")
     EXT="mp3"
     TAG="${TAG}_audio"
     IS_audio_only=true
-elif [[ "$CHOICES" == *"Extract Audio (WAV)"* ]]; then
-    VCODEC_OPTS="-vn"
-    ACODEC_OPTS="-c:a pcm_s16le"
+elif [[ "$CHOICES" == *"Extract WAV"* ]]; then
+    VCODEC_OPTS=("-vn")
+    ACODEC_OPTS=("-c:a" "pcm_s16le")
     EXT="wav"
     TAG="${TAG}_audio"
     IS_audio_only=true
@@ -441,31 +471,31 @@ elif [[ "$CHOICES" == *"Output: GIF"* ]]; then
     IS_gif=true
     EXT="gif"
 elif [[ "$CHOICES" == *"Output: AV1"* ]]; then
-    VCODEC_OPTS="-c:v libaom-av1 -crf $CRF_CPU -cpu-used 4 -row-mt 1"
-    ACODEC_OPTS="-c:a libopus"
+    VCODEC_OPTS=("-c:v" "libaom-av1" "-crf" "$CRF_CPU" "-cpu-used" "4" "-row-mt" "1")
+    ACODEC_OPTS=("-c:a" "libopus")
     EXT="mkv"
     TAG="${TAG}_av1"
 elif [[ "$CHOICES" == *"Output: MOV"* ]]; then
-    VCODEC_OPTS="-c:v copy"
-    ACODEC_OPTS="-c:a copy"
+    VCODEC_OPTS=("-c:v" "copy")
+    ACODEC_OPTS=("-c:a" "copy")
     EXT="mov"
-    GLOBAL_OPTS="-movflags +faststart"
+    GLOBAL_OPTS=("-movflags" "+faststart")
     TAG="${TAG}_mov"
 elif [[ "$CHOICES" == *"Output: MKV"* ]]; then
-    VCODEC_OPTS="-c:v copy"
-    ACODEC_OPTS="-c:a copy"
+    VCODEC_OPTS=("-c:v" "copy")
+    ACODEC_OPTS=("-c:a" "copy")
     EXT="mkv"
-    GLOBAL_OPTS=""
+    GLOBAL_OPTS=()
     TAG="${TAG}_mkv"
 else
     # Default H.264
     if [ "$USE_GPU" = true ]; then
-        if [ "$GPU_TYPE" = "nvenc" ]; then VCODEC_OPTS="-c:v h264_nvenc -preset slow -rc vbr -cq $CQ_NV -pix_fmt yuv420p"; fi
-        if [ "$GPU_TYPE" = "qsv" ]; then VCODEC_OPTS="-c:v h264_qsv -preset medium -global_quality $GQ_QSV -pix_fmt yuv420p"; fi
-        if [ "$GPU_TYPE" = "vaapi" ]; then VCODEC_OPTS="-c:v h264_vaapi -rc_mode CQP -qp $QP_VA"; GLOBAL_OPTS="$GLOBAL_OPTS -vaapi_device /dev/dri/renderD128 -vf format=nv12,hwupload"; fi
+        if [ "$GPU_TYPE" = "nvenc" ]; then VCODEC_OPTS=("-c:v" "h264_nvenc" "-preset" "slow" "-rc" "vbr" "-cq" "$CQ_NV" "-pix_fmt" "yuv420p"); fi
+        if [ "$GPU_TYPE" = "qsv" ]; then VCODEC_OPTS=("-c:v" "h264_qsv" "-preset" "medium" "-global_quality" "$GQ_QSV" "-pix_fmt" "yuv420p"); fi
+        if [ "$GPU_TYPE" = "vaapi" ]; then VCODEC_OPTS=("-c:v" "h264_vaapi" "-rc_mode" "CQP" "-qp" "$QP_VA"); GLOBAL_OPTS+=("-vaapi_device" "/dev/dri/renderD128" "-vf" "format=nv12,hwupload"); fi
     else
         # DEFAULT CPU H264
-        VCODEC_OPTS="-c:v libx264 -crf $CRF_CPU -preset medium"
+        VCODEC_OPTS=("-c:v" "libx264" "-crf" "$CRF_CPU" "-preset" "medium")
     fi
 fi
 
@@ -488,38 +518,39 @@ fi
 for f in "$@"; do
     FILE_TAG="$TAG"
     # Calculate FPS if speed adjustment is active
-    FPS_ARG=""
+    # Calculate FPS if speed adjustment is active
+    FPS_ARG=()
     if [ -n "$SPEED_VAL" ]; then
         IN_FPS=$(ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=noprint_wrappers=1:nokey=1 "$f")
         if [ -n "$IN_FPS" ]; then
-            FPS_ARG="-r $IN_FPS"
+            FPS_ARG=("-r" "$IN_FPS")
             _wizard_log "Detecting FPS: $IN_FPS for $f"
         fi
     fi
 
     # Subtitle Logic
     SUB_FILTER=""
-    SUB_MAPPING=""
+    SUB_MAPPING=()
     if [ "$HAS_SUBS" = true ]; then
         SRT_FILE="${f%.*}.srt"
         if [ -f "$SRT_FILE" ]; then
             if [ "$SUB_TYPE" = "burn" ]; then
                 # Burn-in: Force style for readability
                 # Escape the path for filter: colon must be escaped
-                ESC_SRT=$(echo "$SRT_FILE" | sed 's/:/\\:/g')
+                ESC_SRT=$(echo "$SRT_FILE" | sed "s/:/\\\\:/g")
                 SUB_FILTER="subtitles='$ESC_SRT':force_style='Fontsize=24,BorderStyle=3,Outline=2'"
             elif [ "$SUB_TYPE" = "mux" ]; then
                 # Mux: Add input and map it
-                SUB_MAPPING="-i \"$SRT_FILE\" -c:s mov_text -metadata:s:s:0 language=eng"
+                SUB_MAPPING=("-i" "$SRT_FILE" "-c:s" "mov_text" "-metadata:s:s:0" "language=eng")
                 # If output is MKV, use srt codec, else mov_text for MP4
                 if [ "$EXT" = "webm" ] || [ "$EXT" = "mkv" ]; then
-                     SUB_MAPPING="-i \"$SRT_FILE\" -c:s srt -metadata:s:s:0 language=eng"
+                     SUB_MAPPING=("-i" "$SRT_FILE" "-c:s" "srt" "-metadata:s:s:0" "language=eng")
                 fi
             fi
         fi
     fi
 
-    CMD_FILTERS=""
+    CMD_FILTERS=()
     # Combine VF_CHAIN and SUB_FILTER
     # Subtitles must be last usually, esp if burning into video
     FULL_VF="$VF_CHAIN"
@@ -527,17 +558,17 @@ for f in "$@"; do
         if [ -z "$FULL_VF" ]; then FULL_VF="$SUB_FILTER"; else FULL_VF="$FULL_VF,$SUB_FILTER"; fi
     fi
     
-    if [ -n "$FULL_VF" ]; then CMD_FILTERS="-vf \"$FULL_VF\""; fi
+    if [ -n "$FULL_VF" ]; then CMD_FILTERS=("-vf" "$FULL_VF"); fi
     
     # Handle Audio flags correctly
-    CURRENT_ACORE=""
+    CURRENT_ACORE=()
     if [ "$REMOVE_AUDIO" = true ]; then
-        CURRENT_ACORE="-an"
+        CURRENT_ACORE=("-an")
     else
         if [ -n "$AF_CHAIN" ] && [ "$IS_audio_only" = false ]; then 
-            CURRENT_ACORE="-af \"$AF_CHAIN\" $ACODEC_OPTS $AUDIO_OPTS"
+            CURRENT_ACORE=("-af" "$AF_CHAIN" "${ACODEC_OPTS[@]}" "${AUDIO_OPTS[@]}")
         else
-            CURRENT_ACORE="$ACODEC_OPTS $AUDIO_OPTS"
+            CURRENT_ACORE=("${ACODEC_OPTS[@]}" "${AUDIO_OPTS[@]}")
         fi
     fi
     
@@ -560,7 +591,7 @@ for f in "$@"; do
         if [ -z "$DUR" ] || [ "$DUR" -le 0 ]; then DUR=1; fi
         
         ABR=192
-        if [[ "$ACODEC_OPTS" == *"-b:a 128k"* ]]; then ABR=128; fi
+        if [[ "${ACODEC_OPTS[*]}" == *"-b:a 128k"* ]]; then ABR=128; fi
         if [ "$REMOVE_AUDIO" = true ]; then ABR=0; fi
         
         TOTAL_BR=$(echo "($TARGET_MB * 8192) / $DUR" | bc)
@@ -570,50 +601,51 @@ for f in "$@"; do
             zenity --warning --text="Target size ($TARGET_MB MB) is too small for this duration ($DUR sec).\n\nCalculated Video Bitrate: ${V_BR}k."
         fi
         
-        PASS_LOG="/tmp/ffmpeg2pass-$$"
+        # Use safer get_sys_temp which now returns a real file path (but we will use it as a prefix/base)
+        PASS_LOG=$(get_sys_temp "ffmpeg2pass")
+        rm -f "$PASS_LOG" # We want the prefix
         
         # STRIP QUALITY FLAGS FOR 2-PASS (Bitrate Priority)
         # We remove -crf, -cq, -global_quality, -qp
-        VCODEC_2PASS=$(echo "$VCODEC_OPTS" | sed -E 's/-crf [0-9]+//g; s/-cq [0-9]+//g; s/-global_quality [0-9]+//g; s/-qp [0-9]+//g')
+        VCODEC_2PASS=()
+        for opt in "${VCODEC_OPTS[@]}"; do
+            [[ "$opt" =~ ^(-crf|-cq|-global_quality|-qp)$ ]] && skip_next=true && continue
+            if [ "${skip_next:-false}" = "true" ]; then skip_next=false; continue; fi
+            VCODEC_2PASS+=("$opt")
+        done
         
         # PASS 1 (Fast & Silent)
         echo "# Pass 1: Analyzing..."
-        CMD1="ffmpeg -y -nostdin $INPUT_OPTS -i \"$f\" $SUB_MAPPING $CMD_FILTERS $VCODEC_2PASS -b:v ${V_BR}k -pass 1 -passlogfile \"$PASS_LOG\" -preset fast -an -f null /dev/null"
-        _wizard_log "Pass 1: $CMD1"
-        eval $CMD1
+        _wizard_log "Pass 1 command: ffmpeg -y -nostdin ${INPUT_OPTS[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_2PASS[@]} -b:v ${V_BR}k -pass 1 -passlogfile $PASS_LOG -preset fast -an -f null /dev/null"
+        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_2PASS[@]}" -b:v "${V_BR}k" -pass 1 -passlogfile "$PASS_LOG" -preset fast -an -f null /dev/null
         
         # PASS 2 (Actual Encode)
         echo "# Pass 2: Finalizing size..."
-        CMD2="ffmpeg -y -nostdin $INPUT_OPTS -i \"$f\" $SUB_MAPPING $CMD_FILTERS $VCODEC_2PASS -b:v ${V_BR}k -pass 2 -passlogfile \"$PASS_LOG\" $CURRENT_ACORE $FPS_ARG $GLOBAL_OPTS \"$OUT_FILE\""
-        _wizard_log "Pass 2: $CMD2"
-        eval $CMD2
+        _wizard_log "Pass 2 command: ffmpeg -y -nostdin ${INPUT_OPTS[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_2PASS[@]} -b:v ${V_BR}k -pass 2 -passlogfile $PASS_LOG ${CURRENT_ACORE[@]} ${FPS_ARG[@]} ${GLOBAL_OPTS[@]} $OUT_FILE"
+        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_2PASS[@]}" -b:v "${V_BR}k" -pass 2 -passlogfile "$PASS_LOG" "${CURRENT_ACORE[@]}" "${FPS_ARG[@]}" "${GLOBAL_OPTS[@]}" "$OUT_FILE"
         
         STATUS=$?
         rm -f "${PASS_LOG}"*
     elif [ "$IS_gif" = true ]; then
-        PALETTE="/tmp/palette_$(basename "$f").png"
+        PALETTE=$(get_sys_temp "palette")
+        PALETTE="${PALETTE}.png"
         _wizard_log "Generating palette..."
         VF_GIF="palettegen"
         [ -n "$FULL_VF" ] && VF_GIF="$FULL_VF,palettegen"
-        CMD1="ffmpeg -y -nostdin $INPUT_OPTS -i \"$f\" -vf \"$VF_GIF\" \"$PALETTE\""
-        _wizard_log "$CMD1"
-        eval $CMD1
         
+        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" -vf "$VF_GIF" "$PALETTE"
         _wizard_log "Creating GIF..."
         LAVFI_GIF="[0:v][1:v] paletteuse"
         [ -n "$FULL_VF" ] && LAVFI_GIF="$FULL_VF [x]; [x][1:v] paletteuse"
-        CMD2="ffmpeg -y -nostdin $INPUT_OPTS -i \"$f\" -i \"$PALETTE\" -lavfi \"$LAVFI_GIF\" $FPS_ARG \"$OUT_FILE\""
-        _wizard_log "$CMD2"
-        eval $CMD2
+        
+        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" -i "$PALETTE" -lavfi "$LAVFI_GIF" "${FPS_ARG[@]}" "$OUT_FILE"
         rm "$PALETTE"
         STATUS=$?
 
     else
         # Standard Video/Audio (CRF/CQ Mode)
-        # Note: SUB_MAPPING has -i inside it, so it essentially adds a second input if muxing
-        CMD="ffmpeg -y -nostdin $INPUT_OPTS -i \"$f\" $SUB_MAPPING $CMD_FILTERS $VCODEC_OPTS $CURRENT_ACORE $FPS_ARG $GLOBAL_OPTS \"$OUT_FILE\""
-        _wizard_log "$CMD"
-        eval $CMD
+        _wizard_log "Executing: ffmpeg -y -nostdin ${INPUT_OPTS[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_OPTS[@]} ${CURRENT_ACORE[@]} ${FPS_ARG[@]} ${GLOBAL_OPTS[@]} $OUT_FILE"
+        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_OPTS[@]}" "${CURRENT_ACORE[@]}" "${FPS_ARG[@]}" "${GLOBAL_OPTS[@]}" "$OUT_FILE"
         STATUS=$?
     fi
     
@@ -623,22 +655,23 @@ for f in "$@"; do
         echo "# GPU failed. Retrying with CPU..." # Update progress bar
         
         # Reset VCODEC to safe CPU defaults
-        if [[ "$VCODEC_OPTS" == *"hevc"* ]]; then
-             VCODEC_OPTS="-c:v libx265 -crf 28 -preset medium"
-        elif [[ "$VCODEC_OPTS" == *"h264"* ]]; then
-             VCODEC_OPTS="-c:v libx264 -crf 23 -preset medium"
+        if [[ "${VCODEC_OPTS[*]}" == *"hevc"* ]]; then
+             VCODEC_OPTS=("-c:v" "libx265" "-crf" "28" "-preset" "medium")
+        elif [[ "${VCODEC_OPTS[*]}" == *"h264"* ]]; then
+             VCODEC_OPTS=("-c:v" "libx264" "-crf" "23" "-preset" "medium")
         fi
         # Clear VAAPI specific global opts if any
-        if [ "$GPU_TYPE" = "vaapi" ]; then GLOBAL_OPTS="-movflags +faststart -map_metadata -1"; fi
+        if [ "$GPU_TYPE" = "vaapi" ]; then GLOBAL_OPTS=("-movflags" "+faststart" "-map_metadata" "-1"); fi
 
-        CMD_RETRY="ffmpeg -y $INPUT_OPTS -i \"$f\" $SUB_MAPPING $CMD_FILTERS $VCODEC_OPTS $CURRENT_ACORE $FPS_ARG $GLOBAL_OPTS \"$OUT_FILE\""
-        _wizard_log "$CMD_RETRY"
-        eval $CMD_RETRY
+        _wizard_log "Retrying with: ffmpeg -y ${INPUT_OPTS[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_OPTS[@]} ${CURRENT_ACORE[@]} ${FPS_ARG[@]} ${GLOBAL_OPTS[@]} $OUT_FILE"
+        ffmpeg -y "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_OPTS[@]}" "${CURRENT_ACORE[@]}" "${FPS_ARG[@]}" "${GLOBAL_OPTS[@]}" "$OUT_FILE"
         STATUS=$?
     fi
 
     if [ $STATUS -ne 0 ]; then
         _wizard_log "ERROR: Failed on file $f"
+        # Ensure LOG_FILE exists before trying to read it
+        [ ! -f "$LOG_FILE" ] && echo "FFmpeg failed. No log available." > "$LOG_FILE"
         zenity --error --text="FFmpeg failed on $(basename "$f").\nCheck logs details." --ok-label="Close" --extra-button="Details" --title="Error" < "$LOG_FILE"
     fi
 done
