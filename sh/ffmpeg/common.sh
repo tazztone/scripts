@@ -78,8 +78,8 @@ validate_time_format() {
         local seconds=${BASH_REMATCH[3]}
         local fraction=${BASH_REMATCH[4]:-}
         
-        # Convert to seconds
-        local total_seconds=$((hours * 3600 + minutes * 60 + seconds))
+        # Convert to seconds (force base 10 to avoid octal errors)
+        local total_seconds=$((10#$hours * 3600 + 10#$minutes * 60 + 10#$seconds))
         echo "${total_seconds}${fraction}"
         return 0
     fi
@@ -90,8 +90,8 @@ validate_time_format() {
         local seconds=${BASH_REMATCH[2]}
         local fraction=${BASH_REMATCH[3]:-}
         
-        # Convert to seconds
-        local total_seconds=$((minutes * 60 + seconds))
+        # Convert to seconds (force base 10 to avoid octal errors)
+        local total_seconds=$((10#$minutes * 60 + 10#$seconds))
         echo "${total_seconds}${fraction}"
         return 0
     fi

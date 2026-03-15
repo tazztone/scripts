@@ -507,8 +507,9 @@ execute_trimming() {
     # Add duration/end time if specified
     if [ -n "$end_time" ]; then
         if [ -n "$start_time" ]; then
-            # Calculate duration
-            local duration=$((end_time - start_time))
+            # Calculate duration using bc and printf for floating point support with leading zero
+            local duration=$(echo "$end_time - $start_time" | bc -l)
+            duration=$(printf "%.3f" "$duration")
             cmd="$cmd -t $duration"
         else
             cmd="$cmd -t $end_time"

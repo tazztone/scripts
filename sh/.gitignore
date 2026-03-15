@@ -1,0 +1,22 @@
+# Media artifacts (likely from tests)
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.mp4
+*.mkv
+*.mov
+*.webm
+*.gif
+*.srt
+
+# Test reports and logs
+*.log
+testing/output/
+
+# Symlinks/Workarounds for testing
+imagemagick/im_toolbox.sh
+
+# OS/System files
+.DS_Store
+Thumbs.db

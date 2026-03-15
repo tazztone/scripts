@@ -342,7 +342,7 @@ for opt in "${CHOICE_ARR[@]}"; do
     case "$opt" in
         # --- CROP (PRIORITY 1) ---
         Canvas:*)
-            VAL=$(echo "$opt" | cut -d':' -f2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            VAL=$(echo "$opt" | cut -d':' -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
             case "$VAL" in
                *Square*) 
                    CROP_ARGS+=("-set" "option:distort:viewport" "%[fx:min(w,h)]x%[fx:min(w,h)]" "-distort" "SRT" "0" "+repage")
@@ -363,11 +363,11 @@ for opt in "${CHOICE_ARR[@]}"; do
                        TAG="${TAG}_crop"
                    fi
                    ;;
-               *"2x Grid"*) IM_ARGS+=("-tile" "2x" "-geometry" "+0+0"); TAG="${TAG}_grid2x"; DO_MONTAGE=true ;;
-               *"3x Grid"*) IM_ARGS+=("-tile" "3x" "-geometry" "+0+0"); TAG="${TAG}_grid3x"; DO_MONTAGE=true ;;
-               *"Single Row"*) IM_ARGS+=("-tile" "x1" "-geometry" "+0+0" "-background" "none"); TAG="${TAG}_row"; DO_MONTAGE=true ;;
-               *"Single Column"*) IM_ARGS+=("-tile" "1x" "-geometry" "+0+0" "-background" "none"); TAG="${TAG}_col"; DO_MONTAGE=true ;;
-               *"Contact Sheet"*) IM_ARGS+=("-thumbnail" "200x200>" "-geometry" "+10+10" "-tile" "4x"); TAG="${TAG}_sheet"; DO_MONTAGE=true ;;
+                *2*x*Grid*) IM_ARGS+=("-tile" "2x" "-geometry" "+0+0"); TAG="${TAG}_grid2x"; DO_MONTAGE=true ;;
+                *3*x*Grid*) IM_ARGS+=("-tile" "3x" "-geometry" "+0+0"); TAG="${TAG}_grid3x"; DO_MONTAGE=true ;;
+                *Row*) IM_ARGS+=("-tile" "x1" "-geometry" "+0+0" "-background" "none"); TAG="${TAG}_row"; DO_MONTAGE=true ;;
+                *Column*) IM_ARGS+=("-tile" "1x" "-geometry" "+0+0" "-background" "none"); TAG="${TAG}_col"; DO_MONTAGE=true ;;
+                *Sheet*) IM_ARGS+=("-thumbnail" "200x200>" "-geometry" "+10+10" "-tile" "4x"); TAG="${TAG}_sheet"; DO_MONTAGE=true ;;
             esac
             ;;
         
@@ -379,29 +379,29 @@ for opt in "${CHOICE_ARR[@]}"; do
         "Scale: 50%")   SCALE_ARGS+=("-resize" "50%"); TAG="${TAG}_half" ;;
         
         CustomGeometry:*)
-            VAL=$(echo "$opt" | cut -d':' -f2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            VAL=$(echo "$opt" | cut -d':' -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
             [ -n "$VAL" ] && { SCALE_ARGS+=("-resize" "$VAL"); TAG="${TAG}_${VAL}"; }
             ;;
 
         # --- EFFECTS (PRIORITY 3) ---
         Effect:*)
-            VAL=$(echo "$opt" | cut -d':' -f2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            VAL=$(echo "$opt" | cut -d':' -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
             case "$VAL" in
-                *"Rotate 90 CW"*)  EFFECT_ARGS+=("-rotate" "90"); TAG="${TAG}_90cw" ;;
-                *"Rotate 90 CCW"*) EFFECT_ARGS+=("-rotate" "-90"); TAG="${TAG}_90ccw" ;;
-                *"Flip Horizontal"*) EFFECT_ARGS+=("-flop"); TAG="${TAG}_flop" ;;
-                *"Black & White"*) EFFECT_ARGS+=("-colorspace" "gray"); TAG="${TAG}_bw" ;;
-                "Flatten") EFFECT_ARGS+=("-background" "white" "-flatten"); TAG="${TAG}_flat" ;;
-                "sRGB") EFFECT_ARGS+=("-colorspace" "sRGB"); TAG="${TAG}_srgb" ;;
-                "Mute") DO_MUTE=true ;;
+                *Rotate*90*CW*)  EFFECT_ARGS+=("-rotate" "90"); TAG="${TAG}_90cw" ;;
+                *Rotate*90*CCW*) EFFECT_ARGS+=("-rotate" "-90"); TAG="${TAG}_90ccw" ;;
+                *Flip*Horizontal*) EFFECT_ARGS+=("-flop"); TAG="${TAG}_flop" ;;
+                *Black*White*)    EFFECT_ARGS+=("-colorspace" "gray"); TAG="${TAG}_bw" ;;
+                *Flatten*)         EFFECT_ARGS+=("-background" "white" "-layers" "flatten"); TAG="${TAG}_flat" ;;
+                *sRGB*)            EFFECT_ARGS+=("-colorspace" "sRGB"); TAG="${TAG}_srgb" ;;
+                *Mute*)            DO_MUTE=true ;;
             esac
             ;;
         Branding:*)
-            VAL=$(echo "$opt" | cut -d':' -f2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            VAL=$(echo "$opt" | cut -d':' -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
             if [[ "$VAL" == *"Text Annotation"* ]]; then DO_TEXT_ANNOTATION=true; fi
             ;;
         BrandingPayload:*)
-            BRAND_PAYLOAD=$(echo "$opt" | cut -d':' -f2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            BRAND_PAYLOAD=$(echo "$opt" | cut -d':' -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
             if [ "$DO_TEXT_ANNOTATION" = true ]; then
                 EFFECT_ARGS+=("-gravity" "South" "-pointsize" "24" "-annotate" "+0+20" "$BRAND_PAYLOAD")
                 TAG="${TAG}_text"
@@ -414,7 +414,7 @@ for opt in "${CHOICE_ARR[@]}"; do
             OUT_EXT=$(echo "$opt" | cut -d':' -f2- | cut -d'|' -f1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | tr '[:upper:]' '[:lower:]')
             ;;
         Optimize:*)
-            VAL=$(echo "$opt" | cut -d':' -f2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            VAL=$(echo "$opt" | cut -d':' -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
             if [[ "$VAL" == *"Web Ready"* ]]; then
                 FORMAT_ARGS+=("-quality" "85" "-strip"); TAG="${TAG}_web"
             elif [[ "$VAL" == *"Max Compression"* ]]; then
