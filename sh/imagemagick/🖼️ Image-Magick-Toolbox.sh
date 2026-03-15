@@ -46,6 +46,53 @@ analyze_media() {
     fi
 }
 
+get_recipe_summary() {
+    local choices="$1"
+    local summary=""
+    local IFS='|'
+    read -ra ARR <<< "$choices"
+    for opt in "${ARR[@]}"; do
+        opt=$(echo "$opt" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        case "$opt" in
+            Scale:*)
+                local val="${opt#Scale: }"
+                summary+="${val// /}_"
+                ;;
+            CustomGeometry:*)
+                local val="${opt#CustomGeometry:}"
+                summary+="scale${val// /}_"
+                ;;
+            Format:*)
+                local val="${opt#Format: }"
+                summary+="$(echo "$val" | tr '[:upper:]' '[:lower:]')_"
+                ;;
+            Optimize:*)
+                local val="${opt#Optimize: }"
+                if [[ "$val" == *"Web Ready"* ]]; then summary+="q85_";
+                elif [[ "$val" == *"Max Compression"* ]]; then summary+="min_";
+                elif [[ "$val" == *"Archive"* ]]; then summary+="arch_";
+                else summary+="opt_"; fi
+                ;;
+            Effect:*)
+                local val="${opt#Effect: }"
+                case "$val" in
+                    "Black & White") summary+="bw_"; ;;
+                    "Rotate 90 CW") summary+="90cw_"; ;;
+                    "Rotate 90 CCW") summary+="90ccw_"; ;;
+                    "Flip Horizontal") summary+="flop_"; ;;
+                    *) summary+="$(echo "$val" | tr '[:upper:]' '[:lower:]' | tr ' ' '_')_"; ;;
+                esac
+                ;;
+            Canvas:*)
+                summary+="crop_"
+                ;;
+        esac
+    done
+    summary="${summary%_}"
+    summary="${summary// /}" # Final sweep
+    echo "${summary:-My-Recipe}"
+}
+
 DO_MUTE=false
 DO_TEXT_ANNOTATION=false
 
@@ -253,7 +300,8 @@ show_main_menu() {
             
             # Handle inline save if requested
             if [ "$DO_SAVE" = true ]; then
-                 prompt_save_preset "$PRESET_FILE" "$final_choices" "My-Recipe" "true"
+                 local dyn_name=$(get_recipe_summary "$final_choices")
+                 prompt_save_preset "$PRESET_FILE" "$final_choices" "$dyn_name" "true"
             fi
             
             echo "$final_choices"
