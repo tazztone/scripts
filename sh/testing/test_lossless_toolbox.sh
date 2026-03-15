@@ -17,6 +17,7 @@ run_test "ffmpeg/🔒 Lossless-Operations-Toolbox.sh" "vcodec=h264" "$TEST_DATA/
 
 # Test 2: Trim (Lossless)
 echo "Test 2: Lossless Trim"
+# Note: 0.1s tolerance handles keyframe-alignment in lossless trims
 cat <<EOF > /tmp/zenity_responses
 Trim Video
 00:00:00|00:00:00.5
@@ -51,6 +52,7 @@ run_test "ffmpeg/🔒 Lossless-Operations-Toolbox.sh" "vcodec=h264,title=EMPTY" 
 
 # Test 6: Merge Videos
 echo "Test 6: Merge Videos"
+rm -f "$TEST_DATA/merged.mp4"
 cp "$TEST_DATA/input.mp4" "$TEST_DATA/input2.mp4"
 cat <<EOF > /tmp/zenity_responses
 Merge Videos
