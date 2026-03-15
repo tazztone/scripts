@@ -129,17 +129,24 @@ _wizard_parse_result() {
             done
             RESULT="${CLEAN_RESULT%|}"
         else
-            # --- SELECTION FALLBACK (Double-click/Enter) ---
-            # If we don't see TRUE/FALSE at the start, Zenity likely returned 
-            # the raw row data: [Icon Name|Desc|ID|RawID]
-            # We must only extract ONE ID to prevent tripling.
-            # Usually RawID is at index 3 in this mode.
-            local VAL="${ALL_PARTS[3]}"
-            if [[ -n "$VAL" && "$VAL" != "---" && "$VAL" != "═══" ]]; then
-                RESULT="$VAL"
+            # Fix 2: Refined Fallback parsing
+            # Zenity --print-column=ALL returns 4 columns per selected row.
+            # Columns: [Icon Name], [Description], [ID], [RawID]
+            # We must only extract the RawID (index 3+n*4)
+            local COLS=4
+            if (( ${#ALL_PARTS[@]} % COLS == 0 )); then
+                for (( i=0; i<${#ALL_PARTS[@]}; i+=COLS )); do
+                    local VAL="${ALL_PARTS[i+3]}"
+                    [[ -n "$VAL" && "$VAL" != "---" && "$VAL" != "═══" ]] && CLEAN_RESULT+="$VAL|"
+                done
             else
-                RESULT=""
+                # True fallback if column count is weird
+                for part in "${ALL_PARTS[@]}"; do
+                    part=$(echo "$part" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+                    [[ -n "$part" && "$part" != "---" && "$part" != "═══" ]] && CLEAN_RESULT+="$part|"
+                done
             fi
+            RESULT="${CLEAN_RESULT%|}"
         fi
     elif [[ "$RESULT" =~ ^(TRUE|FALSE|true|false)$ ]]; then
         RESULT=""
