@@ -73,5 +73,44 @@ Scale / Resize
 EOF
 run_test "ffmpeg/🧰 Universal-Toolbox.sh" "format=gif" "$TEST_DATA/src.mp4"
 
+# 9. Speed Change (2x Fast)
+echo "9. Testing Speed Change (2x Fast)"
+cat <<EOF > /tmp/zenity_responses
+Speed Control
+2x (Fast)|| (Inactive)|| (Inactive)|No Change||| (Inactive)| (Inactive)|Medium Default||Auto/MP4|None (CPU Only)
+EOF
+run_test "ffmpeg/🧰 Universal-Toolbox.sh" "duration=1.0" "$TEST_DATA/src.mp4"
+
+# 10. Hardware Encoding Mock (NVENC)
+echo "10. Testing Hardware Encoding Mock (NVENC)"
+# Mock GPU cache
+mkdir -p "/tmp"
+GPU_CACHE="/tmp/scripts-sh-gpu-cache-$(id -u)"
+echo "nvenc" > "$GPU_CACHE"
+cat <<EOF > /tmp/zenity_responses
+Scale / Resize
+ (Inactive)||720p|| (Inactive)|No Change||| (Inactive)| (Inactive)|Medium Default||H.265|Use NVENC (Nvidia)
+EOF
+run_test "ffmpeg/🧰 Universal-Toolbox.sh" "vcodec=hevc,tags=_nvenc" "$TEST_DATA/src.mp4"
+rm "$GPU_CACHE"
+
+# 11. Multi-file Processing
+echo "11. Testing Multi-file Processing"
+cp "$TEST_DATA/src.mp4" "$TEST_DATA/src_another.mp4"
+cat <<EOF > /tmp/zenity_responses
+Scale / Resize
+ (Inactive)||480p|| (Inactive)|No Change||| (Inactive)| (Inactive)|Medium Default||Auto/MP4|None (CPU Only)
+EOF
+# run_test normally picks the newest output. For multi-file, it should run and produce 2 files.
+# lib_test.sh's run_test deletes non-source files before starting, so we should be good.
+run_test "ffmpeg/🧰 Universal-Toolbox.sh" "width=854" "$TEST_DATA/src.mp4" "$TEST_DATA/src_another.mp4"
+# Check if second file exists
+if [ -f "$TEST_DATA/src_another_480p.mp4" ]; then
+    log_pass "Multi-file processing: second output exists"
+else
+    log_fail "Multi-file processing: second output missing"
+fi
+rm "$TEST_DATA/src_another.mp4"
+
 unset ZENITY_LIST_RESPONSE
 echo -e "\n${GREEN}Extended Universal Toolbox Tests Finished!${NC}"

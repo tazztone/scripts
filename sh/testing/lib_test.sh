@@ -92,7 +92,10 @@ if [ -n "$ZENITY_MOCK_EXIT_CODE" ]; then exit "$ZENITY_MOCK_EXIT_CODE"; fi
 case "$ARGS" in
     *--scale*) echo "1280" ;;
     *--entry*) echo "9" ;;
-    *--file-selection*) echo "/tmp/scripts_test_data/test.srt" ;;
+    *--file-selection*) 
+        if get_queue_response; then exit 0; fi
+        echo "/tmp/scripts_test_data/test.srt"
+        ;;
     *--progress*) 
         # For progress bars, we SHOULD NOT consume the mock response queue
         # as the progress bar is usually secondary/informative
@@ -109,6 +112,12 @@ EOF
     echo -n "" > /tmp/zenity_call_log.txt
     chmod +x "$MOCK_BIN/zenity"
     export PATH="$MOCK_BIN:$PATH"
+}
+
+cleanup_test_data() {
+    log_info "Cleaning up temporary test data..."
+    rm -f /tmp/test_trim_*.mp4 /tmp/test_copy_*.mp4 /tmp/test_meta_*.mp4 /tmp/test_stream_*.mp4 /tmp/test_rotation_*.mp4
+    rm -f /tmp/zenity_responses /tmp/zenity_call_log.txt
 }
 
 # --- Helper Functions ---
@@ -172,9 +181,48 @@ validate_media() {
                 [[ -n "$a_streams" ]] && { log_fail "Audio stream found, expected none"; failed=1; }
                 ;;
             fps)
-                local fps=$(ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=noprint_wrappers=1:nokey=1 "$file")
-                fps=$(echo "scale=0; $fps" | bc -l)
-                [[ "$fps" != "$val" ]] && { log_fail "FPS mismatch: expected $val, got $fps"; failed=1; }
+                local fps_raw=$(ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=noprint_wrappers=1:nokey=1 "$file")
+                # Handle fraction like 30000/1001
+                local fps=$(echo "scale=2; $fps_raw" | bc -l)
+                # Round to nearest integer for simple comparison if val is integer
+                if [[ "$val" =~ ^[0-9]+$ ]]; then
+                    fps=$(printf "%.0f" "$fps")
+                fi
+                [[ "$fps" != "$val" ]] && { log_fail "FPS mismatch: expected $val, got $fps (raw: $fps_raw)"; failed=1; }
+                ;;
+            duration)
+                local dur=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file")
+                # Allow 0.1s tolerance
+                local diff=$(echo "$dur - $val" | bc -l | sed 's/-//')
+                if (( $(echo "$diff > 0.1" | bc -l) )); then
+                    log_fail "Duration mismatch: expected $val, got $dur (diff: $diff)"; failed=1
+                fi
+                ;;
+            bitrate)
+                local br=$(ffprobe -v error -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 "$file")
+                local br_kbps=$((br / 1000))
+                # Allow 10% tolerance
+                local lower=$((val * 90 / 100))
+                local upper=$((val * 110 / 100))
+                if [ "$br_kbps" -lt "$lower" ] || [ "$br_kbps" -gt "$upper" ]; then
+                    log_fail "Bitrate outside 10% tolerance: expected ~${val}k, got ${br_kbps}k"; failed=1
+                fi
+                ;;
+            subtitle_stream)
+                local s_streams=$(ffprobe -v error -select_streams s -show_entries stream=index -of default=noprint_wrappers=1:nokey=1 "$file" | wc -l)
+                [[ "$s_streams" -ne "$val" ]] && { log_fail "Subtitle stream count mismatch: expected $val, got $s_streams"; failed=1; }
+                ;;
+            has_audio)
+                local a_streams=$(ffprobe -v error -select_streams a -show_entries stream=index -of default=noprint_wrappers=1:nokey=1 "$file")
+                [[ -z "$a_streams" ]] && { log_fail "Expected audio stream, but none found"; failed=1; }
+                ;;
+            file_size_lt)
+                local size=$(stat -c%s "$file")
+                [[ "$size" -ge "$val" ]] && { log_fail "File size too large: expected < $val, got $size"; failed=1; }
+                ;;
+            file_size_gt)
+                local size=$(stat -c%s "$file")
+                [[ "$size" -le "$val" ]] && { log_fail "File size too small: expected > $val, got $size"; failed=1; }
                 ;;
             format)
                 if command -v magick &>/dev/null; then
@@ -202,15 +250,26 @@ run_test() {
     local validation_rules="$2"
     local input_files=("${@:3}")
     log_info "Testing: $(basename "$script_path") with [${input_files[*]}]"
-    find "$TEST_DATA" -type f -not \( -name "src.mp4" -o -name "src.jpg" -o -name "test.srt" \) -delete
+    
+    local input_bases=()
+    for f in "${input_files[@]}"; do input_bases+=("$(basename "$f")"); done
+
+    # Clean only non-source and non-input files
+    for f in "$TEST_DATA"/*; do
+        [ -e "$f" ] || continue
+        local b=$(basename "$f")
+        [[ "$b" == "src.mp4" || "$b" == "src.jpg" || "$b" == "test.srt" ]] && continue
+        local is_input=0
+        for ib in "${input_bases[@]}"; do [[ "$b" == "$ib" ]] && is_input=1 && break; done
+        [[ "$is_input" -eq 1 ]] && continue
+        rm -rf "$f"
+    done
     
     local before=$(mktemp)
     ls -1 "$TEST_DATA" | sort > "$before"
     local first_input="${input_files[0]}"
     local input_dir=$(dirname "$first_input")
     local abs_script_path=$(readlink -f "$script_path")
-    local input_bases=()
-    for f in "${input_files[@]}"; do input_bases+=("$(basename "$f")"); done
 
     ( cd "$input_dir" && timeout 60s bash "$abs_script_path" "${input_bases[@]}" )
     local exit_code=$?
@@ -225,9 +284,27 @@ run_test() {
         return 1
     fi
 
-    local newest=$(echo "$new_files" | tail -n 1)
+    # Pick the most recently modified file among new ones
+    local newest=""
+    local max_mtime=0
+    while IFS= read -r f; do
+        [ -z "$f" ] && continue
+        local fpath="$TEST_DATA/$f"
+        [ -e "$fpath" ] || continue
+        local mtime=$(stat -c %Y "$fpath" 2>/dev/null || echo 0)
+        if [ "$mtime" -ge "$max_mtime" ]; then
+            max_mtime=$mtime
+            newest="$f"
+        fi
+    done <<< "$new_files"
+
+    if [ -z "$newest" ]; then
+        log_fail "Could not identify newest output file"
+        return 1
+    fi
+
     local output_file="$TEST_DATA/$newest"
-    log_info "Detected output: $newest"
+    log_info "Detected newest output: $newest"
 
     if [ -n "$validation_rules" ]; then
         validate_media "$output_file" "$validation_rules"

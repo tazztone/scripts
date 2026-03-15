@@ -71,3 +71,18 @@ Before showing the menu, run `ffprobe` or `identify` to build a **Media Profile*
 
 ## 🧪 Experimental
 - [ ] **AI Tagging**: Local LLM description/renaming.
+
+---
+
+## 🏗️ Phase 5: Quality & Test Maturity (Future)
+*Goal: Address technical debt and close the remaining testing gaps.*
+
+- [ ] **Unified Lossless Testing**: Migration of `test_lossless_toolbox.sh` to use end-to-end `validate_media` rules (Closing the validation gap).
+- [ ] **Missing Operation Coverage**: 
+    - [ ] Added tests for subtitle burn-in/embed tasks.
+    - [ ] Hardware encoding (NVENC/QSV) verification suite.
+    - [ ] Image watermark and custom-sizing validation.
+- [ ] **Test Engine Hardening**: 
+    - [ ] Refactor `run_test` output detection for better robustness.
+    - [ ] Implement tighter duration tolerances (±0.1s) for lossless verification.
+    - [ ] Fix FPS rounding issues in `validate_media`.
