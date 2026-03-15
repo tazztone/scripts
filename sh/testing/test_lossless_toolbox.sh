@@ -46,7 +46,8 @@ cat <<EOF > /tmp/zenity_responses
 Edit Metadata
 clean_metadata
 EOF
-run_test "ffmpeg/🔒 Lossless-Operations-Toolbox.sh" "vcodec=h264" "$TEST_DATA/input.mp4" || FAILED=$((FAILED+1))
+run_test "ffmpeg/🔒 Lossless-Operations-Toolbox.sh" "vcodec=h264,title=EMPTY" "$TEST_DATA/input.mp4" || FAILED=$((FAILED+1))
+
 
 # Test 6: Merge Videos
 echo "Test 6: Merge Videos"

@@ -43,6 +43,7 @@ rm "$TEST_DATA/input.srt"
 
 # 3. CLI Preset Test
 echo "Test 3: CLI Preset"
+find "$TEST_DATA" -name "input_*.mp4" -delete
 U_TOOLBOX="$SCRIPT_DIR/../ffmpeg/🧰 Universal-Toolbox.sh"
 mkdir -p "$HOME/.config/scripts-sh/ffmpeg"
 echo "TestPreset|Speed: 2x (Fast)|Scale: 720p|Quality: Medium|Remove Audio Track" > "$HOME/.config/scripts-sh/ffmpeg/presets.conf"

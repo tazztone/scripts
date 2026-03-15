@@ -124,7 +124,7 @@ validate_media() {
                 [[ -n "$v" ]] && { log_fail "Video stream found (expected none)"; failed=1; }
                 ;;
             subtitle_stream)
-                local s=$(ffprobe -v error -select_streams s -show_entries stream=index -of default=noprint_wrappers=1:nokey=1 "$file" | wc -l)
+                local s=$(ffprobe -v error -select_streams s -show_entries stream=index -of default=noprint_wrappers=1:nokey=1 "$file" | grep -c .)
                 [[ "$s" -lt "$val" ]] && { log_fail "Subtitle streams mismatch: expected >= $val, got $s"; failed=1; }
                 ;;
             bitrate)
@@ -132,6 +132,13 @@ validate_media() {
                 if [[ "$b" == "N/A" ]] || [[ "$b" -eq 0 ]]; then
                      log_fail "Invalid or missing bitrate: $b"
                      failed=1
+                elif [[ "$val" =~ ^[0-9]+$ ]]; then
+                    local diff=$(awk -v b="$b" -v val="$val" 'BEGIN { diff = b - val; if (diff < 0) diff = -diff; print diff }')
+                    local threshold=$(awk -v val="$val" 'BEGIN { print val * 0.1 }')
+                    if (( $(echo "$diff > $threshold" | bc -l) )); then
+                        log_fail "Bitrate mismatch: expected approx $val, got $b (diff=$diff > $threshold)"
+                        failed=1
+                    fi
                 fi
                 ;;
             file_size_gt)
@@ -150,7 +157,11 @@ validate_media() {
                 ;;
             title)
                 local title=$(ffprobe -v error -show_entries format_tags=title -of default=noprint_wrappers=1:nokey=1 "$file")
-                [[ "$title" != *"$val"* ]] && { log_fail "Title mismatch: expected $val, got $title"; failed=1; }
+                if [[ "$val" == "EMPTY" ]]; then
+                    [[ -n "$title" ]] && { log_fail "Title not empty: got $title"; failed=1; }
+                else
+                    [[ "$title" != *"$val"* ]] && { log_fail "Title mismatch: expected $val, got $title"; failed=1; }
+                fi
                 ;;
         esac
     done

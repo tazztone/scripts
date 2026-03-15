@@ -23,6 +23,7 @@ cat <<EOF > /tmp/zenity_responses
  (Inactive)||720p||||||||Medium (CRF 23)||H.265|Use NVENC (Nvidia)
 EOF
 run_test "ffmpeg/🧰 Universal-Toolbox.sh" "vcodec=hevc,tags=_nvenc" "$TEST_DATA/input.mp4" || FAILED=1
+rm -f "/tmp/scripts-sh-gpu-cache-$(id -u)"
 
 # Test 11: Multi-file processing
 echo "Test 11: Multi-file processing"
