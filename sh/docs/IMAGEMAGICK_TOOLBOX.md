@@ -64,6 +64,7 @@ The ImageMagick Toolbox follows the principle of **"Parallel Processing + Smart 
 - **🛡️ Non-Destructive**: Always creates new files with smart naming (e.g., `image_web_sq.jpg`), never overwriting originals.
 - **📊 Progress Tracking**: Visual progress bar for batch operations with real-time feedback.
 - **🚨 Error Reporting**: Detailed error logs shown if any files fail to process.
+- **💎 Dynamic Preset Naming**: Automatically suggests descriptive names for favorites based on your selected operations (e.g., `scale128x128_jpg_q85`).
 
 ### Operation Categories
 
@@ -154,6 +155,14 @@ The toolbox processes images in a specific order to ensure optimal results:
 2. **Scale/Resize**: Applied after crop for precise sizing.
 3. **Effects**: Color corrections, rotations, etc.
 4. **Format/Optimization**: Final output format and quality.
+
+### Wizard & Parser Logic (Fix 2)
+
+The UI handles complex multi-selection parsing to ensure logical workflow execution:
+- **Intents**: Operations are grouped as "Intents" which return distinct IDs.
+- **Selective Parsing**: The parser (`common/wizard.sh`) uses a column-aware logic to extract only relevant operation IDs from Zenity's multi-column output, ignoring UI metadata (icons, descriptions).
+- **Sub-Dialog Stacking**: If multiple complex operations are selected (e.g., *Scale: Custom* and *Convert Format*), the script stacks them and triggers their respective sub-dialogs sequentially before the final processing begins.
+- **Recipe Builder**: Choices are aggregated into a pipe-separated "Recipe" string, which is used for both command building and persistent preset storage.
 
 ### Parallel Processing
 

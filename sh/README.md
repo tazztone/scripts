@@ -84,7 +84,7 @@ The project has been streamlined into **two powerful master tools** that provide
 *The Swiss Army Knife for FFmpeg. A powerful, workstation-grade tool for all operations.*
 - **0-00 🧰 Universal-Toolbox**: The ultimate one-stop shop for video editing. **[📖 Full Documentation](docs/UNIVERSAL_TOOLBOX.md)**
     - **🧙‍♂️ Guided 2-Step Wizard**:
-        1. **Unified Wizard**: Pick a starting point (Custom, Starred, or History) AND select categories (Speed, Scale, Crop, etc.) in a single, streamlined interface.
+        1. **Unified Wizard (Fix 2)**: Robust multi-selection parsing that intelligently handles complex recipes (Starred, History, and custom categories) while ignoring UI metadata.
         2. **Dashboard**: Configure everything in a single, unified window with dynamic fields.
     - **🏎️ Smart Hardware Auto-Probe**: Performs a silent 1-frame dummy encode at startup to detect and **automatically enable** NVENC (Nvidia), QSV (Intel), or VAAPI (AMD), hiding broken options.
     - **⚖️ Integrated Target Size**: Accurate 2-pass encoding to hit exact MB limits (e.g., 25MB for Discord) directly in the tool.
@@ -110,6 +110,7 @@ The project has been streamlined into **two powerful master tools** that provide
     - **⚡ Parallel Batch Processing**: Uses background jobs to process image libraries at maximum CPU speed.
     - **📱 Modern Format Support**: Automated handling of **HEIC/RAW** to sRGB JPG conversion.
     - **📐 Smart Resizing**: Aspect ratio preservation with "Fit to Height/Width" and HD presets.
+    - **💎 Dynamic Preset Naming**: Automatically suggests descriptive names for favorites based on operations (e.g., `scale128x128_jpg_q85`).
     - **📦 Format Conversion**: Instant conversion between JPG, PNG, WEBP, and TIFF with intelligent transparency handling.
     - **🚀 One-Click Optimization**: "Make Web Ready" preset (quality 85 + metadata stripping).
     - **🖼️ Canvas & Grid**: Create **2x2 / 3x3 grids** or contact sheets from selected images instantly.
