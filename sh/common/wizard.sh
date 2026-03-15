@@ -112,36 +112,38 @@ _wizard_parse_result() {
         local -a ALL_PARTS
         IFS='|' read -ra ALL_PARTS <<< "$RESULT"
         
+        # We expect a checklist return: [TRUE|Icon Name|Desc|ID|RawID|TRUE|...]
         local FIRST_UP=$(echo "${ALL_PARTS[0]}" | tr '[:lower:]' '[:upper:]')
         if [[ "$FIRST_UP" == "TRUE" || "$FIRST_UP" == "FALSE" ]]; then
-            for (( i=0; i<${#ALL_PARTS[@]}; i++ )); do
-                local ITEM="${ALL_PARTS[i]}"
-                local UP_ITEM=$(echo "$ITEM" | tr '[:lower:]' '[:upper:]')
+            # --- CHECKLIST MODE ---
+            for (( i=0; i<${#ALL_PARTS[@]}; i+=WIZARD_ROW_SIZE )); do
+                [ $i -ge ${#ALL_PARTS[@]} ] && break
+                local STATE=$(echo "${ALL_PARTS[i]}" | tr '[:lower:]' '[:upper:]')
                 
-                if [[ "$UP_ITEM" == "TRUE" ]]; then
+                if [[ "$STATE" == "TRUE" ]]; then
                     local VAL="${ALL_PARTS[i+WIZARD_COL_RAWID]}"
                     if [[ -n "$VAL" && "$VAL" != "---" && "$VAL" != "═══" ]]; then
                         CLEAN_RESULT+="$VAL|"
-                        ((i+=WIZARD_ROW_SIZE-1))
                     fi
                 fi
             done
-            
-            if [[ -z "$CLEAN_RESULT" ]]; then
-                for (( i=0; i<${#ALL_PARTS[@]}; i++ )); do
-                    local UP_ITEM=$(echo "${ALL_PARTS[i]}" | tr '[:lower:]' '[:upper:]')
-                    if [[ "$UP_ITEM" == "FALSE" ]]; then
-                        local VAL="${ALL_PARTS[i+WIZARD_COL_RAWID]}"
-                        if [[ -n "$VAL" && "$VAL" != "---" && "$VAL" != "═══" ]]; then
-                            CLEAN_RESULT+="$VAL|"
-                            break
-                        fi
-                    fi
-                done
-            fi
             RESULT="${CLEAN_RESULT%|}"
+        else
+            # --- SELECTION FALLBACK (Double-click/Enter) ---
+            # If we don't see TRUE/FALSE at the start, Zenity likely returned 
+            # the raw row data: [Icon Name|Desc|ID|RawID]
+            # We must only extract ONE ID to prevent tripling.
+            # Usually RawID is at index 3 in this mode.
+            local VAL="${ALL_PARTS[3]}"
+            if [[ -n "$VAL" && "$VAL" != "---" && "$VAL" != "═══" ]]; then
+                RESULT="$VAL"
+            else
+                RESULT=""
+            fi
         fi
     elif [[ "$RESULT" =~ ^(TRUE|FALSE|true|false)$ ]]; then
+        RESULT=""
+    else
         RESULT=""
     fi
     echo "$RESULT"

@@ -176,34 +176,37 @@ show_main_menu() {
             local recipe_list=()
             for CHOICE in "${SELECTED_INTENTS[@]}"; do
                 case "$CHOICE" in
-                    *"Scale & Resize"*)
+                    "Scale & Resize")
                         RES=$(show_scale_interface)
                         [ -z "$RES" ] && continue
                         IFS='|' read -ra VALS <<< "$RES"
-                        if [[ "${VALS[0]}" == "50%" ]]; then recipe_list+=("Scale: 50%")
-                        elif [[ "${VALS[0]}" == "Custom" ]]; then recipe_list+=("CustomGeometry:${VALS[1]}")
-                        else recipe_list+=("Scale: ${VALS[0]}")
+                        local CLEAN_RES=$(echo "${VALS[0]}" | sed 's/ (.*)$//')
+                        if [[ "$CLEAN_RES" == "50%" ]]; then recipe_list+=("Scale: 50%")
+                        elif [[ "$CLEAN_RES" == "Custom" ]]; then recipe_list+=("CustomGeometry:${VALS[1]}")
+                        else recipe_list+=("Scale: $CLEAN_RES")
                         fi
                         ;;
-                    *"Scale: 50%"*) recipe_list+=("Scale: 50%") ;;
-                    *"Scale: 1920x"*) recipe_list+=("Scale: 1920x") ;;
-                    *"Scale: 3840x"*) recipe_list+=("Scale: 3840x") ;;
-                    *"Scale: Custom"*) 
+                    "Scale: 50%")   recipe_list+=("Scale: 50%") ;;
+                    "Scale: 1920x")  recipe_list+=("Scale: 1920x") ;;
+                    "Scale: 3840x")  recipe_list+=("Scale: 3840x") ;;
+                    "Scale: 1280x")  recipe_list+=("Scale: 1280x") ;;
+                    "Scale: 640x")   recipe_list+=("Scale: 640x") ;;
+                    "Scale: Custom") 
                         RES=$(zenity --entry --title="Scale Width" --text="Enter target width (e.g. 1280) or geometry (800x600):" --entry-text="1920" --cancel-label="Cancel")
                         [ -n "$RES" ] && recipe_list+=("CustomGeometry:$RES")
                         ;;
-                    *"Crop"*)
+                    "Crop & Geometry")
                         RES=$(show_crop_interface)
                         [ -z "$RES" ] && continue
                         recipe_list+=("Canvas: $RES")
                         ;;
-                    *"Convert Format"*)
+                    "Convert Format")
                         RES=$(show_convert_interface)
                         [ -z "$RES" ] && continue
                         IFS='|' read -ra VALS <<< "$RES"
                         recipe_list+=("Format: ${VALS[0]}|Optimize: ${VALS[1]}")
                         ;;
-                    *"Effects"*)
+                    "Effects & Branding")
                         RES=$(show_effects_interface)
                         [ -z "$RES" ] && continue
                         IFS='|' read -ra VALS <<< "$RES"
@@ -212,19 +215,28 @@ show_main_menu() {
                             recipe_list+=("Effect: ${VALS[0]}|Branding: ${VALS[1]}|BrandingPayload: ${VALS[2]}")
                         fi
                         ;;
-                    *"Montage"*)
+                    "Montage & Grid")
                         RES=$(show_montage_interface)
                         [ -z "$RES" ] && continue
                         # Montage is terminal/special
                         echo "Canvas: $RES"
                         return 0
                         ;;
-                    *"Flatten"*) recipe_list+=("Effect: Flatten") ;;
-                    *"sRGB"*) recipe_list+=("Effect: sRGB") ;;
-                    *"Remove Audio"*) recipe_list+=("Effect: Mute") ;;
-                    *"Extract Pages"*) recipe_list+=("Action: ExtractPDF") ;;
+                    "Flatten Background") recipe_list+=("Effect: Flatten") ;;
+                    "Convert to sRGB")    recipe_list+=("Effect: sRGB") ;;
+                    "Remove Audio")       recipe_list+=("Effect: Mute") ;;
+                    "Extract Pages")      recipe_list+=("Action: ExtractPDF") ;;
                 esac
             done
+            
+            # --- DEDUPLICATE RECIPE ---
+            local unique_recipe=()
+            for r in "${recipe_list[@]}"; do
+                local found=false
+                for u in "${unique_recipe[@]}"; do [[ "$u" == "$r" ]] && found=true && break; done
+                [[ "$found" == "false" ]] && unique_recipe+=("$r")
+            done
+            recipe_list=("${unique_recipe[@]}")
             
             # If the user cancelled all sub-dialogs, return to the main menu instead of exiting
             if [ ${#recipe_list[@]} -eq 0 ]; then
@@ -234,6 +246,7 @@ show_main_menu() {
             # Combine recipe_list into final string
             local final_choices=""
             for item in "${recipe_list[@]}"; do
+                # Ensure each item only has one pipe at most if it's already a compound
                 final_choices+="$item|"
             done
             final_choices="${final_choices%|}"
@@ -281,7 +294,7 @@ for opt in "${CHOICE_ARR[@]}"; do
     case "$opt" in
         # --- CROP (PRIORITY 1) ---
         Canvas:*)
-            VAL=$(echo "$opt" | cut -d':' -f2 | sed 's/^ //')
+            VAL=$(echo "$opt" | cut -d':' -f2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
             case "$VAL" in
                *"Square Crop"*) 
                    CROP_ARGS+=("-set" "option:distort:viewport" "%[fx:min(w,h)]x%[fx:min(w,h)]" "-distort" "SRT" "0" "+repage")
@@ -311,16 +324,12 @@ for opt in "${CHOICE_ARR[@]}"; do
             ;;
         
         # --- SCALE (PRIORITY 2) ---
-        Scale:*)
-            VAL=$(echo "$opt" | cut -d':' -f2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-            case "$VAL" in
-                *"1920x"*) SCALE_ARGS+=("-resize" "1920x"); TAG="${TAG}_1920p" ;;
-                *"3840x"*) SCALE_ARGS+=("-resize" "3840x"); TAG="${TAG}_4k" ;;
-                *"1280x"*) SCALE_ARGS+=("-resize" "1280x"); TAG="${TAG}_720p" ;;
-                *"640x"*)  SCALE_ARGS+=("-resize" "640x"); TAG="${TAG}_640p" ;;
-                *"50%"*)   SCALE_ARGS+=("-resize" "50%"); TAG="${TAG}_half" ;;
-            esac
-            ;;
+        "Scale: 1920x") SCALE_ARGS+=("-resize" "1920x"); TAG="${TAG}_1920p" ;;
+        "Scale: 3840x") SCALE_ARGS+=("-resize" "3840x"); TAG="${TAG}_4k" ;;
+        "Scale: 1280x") SCALE_ARGS+=("-resize" "1280x"); TAG="${TAG}_720p" ;;
+        "Scale: 640x")  SCALE_ARGS+=("-resize" "640x"); TAG="${TAG}_640p" ;;
+        "Scale: 50%")   SCALE_ARGS+=("-resize" "50%"); TAG="${TAG}_half" ;;
+        
         CustomGeometry:*)
             VAL=$(echo "$opt" | cut -d':' -f2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
             [ -n "$VAL" ] && { SCALE_ARGS+=("-resize" "$VAL"); TAG="${TAG}_${VAL}"; }
@@ -328,7 +337,7 @@ for opt in "${CHOICE_ARR[@]}"; do
 
         # --- EFFECTS (PRIORITY 3) ---
         Effect:*)
-            VAL=$(echo "$opt" | cut -d':' -f2 | sed 's/^ //')
+            VAL=$(echo "$opt" | cut -d':' -f2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
             case "$VAL" in
                 *"Rotate 90 CW"*)  EFFECT_ARGS+=("-rotate" "90"); TAG="${TAG}_90cw" ;;
                 *"Rotate 90 CCW"*) EFFECT_ARGS+=("-rotate" "-90"); TAG="${TAG}_90ccw" ;;
@@ -340,11 +349,11 @@ for opt in "${CHOICE_ARR[@]}"; do
             esac
             ;;
         Branding:*)
-            VAL=$(echo "$opt" | cut -d':' -f2)
+            VAL=$(echo "$opt" | cut -d':' -f2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
             if [[ "$VAL" == *"Text Annotation"* ]]; then DO_TEXT_ANNOTATION=true; fi
             ;;
         BrandingPayload:*)
-            BRAND_PAYLOAD=$(echo "$opt" | cut -d':' -f2 | sed 's/^ //')
+            BRAND_PAYLOAD=$(echo "$opt" | cut -d':' -f2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
             if [ "$DO_TEXT_ANNOTATION" = true ]; then
                 EFFECT_ARGS+=("-gravity" "South" "-pointsize" "24" "-annotate" "+0+20" "$BRAND_PAYLOAD")
                 TAG="${TAG}_text"
@@ -353,11 +362,11 @@ for opt in "${CHOICE_ARR[@]}"; do
         
         # --- FORMAT/ACTION (PRIORITY 4) ---
         Format:*)
-            # Extract just the extension, even if piped (e.g. Format: WEBP|Optimize: ...)
+            # Extract just the extension
             OUT_EXT=$(echo "$opt" | cut -d':' -f2- | cut -d'|' -f1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | tr '[:upper:]' '[:lower:]')
             ;;
         Optimize:*)
-            VAL=$(echo "$opt" | cut -d':' -f2)
+            VAL=$(echo "$opt" | cut -d':' -f2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
             if [[ "$VAL" == *"Web Ready"* ]]; then
                 FORMAT_ARGS+=("-quality" "85" "-strip"); TAG="${TAG}_web"
             elif [[ "$VAL" == *"Max Compression"* ]]; then
