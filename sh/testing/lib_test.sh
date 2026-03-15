@@ -60,6 +60,13 @@ cleanup_test_data() {
     rm -rf "$TEST_DATA" "$MOCK_BIN"
 }
 
+seed_gpu_cache() {
+    local type="$1"
+    local cache="/tmp/scripts-sh-gpu-cache-$(id -u)"
+    log_info "Seeding GPU cache with: $type"
+    echo "$type" > "$cache"
+}
+
 validate_media() {
     local file="$1"
     local rules="$2"
@@ -89,17 +96,51 @@ validate_media() {
             duration)
                 local d=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file")
                 local diff=$(awk -v d="$d" -v val="$val" 'BEGIN { diff = d - val; if (diff < 0) diff = -diff; print diff }')
-                (( $(echo "$diff > 0.5" | bc -l) )) && { log_fail "Duration mismatch: expected $val, got $d"; failed=1; }
+                (( $(echo "$diff > 0.1" | bc -l) )) && { log_fail "Duration mismatch: expected $val, got $d (diff=$diff)"; failed=1; }
                 ;;
             width)
                 local w=$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of default=noprint_wrappers=1:nokey=1 "$file")
                 [[ "$w" != "$val" ]] && { log_fail "Width mismatch: expected $val, got $w"; failed=1; }
                 ;;
             format)
-                # Liberal check: e.g. webp matches web/p
-                local fmt=$(file -b "$file" | tr '[:upper:]' '[:lower:]' | tr -d '/')
-                local v_clean=$(echo "$val" | tr -d '/')
-                [[ "$fmt" != *"$v_clean"* ]] && { log_fail "Format mismatch: $val not in $fmt"; failed=1; }
+                local fmt=""
+                if [[ "$file" =~ \.(jpg|png|webp|gif|jpeg)$ ]]; then
+                    fmt=$(magick identify -format "%m" "$file" | tr '[:upper:]' '[:lower:]' | head -n 1)
+                else
+                    fmt=$(ffprobe -v error -show_entries format=format_name -of default=noprint_wrappers=1:nokey=1 "$file" | tr '[:upper:]' '[:lower:]')
+                fi
+                [[ "$fmt" != *"$val"* ]] && { log_fail "Format mismatch: expected $val in $fmt"; failed=1; }
+                ;;
+            has_audio)
+                local a=$(ffprobe -v error -select_streams a -show_entries stream=index -of default=noprint_wrappers=1:nokey=1 "$file")
+                [[ -z "$a" ]] && { log_fail "Audio stream missing"; failed=1; }
+                ;;
+            no_audio)
+                local a=$(ffprobe -v error -select_streams a -show_entries stream=index -of default=noprint_wrappers=1:nokey=1 "$file")
+                [[ -n "$a" ]] && { log_fail "Audio stream found (expected none)"; failed=1; }
+                ;;
+            no_video)
+                local v=$(ffprobe -v error -select_streams v -show_entries stream=index -of default=noprint_wrappers=1:nokey=1 "$file")
+                [[ -n "$v" ]] && { log_fail "Video stream found (expected none)"; failed=1; }
+                ;;
+            subtitle_stream)
+                local s=$(ffprobe -v error -select_streams s -show_entries stream=index -of default=noprint_wrappers=1:nokey=1 "$file" | wc -l)
+                [[ "$s" -lt "$val" ]] && { log_fail "Subtitle streams mismatch: expected >= $val, got $s"; failed=1; }
+                ;;
+            bitrate)
+                local b=$(ffprobe -v error -show_entries format=bitrate -of default=noprint_wrappers=1:nokey=1 "$file")
+                if [[ "$b" == "N/A" ]] || [[ "$b" -eq 0 ]]; then
+                     log_fail "Invalid or missing bitrate: $b"
+                     failed=1
+                fi
+                ;;
+            file_size_gt)
+                local s=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file")
+                [[ "$s" -le "$val" ]] && { log_fail "File size too small: $s <= $val"; failed=1; }
+                ;;
+            file_size_lt)
+                local s=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file")
+                [[ "$s" -ge "$val" ]] && { log_fail "File size too large: $s >= $val"; failed=1; }
                 ;;
             tags)
                 local filename=$(basename "$file")
@@ -133,7 +174,11 @@ run_test() {
     fi
 
     local files_abs=()
-    for f in "${files_rel[@]}"; do files_abs+=("$(readlink -f "$f")"); done
+    local files_base=()
+    for f in "${files_rel[@]}"; do 
+        files_abs+=("$(readlink -f "$f")")
+        files_base+=("$(basename "$f")")
+    done
 
     local dir=$(dirname "${files_abs[0]}")
     local failed=0
@@ -147,12 +192,16 @@ run_test() {
     local out_log="/tmp/run_test_output.log"
     (
         cd "$dir" || exit 1
-        bash "$script_abs" "${files_abs[@]}"
+        # Pass basenames to script, as we are already in the directory
+        bash "$script_abs" "${files_base[@]}"
     ) &> "$out_log"
     local status=$?
     
-    local newest_file=$(find "$dir" -maxdepth 1 -name "$pattern" -printf "%T@ %p\n" | sort -n | tail -1 | cut -d' ' -f2-)
+    # Portable "newest file" detection using ls -t
+    local newest_file=$(ls -t "$dir"/$pattern 2>/dev/null | head -1)
     if [[ -z "$newest_file" ]] || [[ "$(basename "$newest_file")" == "$(basename "${files_abs[0]}")" ]]; then
+        # Check if maybe the pattern didn't match after rename, but SOME file was created
+        # (Though we prefer the pattern match for accuracy)
         log_fail "No output matching $pattern (Exit: $status)"
         echo "--- LOG ---"; cat "$out_log"; echo "-----------"
         return 1

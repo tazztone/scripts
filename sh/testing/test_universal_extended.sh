@@ -17,11 +17,12 @@ run_test "ffmpeg/🧰 Universal-Toolbox.sh" "duration=0.5" "$TEST_DATA/input.mp4
 
 # Test 10: Fake Hardware Encoding (NVENC) + H.265
 echo "Test 10: Hardware Encoding (Mocked NVENC) + H.265"
+seed_gpu_cache "nvenc"
 cat <<EOF > /tmp/zenity_responses
 📐|Scale / Resize|📦|Output Format
  (Inactive)||720p||||||||Medium (CRF 23)||H.265|Use NVENC (Nvidia)
 EOF
-run_test "ffmpeg/🧰 Universal-Toolbox.sh" "vcodec=hevc" "$TEST_DATA/input.mp4" || FAILED=1
+run_test "ffmpeg/🧰 Universal-Toolbox.sh" "vcodec=hevc,tags=_nvenc" "$TEST_DATA/input.mp4" || FAILED=1
 
 # Test 11: Multi-file processing
 echo "Test 11: Multi-file processing"
@@ -32,8 +33,12 @@ cat <<EOF > /tmp/zenity_responses
 ||720p||||||||Medium (CRF 23)||Auto/MP4|None (CPU Only)
 EOF
 run_test "ffmpeg/🧰 Universal-Toolbox.sh" "width=1280" "$TEST_DATA/input.mp4" "$TEST_DATA/input_another.mp4" || FAILED=1
-if [ -f "$TEST_DATA/input_another_720p.mp4" ]; then
-    log_pass "Multi-file processing: second output exists"
+
+# Check for the second file using a glob
+OUTPUT2=$(ls "$TEST_DATA"/input_another_*.mp4 2>/dev/null | head -1)
+if [[ -n "$OUTPUT2" ]]; then
+    log_pass "Multi-file processing: second output exists ($(basename "$OUTPUT2"))"
+    validate_media "$OUTPUT2" "width=1280" || FAILED=1
 else
     log_fail "Multi-file processing: second output missing"
     FAILED=1

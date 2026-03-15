@@ -5,8 +5,12 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib_test.sh"
 generate_test_media
 FAILED=0
 
-# Use the symlink to avoid emoji issues in shell call
+# Ensure the symlink exists to avoid emoji issues in shell call
+IM_REAL_PATH="imagemagick/🖼️ Image-Magick-Toolbox.sh"
 IM_TOOLBOX="imagemagick/im_toolbox.sh"
+if [ ! -L "$IM_TOOLBOX" ]; then
+    ln -sf "$(basename "$IM_REAL_PATH")" "$IM_TOOLBOX"
+fi
 
 echo -e "\n${YELLOW}=== Image Toolbox Tests ===${NC}"
 
