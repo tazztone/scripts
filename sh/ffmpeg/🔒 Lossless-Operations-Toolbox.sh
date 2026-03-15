@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -u
 # Lossless Operations Toolbox
 # Specialized script for lossless video operations using FFmpeg stream copy only
 

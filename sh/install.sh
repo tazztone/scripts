@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -u
 
 # Define the target directory for Nautilus scripts
 SCRIPTS_TARGET="$HOME/.local/share/nautilus/scripts"
