@@ -1,19 +1,25 @@
 #!/bin/bash
 # Common utility functions for Nautilus FFmpeg Scripts
 
+# Sourcing Guard
+[ "${_FFMPEG_COMMON_SH_LOADED:-0}" -eq 1 ] && return
+readonly _FFMPEG_COMMON_SH_LOADED=1
+
 # Ensure dependencies
 # Check zenity first to use it for errors
-if ! command -v zenity &> /dev/null; then
-    printf "Error: zenity is not installed. Please install it (sudo apt install zenity).\n" >&2
-    exit 1
-fi
-
-for cmd in ffmpeg ffprobe bc; do
-    if ! command -v "$cmd" &> /dev/null; then
-        zenity --error --text="Missing dependency: $cmd\nPlease install it."
+init_ffmpeg_script() {
+    if ! command -v zenity &> /dev/null; then
+        printf "Error: zenity is not installed. Please install it (sudo apt install zenity).\n" >&2
         exit 1
     fi
-done
+
+    for cmd in ffmpeg ffprobe bc; do
+        if ! command -v "$cmd" &> /dev/null; then
+            zenity --error --text="Missing dependency: $cmd\nPlease install it."
+            exit 1
+        fi
+    done
+}
 
 # Zenity Progress Command Standard
 # Usage: ( ... ) | $Z_PROGRESS "Title"
@@ -37,13 +43,17 @@ get_duration() {
 }
 
 # --- GPU PROBE (Run once at startup) ---
-GPU_CACHE="/tmp/scripts-sh-gpu-cache-$(id -u)"
+GPU_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/scripts-sh-gpu-cache"
 probe_gpu() {
+    # Ensure cache directory exists
+    mkdir -p "$(dirname "$GPU_CACHE")"
+    
     # Skip if fresh cache exists (<24h)
     if [ -f "$GPU_CACHE" ] && [ $(( $(date +%s) - $(stat -c %Y "$GPU_CACHE") )) -lt 86400 ]; then
         return 0
     fi
-    echo "" > "$GPU_CACHE"
+    # Use a fresh file to avoid accumulation
+    : > "$GPU_CACHE"
     
     # 1. NVENC Probe
     if ffmpeg -v error -nostdin -f lavfi -i color=black:s=1280x720 -vframes 1 -an -c:v h264_nvenc -f null - 2>/dev/null; then

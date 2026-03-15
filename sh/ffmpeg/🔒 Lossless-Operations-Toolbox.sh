@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # Lossless Operations Toolbox
 # Specialized script for lossless video operations using FFmpeg stream copy only
 
@@ -6,6 +7,8 @@
 SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 source "$SCRIPT_DIR/common.sh"
 source "$SCRIPT_DIR/../common/wizard.sh"
+
+init_ffmpeg_script
 
 # Function to analyze codec information
 analyze_codec() {
@@ -141,23 +144,23 @@ validate_trimming_operation() {
     
     # Get file duration
     local duration=$(get_duration "$file")
-    if [ -z "$duration" ] || [ "$duration" -eq 0 ]; then
+    if [ -z "$duration" ] || (( $(echo "$duration == 0" | bc -l) )); then
         echo "ERROR: Could not determine file duration or file has zero duration"
         return 1
     fi
     
     # Validate time ranges
-    if [ -n "$start_time" ] && [ "$start_time" -lt 0 ]; then
+    if [ -n "$start_time" ] && (( $(echo "$start_time < 0" | bc -l) )); then
         echo "ERROR: Start time cannot be negative"
         return 1
     fi
     
-    if [ -n "$end_time" ] && [ "$end_time" -gt "$duration" ]; then
+    if [ -n "$end_time" ] && (( $(echo "$end_time > $duration" | bc -l) )); then
         echo "ERROR: End time ($end_time) exceeds file duration ($duration)"
         return 1
     fi
     
-    if [ -n "$start_time" ] && [ -n "$end_time" ] && [ "$start_time" -ge "$end_time" ]; then
+    if [ -n "$start_time" ] && [ -n "$end_time" ] && (( $(echo "$start_time >= $end_time" | bc -l) )); then
         echo "ERROR: Start time must be less than end time"
         return 1
     fi
@@ -449,13 +452,18 @@ save_preset() {
     shift 2
     local params="$@"
     
-    # Remove existing preset with same name
-    grep -v "^$name|" "$PRESET_FILE" > "${PRESET_FILE}.tmp" 2>/dev/null
+    # Use a fresh temp file
+    local tmp_file=$(get_sys_temp "preset")
+    
+    # Remove existing preset with same name if file exists
+    if [ -f "$PRESET_FILE" ]; then
+        grep -v "^$name|" "$PRESET_FILE" > "$tmp_file" 2>/dev/null
+    fi
     
     # Add new preset
-    echo "$name|$operation|$params" >> "${PRESET_FILE}.tmp"
+    echo "$name|$operation|$params" >> "$tmp_file"
     
-    mv "${PRESET_FILE}.tmp" "$PRESET_FILE"
+    mv "$tmp_file" "$PRESET_FILE"
 }
 
 load_preset() {
@@ -494,15 +502,15 @@ execute_trimming() {
     fi
     
     # Build FFmpeg command with stream copy
-    local cmd="ffmpeg -y -nostdin"
+    local cmd_args=("ffmpeg" "-y" "-nostdin")
     
     # Add start time if specified
-    if [ -n "$start_time" ] && [ "$start_time" != "0" ]; then
-        cmd="$cmd -ss $start_time"
+    if [ -n "$start_time" ] && (( $(echo "$start_time != 0" | bc -l) )); then
+        cmd_args+=("-ss" "$start_time")
     fi
     
     # Add input file
-    cmd="$cmd -i \"$input_file\""
+    cmd_args+=("-i" "$input_file")
     
     # Add duration/end time if specified
     if [ -n "$end_time" ]; then
@@ -510,20 +518,17 @@ execute_trimming() {
             # Calculate duration using bc and printf for floating point support with leading zero
             local duration=$(echo "$end_time - $start_time" | bc -l)
             duration=$(printf "%.3f" "$duration")
-            cmd="$cmd -t $duration"
+            cmd_args+=("-t" "$duration")
         else
-            cmd="$cmd -t $end_time"
+            cmd_args+=("-t" "$end_time")
         fi
     fi
     
     # Use stream copy for lossless operation
-    cmd="$cmd -c copy"
+    cmd_args+=("-c" "copy" "$output_file")
     
-    # Add output file
-    cmd="$cmd \"$output_file\""
-    
-    echo "Executing: $cmd"
-    eval $cmd
+    echo "Executing: ${cmd_args[*]}"
+    "${cmd_args[@]}"
     
     local status=$?
     if [ $status -eq 0 ]; then
@@ -547,18 +552,21 @@ execute_remuxing() {
     fi
     
     # Build FFmpeg command with stream copy
-    local cmd="ffmpeg -y -nostdin -i \"$input_file\" -c copy"
+    local cmd_args=("ffmpeg" "-y" "-nostdin" "-i" "$input_file" "-c" "copy")
     
     # Add container-specific optimization flags
     local optimization_flags=$(get_container_optimization_flags "$target_container")
     if [ -n "$optimization_flags" ]; then
-        cmd="$cmd $optimization_flags"
+        # Handle multiple flags if present (they are currently space-separated strings)
+        # It's better to split them into the array
+        read -ra opt_parts <<< "$optimization_flags"
+        cmd_args+=("${opt_parts[@]}")
     fi
     
-    cmd="$cmd \"$output_file\""
+    cmd_args+=("$output_file")
     
-    echo "Executing: $cmd"
-    eval $cmd
+    echo "Executing: ${cmd_args[*]}"
+    "${cmd_args[@]}"
     
     local status=$?
     if [ $status -eq 0 ]; then
@@ -582,18 +590,20 @@ execute_merging() {
     fi
     
     # Create temporary concat file list
-    local concat_file="/tmp/lossless_concat_$$.txt"
+    local concat_file=$(get_sys_temp "lossless_concat")
     
     # Write file list for FFmpeg concat demuxer
     for file in "${input_files[@]}"; do
-        echo "file '$(realpath "$file")'" >> "$concat_file"
+        # Use single quotes for paths in the concat file and escape inner single quotes
+        local escaped_path=$(realpath "$file" | sed "s/'/'\\\\''/g")
+        echo "file '$escaped_path'" >> "$concat_file"
     done
     
     # Build FFmpeg command with concat demuxer and stream copy
-    local cmd="ffmpeg -y -nostdin -f concat -safe 0 -i \"$concat_file\" -c copy \"$output_file\""
+    local cmd_args=("ffmpeg" "-y" "-nostdin" "-f" "concat" "-safe" "0" "-i" "$concat_file" "-c" "copy" "$output_file")
     
-    echo "Executing: $cmd"
-    eval $cmd
+    echo "Executing: ${cmd_args[*]}"
+    "${cmd_args[@]}"
     
     local status=$?
     rm -f "$concat_file"
@@ -619,20 +629,14 @@ execute_stream_selection() {
     fi
     
     # Build FFmpeg command based on operation
-    local cmd="ffmpeg -y -nostdin -i \"$input_file\""
+    local cmd_args=("ffmpeg" "-y" "-nostdin" "-i" "$input_file")
     
     case "$operation" in
-        "remove_audio")
-            cmd="$cmd -c:v copy -an"
+        "remove_audio" | "video_only")
+            cmd_args+=("-c:v" "copy" "-an")
             ;;
-        "remove_video")
-            cmd="$cmd -c:a copy -vn"
-            ;;
-        "video_only")
-            cmd="$cmd -c:v copy -an"
-            ;;
-        "audio_only")
-            cmd="$cmd -c:a copy -vn"
+        "remove_video" | "audio_only")
+            cmd_args+=("-c:a" "copy" "-vn")
             ;;
         *)
             echo "ERROR: Unknown stream selection operation: $operation"
@@ -640,10 +644,10 @@ execute_stream_selection() {
             ;;
     esac
     
-    cmd="$cmd \"$output_file\""
+    cmd_args+=("$output_file")
     
-    echo "Executing: $cmd"
-    eval $cmd
+    echo "Executing: ${cmd_args[*]}"
+    "${cmd_args[@]}"
     
     local status=$?
     if [ $status -eq 0 ]; then
@@ -663,29 +667,29 @@ execute_metadata_editing() {
     local value="$4"
     
     # Build FFmpeg command with stream copy and metadata changes
-    local cmd="ffmpeg -y -nostdin -i \"$input_file\" -c copy"
+    local cmd_args=("ffmpeg" "-y" "-nostdin" "-i" "$input_file" "-c" "copy")
     
     case "$operation" in
         "clean_metadata")
-            cmd="$cmd -map_metadata -1"
+            cmd_args+=("-map_metadata" "-1")
             ;;
         "set_title")
-            cmd="$cmd -metadata title=\"$value\""
+            cmd_args+=("-metadata" "title=$value")
             ;;
         "set_rotation")
             # Set rotation metadata without re-encoding
             case "$value" in
                 "90")
-                    cmd="$cmd -metadata:s:v:0 rotate=90"
+                    cmd_args+=("-metadata:s:v:0" "rotate=90")
                     ;;
                 "180")
-                    cmd="$cmd -metadata:s:v:0 rotate=180"
+                    cmd_args+=("-metadata:s:v:0" "rotate=180")
                     ;;
                 "270")
-                    cmd="$cmd -metadata:s:v:0 rotate=270"
+                    cmd_args+=("-metadata:s:v:0" "rotate=270")
                     ;;
                 "0")
-                    cmd="$cmd -metadata:s:v:0 rotate=0"
+                    cmd_args+=("-metadata:s:v:0" "rotate=0")
                     ;;
             esac
             ;;
@@ -695,10 +699,10 @@ execute_metadata_editing() {
             ;;
     esac
     
-    cmd="$cmd \"$output_file\""
+    cmd_args+=("$output_file")
     
-    echo "Executing: $cmd"
-    eval $cmd
+    echo "Executing: ${cmd_args[*]}"
+    "${cmd_args[@]}"
     
     local status=$?
     if [ $status -eq 0 ]; then
