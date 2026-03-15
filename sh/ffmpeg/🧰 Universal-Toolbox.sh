@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # Universal FFmpeg Toolbox
 # Combine multiple operations (Speed, Scale, Crop, Audio, Format) in one pass.
 
@@ -6,6 +7,8 @@
 SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 source "$SCRIPT_DIR/common.sh"
 source "$SCRIPT_DIR/../common/wizard.sh"
+
+init_ffmpeg_script
 
 # --- GPU PROBE (Run once at startup) ---
 probe_gpu </dev/null >/dev/null 2>&1 &
@@ -55,9 +58,9 @@ INTENTS_STR="⏪|Speed Control|Change playback speed;📐|Scale / Resize|Change 
 LOOP_COUNT=0
 while true; do
     LOOP_COUNT=$((LOOP_COUNT + 1))
-    if [ $LOOP_COUNT -gt 5 ]; then
-        echo "[DEBUG] RECURSION GUARD TRIGGERED" >> /tmp/scripts_debug.log
-        zenity --error --text="Recursive UI loop detected ($LOOP_COUNT attempts). Check /tmp/scripts_debug.log"
+    if [ $LOOP_COUNT -gt 10 ]; then
+        _wizard_log "RECURSION GUARD TRIGGERED ($LOOP_COUNT attempts)"
+        zenity --error --text="Recursive UI loop detected ($LOOP_COUNT attempts). If this is intentional, please restart the script."
         exit 1
     fi
 
@@ -68,7 +71,7 @@ while true; do
 
     PICKED_RAW=$(show_unified_wizard "Universal Toolbox Wizard" "$INTENTS_STR" "$PRESET_FILE" "$HISTORY_FILE")
     [ -z "$PICKED_RAW" ] && exit 0
-    echo "[DEBUG] wizard returned: [$PICKED_RAW]" >> /tmp/scripts_debug.log
+    _wizard_log "wizard returned: [$PICKED_RAW]"
 
     # Parse results
     IFS='|' read -ra PARTS <<< "$PICKED_RAW"
@@ -291,8 +294,7 @@ add_af() {
 if [[ "$CHOICES" == *"Trim: Start"* ]]; then
     START="${USER_TRIM_S}"
     if [ -n "$START" ]; then 
-        VALID_S=$(validate_time_format "$START")
-        if [ $? -eq 0 ]; then
+        if VALID_S=$(validate_time_format "$START"); then
             INPUT_OPTS+=( "-ss" "$VALID_S" )
             TAG="${TAG}_cut"
             ((FILTER_COUNT++))
@@ -307,8 +309,7 @@ if [[ "$CHOICES" == *"Trim: End"* ]]; then
         DUR=$(zenity --entry --title="Trim End" --text="Trim End time / Duration to keep (seconds or hh:mm:ss):" --entry-text="00:01:00" --cancel-label="Cancel")
     fi
     if [ -n "$DUR" ]; then 
-        VALID_E=$(validate_time_format "$DUR")
-        if [ $? -eq 0 ]; then
+        if VALID_E=$(validate_time_format "$DUR"); then
             INPUT_OPTS+=( "-t" "$VALID_E" )
             TAG="${TAG}_len"
             ((FILTER_COUNT++))
@@ -404,33 +405,6 @@ fi
 if [[ "$CHOICES" == *"Use NVENC"* ]]; then USE_GPU=true; GPU_TYPE="nvenc"; TAG="${TAG}_nvenc"; fi
 if [[ "$CHOICES" == *"Use QSV"* ]]; then USE_GPU=true; GPU_TYPE="qsv"; TAG="${TAG}_qsv"; fi
 if [[ "$CHOICES" == *"Use VAAPI"* ]]; then USE_GPU=true; GPU_TYPE="vaapi"; TAG="${TAG}_vaapi"; fi
-
-# --- TAG PARSING ---
-# This block is now redundant as parsing is done earlier and more robustly.
-# Keeping it commented out for historical context if needed, but it's not used.
-# SPEED_VAL=""
-# if [[ "$CHOICES" == *"Speed: "* ]]; then
-#     SPEED_VAL=$(echo "$CHOICES" | grep -o "Speed: [^|]*" | cut -d: -f2 | xargs | cut -dx -f1)
-# elif [[ "$CHOICES" == *"2x (Fast)"* ]]; then SPEED_VAL="2"
-# elif [[ "$CHOICES" == *"4x (Super Fast)"* ]]; then SPEED_VAL="4"
-# elif [[ "$CHOICES" == *"0.5x (Slow)"* ]]; then SPEED_VAL="0.5"
-# elif [[ "$CHOICES" == *"0.25x (Very Slow)"* ]]; then SPEED_VAL="0.25"
-# fi
-
-# SCALE_W=""
-# if [[ "$CHOICES" == *"Res: "* ]]; then
-#     SCALE_W=$(echo "$CHOICES" | grep -o "Res: [^|]*" | cut -d: -f2 | xargs | cut -dp -f1)
-# elif [[ "$CHOICES" == *"1.44k"* ]]; then SCALE_W="1440"
-# elif [[ "$CHOICES" == *"1080p"* ]]; then SCALE_W="1080"
-# elif [[ "$CHOICES" == *"720p"* ]]; then SCALE_W="720"
-# elif [[ "$CHOICES" == *"4k"* ]]; then SCALE_W="2160"
-# elif [[ "$CHOICES" == *"480p"* ]]; then SCALE_W="480"
-# elif [[ "$CHOICES" == *"360p"* ]]; then SCALE_W="360"
-# elif [[ "$CHOICES" == *"50%"* ]]; then SCALE_W="50%"
-# fi
-
-# CUSTOM_W=$(echo "$CHOICES" | grep -o "CustomW: [^|]*" | cut -d: -f2 | xargs 2>/dev/null || true)
-# [ -n "$CUSTOM_W" ] && SCALE_W="$CUSTOM_W"
 
 # --- FORMAT OVERRIDES ---
 IS_audio_only=false
@@ -660,8 +634,22 @@ for f in "$@"; do
         elif [[ "${VCODEC_OPTS[*]}" == *"h264"* ]]; then
              VCODEC_OPTS=("-c:v" "libx264" "-crf" "23" "-preset" "medium")
         fi
-        # Clear VAAPI specific global opts if any
-        if [ "$GPU_TYPE" = "vaapi" ]; then GLOBAL_OPTS=("-movflags" "+faststart" "-map_metadata" "-1"); fi
+        
+        # Clear VAAPI specific global opts safely
+        if [ "$GPU_TYPE" = "vaapi" ]; then
+            local NEW_GLOBAL=()
+            local skip_next=false
+            for opt in "${GLOBAL_OPTS[@]}"; do
+                if [ "$skip_next" = "true" ]; then skip_next=false; continue; fi
+                if [[ "$opt" == "-vaapi_device" || "$opt" == "-vf" ]]; then
+                    # Assuming -vf format=nv12,hwupload was what we added
+                    skip_next=true
+                    continue
+                fi
+                NEW_GLOBAL+=("$opt")
+            done
+            GLOBAL_OPTS=("${NEW_GLOBAL[@]}")
+        fi
 
         _wizard_log "Retrying with: ffmpeg -y ${INPUT_OPTS[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_OPTS[@]} ${CURRENT_ACORE[@]} ${FPS_ARG[@]} ${GLOBAL_OPTS[@]} $OUT_FILE"
         ffmpeg -y "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_OPTS[@]}" "${CURRENT_ACORE[@]}" "${FPS_ARG[@]}" "${GLOBAL_OPTS[@]}" "$OUT_FILE"

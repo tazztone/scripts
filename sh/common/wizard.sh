@@ -1,6 +1,10 @@
 #!/bin/bash
 # Shared Wizard Logic for scripts-sh
 
+# Sourcing Guard
+[ "${_WIZARD_SH_LOADED:-0}" -eq 1 ] && return
+readonly _WIZARD_SH_LOADED=1
+
 # --- Logging & Security ---
 LOG_DIR="$HOME/.local/share/scripts-sh"
 LOG_FILE="$LOG_DIR/debug.log"

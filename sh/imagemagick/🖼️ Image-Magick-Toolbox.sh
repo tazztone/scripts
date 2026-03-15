@@ -1,10 +1,13 @@
 #!/bin/bash
+set -euo pipefail
 # 🖼️ Image-Magick-Toolbox v2.1
 # Smart Recipe Builder - Stack edits and Context-Aware UI
 
 SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 source "$SCRIPT_DIR/common.sh"
 source "$SCRIPT_DIR/../common/wizard.sh"
+
+init_imagemagick_script
 
 # --- CONFIG ---
 CONFIG_DIR="$HOME/.config/scripts-sh/imagemagick"

@@ -1,17 +1,29 @@
 #!/bin/bash
+set -euo pipefail
 
 # Define the target directory for Nautilus scripts
 SCRIPTS_TARGET="$HOME/.local/share/nautilus/scripts"
 
-# Define the source directories (absolute paths)
-FFMPEG_SOURCE="$(cd "$(dirname "$0")/ffmpeg" && pwd)"
-IMAGE_SOURCE="$(cd "$(dirname "$0")/imagemagick" && pwd)"
+# Define the source directories (absolute paths) using robust path resolution
+REAL_DIR="$(dirname "$(readlink -f "$0")")"
+FFMPEG_SOURCE="$REAL_DIR/ffmpeg"
+IMAGE_SOURCE="$REAL_DIR/imagemagick"
 
 # Colors for output
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
+
+# Function to detect package manager for hint
+detect_pkg_mgr() {
+    if command -v apt &> /dev/null; then echo "sudo apt update && sudo apt install"
+    elif command -v dnf &> /dev/null; then echo "sudo dnf install"
+    elif command -v pacman &> /dev/null; then echo "sudo pacman -S"
+    elif command -v zypper &> /dev/null; then echo "sudo zypper install"
+    else echo "[package-manager-install-command]"
+    fi
+}
 
 echo -e "${GREEN}Starting installation of Nautilus Media Scripts...${NC}"
 
@@ -38,8 +50,9 @@ for cmd in ffmpeg ffprobe magick zenity bc; do
 done
 
 if [ $MISSING_DEPS -eq 1 ]; then
+    PKG_CMD=$(detect_pkg_mgr)
     echo -e "${RED}Please install missing dependencies manually:${NC}"
-    echo "  sudo apt update && sudo apt install ffmpeg imagemagick zenity bc"
+    echo "  $PKG_CMD ffmpeg imagemagick zenity bc"
     read -p "Do you want to continue installation anyway? (y/N) " confirm
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
         echo "Installation aborted."
@@ -55,8 +68,12 @@ install_scripts() {
     local SOURCE_DIR="$1"
     local NAME="$2"
     
-    if [ -d "$SOURCE_DIR" ]; then
-        echo -e "${YELLOW}Symlinking $NAME scripts to $SCRIPTS_TARGET...${NC}"
+    if [ ! -d "$SOURCE_DIR" ]; then
+        echo -e "${RED}Error: Source directory for $NAME scripts not found at $SOURCE_DIR${NC}"
+        return 1
+    fi
+    
+    echo -e "${YELLOW}Symlinking $NAME scripts to $SCRIPTS_TARGET...${NC}"
         for script in "$SOURCE_DIR"/*.sh; do
             [ -e "$script" ] || continue
             # Skip library files
@@ -93,7 +110,6 @@ install_scripts() {
             ln -sf "$script" "$TARGET_LINK"
             echo "  Created symlink: $(basename "$script")"
         done
-    fi
 }
 
 # Install Scripts from both sources to the root

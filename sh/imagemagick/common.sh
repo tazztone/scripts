@@ -1,31 +1,39 @@
 # Common utility functions for Nautilus ImageMagick Scripts
 
-# Ensuring Zenity for errors
-if ! command -v zenity &> /dev/null; then
-    printf "Error: zenity is not installed. Please install it (sudo apt install zenity).\n" >&2
-    exit 1
-fi
+# Sourcing Guard
+[ "${_IMAGEMAGICK_COMMON_SH_LOADED:-0}" -eq 1 ] && return
+readonly _IMAGEMAGICK_COMMON_SH_LOADED=1
 
-# Check for ImageMagick v7 (magick) or v6 (convert)
-if command -v magick &> /dev/null; then
-    IM_EXE="magick"
-    IM_MONTAGE="magick montage"
-    IM_IDENTIFY="magick identify"
-elif command -v convert &> /dev/null; then
-    IM_EXE="convert"
-    IM_MONTAGE="montage"
-    IM_IDENTIFY="identify"
-else
-    zenity --error --text="ImageMagick not found. Please install it (sudo apt install imagemagick)."
-    exit 1
-fi
-
-for cmd in "${DEPENDENCIES[@]}"; do
-    if ! command -v "$cmd" &> /dev/null; then
-        zenity --error --text="Missing dependency: $cmd\nPlease install it."
+# Check for dependencies and ImageMagick versions
+init_imagemagick_script() {
+    # Ensuring Zenity for errors
+    if ! command -v zenity &> /dev/null; then
+        printf "Error: zenity is not installed. Please install it (sudo apt install zenity).\n" >&2
         exit 1
     fi
-done
+
+    # Check for ImageMagick v7 (magick) or v6 (convert)
+    if command -v magick &> /dev/null; then
+        IM_EXE="magick"
+        IM_MONTAGE="magick montage"
+        IM_IDENTIFY="magick identify"
+    elif command -v convert &> /dev/null; then
+        IM_EXE="convert"
+        IM_MONTAGE="montage"
+        IM_IDENTIFY="identify"
+    else
+        zenity --error --text="ImageMagick not found. Please install it (sudo apt install imagemagick)."
+        exit 1
+    fi
+
+    for cmd in "${DEPENDENCIES[@]:-}"; do
+        [ -z "$cmd" ] && continue
+        if ! command -v "$cmd" &> /dev/null; then
+            zenity --error --text="Missing dependency: $cmd\nPlease install it."
+            exit 1
+        fi
+    done
+}
 
 # Zenity Progress Command Standard
 Z_PROGRESS() {
