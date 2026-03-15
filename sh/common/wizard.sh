@@ -23,7 +23,6 @@ _wizard_log() {
 # show_unified_wizard "Title" "Intents..." "PresetsFile" "HistoryFile"
 # Intents format: "Icon|Name|Description"
 # Returns choice string (e.g. "INTENT:Speed|INTENT:Scale" or "PRESET:My Custom")
-# show_unified_wizard "Title" "Intents..." "PresetsFile" "HistoryFile"
 show_unified_wizard() {
     local TITLE="$1"
     local INTENTS_RAW="$2"
@@ -107,53 +106,63 @@ _wizard_build_args() {
 _wizard_parse_result() {
     local RESULT="$1"
     local CLEAN_RESULT=""
-
-    if [[ "$RESULT" == *"|"* ]]; then
-        local -a ALL_PARTS
-        IFS='|' read -ra ALL_PARTS <<< "$RESULT"
-        
-        # We expect a checklist return: [TRUE|Icon Name|Desc|ID|RawID|TRUE|...]
-        local FIRST_UP=$(echo "${ALL_PARTS[0]}" | tr '[:lower:]' '[:upper:]')
-        if [[ "$FIRST_UP" == "TRUE" || "$FIRST_UP" == "FALSE" ]]; then
-            # --- CHECKLIST MODE ---
-            for (( i=0; i<${#ALL_PARTS[@]}; i+=WIZARD_ROW_SIZE )); do
-                [ $i -ge ${#ALL_PARTS[@]} ] && break
-                local STATE=$(echo "${ALL_PARTS[i]}" | tr '[:lower:]' '[:upper:]')
-                
-                if [[ "$STATE" == "TRUE" ]]; then
-                    local VAL="${ALL_PARTS[i+WIZARD_COL_RAWID]}"
-                    if [[ -n "$VAL" && "$VAL" != "---" && "$VAL" != "═══" ]]; then
-                        CLEAN_RESULT+="$VAL|"
-                    fi
-                fi
-            done
-            RESULT="${CLEAN_RESULT%|}"
-        else
-            # Fix 2: Refined Fallback parsing
-            # Zenity --print-column=ALL returns 4 columns per selected row.
-            # Columns: [Icon Name], [Description], [ID], [RawID]
-            # We must only extract the RawID (index 3+n*4)
-            local COLS=4
-            if (( ${#ALL_PARTS[@]} % COLS == 0 )); then
-                for (( i=0; i<${#ALL_PARTS[@]}; i+=COLS )); do
-                    local VAL="${ALL_PARTS[i+3]}"
-                    [[ -n "$VAL" && "$VAL" != "---" && "$VAL" != "═══" ]] && CLEAN_RESULT+="$VAL|"
-                done
-            else
-                # True fallback if column count is weird
-                for part in "${ALL_PARTS[@]}"; do
-                    part=$(echo "$part" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-                    [[ -n "$part" && "$part" != "---" && "$part" != "═══" ]] && CLEAN_RESULT+="$part|"
-                done
-            fi
-            RESULT="${CLEAN_RESULT%|}"
-        fi
-    elif [[ "$RESULT" =~ ^(TRUE|FALSE|true|false)$ ]]; then
-        RESULT=""
-    else
-        RESULT=""
+    
+    # 1. Terminal Booleans
+    if [[ "$RESULT" =~ ^(TRUE|FALSE|true|false)$ ]]; then
+        return
     fi
-    echo "$RESULT"
+    
+    # 2. Simple Strings (No pipes)
+    if [[ "$RESULT" != *"|"* ]]; then
+        echo "$RESULT"
+        return
+    fi
+
+    local -a ALL_PARTS
+    IFS='|' read -ra ALL_PARTS <<< "$RESULT"
+    local FIRST_UP=$(echo "${ALL_PARTS[0]}" | tr '[:lower:]' '[:upper:]')
+    
+    # 3. Checklist Mode ([TRUE/FALSE] | [Icon Name] | [Desc] | [ID] | [RawID])
+    if [[ "$FIRST_UP" == "TRUE" || "$FIRST_UP" == "FALSE" ]]; then
+        for (( i=0; i<${#ALL_PARTS[@]}; i+=WIZARD_ROW_SIZE )); do
+            [ $i -ge ${#ALL_PARTS[@]} ] && break
+            local STATE=$(echo "${ALL_PARTS[i]}" | tr '[:lower:]' '[:upper:]')
+            if [[ "$STATE" == "TRUE" ]]; then
+                local VAL="${ALL_PARTS[i+WIZARD_COL_RAWID]}"
+                [[ -n "$VAL" && "$VAL" != "---" && "$VAL" != "═══" ]] && CLEAN_RESULT+="$VAL|"
+            fi
+        done
+        
+        if [ -n "$CLEAN_RESULT" ]; then
+             echo "${CLEAN_RESULT%|}"
+             return
+        fi
+        
+        # Double-click case: Zenity returns one row with FALSE but we have pipes
+        if [[ "$FIRST_UP" == "FALSE" ]]; then
+             local VAL="${ALL_PARTS[WIZARD_COL_RAWID]}"
+             [[ -n "$VAL" && "$VAL" != "---" && "$VAL" != "═══" ]] && { echo "$VAL"; return; }
+        fi
+        echo ""
+        return
+    fi
+    
+    # 4. Fallback parsing for non-checklist list returns
+    # Try to extract RawID if the column count matches
+    if (( ${#ALL_PARTS[@]} % WIZARD_ROW_SIZE == 0 )); then
+        for (( i=0; i<${#ALL_PARTS[@]}; i+=WIZARD_ROW_SIZE )); do
+            local VAL="${ALL_PARTS[i+WIZARD_COL_RAWID]}"
+            [[ -n "$VAL" && "$VAL" != "---" && "$VAL" != "═══" ]] && CLEAN_RESULT+="$VAL|"
+        done
+        echo "${CLEAN_RESULT%|}"
+    else
+        # Last resort: just filter out dividers from whatever we got
+        for part in "${ALL_PARTS[@]}"; do
+            part=$(echo "$part" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            [[ -n "$part" && "$part" != "---" && "$part" != "═══" ]] && CLEAN_RESULT+="$part|"
+        done
+        echo "${CLEAN_RESULT%|}"
+    fi
 }
 
 # save_to_history "HistoryFile" "ChoiceString"

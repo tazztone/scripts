@@ -73,8 +73,10 @@ grep -q "FAIL" "$REPORT_FILE" 2>/dev/null && FAILED_ANY=1
 
 if [ $FAILED_ANY -eq 1 ]; then
     echo -e "${RED}Some tests failed! Check $REPORT_FILE for details.${NC}"
+    cleanup_test_data
     exit 1
 else
     echo -e "${GREEN}All tests passed!${NC}"
+    cleanup_test_data
     exit 0
 fi

@@ -6,6 +6,8 @@ This repository uses a custom-built, headless testing framework designed to vali
 
 - [Architecture: The Zenity Mock](#-architecture-the-zenity-mock)
 - [How to Run Tests](#-how-to-run-tests)
+- [Current Test Coverage](#-current-test-coverage)
+- [Coverage Gaps & Technical Debt](#-coverage-gaps--technical-debt)
 - [Common Roadblocks & Pitfalls](#-common-roadblocks--pitfalls)
 - [Negative Path & Resilience Testing](#-new-negative-path--resilience-testing)
 - [Guide for AI Agents](#-guide-for-ai-agents)
@@ -71,6 +73,42 @@ This specialized test suite uses **Property-Based Testing** to validate:
 - **Metadata Handling**: Lossless metadata operations
 
 **Test Coverage**: 12 comprehensive property tests with 100% pass rate validation.
+
+---
+
+## 📊 Current Test Coverage
+
+The test suite provides specialized coverage across the different toolboxes:
+
+| Test File | What it covers |
+|---|---|
+| `test_lossless_toolbox.sh` | 12 properties: stream copy, trimming, remux, metadata, stream selection, codec analysis, batch, rotation |
+| `test_image_toolbox.sh` | 6 scenarios: scale+BW+WEBP, square crop, 9:16 crop, flatten, sRGB, montage |
+| `test_universal_extended.sh` | 8 scenarios: 16:9 crop, 9:16 crop, rotate, normalize, extract MP3, trim, combo, GIF |
+| `test_ui_resilience.sh` | Cancel flows, sub-dialog cancels, no-files error, resilience (cancel→retry→success) |
+| `test_cross_version.sh` | Cross-version compatibility |
+| `test_loop_detection.sh` | Loop/infinite cycle detection |
+| `test_wizard_contract.sh` | Wizard UI contract compliance |
+| `test_wizard_robust.sh` | Wizard robustness |
+
+### File Validation: Inconsistencies & Gaps
+
+While `lib_test.sh` contains a robust `validate_media()` function (checking width, height, codecs, format, and tags), its application is inconsistent:
+- **Universal & Image Toolboxes**: Well-validated using end-to-end rules.
+- **Lossless Toolbox**: Primarily tests internal functions by sourcing the script directly. This verifies logic but misses the end-to-end user flow and actual output file quality validation in the unified style.
+
+## 🛑 Coverage Gaps & Technical Debt
+
+### Missing Operation Tests
+- **Universal Toolbox**: Subtitle burn-in/embed, speed changes, deinterlace, and hardware encoding paths (NVENC, etc.) are currently untested.
+- **Image Toolbox**: Watermarking/overlays, borders/padding, and custom arbitrary resizing are untested.
+- **Lossless Toolbox**: Lacks actual output file validation for "Merge" operations and tight duration tolerance checks (currently ±1s, should be ±0.1s).
+
+### Technical Debt
+- **Namespace Pollution**: `test_lossless_toolbox.sh` sources script paths directly, which can cause subtle interference.
+- **Detection Fragility**: `run_test` output detection via `ls -1` is fragile and may miss outputs in different directories.
+- **Rounding Issues**: `fps` validation in `validate_media` uses integer division, which can cause mismatches (e.g., 29 instead of 30).
+- **Incomplete Validation**: Missing rules for exact `duration`, `bitrate`, and `subtitle_stream` presence.
 
 ---
 

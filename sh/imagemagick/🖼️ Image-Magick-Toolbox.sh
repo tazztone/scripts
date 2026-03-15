@@ -344,19 +344,19 @@ for opt in "${CHOICE_ARR[@]}"; do
         Canvas:*)
             VAL=$(echo "$opt" | cut -d':' -f2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
             case "$VAL" in
-               *"Square Crop"*) 
+               *Square*) 
                    CROP_ARGS+=("-set" "option:distort:viewport" "%[fx:min(w,h)]x%[fx:min(w,h)]" "-distort" "SRT" "0" "+repage")
                    TAG="${TAG}_sq" 
                    ;;
-               *"Vertical (9:16)"*)
+               *Vertical*)
                    CROP_ARGS+=("-set" "option:distort:viewport" "%[fx:min(w,h*9/16)]x%[fx:min(w*16/9,h)]" "-distort" "SRT" "0" "+repage")
                    TAG="${TAG}_9x16"
                    ;;
-               *"Landscape (16:9)"*)
+               *Landscape*)
                    CROP_ARGS+=("-set" "option:distort:viewport" "%[fx:min(w,h*16/9)]x%[fx:min(w*9/16,h)]" "-distort" "SRT" "0" "+repage")
                    TAG="${TAG}_16x9"
                    ;;
-               *"Custom Crop"*)
+               *Custom*)
                    GEOM=$(zenity --entry --title="Custom Crop" --text="Enter geometry (widthxheight+x+y):" --entry-text="800x600+10+10" --cancel-label="Cancel")
                    if [ -n "$GEOM" ]; then
                        CROP_ARGS+=("-crop" "$GEOM" "+repage")
