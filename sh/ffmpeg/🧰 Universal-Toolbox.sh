@@ -224,7 +224,7 @@ while true; do
         
         [ -z "$CHOICES" ] && continue
         
-        SLUG=$(echo "$CHOICES" | sed 's/[^[:alnum:]| ]//g' | sed 's/Speed //g; s/Scale //g; s/Rotate //g; s/Flip //g; s/Crop //g; s/Trim //g; s/Output //g; s/Subtitles //g; s/Use //g; s/Fast//g; s/Slow//g; s/pixels//g; s/Quality //g; s/TargetSizeMB //g; s/|/_/g; s/ //g' | tr '[:upper:]' '[:lower:]')
+        SLUG=$(echo "$CHOICES" | sed 's/[^[:alnum:]| ]//g' | sed 's/ (Inactive)//g; s/No Change//g; s/Speed //g; s/Scale //g; s/Rotate //g; s/Flip //g; s/Crop //g; s/Trim //g; s/Output //g; s/Subtitles //g; s/Use //g; s/Fast//g; s/Slow//g; s/pixels//g; s/Quality //g; s/TargetSizeMB //g; s/|/_/g; s/ //g' | tr '[:upper:]' '[:lower:]')
         
         # If user selected ⭐ Save as Favorite in the wizard, force the prompt
         FORCE_SAVE="false"
@@ -536,10 +536,9 @@ for f in "$@"; do
         SRT_FILE="${f%.*}.srt"
         if [ -f "$SRT_FILE" ]; then
             if [ "$SUB_TYPE" = "burn" ]; then
-                # Burn-in: Force style for readability
-                # Escape the path for filter: colon must be escaped
-                ESC_SRT=$(echo "$SRT_FILE" | sed "s/:/\\\\:/g")
-                SUB_FILTER="subtitles='$ESC_SRT':force_style='Fontsize=24,BorderStyle=3,Outline=2'"
+                # Burn-in: Use relative path (best for ffmpeg)
+                REL_SRT="./$(basename "$SRT_FILE")"
+                SUB_FILTER="subtitles=filename='$REL_SRT':force_style='Fontsize=24,BorderStyle=3,Outline=2'"
             elif [ "$SUB_TYPE" = "mux" ]; then
                 # Mux: Add input and map it
                 SUB_MAPPING=("-i" "$SRT_FILE" "-c:s" "mov_text" "-metadata:s:s:0" "language=eng")
