@@ -96,6 +96,7 @@ validate_media() {
             duration)
                 local d=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file")
                 local diff=$(awk -v d="$d" -v val="$val" 'BEGIN { diff = d - val; if (diff < 0) diff = -diff; print diff }')
+                # 0.1s tolerance handles keyframe-alignment in lossless trims and container overhead
                 (( $(echo "$diff > 0.1" | bc -l) )) && { log_fail "Duration mismatch: expected $val, got $d (diff=$diff)"; failed=1; }
                 ;;
             width)
@@ -125,9 +126,10 @@ validate_media() {
                 ;;
             subtitle_stream)
                 local s=$(ffprobe -v error -select_streams s -show_entries stream=index -of default=noprint_wrappers=1:nokey=1 "$file" | grep -c .)
-                [[ "$s" -lt "$val" ]] && { log_fail "Subtitle streams mismatch: expected >= $val, got $s"; failed=1; }
+                [[ "$s" -ne "$val" ]] && { log_fail "Subtitle streams mismatch: expected $val, got $s"; failed=1; }
                 ;;
             bitrate)
+                # Note: bitrate uses raw bits/second as reported by ffprobe
                 local b=$(ffprobe -v error -show_entries format=bitrate -of default=noprint_wrappers=1:nokey=1 "$file")
                 if [[ "$b" == "N/A" ]] || [[ "$b" -eq 0 ]]; then
                      log_fail "Invalid or missing bitrate: $b"
@@ -200,7 +202,7 @@ run_test() {
     find "$dir" -maxdepth 1 -name "$pattern" "${exclude_args[@]}" -delete
 
     log_info "Testing: $(basename "$script_abs") with [${files_rel[*]}]"
-    local out_log="/tmp/run_test_output.log"
+    local out_log=$(mktemp)
     (
         cd "$dir" || exit 1
         # Pass basenames to script, as we are already in the directory
@@ -215,9 +217,11 @@ run_test() {
         # (Though we prefer the pattern match for accuracy)
         log_fail "No output matching $pattern (Exit: $status)"
         echo "--- LOG ---"; cat "$out_log"; echo "-----------"
+        rm -f "$out_log"
         return 1
     fi
     
     log_info "Detected: $(basename "$newest_file")"
+    rm -f "$out_log"
     validate_media "$newest_file" "$rules" || return 1
 }

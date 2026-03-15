@@ -53,12 +53,13 @@ echo "TestPreset|Speed: 2x (Fast)|Scale: 720p|Quality: Medium|Remove Audio Track
 )
 
 # Use glob and validate_media for better robustness
-PRESET_OUTPUT=$(ls "$TEST_DATA"/input_*2x*720p*noaudio*.mp4 2>/dev/null | head -1)
+# slug order might change, but properties must remain correct
+PRESET_OUTPUT=$(ls "$TEST_DATA"/input_*.mp4 2>/dev/null | head -1)
 if [[ -n "$PRESET_OUTPUT" ]]; then
     log_pass "CLI Preset loaded successfully: $(basename "$PRESET_OUTPUT")"
     validate_media "$PRESET_OUTPUT" "duration=0.5,width=1280,no_audio" || FAILED=$((FAILED+1))
 else
-    log_fail "CLI Preset failed to generate expected output matching glob"
+    log_fail "CLI Preset failed to generate expected output"
     FAILED=$((FAILED+1))
 fi
 
