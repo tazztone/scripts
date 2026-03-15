@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -u
 # 🖼️ Image-Magick-Toolbox v2.1
 # Smart Recipe Builder - Stack edits and Context-Aware UI
 
@@ -16,6 +16,20 @@ HISTORY_FILE="$CONFIG_DIR/history.conf"
 mkdir -p "$CONFIG_DIR"
 touch "$PRESET_FILE" "$HISTORY_FILE"
 
+# --- INIT STATE ---
+IM_ARGS=()
+CROP_ARGS=()
+SCALE_ARGS=()
+EFFECT_ARGS=()
+FORMAT_ARGS=()
+DO_MUTE=false
+DO_TEXT_ANNOTATION=false
+BRAND_PAYLOAD=""
+OUT_EXT=""
+TAG=""
+DO_MONTAGE=false
+DO_PDF_EXTRACT=false
+
 # --- MEDIA ANALYSIS (PRE-FLIGHT) ---
 HAS_ALPHA=0
 IS_CMYK=0
@@ -24,25 +38,26 @@ MEDIA_FORMAT=""
 
 analyze_media() {
     local f="$1"
-    [ ! -f "$f" ] && return
+    if [ ! -f "$f" ]; then return; fi
     
     local ext=$(echo "${f##*.}" | tr '[:upper:]' '[:lower:]')
     
     # Image Analysis
     if [[ "$ext" =~ ^(jpg|jpeg|png|gif|tiff|webp)$ ]]; then
         # Try to get format, alpha existence, and colorspace
-        local info=$($IM_IDENTIFY -format "%m %A %[colorspace]" "$f" 2>/dev/null)
+        local info=$($IM_IDENTIFY -format "%m %A %[colorspace]" "$f" 2>/dev/null || true)
         if [ -n "$info" ]; then
+            local alpha="" colorspace=""
             read -r MEDIA_FORMAT alpha colorspace <<< "$info"
-            [[ "$alpha" == "True" || "$alpha" == "Blend" ]] && HAS_ALPHA=1 || HAS_ALPHA=0
-            [[ "$colorspace" == "CMYK" ]] && IS_CMYK=1 || IS_CMYK=0
+            if [[ "$alpha" == "True" || "$alpha" == "Blend" ]]; then HAS_ALPHA=1; else HAS_ALPHA=0; fi
+            if [[ "$colorspace" == "CMYK" ]]; then IS_CMYK=1; else IS_CMYK=0; fi
         fi
     # Video Analysis
     elif [[ "$ext" =~ ^(mp4|mkv|mov|avi|webm)$ ]]; then
         MEDIA_FORMAT="VIDEO"
         if command -v ffprobe &>/dev/null; then
-            local audio_codec=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "$f" 2>/dev/null)
-            [ -n "$audio_codec" ] && HAS_AUDIO=1 || HAS_AUDIO=0
+            local audio_codec=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "$f" 2>/dev/null || true)
+            if [ -n "$audio_codec" ]; then HAS_AUDIO=1; else HAS_AUDIO=0; fi
         fi
     elif [[ "$ext" == "pdf" ]]; then
         MEDIA_FORMAT="PDF"
@@ -170,26 +185,27 @@ show_main_menu() {
     fi
 
     # 2. Contextual Image Ops
-    [[ "$HAS_ALPHA" -eq 1 ]] && INTENTS+="🎨|Flatten Background|Remove transparency;"
-    [[ "$IS_CMYK" -eq 1 ]] && INTENTS+="🌈|Convert to sRGB|Fix colors for web;"
-    [[ "$MEDIA_FORMAT" == "PDF" ]] && INTENTS+="📄|Extract Pages|Convert PDF to images;"
+    if [[ "$HAS_ALPHA" -eq 1 ]]; then INTENTS+="🎨|Flatten Background|Remove transparency;"; fi
+    if [[ "$IS_CMYK" -eq 1 ]]; then INTENTS+="🌈|Convert to sRGB|Fix colors for web;"; fi
+    if [[ "$MEDIA_FORMAT" == "PDF" ]]; then INTENTS+="📄|Extract Pages|Convert PDF to images;"; fi
 
     # 3. Standard Global Ops
     INTENTS+="📦|Convert Format|JPG/PNG/WEBP/PDF;✨|Effects & Branding|Rotation, Watermarks, BW"
-    [[ "$MEDIA_FORMAT" != "VIDEO" ]] && INTENTS+=";🖼️|Montage & Grid|Combine images into grids"
-    [[ "$HAS_AUDIO" -eq 1 ]] && INTENTS+=";🔇|Remove Audio|Strip audio from video"
+    if [[ "$MEDIA_FORMAT" != "VIDEO" ]]; then INTENTS+=";🖼️|Montage & Grid|Combine images into grids"; fi
+    if [[ "$HAS_AUDIO" -eq 1 ]]; then INTENTS+=";🔇|Remove Audio|Strip audio from video"; fi
 
     local LOOP_COUNT=0
+    local -a VALS=()
     while true; do
         LOOP_COUNT=$((LOOP_COUNT + 1))
-        if [ $LOOP_COUNT -gt 5 ]; then
+        if [ $LOOP_COUNT -gt 10 ]; then
             _wizard_log "RECURSION GUARD TRIGGERED - Too many reloads"
             zenity --error --text="Recursive UI loop detected ($LOOP_COUNT attempts). Selection might not be matching. Please check $LOG_FILE"
             exit 1
         fi
         
-        local PICKED_RAW=$(show_unified_wizard "Image-Magick-Toolbox v2.1" "$INTENTS" "$PRESET_FILE" "$HISTORY_FILE")
-        [ -z "$PICKED_RAW" ] && exit 0
+        local PICKED_RAW=$(show_unified_wizard "Image-Magick-Toolbox v2.1" "$INTENTS" "$PRESET_FILE" "$HISTORY_FILE" || true)
+        if [ -z "$PICKED_RAW" ]; then exit 0; fi
 
         # Result format: "Name|Name|..."
         IFS='|' read -ra PARTS <<< "$PICKED_RAW"
@@ -216,7 +232,8 @@ show_main_menu() {
         done
 
         if [ -n "$LOAD_PRESET" ]; then
-            echo $(grep "^$LOAD_PRESET|" "$PRESET_FILE" | cut -d'|' -f2-)
+            local LINE=$(grep "^$LOAD_PRESET|" "$PRESET_FILE" | cut -d'|' -f2-)
+            echo "$LINE"
             return 0
         elif [ -n "$LOAD_HISTORY" ]; then
             echo "$LOAD_HISTORY"
@@ -227,9 +244,14 @@ show_main_menu() {
             for CHOICE in "${SELECTED_INTENTS[@]}"; do
                 case "$CHOICE" in
                     "Scale & Resize")
-                        RES=$(show_scale_interface)
-                        [ -z "$RES" ] && continue
-                        IFS='|' read -ra VALS <<< "$RES"
+                        RES=$(show_scale_interface || true)
+                        if [ -z "$RES" ]; then continue; fi
+                        # Robust array extraction
+                        local -a NEW_VALS=()
+                        IFS='|' read -ra NEW_VALS <<< "$RES"
+                        VALS=("" "") # Reset/init
+                        for i in "${!NEW_VALS[@]}"; do VALS[i]="${NEW_VALS[i]}"; done
+
                         local CLEAN_RES=$(echo "${VALS[0]}" | sed 's/ (.*)$//')
                         if [[ "$CLEAN_RES" == "50%" ]]; then recipe_list+=("Scale: 50%")
                         elif [[ "$CLEAN_RES" == "Custom" ]]; then recipe_list+=("CustomGeometry:${VALS[1]}")
@@ -242,32 +264,38 @@ show_main_menu() {
                     "Scale: 1280x")  recipe_list+=("Scale: 1280x") ;;
                     "Scale: 640x")   recipe_list+=("Scale: 640x") ;;
                     "Scale: Custom") 
-                        RES=$(zenity --entry --title="Scale Width" --text="Enter target width (e.g. 1280) or geometry (800x600):" --entry-text="1920" --cancel-label="Cancel")
-                        [ -n "$RES" ] && recipe_list+=("CustomGeometry:$RES")
+                        RES=$(zenity --entry --title="Scale Width" --text="Enter target width (e.g. 1280) or geometry (800x600):" --entry-text="1920" --cancel-label="Cancel" || true)
+                        if [ -n "$RES" ]; then recipe_list+=("CustomGeometry:$RES"); fi
                         ;;
                     "Crop & Geometry")
-                        RES=$(show_crop_interface)
-                        [ -z "$RES" ] && continue
+                        RES=$(show_crop_interface || true)
+                        if [ -z "$RES" ]; then continue; fi
                         recipe_list+=("Canvas: $RES")
                         ;;
                     "Convert Format")
-                        RES=$(show_convert_interface)
-                        [ -z "$RES" ] && continue
-                        IFS='|' read -ra VALS <<< "$RES"
+                        RES=$(show_convert_interface || true)
+                        if [ -z "$RES" ]; then continue; fi
+                        local -a NEW_VALS=()
+                        IFS='|' read -ra NEW_VALS <<< "$RES"
+                        VALS=("" "") # Reset/init
+                        for i in "${!NEW_VALS[@]}"; do VALS[i]="${NEW_VALS[i]}"; done
                         recipe_list+=("Format: ${VALS[0]}|Optimize: ${VALS[1]}")
                         ;;
                     "Effects & Branding")
-                        RES=$(show_effects_interface)
-                        [ -z "$RES" ] && continue
-                        IFS='|' read -ra VALS <<< "$RES"
+                        RES=$(show_effects_interface || true)
+                        if [ -z "$RES" ]; then continue; fi
+                        local -a NEW_VALS=()
+                        IFS='|' read -ra NEW_VALS <<< "$RES"
+                        VALS=("" "" "") # Reset/init
+                        for i in "${!NEW_VALS[@]}"; do VALS[i]="${NEW_VALS[i]}"; done
                         # Only add if not "No Change" or "(Inactive)"
                         if [[ "${VALS[0]}" != "No Change" || "${VALS[1]}" != "(Inactive)" ]]; then
                             recipe_list+=("Effect: ${VALS[0]}|Branding: ${VALS[1]}|BrandingPayload: ${VALS[2]}")
                         fi
                         ;;
                     "Montage & Grid")
-                        RES=$(show_montage_interface)
-                        [ -z "$RES" ] && continue
+                        RES=$(show_montage_interface || true)
+                        if [ -z "$RES" ]; then continue; fi
                         # Montage is terminal/special
                         echo "Canvas: $RES"
                         return 0
@@ -360,7 +388,7 @@ for opt in "${CHOICE_ARR[@]}"; do
                    TAG="${TAG}_16x9"
                    ;;
                *Custom*)
-                   GEOM=$(zenity --entry --title="Custom Crop" --text="Enter geometry (widthxheight+x+y):" --entry-text="800x600+10+10" --cancel-label="Cancel")
+                   GEOM=$(zenity --entry --title="Custom Crop" --text="Enter geometry (widthxheight+x+y):" --entry-text="800x600+10+10" --cancel-label="Cancel" || true)
                    if [ -n "$GEOM" ]; then
                        CROP_ARGS+=("-crop" "$GEOM" "+repage")
                        TAG="${TAG}_crop"
@@ -434,10 +462,10 @@ done
 
 # Combine in priority order - safely to preserve element integrity
 IM_ARGS=()
-[ ${#CROP_ARGS[@]} -gt 0 ] && IM_ARGS+=("${CROP_ARGS[@]}")
-[ ${#SCALE_ARGS[@]} -gt 0 ] && IM_ARGS+=("${SCALE_ARGS[@]}")
-[ ${#EFFECT_ARGS[@]} -gt 0 ] && IM_ARGS+=("${EFFECT_ARGS[@]}")
-[ ${#FORMAT_ARGS[@]} -gt 0 ] && IM_ARGS+=("${FORMAT_ARGS[@]}")
+if [ ${#CROP_ARGS[@]} -gt 0 ]; then IM_ARGS+=("${CROP_ARGS[@]}"); fi
+if [ ${#SCALE_ARGS[@]} -gt 0 ]; then IM_ARGS+=("${SCALE_ARGS[@]}"); fi
+if [ ${#EFFECT_ARGS[@]} -gt 0 ]; then IM_ARGS+=("${EFFECT_ARGS[@]}"); fi
+if [ ${#FORMAT_ARGS[@]} -gt 0 ]; then IM_ARGS+=("${FORMAT_ARGS[@]}"); fi
 
 # --- SPECIAL MODE: MONTAGE ---
 if [ "$DO_MONTAGE" = true ]; then
@@ -480,16 +508,17 @@ fi
         
         # Execute chain
         {
+            RET=0
             if [ "$DO_MUTE" = true ] && command -v ffmpeg &>/dev/null; then
-                ffmpeg -v error -i "$f" -an -c:v copy "/tmp/tmp_mute_${COUNT}.${IN_EXT}"
-                $IM_EXE "/tmp/tmp_mute_${COUNT}.${IN_EXT}" "${IM_ARGS[@]}" "$OUT_FILE" 2>>"$ERR_LOG"
-                RET=$?
-                rm "/tmp/tmp_mute_${COUNT}.${IN_EXT}"
+                ffmpeg -v error -i "$f" -an -c:v copy "/tmp/tmp_mute_${COUNT}.${IN_EXT}" || RET=$?
+                if [ $RET -eq 0 ]; then
+                    $IM_EXE "/tmp/tmp_mute_${COUNT}.${IN_EXT}" "${IM_ARGS[@]}" "$OUT_FILE" 2>>"$ERR_LOG" || RET=$?
+                fi
+                rm -f "/tmp/tmp_mute_${COUNT}.${IN_EXT}"
             else
-                $IM_EXE "$f" "${IM_ARGS[@]}" "$OUT_FILE" 2>>"$ERR_LOG"
-                RET=$?
+                $IM_EXE "$f" "${IM_ARGS[@]}" "$OUT_FILE" 2>>"$ERR_LOG" || RET=$?
             fi
-            [ $RET -ne 0 ] && echo "Error processing file: $f" >> "$ERR_LOG"
+            if [ $RET -ne 0 ]; then echo "Error processing file: $f (Exit: $RET)" >> "$ERR_LOG"; fi
         }
         
         # In sequential mode we don't need wait -n or jobs

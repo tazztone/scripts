@@ -1,14 +1,14 @@
 #!/bin/bash
 # Shared Wizard Logic for scripts-sh
 
-# Sourcing Guard
-[ "${_WIZARD_SH_LOADED:-0}" -eq 1 ] && return
-readonly _WIZARD_SH_LOADED=1
-
 # --- Logging & Security ---
 LOG_DIR="$HOME/.local/share/scripts-sh"
 LOG_FILE="$LOG_DIR/debug.log"
 DEBUG_MODE="${DEBUG_MODE:-0}"
+
+# Sourcing Guard
+[ "${_WIZARD_SH_LOADED:-0}" -eq 1 ] && return
+readonly _WIZARD_SH_LOADED=1
 
 # --- Constants ---
 readonly WIZARD_ROW_SIZE=5
@@ -17,7 +17,7 @@ readonly MAX_HISTORY=10
 readonly MAX_PRESETS=20
 
 _wizard_log() {
-    if [[ "$DEBUG_MODE" == "1" ]]; then
+    if [[ "${DEBUG_MODE:-0}" == "1" ]]; then
         mkdir -p "$LOG_DIR"
         chmod 700 "$LOG_DIR" 2>/dev/null
         echo "[DEBUG] $(date '+%Y-%m-%d %H:%M:%S') $1" >> "$LOG_FILE"
@@ -67,6 +67,7 @@ _wizard_build_args() {
     # 1. Add Intents
     IFS=';' read -ra INTENTS_ARR <<< "$INTENTS_RAW"
     for item in "${INTENTS_ARR[@]}"; do
+        local icon="" name="" desc=""
         IFS='|' read -r icon name desc <<< "$item"
         _ARGS+=(FALSE "$icon $name" "$desc" "$name" "$name")
     done
@@ -84,7 +85,8 @@ _wizard_build_args() {
     # 3. Add Presets
     if [ -s "$PRESET_FILE" ]; then
         local p_count=0
-        while IFS='|' read -r name options; do
+        while IFS='|' read -r name options || [ -n "$name" ]; do
+            local name="${name:-}" options="${options:-}"
             [ -z "$name" ] && continue
             [ "$p_count" -ge "$MAX_PRESETS" ] && break
             _ARGS+=(FALSE "⭐ $name" "Saved Favorite" "PRESET:$name" "PRESET:$name")
@@ -122,17 +124,17 @@ _wizard_parse_result() {
         return
     fi
 
-    local -a ALL_PARTS
+    local -a ALL_PARTS=()
     IFS='|' read -ra ALL_PARTS <<< "$RESULT"
-    local FIRST_UP=$(echo "${ALL_PARTS[0]}" | tr '[:lower:]' '[:upper:]')
+    local FIRST_UP=$(echo "${ALL_PARTS[0]:-}" | tr '[:lower:]' '[:upper:]')
     
     # 3. Checklist Mode ([TRUE/FALSE] | [Icon Name] | [Desc] | [ID] | [RawID])
     if [[ "$FIRST_UP" == "TRUE" || "$FIRST_UP" == "FALSE" ]]; then
         for (( i=0; i<${#ALL_PARTS[@]}; i+=WIZARD_ROW_SIZE )); do
             [ $i -ge ${#ALL_PARTS[@]} ] && break
-            local STATE=$(echo "${ALL_PARTS[i]}" | tr '[:lower:]' '[:upper:]')
+            local STATE=$(echo "${ALL_PARTS[i]:-}" | tr '[:lower:]' '[:upper:]')
             if [[ "$STATE" == "TRUE" ]]; then
-                local VAL="${ALL_PARTS[i+WIZARD_COL_RAWID]}"
+                local VAL="${ALL_PARTS[i+WIZARD_COL_RAWID]:-}"
                 [[ -n "$VAL" && "$VAL" != "---" && "$VAL" != "═══" ]] && CLEAN_RESULT+="$VAL|"
             fi
         done
@@ -144,7 +146,7 @@ _wizard_parse_result() {
         
         # Double-click case: Zenity returns one row with FALSE but we have pipes
         if [[ "$FIRST_UP" == "FALSE" ]]; then
-             local VAL="${ALL_PARTS[WIZARD_COL_RAWID]}"
+             local VAL="${ALL_PARTS[WIZARD_COL_RAWID]:-}"
              [[ -n "$VAL" && "$VAL" != "---" && "$VAL" != "═══" ]] && { echo "$VAL"; return; }
         fi
         echo ""
@@ -155,7 +157,7 @@ _wizard_parse_result() {
     # Try to extract RawID if the column count matches
     if (( ${#ALL_PARTS[@]} % WIZARD_ROW_SIZE == 0 )); then
         for (( i=0; i<${#ALL_PARTS[@]}; i+=WIZARD_ROW_SIZE )); do
-            local VAL="${ALL_PARTS[i+WIZARD_COL_RAWID]}"
+            local VAL="${ALL_PARTS[i+WIZARD_COL_RAWID]:-}"
             [[ -n "$VAL" && "$VAL" != "---" && "$VAL" != "═══" ]] && CLEAN_RESULT+="$VAL|"
         done
         echo "${CLEAN_RESULT%|}"
@@ -176,13 +178,19 @@ save_to_history() {
     [ -z "$CHOICES" ] && return
     
     # 1. De-duplicate: If choices match the most recent entry, do nothing.
-    local RECENT=$(head -n 1 "$HISTORY_FILE" 2>/dev/null)
+    # Use || true to avoid set -e if file is empty
+    local RECENT=""
+    RECENT=$(head -n 1 "$HISTORY_FILE" 2>/dev/null || true)
     if [ "$CHOICES" != "$RECENT" ]; then
         # 2. Add to top
-        echo "$CHOICES" | cat - "$HISTORY_FILE" > "${HISTORY_FILE}.tmp"
+        local tmp_file="${HISTORY_FILE}.tmp"
+        echo "$CHOICES" > "$tmp_file"
+        if [ -f "$HISTORY_FILE" ]; then
+            cat "$HISTORY_FILE" >> "$tmp_file"
+        fi
         # 3. Keep last MAX_HISTORY
-        head -n "$MAX_HISTORY" "${HISTORY_FILE}.tmp" > "$HISTORY_FILE"
-        rm "${HISTORY_FILE}.tmp"
+        head -n "$MAX_HISTORY" "$tmp_file" > "$HISTORY_FILE"
+        rm -f "$tmp_file"
     fi
 }
 
@@ -193,20 +201,29 @@ prompt_save_preset() {
     local SUGGESTED_NAME="$3"
     local FORCE="${4:-false}"
     
-    if [ "$FORCE" = "true" ] || zenity --question --title="Save as Favorite?" --text="Would you like to save this configuration as a permanent favorite?" --ok-label="Save" --cancel-label="Just Run Once"; then
-        local PNAME
-        PNAME=$(zenity --entry --title="Save Favorite" --text="Enter a name for this recipe:" --entry-text="$SUGGESTED_NAME" --cancel-label="Cancel")
+    local SAVE_CONFIRMED=false
+    if [ "$FORCE" = "true" ]; then
+        SAVE_CONFIRMED=true
+    else
+        if zenity --question --title="Save as Favorite?" --text="Would you like to save this configuration as a permanent favorite?" --ok-label="Save" --cancel-label="Just Run Once" 2>/dev/null; then
+            SAVE_CONFIRMED=true
+        fi
+    fi
+
+    if [ "$SAVE_CONFIRMED" = "true" ]; then
+        local PNAME=""
+        PNAME=$(zenity --entry --title="Save Favorite" --text="Enter a name for this recipe:" --entry-text="$SUGGESTED_NAME" --cancel-label="Cancel" 2>/dev/null || true)
         if [ -n "$PNAME" ]; then
             PNAME="${PNAME//|/}" # Sanitize: remove pipes
-            if grep -q "^$PNAME|" "$PRESET_FILE"; then
-                if ! zenity --question --title="Overwrite?" --text="A favorite named '$PNAME' already exists.\nOverwrite it?" --ok-label="Overwrite" --cancel-label="Cancel"; then
+            if [ -f "$PRESET_FILE" ] && grep -q "^$PNAME|" "$PRESET_FILE"; then
+                if ! zenity --question --title="Overwrite?" --text="A favorite named '$PNAME' already exists.\nOverwrite it?" --ok-label="Overwrite" --cancel-label="Cancel" 2>/dev/null; then
                     return 0
                 fi
                 local ESC_PNAME=$(printf '%s\n' "$PNAME" | sed 's/[.[\*^$]/\\&/g')
                 sed -i "/^${ESC_PNAME}|/d" "$PRESET_FILE"
             fi
             echo "$PNAME|$CHOICES" >> "$PRESET_FILE"
-            zenity --notification --text="Saved as '$PNAME'!"
+            zenity --notification --text="Saved as '$PNAME'!" 2>/dev/null || true
         fi
     fi
 }

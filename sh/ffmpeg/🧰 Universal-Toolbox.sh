@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -u
 # Universal FFmpeg Toolbox
 # Combine multiple operations (Speed, Scale, Crop, Audio, Format) in one pass.
 
@@ -17,6 +17,7 @@ probe_gpu </dev/null >/dev/null 2>&1 &
 CONFIG_DIR="$HOME/.config/scripts-sh/ffmpeg"
 PRESET_FILE="$CONFIG_DIR/presets.conf"
 HISTORY_FILE="$CONFIG_DIR/history.conf"
+LOG_FILE="${LOG_FILE:-/tmp/universal_toolbox.log}"
 mkdir -p "$CONFIG_DIR"
 touch "$HISTORY_FILE"
 
@@ -28,6 +29,12 @@ fi
 
 # --- ARGUMENT PARSING (CLI PRESETS) ---
 PRELOADED_CHOICES=""
+PRESET_NAME=""
+USER_TARGET_MB=""
+USER_TRIM_S=""
+USER_TRIM_E=""
+USER_W=""
+
 if [[ "$1" == "preset="* ]]; then
     PRESET_NAME="${1#preset=}"
     shift 1
@@ -38,7 +45,8 @@ fi
 
 if [ -n "$PRESET_NAME" ]; then
     # Read preset line: Name|Choice1|Choice2...
-    LINE=$(grep "^$PRESET_NAME|" "$PRESET_FILE")
+    # Use || true to prevent set -e trigger on no match
+    LINE=$(grep "^$PRESET_NAME|" "$PRESET_FILE" || true)
     if [ -n "$LINE" ]; then
         # Extract choices (everything after first pipe)
         PRELOADED_CHOICES="${LINE#*|}"
@@ -53,7 +61,9 @@ fi
 _wizard_log "Universal-Toolbox started with args: [$*]"
 
 INTENTS_STR="⏪|Speed Control|Change playback speed;📐|Scale / Resize|Change resolution;🖼️|Crop / Aspect Ratio|Vertical/Square/etc;🔄|Rotate & Flip|Fix orientation;⏱️|Trim (Cut Time)|Select segment;🔊|Audio Tools|Normalize/Boost/Mute"
-[ -f "${1%.*}.srt" ] && INTENTS_STR+=";📝|Subtitles|Burn-in or Mux .srt"
+if [ -n "${1:-}" ] && [ -f "${1%.*}.srt" ]; then
+    INTENTS_STR+=";📝|Subtitles|Burn-in or Mux .srt"
+fi
 
 LOOP_COUNT=0
 while true; do
@@ -159,12 +169,20 @@ while true; do
         HW_OPTS="${HW_OPTS}None (CPU Only)"
         ZENITY_FORMS+=( "--add-combo=🏎️ Hardware" "--combo-values=$HW_OPTS" )
 
-        CONFIG_RESULT=$(zenity "${ZENITY_FORMS[@]}")
-        [ -z "$CONFIG_RESULT" ] && continue 
+        # Use || true to prevent set -e on Cancel (exit 1)
+        CONFIG_RESULT=$(zenity "${ZENITY_FORMS[@]}" || true)
+        if [ -z "$CONFIG_RESULT" ]; then
+            _wizard_log "User cancelled configuration form"
+            continue 
+        fi
 
         # --- EXTRACT CONFIG & MAP TO CHOICES ---
         CHOICES=""
-        IFS='|' read -ra VALS <<< "$CONFIG_RESULT"
+        # Initialize array with empty values to satisfy set -u
+        VALS=("" "" "" "" "" "" "" "" "" "" "" "" "" "")
+        IFS='|' read -ra NEW_VALS <<< "$CONFIG_RESULT"
+        # Copy newly read values into our base array
+        for i in "${!NEW_VALS[@]}"; do VALS[i]="${NEW_VALS[i]}"; done
 
         # 0. Speed
         PICK_spd="${VALS[0]}"; CUST_spd="${VALS[1]}"
@@ -253,9 +271,12 @@ fi
 
 if [[ "$CHOICES" == *"Target Size"* ]]; then
     if [ -z "$TARGET_MB" ]; then
-        TARGET_MB=$(zenity --entry --title="Target Size" --text="Total file size (MB):" --entry-text="25" --cancel-label="Cancel")
+        TARGET_MB=$(zenity --entry --title="Target Size" --text="Total file size (MB):" --entry-text="25" --cancel-label="Cancel" || true)
     fi
-    [ -z "$TARGET_MB" ] && exit 0
+    if [ -z "$TARGET_MB" ]; then
+        _wizard_log "User cancelled target size prompt"
+        exit 0
+    fi
 fi
 
 # 2. Logic & Prompts
@@ -306,7 +327,7 @@ fi
 if [[ "$CHOICES" == *"Trim: End"* ]]; then
     DUR="${USER_TRIM_E}"
     if [ -z "$DUR" ]; then
-        DUR=$(zenity --entry --title="Trim End" --text="Trim End time / Duration to keep (seconds or hh:mm:ss):" --entry-text="00:01:00" --cancel-label="Cancel")
+        DUR=$(zenity --entry --title="Trim End" --text="Trim End time / Duration to keep (seconds or hh:mm:ss):" --entry-text="00:01:00" --cancel-label="Cancel" || true)
     fi
     if [ -n "$DUR" ]; then 
         if VALID_E=$(validate_time_format "$DUR"); then
@@ -368,7 +389,7 @@ if [[ "$CHOICES" == *"Scale: 50%"* ]]; then SCALE_W="iw*0.5"; TAG="${TAG}_half";
 if [[ "$CHOICES" == *"Custom Scale Width"* ]]; then
     W="${USER_W}"
     if [ -z "$W" ]; then
-        W=$(zenity --entry --title="Scale Width" --text="Target Width (px):" --entry-text="1280" --cancel-label="Cancel")
+        W=$(zenity --entry --title="Scale Width" --text="Target Width (px):" --entry-text="1280" --cancel-label="Cancel" || true)
     fi
     if [ -n "$W" ]; then SCALE_W="$W"; TAG="${TAG}_${W}w"; fi
 fi
@@ -493,10 +514,9 @@ fi
 for f in "$@"; do
     FILE_TAG="$TAG"
     # Calculate FPS if speed adjustment is active
-    # Calculate FPS if speed adjustment is active
     FPS_ARG=()
     if [ -n "$SPEED_VAL" ]; then
-        IN_FPS=$(ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=noprint_wrappers=1:nokey=1 "$f")
+        IN_FPS=$(ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=noprint_wrappers=1:nokey=1 "$f" || true)
         if [ -n "$IN_FPS" ]; then
             FPS_ARG=("-r" "$IN_FPS")
             _wizard_log "Detecting FPS: $IN_FPS for $f"
@@ -561,15 +581,15 @@ for f in "$@"; do
     # --- TARGET SIZE (2-PASS) EXECUTION ---
     if [ -n "$TARGET_MB" ]; then
         _wizard_log "Calculating Bitrate for Target Size..."
-        DUR=$(get_duration "$f" | cut -d. -f1)
+        DUR=$(get_duration "$f" | cut -d. -f1 || echo "1")
         if [ -z "$DUR" ] || [ "$DUR" -le 0 ]; then DUR=1; fi
         
         ABR=192
-        if [[ "${ACODEC_OPTS[*]}" == *"-b:a 128k"* ]]; then ABR=128; fi
+        if [[ "${ACODEC_OPTS[*]:-}" == *"-b:a 128k"* ]]; then ABR=128; fi
         if [ "$REMOVE_AUDIO" = true ]; then ABR=0; fi
         
-        TOTAL_BR=$(echo "($TARGET_MB * 8192) / $DUR" | bc)
-        V_BR=$(echo "$TOTAL_BR - $ABR" | bc)
+        TOTAL_BR=$(echo "($TARGET_MB * 8192) / $DUR" | bc || echo "1000")
+        V_BR=$(echo "$TOTAL_BR - $ABR" | bc || echo "800")
         
         if [ "$V_BR" -lt 50 ]; then
             zenity --warning --text="Target size ($TARGET_MB MB) is too small for this duration ($DUR sec).\n\nCalculated Video Bitrate: ${V_BR}k."
