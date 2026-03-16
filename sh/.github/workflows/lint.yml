@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run ShellCheck
-        uses: ludeeus/shellcheck-action@master
+        uses: ludeeus/action-shellcheck@v2
         with:
           scandir: '.'
           severity: error
