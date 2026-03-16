@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # Common utility functions for Nautilus FFmpeg Scripts
 
 # Sourcing Guard
@@ -30,11 +31,11 @@ Z_PROGRESS() {
 # Show Error and Exit
 # Usage: error_exit "Message"
 error_exit() {
-    zenity --error --text="$1"
+    zenity --error --text="$1" --no-markup
     exit 1
 }
 
-# Get Video Duration in Seconds
+# Get Video Duration in Seconds (float)
 # Usage: get_duration "filename"
 get_duration() {
     local d
@@ -120,7 +121,7 @@ generate_safe_filename() {
     
     while [ -f "$out" ]; do
         out="${base}${tag}_v${ctr}.${ext}"
-        ((ctr++))
+        ((ctr += 1))
     done
     echo "$out"
 }
