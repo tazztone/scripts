@@ -1384,11 +1384,27 @@ show_batch_interface() {
 # Enhanced main script execution with preset support
 main() {
     # Check if files were passed as arguments
-    if [ $# -eq 0 ]; then
+    if [[ $# -eq 0 ]]; then
         zenity --error --text="No files selected.\n\nPlease select video files and run this script from the right-click menu."
         exit 1
     fi
     
+    # Check if files exist and are readable
+    for f in "$@"; do
+        if [[ ! -f "$f" ]]; then
+            echo "Error: File not found: $f"
+            exit 1
+        fi
+        if [[ ! -r "$f" ]]; then
+            echo "Error: File not readable: $f"
+            exit 1
+        fi
+        if [[ ! -s "$f" ]]; then
+            echo "Error: File is empty: $f"
+            exit 1
+        fi
+    done
+
     local files=("$@")
     
     # Show main menu (handles presets and history internally)
