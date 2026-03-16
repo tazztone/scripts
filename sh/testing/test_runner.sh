@@ -29,7 +29,7 @@ cat <<EOF > /tmp/zenity_responses
 Speed Control|Scale / Resize|Audio Tools
 2x (Fast)||720p||||||Remove Audio Track||Medium (CRF 23)||Auto/MP4|None (CPU Only)
 EOF
-run_test "ffmpeg/🧰 Universal-Toolbox.sh" "vcodec=h264,fps=30" "$TEST_DATA/input.mp4" || FAILED=$((FAILED+1))
+run_test "$SCRIPT_DIR/../ffmpeg/🧰 Universal-Toolbox.sh" "vcodec=h264,fps=30" "$TEST_DATA/input.mp4" || FAILED=$((FAILED+1))
 
 # 2. Subtitle Burn-in
 echo "Test 2: Subtitle Burn-in"
@@ -38,7 +38,7 @@ cat <<EOF > /tmp/zenity_responses
 📝|Subtitles
 |||||||||Burn-in|Medium (CRF 23)||Auto/MP4|None (CPU Only)
 EOF
-run_test "ffmpeg/🧰 Universal-Toolbox.sh" "vcodec=h264" "$TEST_DATA/input.mp4" || FAILED=$((FAILED+1))
+run_test "$SCRIPT_DIR/../ffmpeg/🧰 Universal-Toolbox.sh" "vcodec=h264" "$TEST_DATA/input.mp4" || FAILED=$((FAILED+1))
 rm "$TEST_DATA/input.srt"
 
 # 3. CLI Preset Test
@@ -77,6 +77,9 @@ bash testing/test_cross_version.sh || FAILED=$((FAILED+1))
 
 echo -e "\n${YELLOW}=== Running Negative & Edge-Case Tests ===${NC}"
 bash testing/test_negative.sh || FAILED=$((FAILED+1))
+
+echo -e "\n${YELLOW}=== Running Installation & Uninstallation Tests ===${NC}"
+bash testing/test_install.sh || FAILED=$((FAILED+1))
 
 # --- Summary ---
 echo -e "\n${YELLOW}=== Final Test Summary ===${NC}"

@@ -55,6 +55,11 @@ log_fail() {
 log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
 
 generate_test_media() {
+    # Guard against redundant calls
+    if [[ -f "$TEST_DATA/input.mp4" && -f "$TEST_DATA/input.jpg" && -f "$TEST_DATA/alpha.png" ]]; then
+        return 0
+    fi
+
     log_info "Generating safe test media..."
     # Standardized names that don't match output wildcards (which start with input_name_)
     ffmpeg -y -f lavfi -i color=c=black:s=1280x720:d=1:r=30 -f lavfi -i anullsrc=r=44100:cl=stereo:d=1 \
