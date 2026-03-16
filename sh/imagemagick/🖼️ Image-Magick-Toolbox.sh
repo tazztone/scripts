@@ -9,6 +9,22 @@ source "$SCRIPT_DIR/../common/wizard.sh"
 
 init_imagemagick_script
 
+# Ensure at least one input file exists and is valid
+if [[ -z "${1:-}" ]]; then
+    echo "Usage: $0 input.jpg [input2.png ...]"
+    exit 1
+fi
+
+if [[ ! -f "$1" ]]; then
+    echo "Error: File not found: $1"
+    exit 1
+fi
+
+if [[ ! -r "$1" ]]; then
+    echo "Error: File not readable: $1"
+    exit 1
+fi
+
 # --- CONFIG ---
 CONFIG_DIR="$HOME/.config/scripts-sh/imagemagick"
 PRESET_FILE="$CONFIG_DIR/presets.conf"

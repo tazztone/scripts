@@ -9,6 +9,11 @@ FAILED=0
 
 echo -e "\n${YELLOW}=== Zenity Binary Smoke Test ===${NC}"
 
+if [[ -z "${DISPLAY:-}" ]]; then
+    log_info "Skipping zenity smoke (no DISPLAY)"
+    exit 0
+fi
+
 # Test 1: Info (with timeout to avoid blocking)
 echo "Test 1: Launching --info (Timeout 0.1s)"
 timeout 0.1s zenity --info --text="Test" &>/dev/null

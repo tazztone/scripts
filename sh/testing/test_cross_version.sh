@@ -10,6 +10,9 @@ log_info "Starting Cross-Version Compatibility Tests..."
 
 setup_mock_zenity
 generate_test_media
+# Ensure local copies with expected names for cross-version
+cp "$TEST_DATA/input.mp4" "$TEST_DATA/src.mp4"
+cp "$TEST_DATA/input.jpg" "$TEST_DATA/src.jpg"
 
 FAILED=0
 
@@ -22,23 +25,25 @@ run_matrix_test() {
         echo -e "\n[PROFILE: $profile] Testing $(basename "$script")"
         export ZENITY_PROFILE="$profile"
         
-        # Clear queues
+        # Cleanup existing outputs from previous profiles to ensure detection
+        for inp in "${inputs[@]}"; do
+            local base=$(basename -- "${inp%.*}")
+            rm -f "$TEST_DATA/${base}"_*.*
+        done
+
+        # Clear and seed response queue
         > /tmp/zenity_responses
-        unset ZENITY_LIST_RESPONSE
-        unset ZENITY_FORMS_RESPONSE
         
-        # Script-specific mocks
         case "$(basename "$script")" in
             *"Universal"*)
-                export ZENITY_LIST_RESPONSE="Scale / Resize"
-                export ZENITY_FORMS_RESPONSE="1x (Normal)||720p||||||||||Auto/MP4"
+                echo "Scale / Resize" > /tmp/zenity_responses
+                echo "1x (Normal)||720p||||||||||Auto/MP4" >> /tmp/zenity_responses
                 ;;
             *"Image-Magick"*)
-                export ZENITY_LIST_RESPONSE="Scale & Resize"
-                export ZENITY_FORMS_RESPONSE="1280x|"
+                echo "Scale & Resize" > /tmp/zenity_responses
+                echo "1280x|" >> /tmp/zenity_responses
                 ;;
             *"Lossless"*)
-                # Lossless needs TWO list responses in a queue
                 echo "Edit Streams" > /tmp/zenity_responses
                 echo "remove_video" >> /tmp/zenity_responses
                 ;;

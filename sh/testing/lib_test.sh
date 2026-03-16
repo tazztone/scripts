@@ -20,19 +20,27 @@ NC='\033[0m'
 setup_mock_zenity() {
     cat <<'EOF' > "$MOCK_BIN/zenity"
 #!/bin/bash
+# Handle --progress separately
 if [[ "$*" == *"--progress"* ]]; then
     while read -r line; do :; done
     exit 0
 fi
+
+# Informational dialogs exit 0 by default in mock
+if [[ "$*" == *"--info"* || "$*" == *"--notification"* || "$*" == *"--error"* || "$*" == *"--warning"* ]]; then
+    exit 0
+fi
+
 RESP_FILE="/tmp/zenity_responses"
 if [ -f "$RESP_FILE" ] && [ -s "$RESP_FILE" ]; then
     PICK=$(head -n 1 "$RESP_FILE")
+    # Use temporary file for atomic-ish update
     tail -n +2 "$RESP_FILE" > "${RESP_FILE}.tmp" && mv "${RESP_FILE}.tmp" "$RESP_FILE"
     echo "$PICK"
     exit 0
 else
-    echo ""
-    exit 0
+    # Mock cancel/close for input-requiring dialogs (list, entry, etc.)
+    exit 1
 fi
 EOF
     chmod +x "$MOCK_BIN/zenity"
@@ -152,7 +160,7 @@ validate_media() {
                 [[ "$s" -ge "$val" ]] && { log_fail "File size too large: $s >= $val"; failed=1; }
                 ;;
             tags)
-                local filename=$(basename "$file")
+                local filename=$(basename -- "$file")
                 for t in $(echo "$val" | tr ',' ' '); do
                     [[ "$filename" != *"$t"* ]] && { log_fail "Tag missing: $t ($filename)"; failed=1; }
                 done
@@ -175,53 +183,120 @@ run_test() {
     local rules="$2"
     local pattern=""
     local files_rel=()
-    local script_abs=$(readlink -f "$script_rel")
+    local script_abs=$(readlink -f -- "$script_rel")
 
     if [[ "$3" == "--pattern" ]]; then
         pattern="$4"
         files_rel=("${@:5}")
     else
         files_rel=("${@:3}")
-        local base=$(basename "${files_rel[0]%.*}")
+        local first_file="${files_rel[0]}"
+        # If first_file is a flag like --preset, pattern must be provided via --pattern
+        if [[ "$first_file" == "-"* ]]; then
+            log_fail "run_test: first file is a flag [$first_file], but --pattern was not used."
+            return 1
+        fi
+        local base=$(basename -- "${first_file%.*}")
         pattern="${base}_*.*"
     fi
 
     local files_abs=()
     local files_base=()
     for f in "${files_rel[@]}"; do 
-        files_abs+=("$(readlink -f "$f")")
-        files_base+=("$(basename "$f")")
+        if [[ "$f" == "-"* ]]; then
+            files_base+=("$f")
+        else
+            files_abs+=("$(readlink -f -- "$f")")
+            files_base+=("$(basename -- "$f")")
+        fi
     done
 
-    local dir=$(dirname "${files_abs[0]}")
+    # Get dir from first non-flag file
+    local dir="."
+    for f in "${files_rel[@]}"; do
+        if [[ "$f" != "-"* ]]; then
+            dir=$(dirname -- "$(readlink -f -- "$f")")
+            break
+        fi
+    done
+
     local failed=0
     
-    # Cleanup only files matching pattern that ARE NOT the source files themselves
-    local exclude_args=()
-    for f in "${files_abs[@]}"; do exclude_args+=("!" "-name" "$(basename "$f")"); done
-    find "$dir" -maxdepth 1 -name "$pattern" "${exclude_args[@]}" -delete
+    # Pre-run file list
+    local before=$(find "$dir" -maxdepth 1 -name "$pattern" | sort)
 
-    log_info "Testing: $(basename "$script_abs") with [${files_rel[*]}]"
+    log_info "Testing: $(basename -- "$script_abs") with [${files_rel[*]}]"
     local out_log=$(mktemp)
     (
         cd "$dir" || exit 1
-        # Pass basenames to script, as we are already in the directory
         bash "$script_abs" "${files_base[@]}"
     ) &> "$out_log"
     local status=$?
     
-    # Portable "newest file" detection using ls -t
-    local newest_file=$(ls -t "$dir"/$pattern 2>/dev/null | head -1)
-    if [ $status -ne 0 ] || [[ -z "$newest_file" ]] || [[ "$(basename "$newest_file")" == "$(basename "${files_abs[0]}")" ]]; then
-        # Check if maybe the pattern didn't match after rename, but SOME file was created
-        # (Though we prefer the pattern match for accuracy)
-        log_fail "Test execution failed or no output matching $pattern (Exit: $status)"
+    # Post-run file list
+    local after=$(find "$dir" -maxdepth 1 -name "$pattern" | sort)
+    
+    # Find new file (comm -13 shows lines only in 'after')
+    local newest_file=$(comm -13 <(echo "$before") <(echo "$after") | head -n 1)
+
+    if [ $status -ne 0 ] || [[ -z "$newest_file" ]]; then
+        log_fail "Test execution failed or no new output matching $pattern (Exit: $status)"
         echo "--- LOG ---"; cat "$out_log"; echo "-----------"
         rm -f "$out_log"
         return 1
     fi
     
-    log_info "Detected: $(basename "$newest_file")"
+    log_info "Detected: $(basename -- "$newest_file")"
     rm -f "$out_log"
     validate_media "$newest_file" "$rules" || return 1
+}
+
+# Negative testing: Expect script to FAIL (non-zero exit)
+# Usage: run_fail_test "script" "expected_error_regex" "input_files..."
+run_fail_test() {
+    local script_rel="$1"
+    local err_regex="$2"
+    local files_rel=("${@:3}")
+    local script_abs=$(readlink -f -- "$script_rel")
+    
+    local files_base=()
+    local dir="."
+    for f in "${files_rel[@]}"; do 
+        if [[ "$f" == "-"* ]]; then
+            files_base+=("$f")
+        else
+            files_base+=("$(basename -- "$f")")
+            if [ "$dir" == "." ]; then
+                dir=$(dirname -- "$(readlink -f -- "$f")")
+            fi
+        fi
+    done
+
+    log_info "Testing (Expect Failure): $(basename -- "$script_abs") with [${files_rel[*]}]"
+    local out_log=$(mktemp)
+    (
+        cd "$dir" || exit 1
+        bash "$script_abs" "${files_base[@]}"
+    ) &> "$out_log"
+    local status=$?
+    
+    if [ $status -eq 0 ]; then
+        log_fail "Script passed but was expected to fail: $(basename -- "$script_abs")"
+        echo "--- LOG ---"; cat "$out_log"; echo "-----------"
+        rm -f "$out_log"
+        return 1
+    fi
+
+    if [[ -n "$err_regex" ]]; then
+        if ! grep -qiE "$err_regex" "$out_log"; then
+            log_fail "Script failed as expected, but error message did not match '$err_regex'"
+            echo "--- LOG ---"; cat "$out_log"; echo "-----------"
+            rm -f "$out_log"
+            return 1
+        fi
+    fi
+    
+    log_pass "Script failed as expected with status $status"
+    rm -f "$out_log"
+    return 0
 }

@@ -72,14 +72,23 @@ bash testing/test_universal_extended.sh || FAILED=$((FAILED+1))
 echo -e "\n${YELLOW}=== Running Image Toolbox Tests ===${NC}"
 bash testing/test_image_toolbox.sh || FAILED=$((FAILED+1))
 
+echo -e "\n${YELLOW}=== Running Cross-Version Compatibility Tests ===${NC}"
+bash testing/test_cross_version.sh || FAILED=$((FAILED+1))
+
+echo -e "\n${YELLOW}=== Running Negative & Edge-Case Tests ===${NC}"
+bash testing/test_negative.sh || FAILED=$((FAILED+1))
+
 # --- Summary ---
 echo -e "\n${YELLOW}=== Final Test Summary ===${NC}"
-FAILED_ANY=0
-[ -f "$REPORT_FILE" ] && grep -q "FAIL" "$REPORT_FILE" && FAILED_ANY=1
+# Consolidate: if FAILED > 0 OR REPORT_FILE has FAIL, it's a failure.
+if [ -f "$REPORT_FILE" ] && grep -q "FAIL" "$REPORT_FILE"; then
+    # Ensure FAILED is at least 1 if something was logged to report
+    [ $FAILED -eq 0 ] && FAILED=1
+fi
 
-if [ $FAILED_ANY -eq 1 ] || [ $FAILED -gt 0 ]; then
-    echo -e "${RED}FAILURE DETECTED: Log contains FAIL or FAILED script counter is $FAILED${NC}"
-    [ $FAILED_ANY -eq 1 ] && echo -e "${RED}Check $REPORT_FILE for details.${NC}"
+if [ $FAILED -gt 0 ]; then
+    echo -e "${RED}FAILURE DETECTED: $FAILED component(s) failed or logged errors.${NC}"
+    echo -e "${RED}Check $REPORT_FILE for details.${NC}"
     cleanup_test_data
     exit 1
 else

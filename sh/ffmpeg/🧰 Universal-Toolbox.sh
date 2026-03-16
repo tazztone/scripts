@@ -10,9 +10,6 @@ source "$SCRIPT_DIR/../common/wizard.sh"
 
 init_ffmpeg_script
 
-# --- GPU PROBE (Run once at startup) ---
-probe_gpu </dev/null >/dev/null 2>&1 &
-
 # --- CONFIG & PRESETS ---
 CONFIG_DIR="$HOME/.config/scripts-sh/ffmpeg"
 PRESET_FILE="$CONFIG_DIR/presets.conf"
@@ -22,7 +19,7 @@ mkdir -p "$(dirname "$LOG_FILE")"
 mkdir -p "$CONFIG_DIR"
 touch "$HISTORY_FILE"
 
-if [ ! -s "$PRESET_FILE" ]; then
+if [[ ! -s "$PRESET_FILE" ]]; then
     echo "Social Speed Edit|Speed 2x (Fast)|Scale 720p|Normalize (R128)|Output as H.264" > "$PRESET_FILE"
     echo "4K Archival (H.265)|Output as H.265|Clean Metadata" >> "$PRESET_FILE"
     echo "YouTube 1080p (Fast)|Scale 1080p|Normalize (R128)|Output as H.264" >> "$PRESET_FILE"
@@ -36,19 +33,19 @@ USER_TRIM_S=""
 USER_TRIM_E=""
 USER_W=""
 
-if [[ "$1" == "preset="* ]]; then
-    PRESET_NAME="${1#preset=}"
-    shift 1
-elif [ "$1" == "--preset" ] && [ -n "$2" ]; then
+if [[ "${1:-}" == "--preset" ]] && [[ -n "${2:-}" ]]; then
     PRESET_NAME="$2"
     shift 2
+elif [[ "${1:-}" == "preset="* ]]; then
+    PRESET_NAME="${1#preset=}"
+    shift 1
 fi
 
-if [ -n "$PRESET_NAME" ]; then
+if [[ -n "$PRESET_NAME" ]]; then
     # Read preset line: Name|Choice1|Choice2...
     # Use || true to prevent set -e trigger on no match
-    LINE=$(grep "^$PRESET_NAME|" "$PRESET_FILE" || true)
-    if [ -n "$LINE" ]; then
+    LINE=$(grep "^$PRESET_NAME|" "$PRESET_FILE" 2>/dev/null || true)
+    if [[ -n "$LINE" ]]; then
         # Extract choices (everything after first pipe)
         PRELOADED_CHOICES="${LINE#*|}"
     else
@@ -56,6 +53,24 @@ if [ -n "$PRESET_NAME" ]; then
         exit 1
     fi
 fi
+
+# Ensure at least one input file exists if no preset is loaded
+if [[ -z "$PRELOADED_CHOICES" ]]; then
+    if [[ -z "${1:-}" ]]; then
+        echo "Usage: $0 [--preset NAME] input.mp4 [input2.mp4 ...]"
+        exit 1
+    fi
+    if [[ ! -f "$1" ]]; then
+        echo "Error: File not found: $1"
+        exit 1
+    fi
+    if [[ ! -r "$1" ]]; then
+        echo "Error: File not readable: $1"
+        exit 1
+    fi
+fi
+
+# --- GPU PROBE (Run once at startup) ---
 
 # --- UNIFIED LAUNCHPAD ---
 # 🧰 Universal-Toolbox v3.1
