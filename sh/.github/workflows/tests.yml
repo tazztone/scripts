@@ -16,8 +16,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg imagemagick zenity bc
+          sudo apt-get install -y ffmpeg imagemagick bc
           
       - name: Run Test Suite
         run: bash testing/test_runner.sh
-        working-directory: .
