@@ -1,4 +1,5 @@
 # Common utility functions for Nautilus ImageMagick Scripts
+set -euo pipefail
 
 # Sourcing Guard
 [ "${_IMAGEMAGICK_COMMON_SH_LOADED:-0}" -eq 1 ] && return
@@ -42,7 +43,7 @@ Z_PROGRESS() {
 
 # Show Error and Exit
 error_exit() {
-    zenity --error --text="$1"
+    zenity --error --text="$1" --no-markup
     exit 1
 }
 

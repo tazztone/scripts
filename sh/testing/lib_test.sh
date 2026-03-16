@@ -212,10 +212,10 @@ run_test() {
     
     # Portable "newest file" detection using ls -t
     local newest_file=$(ls -t "$dir"/$pattern 2>/dev/null | head -1)
-    if [[ -z "$newest_file" ]] || [[ "$(basename "$newest_file")" == "$(basename "${files_abs[0]}")" ]]; then
+    if [ $status -ne 0 ] || [[ -z "$newest_file" ]] || [[ "$(basename "$newest_file")" == "$(basename "${files_abs[0]}")" ]]; then
         # Check if maybe the pattern didn't match after rename, but SOME file was created
         # (Though we prefer the pattern match for accuracy)
-        log_fail "No output matching $pattern (Exit: $status)"
+        log_fail "Test execution failed or no output matching $pattern (Exit: $status)"
         echo "--- LOG ---"; cat "$out_log"; echo "-----------"
         rm -f "$out_log"
         return 1

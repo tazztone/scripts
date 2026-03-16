@@ -1,5 +1,5 @@
 #!/bin/bash
-set -u
+set -euo pipefail
 # Lossless Operations Toolbox
 # Specialized script for lossless video operations using FFmpeg stream copy only
 
@@ -822,7 +822,7 @@ execute_batch_trimming() {
         # Validate file first
         if ! validate_trimming_operation "$file" "$start_time" "$end_time"; then
             echo "SKIPPED: $(basename "$file") - validation failed"
-            ((skipped++))
+            ((skipped += 1))
             update_batch_progress "$batch_id" $completed $failed $skipped $total
             continue
         fi
@@ -835,10 +835,10 @@ execute_batch_trimming() {
         # Execute trimming
         if execute_trimming "$file" "$output_file" "$start_time" "$end_time" >/dev/null 2>&1; then
             echo "SUCCESS: $(basename "$output_file")"
-            ((completed++))
+            (( completed += 1 ))
         else
             echo "FAILED: $(basename "$file")"
-            ((failed++))
+            (( failed += 1 ))
         fi
         
         update_batch_progress "$batch_id" $completed $failed $skipped $total
@@ -870,7 +870,7 @@ execute_batch_remuxing() {
         # Validate file first
         if ! validate_remuxing_operation "$file" "$target_container"; then
             echo "SKIPPED: $(basename "$file") - validation failed"
-            ((skipped++))
+            ((skipped += 1))
             update_batch_progress "$batch_id" $completed $failed $skipped $total
             continue
         fi
@@ -882,10 +882,10 @@ execute_batch_remuxing() {
         # Execute remuxing
         if execute_remuxing "$file" "$output_file" "$target_container" >/dev/null 2>&1; then
             echo "SUCCESS: $(basename "$output_file")"
-            ((completed++))
+            (( completed += 1 ))
         else
             echo "FAILED: $(basename "$file")"
-            ((failed++))
+            (( failed += 1 ))
         fi
         
         update_batch_progress "$batch_id" $completed $failed $skipped $total
@@ -917,7 +917,7 @@ execute_batch_stream_selection() {
         # Validate file first
         if ! validate_stream_selection "$file" "$operation"; then
             echo "SKIPPED: $(basename "$file") - validation failed"
-            ((skipped++))
+            ((skipped += 1))
             update_batch_progress "$batch_id" $completed $failed $skipped $total
             continue
         fi
@@ -937,10 +937,10 @@ execute_batch_stream_selection() {
         # Execute stream selection
         if execute_stream_selection "$file" "$output_file" "$operation" >/dev/null 2>&1; then
             echo "SUCCESS: $(basename "$output_file")"
-            ((completed++))
+            (( completed += 1 ))
         else
             echo "FAILED: $(basename "$file")"
-            ((failed++))
+            (( failed += 1 ))
         fi
         
         update_batch_progress "$batch_id" $completed $failed $skipped $total
@@ -1025,7 +1025,7 @@ show_trimming_interface() {
         --text="Extract video segments using lossless stream copy:" \
         --add-entry="Start Time (e.g., 10, 1:30, 01:30:45):" \
         --add-entry="End Time (e.g., 60, 5:00, 02:15:30):" \
-        --separator="|")
+        --separator="|") || true
     
     if [ -z "$params" ]; then
         return 1
@@ -1068,7 +1068,7 @@ show_trimming_interface() {
             # Validate operation
             if ! validate_trimming_operation "$file" "$start_time" "$end_time"; then
                 echo "# SKIPPED: $(basename "$file") - validation failed"
-                ((current++))
+                (( current += 1 ))
                 continue
             fi
             
@@ -1084,7 +1084,7 @@ show_trimming_interface() {
                 echo "# FAILED: $(basename "$file")"
             fi
             
-            ((current++))
+            (( current += 1 ))
         done
         
         echo "100"
@@ -1109,7 +1109,7 @@ show_remuxing_interface() {
         "mp4" "MP4 - Universal compatibility" "Most devices, streaming" \
         "mkv" "MKV - Open format, supports all codecs" "Archival, flexibility" \
         "mov" "MOV - Apple QuickTime format" "Apple ecosystem, editing" \
-        "webm" "WebM - Web-optimized format" "Web playback, browsers")
+        "webm" "WebM - Web-optimized format" "Web playback, browsers") || true
     
     if [ -z "$container" ]; then
         return 1
@@ -1133,8 +1133,8 @@ show_remuxing_interface() {
             # Validate operation
             if ! validate_remuxing_operation "$file" "$container"; then
                 echo "# SKIPPED: $(basename "$file") - incompatible codecs"
-                ((skipped++))
-                ((current++))
+                ((skipped += 1))
+                (( current += 1 ))
                 continue
             fi
             
@@ -1145,13 +1145,13 @@ show_remuxing_interface() {
             # Execute remuxing
             if execute_remuxing "$file" "$output_file" "$container"; then
                 echo "# SUCCESS: $(basename "$output_file")"
-                ((successful++))
+                (( successful += 1 ))
             else
                 echo "# FAILED: $(basename "$file")"
-                ((failed++))
+                (( failed += 1 ))
             fi
             
-            ((current++))
+            (( current += 1 ))
         done
         
         echo "100"
@@ -1177,7 +1177,7 @@ show_merging_interface() {
     fi
     
     # Get output filename
-    local output_file=$(zenity --file-selection --save --title="Save Merged Video As" --filename="merged_video.mp4")
+    local output_file=$(zenity --file-selection --save --title="Save Merged Video As" --filename="merged_video.mp4" || true)
     
     if [ -z "$output_file" ]; then
         return 1
@@ -1216,7 +1216,7 @@ show_stream_editing_interface() {
         "remove_audio" "Remove audio track (video only)" \
         "remove_video" "Remove video track (audio only)" \
         "video_only" "Keep video track only" \
-        "audio_only" "Keep audio track only")
+        "audio_only" "Keep audio track only") || true
     
     if [ -z "$operation" ]; then
         return 1
@@ -1234,7 +1234,7 @@ show_stream_editing_interface() {
             # Validate operation
             if ! validate_stream_selection "$file" "$operation"; then
                 echo "# SKIPPED: $(basename "$file") - validation failed"
-                ((current++))
+                (( current += 1 ))
                 continue
             fi
             
@@ -1257,7 +1257,7 @@ show_stream_editing_interface() {
                 echo "# FAILED: $(basename "$file")"
             fi
             
-            ((current++))
+            (( current += 1 ))
         done
         
         echo "100"
@@ -1281,7 +1281,7 @@ show_metadata_interface() {
         --column="Operation" --column="Description" --column="Privacy Level" \
         "clean_metadata" "Remove all metadata" "High - Complete privacy" \
         "set_rotation" "Set rotation metadata only" "Low - Orientation fix" \
-        "set_title" "Set custom title" "Medium - Basic info")
+        "set_title" "Set custom title" "Medium - Basic info") || true
     
     if [ -z "$operation" ]; then
         return 1
@@ -1296,11 +1296,11 @@ show_metadata_interface() {
                 "0" "No rotation (reset)" \
                 "90" "Rotate 90° clockwise" \
                 "180" "Rotate 180° (upside down)" \
-                "270" "Rotate 270° clockwise (90° CCW)")
+                "270" "Rotate 270° clockwise (90° CCW)") || true
             ;;
         "set_title")
             value=$(zenity --entry --title="Set Title" --text="Enter new title for the video:" \
-                --entry-text="")
+                --entry-text="") || true
             ;;
     esac
     
@@ -1338,7 +1338,7 @@ show_metadata_interface() {
                 echo "# FAILED: $(basename "$file")"
             fi
             
-            ((current++))
+            (( current += 1 ))
         done
         
         echo "100"
@@ -1362,7 +1362,7 @@ show_batch_interface() {
         --column="Operation" --column="Description" \
         "batch_trim" "Trim all files with same parameters" \
         "batch_remux" "Remux all files to same container" \
-        "batch_stream" "Apply same stream editing to all files")
+        "batch_stream" "Apply same stream editing to all files") || true
     
     if [ -z "$operation" ]; then
         return 1
@@ -1433,7 +1433,7 @@ main() {
                             echo "# SKIPPED: $(basename "$file") - validation failed"
                         fi
                         
-                        ((current++))
+                        (( current += 1 ))
                     done
                     echo "100"
                 ) | zenity --progress --title="Executing Preset: Trim" --auto-close

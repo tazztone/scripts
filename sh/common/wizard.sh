@@ -37,7 +37,7 @@ show_unified_wizard() {
     _wizard_build_args ARGS "$TITLE" "$INTENTS_RAW" "$PRESET_FILE" "$HISTORY_FILE"
 
     local RESULT
-    RESULT=$(zenity "${ARGS[@]}")
+    RESULT=$(zenity "${ARGS[@]}" || true)
     # Strip any trailing newlines or junk
     RESULT=$(echo -n "$RESULT" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
     _wizard_log "wizard raw return: [$RESULT]"

@@ -1,5 +1,5 @@
 #!/bin/bash
-set -u
+set -euo pipefail
 # 🖼️ Image-Magick-Toolbox v2.1
 # Smart Recipe Builder - Stack edits and Context-Aware UI
 
@@ -120,7 +120,7 @@ show_scale_interface() {
     zenity --forms --title="📏 Scale & Resize" --width=450 \
         --text="Select scaling options:" \
         --add-combo="Resolution" --combo-values="1920x (HD)|3840x (4K)|1280x (720p)|640x|50%|Custom" \
-        --add-entry="Custom Geometry (e.g. 800x600)"
+        --add-entry="Custom Geometry (e.g. 800x600)" || true
 }
 
 show_crop_interface() {
@@ -130,14 +130,14 @@ show_crop_interface() {
         "🔲 Square Crop (Center 1:1)" "Automatic 1:1 center crop" \
         "📱 Vertical (9:16)" "Standard mobile aspect ratio" \
         "🖥️ Landscape (16:9)" "Standard widescreen aspect ratio" \
-        "✍️ Custom Crop" "Specify manual crop geometry"
+        "✍️ Custom Crop" "Specify manual crop geometry" || true
 }
 
 show_convert_interface() {
     zenity --forms --title="📦 Convert & Optimize" --width=450 \
         --text="Select format and quality:" \
         --add-combo="Output Format" --combo-values="JPG|PNG|WEBP|TIFF|PDF" \
-        --add-combo="Optimize Strategy" --combo-values="Web Ready (Quality 85)|Max Compression|Archive (Lossless)"
+        --add-combo="Optimize Strategy" --combo-values="Web Ready (Quality 85)|Max Compression|Archive (Lossless)" || true
 }
 
 show_montage_interface() {
@@ -148,7 +148,7 @@ show_montage_interface() {
         "🎲 3x Grid" "3-column grid layout" \
         "📑 Contact Sheet" "Labeled thumbnail grid" \
         "➡ Single Row" "Stitch images side-by-side" \
-        "⬇ Single Column" "Stitch images vertically"
+        "⬇ Single Column" "Stitch images vertically" || true
 }
 
 show_effects_interface() {
@@ -157,7 +157,7 @@ show_effects_interface() {
         --text="Apply effects or watermarks:" \
         --add-combo="Visual Effect" --combo-values="No Change|Rotate 90 CW|Rotate 90 CCW|Flip Horizontal|Black & White" \
         --add-combo="Branding" --combo-values="$branding_opts" \
-        --add-entry="Watermark Path / Text Content"
+        --add-entry="Watermark Path / Text Content" || true
 }
 
 # Remove obsolete intent functions
@@ -489,7 +489,7 @@ fi
     COUNT=0
 
     for f in "$@"; do
-        ((COUNT++))
+        ((COUNT += 1))
         PERCENT=$((COUNT * 100 / TOTAL))
         echo "$PERCENT"
         echo "# Processing ($COUNT/$TOTAL): $(basename "$f")..."

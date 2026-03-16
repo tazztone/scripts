@@ -1,5 +1,5 @@
 #!/bin/bash
-set -u
+set -euo pipefail
 # Universal FFmpeg Toolbox
 # Combine multiple operations (Speed, Scale, Crop, Audio, Format) in one pass.
 
@@ -17,7 +17,8 @@ probe_gpu </dev/null >/dev/null 2>&1 &
 CONFIG_DIR="$HOME/.config/scripts-sh/ffmpeg"
 PRESET_FILE="$CONFIG_DIR/presets.conf"
 HISTORY_FILE="$CONFIG_DIR/history.conf"
-LOG_FILE="${LOG_FILE:-/tmp/universal_toolbox.log}"
+LOG_FILE="${LOG_FILE:-$HOME/.local/share/scripts-sh/ffmpeg_last_run.log}"
+mkdir -p "$(dirname "$LOG_FILE")"
 mkdir -p "$CONFIG_DIR"
 touch "$HISTORY_FILE"
 
@@ -303,22 +304,25 @@ if [[ "$CHOICES" == *"Quality: Lossless"* ]]; then CRF_CPU=0; CQ_NV=0; GQ_QSV=1;
 # Helper to add video filter safely
 add_vf() {
     if [ -z "$VF_CHAIN" ]; then VF_CHAIN="$1"; else VF_CHAIN="$VF_CHAIN,$1"; fi
-    ((FILTER_COUNT++))
+    ((FILTER_COUNT += 1))
 }
 # Helper to add audio filter safely
 add_af() {
     if [ -z "$AF_CHAIN" ]; then AF_CHAIN="$1"; else AF_CHAIN="$AF_CHAIN,$1"; fi
-    ((FILTER_COUNT++))
+    ((FILTER_COUNT += 1))
 }
 
 # --- CUSTOM INPUTS ---
 if [[ "$CHOICES" == *"Trim: Start"* ]]; then
     START="${USER_TRIM_S}"
+    if [ -z "$START" ]; then
+        START=$(zenity --entry --title="Trim Start" --text="Trim Start time (seconds or hh:mm:ss):" --entry-text="00:00:00" --cancel-label="Cancel" || true)
+    fi
     if [ -n "$START" ]; then 
         if VALID_S=$(validate_time_format "$START"); then
             INPUT_OPTS+=( "-ss" "$VALID_S" )
             TAG="${TAG}_cut"
-            ((FILTER_COUNT++))
+            ((FILTER_COUNT += 1))
         else
             zenity --error --text="Invalid Trim Start format: $START"
         fi
@@ -333,7 +337,7 @@ if [[ "$CHOICES" == *"Trim: End"* ]]; then
         if VALID_E=$(validate_time_format "$DUR"); then
             INPUT_OPTS+=( "-t" "$VALID_E" )
             TAG="${TAG}_len"
-            ((FILTER_COUNT++))
+            ((FILTER_COUNT += 1))
         else
             zenity --error --text="Invalid Trim End format: $DUR"
         fi
@@ -349,7 +353,7 @@ if [[ "$CHOICES" =~ Speed:\ ([0-9.]+)x ]]; then
         SPEED_VAL="1.0"
     fi
     TAG="${TAG}_${SPEED_VAL}x"
-    PTS=$(echo "scale=4; 1/$SPEED_VAL" | bc)
+    PTS=$(echo "scale=4; 1/$SPEED_VAL" | bc -l)
     ATEMPO="$SPEED_VAL"
 fi
 
@@ -360,11 +364,11 @@ if [ -n "$SPEED_VAL" ]; then
         AF_TMP=""
         while (( $(echo "$CUR_A > 2.0" | bc -l) )); do
             AF_TMP="${AF_TMP}atempo=2.0,"
-            CUR_A=$(echo "scale=4; $CUR_A/2.0" | bc)
+            CUR_A=$(echo "scale=4; $CUR_A/2.0" | bc -l)
         done
         while (( $(echo "$CUR_A < 0.5" | bc -l) )); do
             AF_TMP="${AF_TMP}atempo=0.5,"
-            CUR_A=$(echo "scale=4; $CUR_A/0.5" | bc)
+            CUR_A=$(echo "scale=4; $CUR_A/0.5" | bc -l)
         done
         add_af "${AF_TMP}atempo=${CUR_A}"
     fi
@@ -581,18 +585,20 @@ for f in "$@"; do
     # --- TARGET SIZE (2-PASS) EXECUTION ---
     if [ -n "$TARGET_MB" ]; then
         _wizard_log "Calculating Bitrate for Target Size..."
-        DUR=$(get_duration "$f" | cut -d. -f1 || echo "1")
-        if [ -z "$DUR" ] || [ "$DUR" -le 0 ]; then DUR=1; fi
+        DUR=$(get_duration "$f")
+        if [ -z "$DUR" ] || (( $(echo "$DUR <= 0" | bc -l) )); then DUR=1; fi
         
         ABR=192
         if [[ "${ACODEC_OPTS[*]:-}" == *"-b:a 128k"* ]]; then ABR=128; fi
         if [ "$REMOVE_AUDIO" = true ]; then ABR=0; fi
         
-        TOTAL_BR=$(echo "($TARGET_MB * 8192) / $DUR" | bc || echo "1000")
-        V_BR=$(echo "$TOTAL_BR - $ABR" | bc || echo "800")
+        TOTAL_BR=$(echo "($TARGET_MB * 8192) / $DUR" | bc -l || echo "1000")
+        V_BR=$(echo "$TOTAL_BR - $ABR" | bc -l || echo "800")
         
-        if [ "$V_BR" -lt 50 ]; then
-            zenity --warning --text="Target size ($TARGET_MB MB) is too small for this duration ($DUR sec).\n\nCalculated Video Bitrate: ${V_BR}k."
+        # Round to integer for FFmpeg
+        V_BR_INT=$(printf "%.0f" "$V_BR" 2>/dev/null || echo "800")
+        if [ "$V_BR_INT" -lt 50 ]; then
+            zenity --warning --text="Target size ($TARGET_MB MB) is too small for this duration ($DUR sec).\n\nCalculated Video Bitrate: ${V_BR_INT}k."
         fi
         
         # Use safer get_sys_temp which now returns a real file path
@@ -610,13 +616,13 @@ for f in "$@"; do
         
         # PASS 1 (Fast & Silent)
         echo "# Pass 1: Analyzing..."
-        _wizard_log "Pass 1 command: ffmpeg -y -nostdin ${INPUT_OPTS[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_2PASS[@]} -b:v ${V_BR}k -pass 1 -passlogfile $PASS_LOG -preset fast -an -f null /dev/null"
-        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_2PASS[@]}" -b:v "${V_BR}k" -pass 1 -passlogfile "$PASS_LOG" -preset fast -an -f null /dev/null
+        _wizard_log "Pass 1 command: ffmpeg -y -nostdin ${INPUT_OPTS[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_2PASS[@]} -b:v ${V_BR_INT}k -pass 1 -passlogfile $PASS_LOG -preset fast -an -f null /dev/null"
+        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_2PASS[@]}" -b:v "${V_BR_INT}k" -pass 1 -passlogfile "$PASS_LOG" -preset fast -an -f null /dev/null 2>"$LOG_FILE"
         
         # PASS 2 (Actual Encode)
         echo "# Pass 2: Finalizing size..."
-        _wizard_log "Pass 2 command: ffmpeg -y -nostdin ${INPUT_OPTS[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_2PASS[@]} -b:v ${V_BR}k -pass 2 -passlogfile $PASS_LOG ${CURRENT_ACORE[@]} ${FPS_ARG[@]} ${GLOBAL_OPTS[@]} $OUT_FILE"
-        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_2PASS[@]}" -b:v "${V_BR}k" -pass 2 -passlogfile "$PASS_LOG" "${CURRENT_ACORE[@]}" "${FPS_ARG[@]}" "${GLOBAL_OPTS[@]}" "$OUT_FILE"
+        _wizard_log "Pass 2 command: ffmpeg -y -nostdin ${INPUT_OPTS[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_2PASS[@]} -b:v ${V_BR_INT}k -pass 2 -passlogfile $PASS_LOG ${CURRENT_ACORE[@]} ${FPS_ARG[@]} ${GLOBAL_OPTS[@]} $OUT_FILE"
+        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_2PASS[@]}" -b:v "${V_BR_INT}k" -pass 2 -passlogfile "$PASS_LOG" "${CURRENT_ACORE[@]}" "${FPS_ARG[@]}" "${GLOBAL_OPTS[@]}" "$OUT_FILE" 2>>"$LOG_FILE"
         
         STATUS=$?
         rm -f "${PASS_LOG}"*
@@ -627,19 +633,19 @@ for f in "$@"; do
         VF_GIF="palettegen"
         [ -n "$FULL_VF" ] && VF_GIF="$FULL_VF,palettegen"
         
-        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" -vf "$VF_GIF" "$PALETTE"
+        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" -vf "$VF_GIF" "$PALETTE" 2>"$LOG_FILE"
         _wizard_log "Creating GIF..."
         LAVFI_GIF="[0:v][1:v] paletteuse"
         [ -n "$FULL_VF" ] && LAVFI_GIF="$FULL_VF [x]; [x][1:v] paletteuse"
         
-        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" -i "$PALETTE" -lavfi "$LAVFI_GIF" "${FPS_ARG[@]}" "$OUT_FILE"
+        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" -i "$PALETTE" -lavfi "$LAVFI_GIF" "${FPS_ARG[@]}" "$OUT_FILE" 2>>"$LOG_FILE"
         rm "$PALETTE"
         STATUS=$?
 
     else
         # Standard Video/Audio (CRF/CQ Mode)
         _wizard_log "Executing: ffmpeg -y -nostdin ${INPUT_OPTS[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_OPTS[@]} ${CURRENT_ACORE[@]} ${FPS_ARG[@]} ${GLOBAL_OPTS[@]} $OUT_FILE"
-        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_OPTS[@]}" "${CURRENT_ACORE[@]}" "${FPS_ARG[@]}" "${GLOBAL_OPTS[@]}" "$OUT_FILE"
+        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_OPTS[@]}" "${CURRENT_ACORE[@]}" "${FPS_ARG[@]}" "${GLOBAL_OPTS[@]}" "$OUT_FILE" 2>"$LOG_FILE"
         STATUS=$?
     fi
     
@@ -672,7 +678,7 @@ for f in "$@"; do
         fi
 
         _wizard_log "Retrying with: ffmpeg -y ${INPUT_OPTS[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_OPTS[@]} ${CURRENT_ACORE[@]} ${FPS_ARG[@]} ${GLOBAL_OPTS[@]} $OUT_FILE"
-        ffmpeg -y "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_OPTS[@]}" "${CURRENT_ACORE[@]}" "${FPS_ARG[@]}" "${GLOBAL_OPTS[@]}" "$OUT_FILE"
+        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_OPTS[@]}" "${CURRENT_ACORE[@]}" "${FPS_ARG[@]}" "${GLOBAL_OPTS[@]}" "$OUT_FILE" 2>>"$LOG_FILE"
         STATUS=$?
     fi
 
