@@ -35,6 +35,7 @@ EOF
 EXPECTED_LINKS=(
     "$HOME/.local/share/nautilus/scripts/🧰 Universal-Toolbox.sh"
     "$HOME/.local/share/nautilus/scripts/🖼️ Image-Magick-Toolbox.sh"
+    "$HOME/.local/share/nautilus/scripts/🔒 Lossless-Operations-Toolbox.sh"
 )
 
 for LINK in "${EXPECTED_LINKS[@]}"; do

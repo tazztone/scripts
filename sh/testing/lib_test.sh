@@ -8,7 +8,11 @@ REPORT_FILE="/tmp/scripts_test_report.log"
 HEADLESS=true
 
 mkdir -p "$TEST_DATA" "$MOCK_BIN"
-[ -z "$TEST_SUITE_RUNNING" ] && { > "$REPORT_FILE"; export TEST_SUITE_RUNNING=1; }
+if [ -z "$TEST_SUITE_RUNNING" ]; then
+    > "$REPORT_FILE"
+    printf "0\n0\n" > /tmp/scripts_test_count.log
+    export TEST_SUITE_RUNNING=1
+fi
 
 # Colors
 GREEN='\033[0;32m'
@@ -18,8 +22,13 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 setup_mock_zenity() {
+    # Initialize call log
+    printf "" > /tmp/zenity_call_log.txt
     cat <<'EOF' > "$MOCK_BIN/zenity"
 #!/bin/bash
+# Log every call for debugging and loop detection
+printf "CALL: %s\n" "$*" >> /tmp/zenity_call_log.txt
+
 # Handle --progress separately
 if [[ "$*" == *"--progress"* ]]; then
     while read -r line; do :; done
@@ -57,16 +66,31 @@ EOF
     export PATH="$MOCK_BIN:$PATH"
 }
 
-log_pass() { echo -e "${GREEN}[PASS]${NC} $1"; }
+_count_test() {
+    local pass=$1
+    if [ -f /tmp/scripts_test_count.log ]; then
+        local counts=($(cat /tmp/scripts_test_count.log))
+        local total=$((counts[0] + 1))
+        local passed=$((counts[1] + pass))
+        printf "%s\n%s\n" "$total" "$passed" > /tmp/scripts_test_count.log
+    fi
+}
+
+log_pass() { 
+    echo -e "${GREEN}[PASS]${NC} $1"
+    _count_test 1
+}
+
 log_fail() {
     echo -e "${RED}[FAIL]${NC} $1"
     echo "FAIL: $1" >> "$REPORT_FILE"
+    _count_test 0
 }
 log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
 
 generate_test_media() {
     # Guard against redundant calls
-    if [[ -f "$TEST_DATA/input.mp4" && -f "$TEST_DATA/input.jpg" && -f "$TEST_DATA/alpha.png" ]]; then
+    if [[ -f "$TEST_DATA/input.mp4" && -f "$TEST_DATA/input.jpg" && -f "$TEST_DATA/src.mp4" && -f "$TEST_DATA/src.jpg" ]]; then
         return 0
     fi
 
@@ -76,6 +100,10 @@ generate_test_media() {
            -c:v libx264 -c:a aac -pix_fmt yuv420p "$TEST_DATA/input.mp4" &>/dev/null
     ffmpeg -y -nostdin -f lavfi -i color=c=blue:s=1280x720:d=1 -vframes 1 "$TEST_DATA/input.jpg" &>/dev/null
     magick -size 100x100 xc:transparent "$TEST_DATA/alpha.png" &>/dev/null
+
+    # Create src.* copies for compatibility with legacy tests
+    cp "$TEST_DATA/input.mp4" "$TEST_DATA/src.mp4"
+    cp "$TEST_DATA/input.jpg" "$TEST_DATA/src.jpg"
 }
 
 cleanup_test_data() {
@@ -110,6 +138,10 @@ validate_media() {
             vcodec)
                 local codec=$(ffprobe -v error -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 -select_streams v:0 "$file")
                 [[ "$codec" != *"$val"* ]] && { log_fail "V-Codec mismatch: expected $val, got $codec"; failed=1; }
+                ;;
+            acodec)
+                local codec=$(ffprobe -v error -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 -select_streams a:0 "$file")
+                [[ "$codec" != *"$val"* ]] && { log_fail "A-Codec mismatch: expected $val, got $codec"; failed=1; }
                 ;;
             fps)
                 local fps_raw=$(ffprobe -v error -select_streams v:0 -show_entries stream=avg_frame_rate -of default=noprint_wrappers=1:nokey=1 "$file")
@@ -177,7 +209,7 @@ validate_media() {
                 ;;
             tags)
                 local filename=$(basename -- "$file")
-                for t in $(echo "$val" | tr ',' ' '); do
+                for t in $(echo "$val" | tr '|' ' '); do
                     [[ "$filename" != *"$t"* ]] && { log_fail "Tag missing: $t ($filename)"; failed=1; }
                 done
                 ;;

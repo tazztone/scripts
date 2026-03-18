@@ -27,9 +27,10 @@ echo -e "\n${YELLOW}=== Universal Toolbox Core Tests ===${NC}"
 echo "Test 1: Core Recipe"
 cat <<EOF > /tmp/zenity_responses
 Speed Control|Scale / Resize|Audio Tools
-2x (Fast)||720p||||||Remove Audio Track||Medium (CRF 23)||Auto/MP4|None (CPU Only)
+2x (Fast)||720p||||||Keep Source||Medium (CRF 23)||Auto/MP4|None (CPU Only)
 EOF
-run_test "$SCRIPT_DIR/../ffmpeg/🧰 Universal-Toolbox.sh" "vcodec=h264,fps=30" "$TEST_DATA/input.mp4" || FAILED=$((FAILED+1))
+# Adding acodec=aac and tags to verify the new rules work
+run_test "$SCRIPT_DIR/../ffmpeg/🧰 Universal-Toolbox.sh" "vcodec=h264,fps=30,acodec=aac,tags=2x|720p" "$TEST_DATA/input.mp4" || FAILED=$((FAILED+1))
 
 # 2. Subtitle Burn-in
 echo "Test 2: Subtitle Burn-in"
@@ -82,11 +83,24 @@ echo -e "\n${YELLOW}=== Running Negative & Edge-Case Tests ===${NC}"
 bash "$SCRIPT_DIR/test_negative.sh" || FAILED=$((FAILED+1))
 bash "$SCRIPT_DIR/test_ui_resilience.sh" || FAILED=$((FAILED+1))
 
+echo -e "\n${YELLOW}=== Running Zenity 4.x UI Loop Repro ===${NC}"
+bash "$SCRIPT_DIR/test_zenity4_repro.sh" || FAILED=$((FAILED+1))
+
 echo -e "\n${YELLOW}=== Running Installation & Uninstallation Tests ===${NC}"
 bash "$SCRIPT_DIR/test_install.sh" || FAILED=$((FAILED+1))
 
 # --- Summary ---
 echo -e "\n${YELLOW}=== Final Test Summary ===${NC}"
+# Get global counts
+if [ -f /tmp/scripts_test_count.log ]; then
+    counts=($(cat /tmp/scripts_test_count.log))
+    TOTAL_TESTS=${counts[0]}
+    TOTAL_PASSED=${counts[1]}
+    echo -e "Total Tests:  $TOTAL_TESTS"
+    echo -e "Tests Passed: ${GREEN}$TOTAL_PASSED${NC}"
+    echo -e "Tests Failed: ${RED}$((TOTAL_TESTS - TOTAL_PASSED))${NC}"
+fi
+
 # Consolidate: if FAILED > 0 OR REPORT_FILE has FAIL, it's a failure.
 if [ -f "$REPORT_FILE" ] && grep -q "FAIL" "$REPORT_FILE"; then
     # Ensure FAILED is at least 1 if something was logged to report
@@ -94,12 +108,14 @@ if [ -f "$REPORT_FILE" ] && grep -q "FAIL" "$REPORT_FILE"; then
 fi
 
 if [ $FAILED -gt 0 ]; then
-    echo -e "${RED}FAILURE DETECTED: $FAILED component(s) failed or logged errors.${NC}"
+    echo -e "\n${RED}FAILURE DETECTED: $FAILED component(s) failed or logged errors.${NC}"
     echo -e "${RED}Check $REPORT_FILE for details.${NC}"
     cleanup_test_data
+    rm -f /tmp/scripts_test_count.log
     exit 1
 else
-    echo -e "${GREEN}All tests passed!${NC}"
+    echo -e "\n${GREEN}All tests passed!${NC}"
     cleanup_test_data
+    rm -f /tmp/scripts_test_count.log
     exit 0
 fi
