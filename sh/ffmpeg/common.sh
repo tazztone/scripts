@@ -6,6 +6,17 @@ set -euo pipefail
 [ "${_FFMPEG_COMMON_SH_LOADED:-0}" -eq 1 ] && return
 readonly _FFMPEG_COMMON_SH_LOADED=1
 
+_wizard_log() {
+    if [[ "${DEBUG_MODE:-0}" == "1" ]]; then
+        local log_dir="${LOG_DIR:-$HOME/.local/share/scripts-sh}"
+        local log_file="${LOG_FILE:-$log_dir/debug.log}"
+        mkdir -p "$log_dir"
+        chmod 700 "$log_dir" 2>/dev/null
+        echo "[DEBUG] $(date '+%Y-%m-%d %H:%M:%S') $1" >> "$log_file"
+        echo "[DEBUG] $1" >&2
+    fi
+}
+
 # Ensure dependencies
 # Check zenity first to use it for errors
 init_ffmpeg_script() {
@@ -40,6 +51,7 @@ error_exit() {
 get_duration() {
     local d
     d=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$1")
+    _wizard_log "ffprobe duration for $1: [$d]"
     if [ -z "$d" ]; then echo "0"; else echo "$d"; fi
 }
 

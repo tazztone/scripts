@@ -159,6 +159,10 @@ validate_media() {
                 local w=$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of default=noprint_wrappers=1:nokey=1 "$file")
                 [[ "$w" != "$val" ]] && { log_fail "Width mismatch: expected $val, got $w"; failed=1; }
                 ;;
+            height)
+                local h=$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of default=noprint_wrappers=1:nokey=1 "$file")
+                [[ "$h" != "$val" ]] && { log_fail "Height mismatch: expected $val, got $h"; failed=1; }
+                ;;
             format)
                 local fmt=""
                 if [[ "$file" =~ \.(jpg|png|webp|gif|jpeg)$ ]]; then
@@ -277,7 +281,7 @@ run_test() {
     local out_log=$(mktemp)
     (
         cd "$dir" || exit 1
-        bash "$script_abs" "${files_base[@]}"
+        DEBUG_MODE=1 bash "$script_abs" "${files_base[@]}"
     ) &> "$out_log"
     local status=$?
     
@@ -289,7 +293,9 @@ run_test() {
 
     if [ $status -ne 0 ] || [[ -z "$newest_file" ]]; then
         log_fail "Test execution failed or no new output matching $pattern (Exit: $status)"
-        echo "--- LOG ---"; cat "$out_log"; echo "-----------"
+        echo "--- LOG ---"
+        cat "$out_log"
+        echo "-----------"
         rm -f "$out_log"
         return 1
     fi
