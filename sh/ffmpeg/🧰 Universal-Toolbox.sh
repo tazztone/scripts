@@ -194,9 +194,12 @@ while true; do
 
         # --- EXTRACT CONFIG & MAP TO CHOICES ---
         CHOICES=""
+        _wizard_log "CONFIG_RESULT: [$CONFIG_RESULT]"
         # Initialize array with empty values to satisfy set -u
-        VALS=("" "" "" "" "" "" "" "" "" "" "" "" "" "")
+        declare -a VALS=("" "" "" "" "" "" "" "" "" "" "" "" "" "")
+        declare -a NEW_VALS=()
         IFS='|' read -ra NEW_VALS <<< "$CONFIG_RESULT"
+        _wizard_log "NEW_VALS length: ${#NEW_VALS[@]}"
         # Copy newly read values into our base array
         for i in "${!NEW_VALS[@]}"; do VALS[i]="${NEW_VALS[i]}"; done
 
@@ -258,6 +261,7 @@ while true; do
         if [[ "$H_ACCEL" == *"VAAPI"* ]]; then CHOICES+="🏎️ Use VAAPI (AMD/Intel)|"; fi
 
         CHOICES=$(echo "$CHOICES" | sed 's/|$//')
+        _wizard_log "Final CHOICES: [$CHOICES]"
         
         [ -z "$CHOICES" ] && continue
         
@@ -280,7 +284,7 @@ save_to_history "$HISTORY_FILE" "$CHOICES"
 # --- TARGET SIZE PROMPT ---
 TARGET_MB="${USER_TARGET_MB}"
 # Extract embedded Target Size if present (format: "Target Size:25")
-if [[ "$CHOICES" =~ Target\ Size:([0-9]+) ]]; then
+if [[ "$CHOICES" =~ Target\ Size:([0-9.]+) ]]; then
     TARGET_MB="${BASH_REMATCH[1]}"
     USER_TARGET_MB="$TARGET_MB" # Sync for consistency
 fi
@@ -363,11 +367,14 @@ fi
 SPEED_VAL=""
 if [[ "$CHOICES" =~ Speed:\ ([0-9.]+)x ]]; then
     SPEED_VAL="${BASH_REMATCH[1]}"
+    _wizard_log "SPEED_VAL: [$SPEED_VAL]"
+    _wizard_log "BC CALL: echo \"$SPEED_VAL <= 0\" | bc -l"
     if (( $(echo "$SPEED_VAL <= 0" | bc -l) )); then
         zenity --error --text="Invalid Speed: $SPEED_VAL (Must be greater than 0)"
         SPEED_VAL="1.0"
     fi
     TAG="${TAG}_${SPEED_VAL}x"
+    _wizard_log "BC CALL: echo \"scale=4; 1/$SPEED_VAL\" | bc -l"
     PTS=$(echo "scale=4; 1/$SPEED_VAL" | bc -l)
     ATEMPO="$SPEED_VAL"
 fi
@@ -599,8 +606,9 @@ for f in "$@"; do
     
     # --- TARGET SIZE (2-PASS) EXECUTION ---
     if [ -n "$TARGET_MB" ]; then
-        _wizard_log "Calculating Bitrate for Target Size..."
+        _wizard_log "Calculating Bitrate for Target Size... MB=$TARGET_MB"
         DUR=$(get_duration "$f")
+        _wizard_log "Duration for bitrate calc: [$DUR]"
         if [ -z "$DUR" ] || (( $(echo "$DUR <= 0" | bc -l) )); then DUR=1; fi
         
         ABR=192
@@ -631,8 +639,8 @@ for f in "$@"; do
         
         # PASS 1 (Fast & Silent)
         echo "# Pass 1: Analyzing..."
-        _wizard_log "Pass 1 command: ffmpeg -y -nostdin ${INPUT_OPTS[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_2PASS[@]} -b:v ${V_BR_INT}k -pass 1 -passlogfile $PASS_LOG -preset fast -an -f null /dev/null"
-        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_2PASS[@]}" -b:v "${V_BR_INT}k" -pass 1 -passlogfile "$PASS_LOG" -preset fast -an -f null /dev/null 2>"$LOG_FILE"
+        _wizard_log "Pass 1 command: ffmpeg -y -nostdin ${INPUT_OPTS[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_2PASS[@]} -b:v ${V_BR_INT}k -pass 1 -passlogfile $PASS_LOG -an -f null /dev/null"
+        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_2PASS[@]}" -b:v "${V_BR_INT}k" -pass 1 -passlogfile "$PASS_LOG" -an -f null /dev/null 2>"$LOG_FILE"
         
         # PASS 2 (Actual Encode)
         echo "# Pass 2: Finalizing size..."
