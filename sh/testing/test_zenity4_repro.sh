@@ -1,7 +1,7 @@
 #!/bin/bash
 # testing/test_zenity4_repro.sh
 
-source testing/lib_test.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib_test.sh"
 setup_mock_zenity
 generate_test_media
 
@@ -21,14 +21,18 @@ export DEBUG_MODE=1
 
 echo "Running Image-Magick-Toolbox.sh with Zenity 4.x mock..."
 # Run the script with timeout just in case it hard-loops
-timeout 10s bash "imagemagick/🖼️ Image-Magick-Toolbox.sh" "$TEST_DATA/src.jpg" > "$log_file" 2>&1
+timeout 5s bash "imagemagick/🖼️ Image-Magick-Toolbox.sh" "$TEST_DATA/src.jpg" > "$log_file" 2>&1
+STATUS=$?
 
-# Check if the recursion guard was triggered
-if grep -q "RECURSION GUARD TRIGGERED" "$LOG_FILE"; then
-    log_pass "Successfully reproduced the Zenity 4.x UI loop bug (Guard Tripped)."
+# If the fix works, it should exit 0 immediately after receiving "FALSE"
+if [ $STATUS -eq 0 ] && ! grep -q "RECURSION GUARD TRIGGERED" "$LOG_FILE"; then
+    log_pass "Zenity 4.x 'FALSE' bug handled correctly (Graceful exit, no loop)."
     exit 0
+elif grep -q "RECURSION GUARD TRIGGERED" "$LOG_FILE"; then
+    log_fail "Recursion guard was hit! The script looped 10+ times."
+    exit 1
 else
-    log_fail "Failed to reproduce infinite loop. It did not hit the recursion guard."
-    cat "$LOG_FILE"
+    log_fail "Script failed with status $STATUS"
+    cat "$log_file"
     exit 1
 fi

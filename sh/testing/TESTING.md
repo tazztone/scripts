@@ -44,20 +44,13 @@ The runner will:
 2.  Execute scripts against this data.
 3.  Analyze the output files using `ffprobe` to verify codecs, resolution, and metadata.
 
-**Example Output:**
-```
-=== Universal Scripts Test Suite ===
+**Example Output (v2.6+):**
+```text
+=== Final Test Summary ===
+Total Tests:  34
+Tests Passed: 34
+Tests Failed: 0
 
-Testing: Universal Toolbox - Core Recipe
-[PASS] Core Recipe - vcodec=h264, fps=30
-
-Testing: Universal Toolbox - Subtitle Burn-in
-[PASS] Subtitle Burn-in - vcodec=h264
-
-=== Test Summary ===
-Total Tests: 21
-Passed: 21
-Failed: 0
 All tests passed!
 ```
 
@@ -92,6 +85,7 @@ The test suite provides specialized coverage across the different toolboxes:
 | `test_wizard_robust.sh` | Wizard robustness |
 | `test_cross_version.sh` | Cross-version compatibility |
 | `test_zenity_smoke.sh` | Basic Zenity binary availability and mock functionality |
+| `test_zenity4_repro.sh` | Reproduces Zenity 4.x "FALSE" return bug and verifies recursion guard |
 | `test_lint.sh` | Static syntax analysis (ShellCheck-lite) |
 
 ### File Validation: Unified Approach
@@ -236,6 +230,8 @@ To add a new test case:
 ## 🔧 Quick Reference: Common Testing Scenarios
 
 #### Test a Specific Script with Custom Input
+*Note: These variables will affect the entire test suite if exported. Use them for manual testing or scoped within a single test case.*
+
 ```bash
 # Set custom responses for zenity dialogs
 export ZENITY_LIST_RESPONSE="📐 Scale: 720p|📦 Output: H.265"

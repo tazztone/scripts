@@ -26,8 +26,9 @@ bash "$PROJECT_ROOT/imagemagick/🖼️ Image-Magick-Toolbox.sh" "$TEST_DATA/src
 CALL_COUNT=$(grep -c "CALL:" /tmp/zenity_call_log.txt)
 echo "Total Zenity Calls: $CALL_COUNT"
 
-if [ "$CALL_COUNT" -gt 3 ]; then
-    log_fail "LOOP DETECTED! Zenity was called $CALL_COUNT times (Expected <= 3)."
+# Normal flow: 1. List (Menu), 2. Forms (Options), 3. Progress, 4. Notification
+if [ "$CALL_COUNT" -gt 4 ]; then
+    log_fail "LOOP DETECTED! Zenity was called $CALL_COUNT times (Expected <= 4)."
     echo "--- Zenity Call Log ---"
     cat /tmp/zenity_call_log.txt
     exit 1
