@@ -28,7 +28,17 @@ fi
 
 # Informational dialogs exit 0 by default in mock
 if [[ "$*" == *"--info"* || "$*" == *"--notification"* || "$*" == *"--error"* || "$*" == *"--warning"* ]]; then
-    exit 0
+    exit ${ZENITY_MOCK_EXIT_CODE:-0}
+fi
+
+# Override responses from environment variables if present
+if [[ "$*" == *"--list"* && -n "$ZENITY_LIST_RESPONSE" ]]; then
+    echo "$ZENITY_LIST_RESPONSE"
+    exit ${ZENITY_MOCK_EXIT_CODE:-0}
+fi
+if [[ ("$*" == *"--entry"* || "$*" == *"--forms"*) && -n "$ZENITY_ENTRY_RESPONSE" ]]; then
+    echo "$ZENITY_ENTRY_RESPONSE"
+    exit ${ZENITY_MOCK_EXIT_CODE:-0}
 fi
 
 RESP_FILE="/tmp/zenity_responses"
@@ -37,10 +47,10 @@ if [ -f "$RESP_FILE" ] && [ -s "$RESP_FILE" ]; then
     # Use temporary file for atomic-ish update
     tail -n +2 "$RESP_FILE" > "${RESP_FILE}.tmp" && mv "${RESP_FILE}.tmp" "$RESP_FILE"
     echo "$PICK"
-    exit 0
+    exit ${ZENITY_MOCK_EXIT_CODE:-0}
 else
     # Mock cancel/close for input-requiring dialogs (list, entry, etc.)
-    exit 1
+    exit ${ZENITY_MOCK_EXIT_CODE:-1}
 fi
 EOF
     chmod +x "$MOCK_BIN/zenity"
