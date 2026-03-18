@@ -75,8 +75,9 @@ cleanup_test_data() {
 
 seed_gpu_cache() {
     local type="$1"
-    local cache="/tmp/scripts-sh-gpu-cache-$(id -u)"
+    local cache="${XDG_CACHE_HOME:-$HOME/.cache}/scripts-sh-gpu-cache"
     log_info "Seeding GPU cache with: $type"
+    mkdir -p "$(dirname "$cache")"
     echo "$type" > "$cache"
 }
 

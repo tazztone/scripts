@@ -15,6 +15,9 @@ MOCK_HOME=$(mktemp -d)
 ORIG_HOME="$HOME"
 export HOME="$MOCK_HOME"
 
+# Guaranteed cleanup
+trap 'export HOME="$ORIG_HOME"; rm -rf "$MOCK_HOME"' EXIT
+
 # Mock zenity to always "Overwrite" or "Confirm"
 setup_mock_zenity
 echo "Overwrite" > /tmp/zenity_responses # For install.sh question if any
@@ -29,14 +32,19 @@ EOF
 ) &>/dev/null
 
 # Verify symlinks
-EXPECTED_LINK="$HOME/.local/share/nautilus/scripts/🧰 Universal-Toolbox.sh"
-if [ -L "$EXPECTED_LINK" ]; then
-    log_pass "install.sh created symlink successfully"
-else
-    log_fail "install.sh failed to create symlink at $EXPECTED_LINK"
-    ls -R "$HOME" # Debug
-    FAILED=1
-fi
+EXPECTED_LINKS=(
+    "$HOME/.local/share/nautilus/scripts/🧰 Universal-Toolbox.sh"
+    "$HOME/.local/share/nautilus/scripts/🖼️ Image-Magick-Toolbox.sh"
+)
+
+for LINK in "${EXPECTED_LINKS[@]}"; do
+    if [ -L "$LINK" ]; then
+        log_pass "install.sh created symlink successfully: $(basename "$LINK")"
+    else
+        log_fail "install.sh failed to create symlink at $LINK"
+        FAILED=1
+    fi
+done
 
 # Test 2: uninstall.sh
 echo "Test 2: Running uninstall.sh"
@@ -47,15 +55,13 @@ y
 EOF
 ) &>/dev/null
 
-if [ ! -e "$EXPECTED_LINK" ]; then
-    log_pass "uninstall.sh removed symlink successfully"
-else
-    log_fail "uninstall.sh failed to remove symlink"
-    FAILED=1
-fi
-
-# Cleanup
-export HOME="$ORIG_HOME"
-rm -rf "$MOCK_HOME"
+for LINK in "${EXPECTED_LINKS[@]}"; do
+    if [ ! -e "$LINK" ]; then
+        log_pass "uninstall.sh removed symlink successfully: $(basename "$LINK")"
+    else
+        log_fail "uninstall.sh failed to remove symlink: $LINK"
+        FAILED=1
+    fi
+done
 
 exit $FAILED

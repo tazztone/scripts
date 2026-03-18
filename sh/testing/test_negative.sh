@@ -37,7 +37,8 @@ fi
 # Test 4: Corrupt File (Simulated with empty file)
 echo "Test 4: Corrupt/Empty input file"
 touch "$TEST_DATA/empty.mp4"
-# Using regex that matches actual script output for empty files
+# Using regex that matches actual script output for empty files.
+# The Lossless Operations Toolbox checks for empty files before processing.
 run_fail_test "$PROJECT_ROOT/ffmpeg/🔒 Lossless-Operations-Toolbox.sh" "Error: File is empty" "$TEST_DATA/empty.mp4" || FAILED=1
 rm "$TEST_DATA/empty.mp4"
 
