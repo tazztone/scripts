@@ -65,14 +65,13 @@ All tests passed!
 ```bash
 bash testing/test_lossless_toolbox.sh
 ```
-This specialized test suite uses **Property-Based Testing** to validate:
-- **Stream Copy Preservation**: Ensures no re-encoding occurs
-- **Codec Compatibility**: Validates container-codec combinations
-- **Operation Safety**: Prevents destructive operations
-- **Batch Processing**: Multi-file operation integrity
-- **Metadata Handling**: Lossless metadata operations
+This suite validates:
+- **Remuxing & Format Preservation**: Safely swaps containers (`MOV` to `MP4`) without re-encoding.
+- **Lossless Extraction**: Frame-accurate trimming.
+- **Stream Editing**: Audio stream removal and metadata tagging/clearing.
+- **Video Merging**: Robust `concat` demuxing handling.
 
-**Test Coverage**: 12 comprehensive property tests with 100% pass rate validation.
+**Test Coverage**: 6 standard end-to-end operations with 100% pass rate validation.
 
 ---
 
@@ -82,7 +81,7 @@ The test suite provides specialized coverage across the different toolboxes:
 
 | Test File | What it covers |
 |---|---|
-| `test_lossless_toolbox.sh` | 12 properties: stream copy, trimming, remux, metadata, stream selection, codec analysis, batch, rotation |
+| `test_lossless_toolbox.sh` | 6 end-to-end scenarios: remux, lossless trim, remove audio, metadata title, metadata clean, merge videos |
 | `test_image_toolbox.sh` | 6 scenarios: scale+BW+WEBP, square crop, 9:16 crop, flatten, sRGB, montage |
 | `test_universal_extended.sh` | 8 scenarios: 16:9 crop, 9:16 crop, rotate, normalize, extract MP3, trim, combo, GIF |
 | `test_ui_resilience.sh` | Cancel flows, sub-dialog cancels, no-files error, resilience (cancel→retry→success) |
@@ -95,24 +94,25 @@ The test suite provides specialized coverage across the different toolboxes:
 | `test_zenity_smoke.sh` | Basic Zenity binary availability and mock functionality |
 | `test_lint.sh` | Static syntax analysis (ShellCheck-lite) |
 
-### File Validation: Inconsistencies & Gaps
+### File Validation: Unified Approach
 
-While `lib_test.sh` contains a robust `validate_media()` function (checking width, height, codecs, format, and tags), its application is inconsistent:
-- **Universal & Image Toolboxes**: Well-validated using end-to-end rules.
-- **Lossless Toolbox**: Primarily tests internal functions by sourcing the script directly. This verifies logic but misses the end-to-end user flow and actual output file quality validation in the unified style.
+The testing framework relies on `lib_test.sh`'s `validate_media()` to perform rigorous end-to-end assertions on output files. It validates properties such as:
+- Codec matching (`vcodec=hevc`)
+- Exact framerate calculation (`fps=30`, handled robustly via `bc`)
+- Sub-second duration tolerance (`duration=0.5s` with `±0.1s` accuracy)
+- Stream identification (`has_audio`, `no_audio`, `subtitle_stream=1`)
+- Accurate format headers via `magick` and `ffprobe` (`format=webp`)
+- Exact file size and bitrate constraints (`file_size_gt`, `bitrate`)
 
-## 🛑 Coverage Gaps & Technical Debt
+All toolboxes (Universal, Image, and Lossless) utilize this unified `run_test` integration pipeline.
 
-### Missing Operation Tests
-- **Universal Toolbox**: Subtitle burn-in/embed, speed changes, deinterlace, and hardware encoding paths (NVENC, etc.) are currently untested.
-- **Image Toolbox**: Watermarking/overlays, borders/padding, and custom arbitrary resizing are untested.
-- **Lossless Toolbox**: Lacks actual output file validation for "Merge" operations and tight duration tolerance checks (currently ±1s, should be ±0.1s).
+## 🛑 Previous Technical Debt (Resolved)
 
-### Technical Debt
-- **Namespace Pollution**: `test_lossless_toolbox.sh` sources script paths directly, which can cause subtle interference.
-- **Detection Fragility**: `run_test` output detection via `ls -1` is fragile and may miss outputs in different directories.
-- **Rounding Issues**: `fps` validation in `validate_media` uses integer division, which can cause mismatches (e.g., 29 instead of 30).
-- **Incomplete Validation**: Missing rules for exact `duration`, `bitrate`, and `subtitle_stream` presence.
+Older iterations of the test suite had coverage gaps (like float rounding bugs, missing audio stream verifications, fragile GUI inputs, and GNU-only `find -printf` commands). 
+As of the latest refactoring, the suite is fully standardized:
+- **Consistent Rounding**: `bc -l` and `awk` compute exact floating-point tolerances (e.g., 0.1s for trims).
+- **Format Integrity**: File type sniffing uses robust FFprobe and ImageMagick detection, circumventing ambiguities in `file -b`.
+- **Posix Portability**: macOS/BSD compatibilities are maintained across core detection logic.
 
 ---
 
@@ -280,31 +280,17 @@ cat ~/.local/share/scripts-sh/debug.log
 
 ## 🔒 Lossless Operations Toolbox Testing
 
-The Lossless Operations Toolbox uses a specialized **Property-Based Testing** approach to validate correctness and safety of lossless operations.
+The Lossless Operations Toolbox suite operates with a fully end-to-end execution model, applying the established UI/Zenity mocks utilized in the rest of the testing suite.
 
-### Property-Based Testing Philosophy
-Instead of testing specific input/output combinations, property-based testing validates universal properties that should always hold true:
+### Test Scenarios
+The test suite spans the most critical lossless operations:
 
-- **Stream Copy Preservation**: No re-encoding should ever occur
-- **Codec Compatibility**: Container-codec combinations must be valid
-- **Operation Safety**: Destructive operations must be prevented
-- **Metadata Integrity**: Metadata operations must preserve streams
-
-### Test Properties
-The test suite validates 12 comprehensive properties:
-
-1. **Stream Copy Preservation**: Validates FFmpeg commands use `-c copy`
-2. **Lossless Operation Validation**: Ensures only safe operations are allowed
-3. **Trimming Accuracy**: Validates time range and duration handling
-4. **Container Format Remuxing**: Tests format conversion compatibility
-5. **Codec Compatibility Validation**: Multi-file codec matching
-6. **Metadata Preservation**: Lossless metadata handling
-7. **Stream Selection Accuracy**: Track removal/selection validation
-8. **Metadata-Only Rotation**: Rotation without re-encoding
-9. **Alternative Suggestions**: Helpful error messages for invalid operations
-10. **Batch Processing Integrity**: Multi-file operation consistency
-11. **Codec Analysis Accuracy**: FFprobe integration validation
-12. **Multi-File Compatibility Analysis**: Batch operation validation
+1. **Remuxing**: Validates container swapping while retaining video/audio codecs.
+2. **Lossless Trimming**: Ensures precise extraction (±0.1s tolerance) using stream copying.
+3. **Stream Removal**: Confirms total elimination of audio streams without re-encoding video.
+4. **Metadata Targeting**: Sets specific metadata objects (e.g., Title) and validates tag injection.
+5. **Metadata Scrubbing**: Clears exhaustive EXIF/metadata properties without re-encoding.
+6. **Video Merging**: Validates `concat` mechanics across consecutive files.
 
 ### Running Lossless Tests
 ```bash
@@ -313,28 +299,23 @@ bash testing/test_lossless_toolbox.sh
 
 **Expected Output:**
 ```
-=== Lossless Operations Toolbox Property Tests ===
-Feature: lossless-operations-toolbox
-
-Testing Property 1: Stream Copy Preservation
-[PASS] Stream Copy Preservation
+=== Lossless Operations Toolbox Tests ===
+Test 1: Remux (MOV -> MP4)
+[INFO] Testing: 🔒 Lossless-Operations-Toolbox.sh with [/tmp/scripts_test_data/input.mp4]
+[INFO] Detected: input_remuxed.mp4
 ...
-Testing Property 12: Multi-File Compatibility Analysis
-[PASS] Multi-File Compatibility Analysis
+Test 6: Merge Videos
+[INFO] Testing: 🔒 Lossless-Operations-Toolbox.sh with [/tmp/scripts_test_data/input.mp4 /tmp/scripts_test_data/input2.mp4]
+[INFO] Detected: merged.mp4
 
-=== Test Summary ===
-Total Tests: 12
-Passed: 12
-Failed: 0
-All tests passed!
+Lossless Toolbox Tests Finished!
 ```
 
 ### Test Data Generation
-The tests generate dummy media files in `/tmp/scripts_test_data` for universal tests and use property-based validation for lossless tests. The test data includes:
+The tests generate standard dummy media files in `/tmp/scripts_test_data` for consistency across all toolboxes. The test data includes:
 
 ```bash
 # Test files are generated in /tmp/scripts_test_data/
-src.mp4          # H.264/AAC source file for transcoding tests
-converted.mkv    # Different container, same codecs
-compressed.mp4   # Different parameters
+input.mp4          # Basic 1s H.264/AAC source file
+input2.mp4         # Duplicated source for multi-file operations
 ```
