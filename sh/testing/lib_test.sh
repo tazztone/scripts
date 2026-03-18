@@ -72,9 +72,9 @@ generate_test_media() {
 
     log_info "Generating safe test media..."
     # Standardized names that don't match output wildcards (which start with input_name_)
-    ffmpeg -y -f lavfi -i color=c=black:s=1280x720:d=1:r=30 -f lavfi -i anullsrc=r=44100:cl=stereo:d=1 \
+    ffmpeg -y -nostdin -f lavfi -i color=c=black:s=1280x720:d=1:r=30 -f lavfi -i anullsrc=r=44100:cl=stereo:d=1 \
            -c:v libx264 -c:a aac -pix_fmt yuv420p "$TEST_DATA/input.mp4" &>/dev/null
-    ffmpeg -y -f lavfi -i color=c=blue:s=1280x720:d=1 -vframes 1 "$TEST_DATA/input.jpg" &>/dev/null
+    ffmpeg -y -nostdin -f lavfi -i color=c=blue:s=1280x720:d=1 -vframes 1 "$TEST_DATA/input.jpg" &>/dev/null
     magick -size 100x100 xc:transparent "$TEST_DATA/alpha.png" &>/dev/null
 }
 
@@ -315,4 +315,50 @@ run_fail_test() {
     log_pass "Script failed as expected with status $status"
     rm -f "$out_log"
     return 0
+}
+
+# Negative testing: Expect script to exit 0 (user cancel)
+run_negative_test() {
+    local script_rel="$1"
+    local files_rel=("${@:2}")
+    local script_abs=$(readlink -f -- "$script_rel")
+    
+    local files_base=()
+    local dir="."
+    for f in "${files_rel[@]}"; do 
+        files_base+=("$(basename -- "$f")")
+        if [ "$dir" == "." ]; then
+            dir=$(dirname -- "$(readlink -f -- "$f")")
+        fi
+    done
+
+    log_info "Testing (Expect Cancel): $(basename -- "$script_abs") with [${files_rel[*]}]"
+    local out_log=$(mktemp)
+    (
+        cd "$dir" || exit 1
+        bash "$script_abs" "${files_base[@]}"
+    ) &> "$out_log"
+    local status=$?
+    
+    if [ $status -eq 0 ]; then
+        log_pass "Script exited gracefully (status 0) on wizard cancel"
+        rm -f "$out_log"
+        return 0
+    else
+        log_fail "Script failed on cancel (Exit: $status)"
+        echo "--- LOG ---"; cat "$out_log"; echo "-----------"
+        rm -f "$out_log"
+        return 1
+    fi
+}
+
+# Resilience testing: Expect script to survive cancellations and eventually succeed
+run_resilience_test() {
+    local script_rel="$1"
+    local rules="$2"
+    local files_rel=("${@:3}")
+    local script_abs=$(readlink -f -- "$script_rel")
+    
+    log_info "Testing Resilience: $(basename -- "$script_abs")"
+    run_test "$script_rel" "$rules" "${files_rel[@]}"
 }

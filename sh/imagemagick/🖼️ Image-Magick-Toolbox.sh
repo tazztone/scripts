@@ -526,7 +526,7 @@ fi
         {
             RET=0
             if [ "$DO_MUTE" = true ] && command -v ffmpeg &>/dev/null; then
-                ffmpeg -v error -i "$f" -an -c:v copy "/tmp/tmp_mute_${COUNT}.${IN_EXT}" || RET=$?
+                ffmpeg -v error -nostdin -i "$f" -an -c:v copy "/tmp/tmp_mute_${COUNT}.${IN_EXT}" || RET=$?
                 if [ $RET -eq 0 ]; then
                     $IM_EXE "/tmp/tmp_mute_${COUNT}.${IN_EXT}" "${IM_ARGS[@]}" "$OUT_FILE" 2>>"$ERR_LOG" || RET=$?
                 fi

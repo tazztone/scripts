@@ -80,6 +80,7 @@ bash "$SCRIPT_DIR/test_loop_detection.sh" || FAILED=$((FAILED+1))
 
 echo -e "\n${YELLOW}=== Running Negative & Edge-Case Tests ===${NC}"
 bash "$SCRIPT_DIR/test_negative.sh" || FAILED=$((FAILED+1))
+bash "$SCRIPT_DIR/test_ui_resilience.sh" || FAILED=$((FAILED+1))
 
 echo -e "\n${YELLOW}=== Running Installation & Uninstallation Tests ===${NC}"
 bash "$SCRIPT_DIR/test_install.sh" || FAILED=$((FAILED+1))

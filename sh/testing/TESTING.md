@@ -48,15 +48,15 @@ The runner will:
 ```
 === Universal Scripts Test Suite ===
 
-Testing: Universal Toolbox - H.264 Compression
-[PASS] H.264 Compression - vcodec=h264, width=1280
+Testing: Universal Toolbox - Core Recipe
+[PASS] Core Recipe - vcodec=h264, fps=30
 
-Testing: Universal Toolbox - HEVC Scaling
-[PASS] HEVC Scaling - vcodec=hevc, width=1280, height=720
+Testing: Universal Toolbox - Subtitle Burn-in
+[PASS] Subtitle Burn-in - vcodec=h264
 
 === Test Summary ===
-Total Tests: 15
-Passed: 15
+Total Tests: 21
+Passed: 21
 Failed: 0
 All tests passed!
 ```
@@ -82,10 +82,10 @@ The test suite provides specialized coverage across the different toolboxes:
 | Test File | What it covers |
 |---|---|
 | `test_lossless_toolbox.sh` | 6 end-to-end scenarios: remux, lossless trim, remove audio, metadata title, metadata clean, merge videos |
-| `test_image_toolbox.sh` | 6 scenarios: scale+BW+WEBP, square crop, 9:16 crop, flatten, sRGB, montage |
-| `test_universal_extended.sh` | 8 scenarios: 16:9 crop, 9:16 crop, rotate, normalize, extract MP3, trim, combo, GIF |
-| `test_ui_resilience.sh` | Cancel flows, sub-dialog cancels, no-files error, resilience (cancel→retry→success) |
-| `test_negative.sh` | Missing files, invalid presets, user cancellations, corrupt/empty file handling |
+| `test_image_toolbox.sh` | 9 scenarios: Scale/BW/WebP, Square, 9:16, Flatten, sRGB, Montage, 16:9, Custom Resize, Text Annotation |
+| `test_universal_extended.sh` | 3 complex scenarios: Speed control (2x), Hardware encoding (NVENC), and Multi-file processing |
+| `test_ui_resilience.sh` | 6 resilience scenarios: Cancel flows, sub-dialog cancels, no-files error, resilience (cancel→retry→success) |
+| `test_negative.sh` | 4 edge cases: Missing files, invalid presets, user cancellations, corrupt/empty file handling |
 | `test_install.sh` | Full install/uninstall flow, symlink verification for multiple tools, mock HOME |
 | `test_loop_detection.sh` | Detection of infinite Zenity menu loops |
 | `test_wizard_contract.sh` | Wizard UI contract compliance |
