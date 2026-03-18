@@ -12,14 +12,14 @@ generate_test_media
 FAILED=0
 
 echo -e "\n${YELLOW}=== Static Syntax Analysis (Linting) ===${NC}"
-bash testing/test_lint.sh || FAILED=$((FAILED+1))
+bash "$SCRIPT_DIR/test_lint.sh" || FAILED=$((FAILED+1))
 
 echo -e "\n${YELLOW}=== Isolated Wizard Parser & Contract Tests ===${NC}"
-bash testing/test_wizard_robust.sh || FAILED=$((FAILED+1))
-bash testing/test_wizard_contract.sh || FAILED=$((FAILED+1))
+bash "$SCRIPT_DIR/test_wizard_robust.sh" || FAILED=$((FAILED+1))
+bash "$SCRIPT_DIR/test_wizard_contract.sh" || FAILED=$((FAILED+1))
 
 echo -e "\n${YELLOW}=== Zenity Binary Smoke Test ===${NC}"
-bash testing/test_zenity_smoke.sh || FAILED=$((FAILED+1))
+bash "$SCRIPT_DIR/test_zenity_smoke.sh" || FAILED=$((FAILED+1))
 
 echo -e "\n${YELLOW}=== Universal Toolbox Core Tests ===${NC}"
 
@@ -64,22 +64,25 @@ else
 fi
 
 echo -e "\n${YELLOW}=== Running Lossless Operations Toolbox Tests ===${NC}"
-bash testing/test_lossless_toolbox.sh || FAILED=$((FAILED+1))
+bash "$SCRIPT_DIR/test_lossless_toolbox.sh" || FAILED=$((FAILED+1))
 
 echo -e "\n${YELLOW}=== Running Extended Universal Toolbox Tests ===${NC}"
-bash testing/test_universal_extended.sh || FAILED=$((FAILED+1))
+bash "$SCRIPT_DIR/test_universal_extended.sh" || FAILED=$((FAILED+1))
 
 echo -e "\n${YELLOW}=== Running Image Toolbox Tests ===${NC}"
-bash testing/test_image_toolbox.sh || FAILED=$((FAILED+1))
+bash "$SCRIPT_DIR/test_image_toolbox.sh" || FAILED=$((FAILED+1))
 
 echo -e "\n${YELLOW}=== Running Cross-Version Compatibility Tests ===${NC}"
-bash testing/test_cross_version.sh || FAILED=$((FAILED+1))
+bash "$SCRIPT_DIR/test_cross_version.sh" || FAILED=$((FAILED+1))
+
+echo -e "\n${YELLOW}=== Running Infinite Loop Detection Tests ===${NC}"
+bash "$SCRIPT_DIR/test_loop_detection.sh" || FAILED=$((FAILED+1))
 
 echo -e "\n${YELLOW}=== Running Negative & Edge-Case Tests ===${NC}"
-bash testing/test_negative.sh || FAILED=$((FAILED+1))
+bash "$SCRIPT_DIR/test_negative.sh" || FAILED=$((FAILED+1))
 
 echo -e "\n${YELLOW}=== Running Installation & Uninstallation Tests ===${NC}"
-bash testing/test_install.sh || FAILED=$((FAILED+1))
+bash "$SCRIPT_DIR/test_install.sh" || FAILED=$((FAILED+1))
 
 # --- Summary ---
 echo -e "\n${YELLOW}=== Final Test Summary ===${NC}"

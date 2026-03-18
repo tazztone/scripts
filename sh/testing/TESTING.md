@@ -86,10 +86,14 @@ The test suite provides specialized coverage across the different toolboxes:
 | `test_image_toolbox.sh` | 6 scenarios: scale+BW+WEBP, square crop, 9:16 crop, flatten, sRGB, montage |
 | `test_universal_extended.sh` | 8 scenarios: 16:9 crop, 9:16 crop, rotate, normalize, extract MP3, trim, combo, GIF |
 | `test_ui_resilience.sh` | Cancel flows, sub-dialog cancels, no-files error, resilience (cancel→retry→success) |
-| `test_cross_version.sh` | Cross-version compatibility |
-| `test_loop_detection.sh` | Loop/infinite cycle detection |
+| `test_negative.sh` | Missing files, invalid presets, user cancellations, corrupt/empty file handling |
+| `test_install.sh` | Full install/uninstall flow, symlink verification for multiple tools, mock HOME |
+| `test_loop_detection.sh` | Detection of infinite Zenity menu loops |
 | `test_wizard_contract.sh` | Wizard UI contract compliance |
 | `test_wizard_robust.sh` | Wizard robustness |
+| `test_cross_version.sh` | Cross-version compatibility |
+| `test_zenity_smoke.sh` | Basic Zenity binary availability and mock functionality |
+| `test_lint.sh` | Static syntax analysis (ShellCheck-lite) |
 
 ### File Validation: Inconsistencies & Gaps
 
@@ -142,7 +146,7 @@ As of v2.6, the framework supports testing "unhappy paths" such as user cancella
 Use the `ZENITY_MOCK_EXIT_CODE` environment variable to force the mock to return a specific exit status (e.g., `1` for Cancel).
 ```bash
 export ZENITY_MOCK_EXIT_CODE=1
-run_negative_test "myscript.sh" "input.mp4"
+run_fail_test "myscript.sh" "Error: Expected Message" "input.mp4"
 unset ZENITY_MOCK_EXIT_CODE
 ```
 
@@ -150,6 +154,9 @@ unset ZENITY_MOCK_EXIT_CODE
 Use `run_resilience_test` when you want to verify that a script survives a cancellation mid-flow but eventually produces a valid output.
 - Set up a `/tmp/zenity_responses` queue with mixed "cancel" strings (empty) and valid selections.
 - The test succeeds only if an output file is correctly generated despite the internal "continue" loops.
+
+### 3. Testing Installation
+`test_install.sh` uses a transient `MOCK_HOME` to verify that `install.sh` and `uninstall.sh` correctly manage symlinks in the user's Nautilus scripts directory without affecting the developer's actual environment. It uses `trap` to ensure cleanup even on failure.
 
 ---
 

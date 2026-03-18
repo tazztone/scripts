@@ -2,7 +2,9 @@
 # testing/test_loop_detection.sh
 # Specifically checks if Image-Magick-Toolbox loops its menu.
 
-source testing/lib_test.sh
+SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+source "$SCRIPT_DIR/lib_test.sh"
 setup_mock_zenity
 generate_test_media
 
@@ -19,7 +21,7 @@ printf "Scale & Resize\n1920x (HD)|\n\n" > /tmp/zenity_responses
 
 echo "Running Image-Magick-Toolbox.sh..."
 log_file="/tmp/loop_test_script.log"
-bash "imagemagick/🖼️ Image-Magick-Toolbox.sh" "$TEST_DATA/src.jpg" > "$log_file" 2>&1
+bash "$PROJECT_ROOT/imagemagick/🖼️ Image-Magick-Toolbox.sh" "$TEST_DATA/src.jpg" > "$log_file" 2>&1
 
 CALL_COUNT=$(grep -c "CALL:" /tmp/zenity_call_log.txt)
 echo "Total Zenity Calls: $CALL_COUNT"
