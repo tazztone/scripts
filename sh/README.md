@@ -12,7 +12,7 @@ Powered by `ffmpeg`, `zenity`, and `bc`.
 - **Lossless Operations:** Lightning-fast quality-preserving operations (trimming, remuxing, stream editing) with zero re-encoding.
 - **Instant Conversions:** One-click presets for MP4, WebM, ProRes, and DNxHD.
 - **Workflow Automation:** Trim, scale, and extract audio instantly with preset and history systems.
-- **GUI Feedback:** Uses Zenity to provide progress bars, confirmation dialogs, and user input fields.
+- **GUI Feedback:** Features a modern Zenity 4 checklist UI and **real-time** parsing progress bars for long FFmpeg encodes.
 - **CLI Integration:** Command-line preset support for automation and batch processing.
 
 ## 🛠️ Prerequisites

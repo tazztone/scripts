@@ -15,17 +15,19 @@ This repository uses a custom-built, headless testing framework designed to vali
 - [Expansion](#-expansion)
 - [Quick Reference: Common Testing Scenarios](#-quick-reference-common-testing-scenarios)
 
-## 🏗️ Architecture: The Zenity Mock
-The core of the testing suite is `testing/test_runner.sh`. It functions by "hijacking" the `zenity` command.
+## 🏗️ Architecture: Binary Delegation Mocking
+The core of the testing suite is `testing/test_runner.sh` and `lib_test.sh`. The framework uses a sophisticated "binary delegation" system rather than relying on brittle shell function overrides.
 
-1.  **Mock Injection**: The runner creates a temporary bash script named `zenity` in `/tmp/scripts_mock_bin`.
-2.  **PATH Precedence**: It prepends this directory to the `$PATH`. When scripts run `zenity`, they execute our mock instead of the system binary.
-3.  **Programmable Responses**: The mock script inspects the incoming arguments (like `--list` or `--entry`) and returns predefined strings based on the context.
+1.  **Mock Injection**: `lib_test.sh` creates temporary bash scripts named `zenity` and `ffmpeg` inside a dedicated `MOCK_BIN` directory (e.g., `/tmp/scripts_mock_bin_XXX`).
+2.  **PATH Precedence**: This directory is prepended to the `$PATH`. When scripts run `zenity` or `ffmpeg`, they execute our mock binaries instead of the real system executables, ensuring true process isolation.
+3.  **Programmable Responses (`zenity`)**: The `zenity` mock inspects incoming arguments (like `--list` or `--entry`) and returns predefined strings read from temporary files (`/tmp/zenity_responses`) or environment variables.
+4.  **Selective Delegation (`ffmpeg`)**: The `ffmpeg` mock intercepts specific calls (like GPU probing) to return mocked cache data, but **delegates** all actual intensive tasks (like `-pass 1` or encoding) back to the real system `ffmpeg` by temporarily stripping the mock directory from its `$PATH`.
 
 ### Dynamic Overrides
-You can control the mock's behavior for specific tests using environment variables:
+You can control the `zenity` mock's behavior for specific tests using environment variables:
 *   `ZENITY_LIST_RESPONSE`: Force the mock to return specific checklist/list items (e.g., `"📐 Scale: 720p|📦 Output: H.265"`).
 *   `ZENITY_ENTRY_RESPONSE`: Force the mock to return an input string (e.g., `"25"` for Target Size).
+*   `/tmp/zenity_responses`: Feed a stream of line-breaks for multiple sequential zenity calls.
 
 ## 🚀 How to Run Tests
 
