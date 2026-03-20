@@ -203,17 +203,20 @@ while true; do
         # Copy newly read values into our base array
         for i in "${!NEW_VALS[@]}"; do VALS[i]="${NEW_VALS[i]}"; done
 
-        # Mapping for 13 fields (0-indexed):
-        # 0:Speed 1:Res 2:CustomW 3:Crop 4:Rot 5:TrimS 6:TrimE 7:Audio 8:Subs 9:Qual 10:Target 11:Format 12:HW
+        # Mapping for 14 fields (0-indexed):
+        # 0:Speed 1:Custom_Spd 2:Res 3:CustomW 4:Crop 5:Rot 6:TrimS 7:TrimE 8:Audio 9:Subs 10:Qual 11:Target 12:Format 13:HW
 
         # 0. Speed
-        PICK_spd="${VALS[0]}"
-        if [[ "$PICK_spd" != *"Inactive"* ]]; then
+        PICK_spd="${VALS[0]}"; CUST_SPD="${VALS[1]}"
+        if [ -n "$CUST_SPD" ]; then
+            CHOICES+="Speed: ${CUST_SPD}|"
+            USER_SPEED="$CUST_SPD"
+        elif [[ "$PICK_spd" != *"Inactive"* ]]; then
             CHOICES+="Speed: ${PICK_spd}|"
         fi
 
         # 1. Scale
-        PICK_res="${VALS[1]}"; CUST_W="${VALS[2]}"
+        PICK_res="${VALS[2]}"; CUST_W="${VALS[3]}"
         if [ -n "$CUST_W" ]; then
             CHOICES+="Custom Scale Width:$CUST_W|"
             USER_W="$CUST_W"
@@ -222,28 +225,28 @@ while true; do
         fi
 
         # 3. Crop
-        PICK_crp="${VALS[3]}"
+        PICK_crp="${VALS[4]}"
         [[ "$PICK_crp" != *"Inactive"* ]] && CHOICES+="Crop: $PICK_crp|"
 
         # 4. Rotate
-        PICK_rot="${VALS[4]}"
+        PICK_rot="${VALS[5]}"
         [[ "$PICK_rot" != *"Inactive"* && "$PICK_rot" != "No Change" ]] && CHOICES+="$PICK_rot|"
 
         # 5. Trim
-        T_S="${VALS[5]}"; T_E="${VALS[6]}"
+        T_S="${VALS[6]}"; T_E="${VALS[7]}"
         [ -n "$T_S" ] && { CHOICES+="Trim: Start|"; USER_TRIM_S="$T_S"; }
         [ -n "$T_E" ] && { CHOICES+="Trim: End|"; USER_TRIM_E="$T_E"; }
 
         # 7. Audio
-        PICK_aud="${VALS[7]}"
+        PICK_aud="${VALS[8]}"
         [[ "$PICK_aud" != *"Inactive"* && "$PICK_aud" != "No Change" ]] && CHOICES+="$PICK_aud|"
 
         # 8. Subs
-        PICK_sub="${VALS[8]}"
+        PICK_sub="${VALS[9]}"
         [[ "$PICK_sub" != *"Inactive"* ]] && CHOICES+="Subtitles: $PICK_sub|"
 
         # EXPORT
-        Q_STRAT="${VALS[9]}"; T_MB="${VALS[10]}"; O_FMT="${VALS[11]}"; H_ACCEL="${VALS[12]}"
+        Q_STRAT="${VALS[10]}"; T_MB="${VALS[11]}"; O_FMT="${VALS[12]}"; H_ACCEL="${VALS[13]}"
 
         if [ -n "$T_MB" ]; then
             CHOICES+="Target Size:$T_MB|"
@@ -607,12 +610,13 @@ for f in "$@"; do
     
     echo "# Processing $f..."
     
+    DUR=$(get_duration "$f")
+    if [ -z "$DUR" ] || (( $(echo "$DUR <= 0" | bc -l) )); then DUR=1; fi
+    
     # --- TARGET SIZE (2-PASS) EXECUTION ---
     if [[ -n "$TARGET_MB" && "$TARGET_MB" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
         _wizard_log "Calculating Bitrate for Target Size... MB=$TARGET_MB"
-        DUR=$(get_duration "$f")
         _wizard_log "Duration for bitrate calc: [$DUR]"
-        if [ -z "$DUR" ] || (( $(echo "$DUR <= 0" | bc -l) )); then DUR=1; fi
         
         ABR=192
         if [[ "${ACODEC_OPTS[*]:-}" == *"-b:a 128k"* ]]; then ABR=128; fi
@@ -641,16 +645,16 @@ for f in "$@"; do
         done
         
         # PASS 1 (Fast & Silent)
-        echo "# Pass 1: Analyzing..."
+        echo "# Pass 1: Analyzing $(basename "$f")..."
         _wizard_log "Pass 1 command: ffmpeg -y -nostdin ${INPUT_OPTS[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_2PASS[@]} -b:v ${V_BR_INT}k -pass 1 -passlogfile $PASS_LOG -an -f null /dev/null"
-        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_2PASS[@]}" -b:v "${V_BR_INT}k" -pass 1 -passlogfile "$PASS_LOG" -an -f null /dev/null 2>"$LOG_FILE"
+        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_2PASS[@]}" -b:v "${V_BR_INT}k" -nostats -progress /dev/stdout -pass 1 -passlogfile "$PASS_LOG" -an -f null /dev/null 2>"$LOG_FILE" | awk -v dur="$DUR" -F'=' '/out_time_us=/ { if(dur>0){ pct=($2/1000000)/dur*50; printf "%.0f\n", pct; fflush(); } }'
         
         # PASS 2 (Actual Encode)
-        echo "# Pass 2: Finalizing size..."
+        echo "# Pass 2: Encoding $(basename "$f")..."
         _wizard_log "Pass 2 command: ffmpeg -y -nostdin ${INPUT_OPTS[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_2PASS[@]} -b:v ${V_BR_INT}k -pass 2 -passlogfile $PASS_LOG ${CURRENT_ACORE[@]} ${FPS_ARG[@]} ${GLOBAL_OPTS[@]} $OUT_FILE"
-        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_2PASS[@]}" -b:v "${V_BR_INT}k" -pass 2 -passlogfile "$PASS_LOG" "${CURRENT_ACORE[@]}" "${FPS_ARG[@]}" "${GLOBAL_OPTS[@]}" "$OUT_FILE" 2>>"$LOG_FILE"
+        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_2PASS[@]}" -b:v "${V_BR_INT}k" -nostats -progress /dev/stdout -pass 2 -passlogfile "$PASS_LOG" "${CURRENT_ACORE[@]}" "${FPS_ARG[@]}" "${GLOBAL_OPTS[@]}" "$OUT_FILE" 2>>"$LOG_FILE" | awk -v dur="$DUR" -F'=' '/out_time_us=/ { if(dur>0){ pct=50+($2/1000000)/dur*50; printf "%.0f\n", pct; fflush(); } }'
         
-        STATUS=$?
+        STATUS=${PIPESTATUS[0]}
         rm -f "${PASS_LOG}"*
     elif [ "$IS_gif" = true ]; then
         PALETTE=$(get_sys_temp "palette")
@@ -664,15 +668,17 @@ for f in "$@"; do
         LAVFI_GIF="[0:v][1:v] paletteuse"
         [ -n "$FULL_VF" ] && LAVFI_GIF="$FULL_VF [x]; [x][1:v] paletteuse"
         
-        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" -i "$PALETTE" -lavfi "$LAVFI_GIF" "${FPS_ARG[@]}" "$OUT_FILE" 2>>"$LOG_FILE"
+        echo "# Generating GIF for $(basename "$f")..."
+        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" -i "$PALETTE" -lavfi "$LAVFI_GIF" -nostats -progress /dev/stdout "${FPS_ARG[@]}" "$OUT_FILE" 2>>"$LOG_FILE" | awk -v dur="$DUR" -F'=' '/out_time_us=/ { if(dur>0){ pct=($2/1000000)/dur*100; printf "%.0f\n", pct; fflush(); } }'
         rm "$PALETTE"
-        STATUS=$?
+        STATUS=${PIPESTATUS[0]}
 
     else
         # Standard Video/Audio (CRF/CQ Mode)
+        echo "# Encoding $(basename "$f")..."
         _wizard_log "Executing: ffmpeg -y -nostdin ${INPUT_OPTS[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_OPTS[@]} ${CURRENT_ACORE[@]} ${FPS_ARG[@]} ${GLOBAL_OPTS[@]} $OUT_FILE"
-        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_OPTS[@]}" "${CURRENT_ACORE[@]}" "${FPS_ARG[@]}" "${GLOBAL_OPTS[@]}" "$OUT_FILE" 2>"$LOG_FILE"
-        STATUS=$?
+        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_OPTS[@]}" -nostats -progress /dev/stdout "${CURRENT_ACORE[@]}" "${FPS_ARG[@]}" "${GLOBAL_OPTS[@]}" "$OUT_FILE" 2>"$LOG_FILE" | awk -v dur="$DUR" -F'=' '/out_time_us=/ { if(dur>0){ pct=($2/1000000)/dur*100; printf "%.0f\n", pct; fflush(); } }'
+        STATUS=${PIPESTATUS[0]}
     fi
     
     # --- GRACEFUL RETRY (Fallback to CPU) ---
@@ -704,8 +710,8 @@ for f in "$@"; do
         fi
 
         _wizard_log "Retrying with: ffmpeg -y -nostdin ${INPUT_OPTS[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_OPTS[@]} ${CURRENT_ACORE[@]} ${FPS_ARG[@]} ${GLOBAL_OPTS[@]} $OUT_FILE"
-        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_OPTS[@]}" "${CURRENT_ACORE[@]}" "${FPS_ARG[@]}" "${GLOBAL_OPTS[@]}" "$OUT_FILE" 2>>"$LOG_FILE"
-        STATUS=$?
+        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_OPTS[@]}" -nostats -progress /dev/stdout "${CURRENT_ACORE[@]}" "${FPS_ARG[@]}" "${GLOBAL_OPTS[@]}" "$OUT_FILE" 2>>"$LOG_FILE" | awk -v dur="$DUR" -F'=' '/out_time_us=/ { if(dur>0){ pct=($2/1000000)/dur*100; printf "%.0f\n", pct; fflush(); } }'
+        STATUS=${PIPESTATUS[0]}
     fi
 
     if [ $STATUS -ne 0 ]; then
