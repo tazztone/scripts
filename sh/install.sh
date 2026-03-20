@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 set -u
 
 # Define the target directory for Nautilus scripts
@@ -101,7 +102,7 @@ install_scripts() {
                      fi
                 else
                      read -p "Overwrite existing link for $(basename "$script")? (y/N) " confirm
-                     [[ ! "$confirm" =~ ^[Yy]$ ]] || { echo "  Skipped: $(basename "$script")"; continue; }
+                     [[ ! "$confirm" =~ ^[Yy]$ ]] && { echo "  Skipped: $(basename "$script")"; continue; }
                 fi
             fi
 

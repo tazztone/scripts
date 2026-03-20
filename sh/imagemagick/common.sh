@@ -13,6 +13,15 @@ init_imagemagick_script() {
         exit 1
     fi
 
+    # Zenity 4+ Requirement Check
+    local z_ver
+    z_ver=$(zenity --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -n 1)
+    if (( $(echo "${z_ver:-0} < 4.0" | bc -l) )); then
+        printf "Error: scripts-sh requires Zenity 4.0 or higher (found %s).\n" "${z_ver:-unknown}" >&2
+        zenity --error --text="Upgrade Required: Zenity 4.0+ is needed for the checklist UI.\nFound: ${z_ver:-unknown}"
+        exit 1
+    fi
+
     # Check for ImageMagick v7 (magick) or v6 (convert)
     if command -v magick &> /dev/null; then
         IM_EXE="magick"
@@ -43,6 +52,7 @@ Z_PROGRESS() {
 
 # Show Error and Exit
 error_exit() {
+    echo "Error: $1" >&2
     zenity --error --text="$1" --no-markup
     exit 1
 }
@@ -61,20 +71,33 @@ generate_safe_filename() {
     
     # NEW: Strip existing known tags recursively from basename ONLY
     # This list should match common tags used across scripts
-    local KNOWN_TAGS="_half|_1920p|_4k|_720p|_640p|_sq|_9x16|_16x9|_grid2x|_grid3x|_row|_col|_sheet|_90cw|_90ccw|_flop|_bw|_flat|_srgb|_text|_web|_min|_arch|_edit|_high|_low|_lossless|_nvenc|_qsv|_vaapi|_cut|_len|_audio|_av1|_mov|_mkv"
+    local KNOWN_TAGS=(
+        "_half" "_1920p" "_4k" "_720p" "_640p" "_sq" "_9x16" "_16x9"
+        "_grid2x" "_grid3x" "_row" "_col" "_sheet" "_90cw" "_90ccw" "_flop"
+        "_bw" "_flat" "_srgb" "_text" "_web" "_min" "_arch" "_edit" "_high"
+        "_low" "_lossless" "_nvenc" "_qsv" "_vaapi" "_cut" "_len" "_audio"
+        "_av1" "_mov" "_mkv"
+    )
+    local tag_regex
+    tag_regex=$(IFS='|'; echo "${KNOWN_TAGS[*]}")
     
     local dir=$(dirname "$base")
     local bname=$(basename "$base")
     local clean_bname="$bname"
     
     while true; do
-        local stripped=$(echo "$clean_bname" | sed -E "s/(${KNOWN_TAGS})(_v[0-9]+)?$//")
+        local stripped=$(echo "$clean_bname" | sed -E "s/(${tag_regex})(_v[0-9]+)?$//")
         [ "$stripped" == "$clean_bname" ] && break
         clean_bname="$stripped"
     done
     
-    local final_base="$clean_bname"
-    [ "$dir" != "." ] && final_base="${dir}/${clean_bname}"
+    local final_base="${dir}/${clean_bname}"
+    # Clean up ./ if it was added unnecessarily (e.g. if original base didn't have it)
+    if [[ "$base" == "./"* ]]; then
+        final_base="./${clean_bname}"
+    elif [ "$dir" == "." ]; then
+        final_base="$clean_bname"
+    fi
 
     local out="${final_base}${tag}.${ext}"
     local ctr=1

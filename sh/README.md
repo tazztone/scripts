@@ -24,7 +24,7 @@ sudo apt update
 sudo apt install ffmpeg zenity bc
 ```
 *   `ffmpeg`: The core media engine.
-*   `zenity`: Creates the popup windows and progress bars.
+*   `zenity`: Creates the popup windows and progress bars. **(Requires version 4.0 or higher)**.
 *   `bc`: Performs math calculations for bitrate scripts.
 
 ## 📥 Installation
