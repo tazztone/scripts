@@ -323,7 +323,7 @@ run_test() {
     fi
     
     log_info "Detected: $(basename -- "$newest_file")"
-    rm -f "$out_log"
+    rm -f "$out_log" "$trace_log"
     validate_media "$newest_file" "$rules" || return 1
 }
 
