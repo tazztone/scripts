@@ -286,7 +286,13 @@ show_main_menu() {
                     "Crop & Geometry")
                         RES=$(show_crop_interface || true)
                         if [ -z "$RES" ]; then continue; fi
-                        recipe_list+=("Canvas: $RES")
+                        if [[ "$RES" == *"Custom"* ]]; then
+                            GEOM=$(zenity --entry --title="Custom Crop" --text="Enter geometry (widthxheight+x+y):" --entry-text="800x600+10+10" --cancel-label="Cancel" || true)
+                            [ -z "$GEOM" ] && continue
+                            recipe_list+=("Canvas: Custom:$GEOM")
+                        else
+                            recipe_list+=("Canvas: $RES")
+                        fi
                         ;;
                     "Convert Format")
                         RES=$(show_convert_interface || true)
@@ -403,8 +409,8 @@ for opt in "${CHOICE_ARR[@]}"; do
                    CROP_ARGS+=("-set" "option:distort:viewport" "%[fx:min(w,h*16/9)]x%[fx:min(w*9/16,h)]" "-distort" "SRT" "0" "+repage")
                    TAG="${TAG}_16x9"
                    ;;
-               *Custom*)
-                   GEOM=$(zenity --entry --title="Custom Crop" --text="Enter geometry (widthxheight+x+y):" --entry-text="800x600+10+10" --cancel-label="Cancel" || true)
+               *Custom:*)
+                   GEOM="${VAL#*Custom:}"
                    if [ -n "$GEOM" ]; then
                        CROP_ARGS+=("-crop" "$GEOM" "+repage")
                        TAG="${TAG}_crop"
