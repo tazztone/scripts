@@ -255,6 +255,15 @@ show_main_menu() {
             echo "$LOAD_HISTORY"
             return 0
         elif [ ${#SELECTED_INTENTS[@]} -gt 0 ]; then
+            # Deduplicate SELECTED_INTENTS as a safeguard against double-firing interfaces
+            local unique_intents=()
+            for si in "${SELECTED_INTENTS[@]}"; do
+                local already=false
+                for ui in "${unique_intents[@]}"; do [[ "$ui" == "$si" ]] && already=true && break; done
+                [[ "$already" == "false" ]] && unique_intents+=("$si")
+            done
+            SELECTED_INTENTS=("${unique_intents[@]}")
+
             # Build recipe from intents
             local recipe_list=()
             for CHOICE in "${SELECTED_INTENTS[@]}"; do

@@ -163,11 +163,25 @@ _wizard_parse_result() {
             [[ -n "$VAL" && "$VAL" != "---" && "$VAL" != "═══" ]] && CLEAN_RESULT+="$VAL|"
         done
         echo "${CLEAN_RESULT%|}"
+    elif (( ${#ALL_PARTS[@]} % (WIZARD_ROW_SIZE - 1) == 0 )); then
+        # Handle case where boolean column is omitted entirely by Zenity on double-click
+        for (( i=0; i<${#ALL_PARTS[@]}; i+=(WIZARD_ROW_SIZE - 1) )); do
+            local VAL="${ALL_PARTS[i+WIZARD_COL_RAWID-1]:-}"
+            [[ -n "$VAL" && "$VAL" != "---" && "$VAL" != "═══" ]] && CLEAN_RESULT+="$VAL|"
+        done
+        echo "${CLEAN_RESULT%|}"
     else
         # Last resort: just filter out dividers from whatever we got
+        # To avoid duplicating intents if they appear multiple times in a row, use a deduplicated list
+        declare -A SEEN
         for part in "${ALL_PARTS[@]}"; do
             part=$(echo "$part" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-            [[ -n "$part" && "$part" != "---" && "$part" != "═══" ]] && CLEAN_RESULT+="$part|"
+            if [[ -n "$part" && "$part" != "---" && "$part" != "═══" ]]; then
+                if [[ -z "${SEEN[$part]:-}" ]]; then
+                    CLEAN_RESULT+="$part|"
+                    SEEN[$part]=1
+                fi
+            fi
         done
         echo "${CLEAN_RESULT%|}"
     fi
