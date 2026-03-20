@@ -62,7 +62,8 @@ analyze_media() {
     # Image Analysis
     if [[ "$ext" =~ ^(jpg|jpeg|png|gif|tiff|webp)$ ]]; then
         # Try to get format, alpha existence, and colorspace
-        local info=$($IM_IDENTIFY -format "%m %A %[colorspace]" "$f" 2>/dev/null || true)
+        local info
+        info=$($IM_IDENTIFY -format "%m %A %[colorspace]" "$f" 2>/dev/null || true)
         if [ -n "$info" ]; then
             local alpha="" colorspace=""
             read -r MEDIA_FORMAT alpha colorspace <<< "$info"
@@ -73,7 +74,8 @@ analyze_media() {
     elif [[ "$ext" =~ ^(mp4|mkv|mov|avi|webm)$ ]]; then
         MEDIA_FORMAT="VIDEO"
         if command -v ffprobe &>/dev/null; then
-            local audio_codec=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "$f" 2>/dev/null || true)
+            local audio_codec
+            audio_codec=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "$f" 2>/dev/null || true)
             if [ -n "$audio_codec" ]; then HAS_AUDIO=1; else HAS_AUDIO=0; fi
         fi
     elif [[ "$ext" == "pdf" ]]; then
@@ -218,7 +220,8 @@ show_main_menu() {
             exit 1
         fi
         
-        local PICKED_RAW=$(show_unified_wizard "Image-Magick-Toolbox v2.1" "$INTENTS" "$PRESET_FILE" "$HISTORY_FILE" || true)
+        local PICKED_RAW
+        PICKED_RAW=$(show_unified_wizard "Image-Magick-Toolbox v2.1" "$INTENTS" "$PRESET_FILE" "$HISTORY_FILE" || true)
         if [ -z "$PICKED_RAW" ]; then exit 0; fi
 
         # Result format: "Name|Name|..."
@@ -246,7 +249,8 @@ show_main_menu() {
         done
 
         if [ -n "$LOAD_PRESET" ]; then
-            local LINE=$(grep "^$LOAD_PRESET|" "$PRESET_FILE" | cut -d'|' -f2-)
+            local LINE
+            LINE=$(grep "^$LOAD_PRESET|" "$PRESET_FILE" | cut -d'|' -f2-)
             echo "$LINE"
             return 0
         elif [ -n "$LOAD_HISTORY" ]; then
@@ -361,7 +365,8 @@ show_main_menu() {
             
             # Handle inline save if requested
             if [ "$DO_SAVE" = true ]; then
-                 local dyn_name=$(get_recipe_summary "$final_choices")
+                 local dyn_name
+                 dyn_name=$(get_recipe_summary "$final_choices")
                  prompt_save_preset "$PRESET_FILE" "$final_choices" "$dyn_name" "true"
             fi
             
@@ -462,7 +467,8 @@ for opt in "${CHOICE_ARR[@]}"; do
             if [[ "$VAL" == *"Text Annotation"* ]]; then DO_TEXT_ANNOTATION=true; fi
             ;;
         BrandingPayload:*)
-            BRAND_PAYLOAD=$(echo "$opt" | cut -d':' -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            VAL=$(echo "$opt" | cut -d':' -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            BRAND_PAYLOAD="$VAL"
             if [ "$DO_TEXT_ANNOTATION" = true ]; then
                 EFFECT_ARGS+=("-gravity" "South" "-pointsize" "24" "-annotate" "+0+20" "$BRAND_PAYLOAD")
                 TAG="${TAG}_text"
@@ -472,7 +478,8 @@ for opt in "${CHOICE_ARR[@]}"; do
         # --- FORMAT/ACTION (PRIORITY 4) ---
         Format:*)
             # Extract just the extension
-            OUT_EXT=$(echo "$opt" | cut -d':' -f2- | cut -d'|' -f1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | tr '[:upper:]' '[:lower:]')
+            VAL=$(echo "$opt" | cut -d':' -f2- | cut -d'|' -f1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | tr '[:upper:]' '[:lower:]')
+            OUT_EXT="$VAL"
             ;;
         Optimize:*)
             VAL=$(echo "$opt" | cut -d':' -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
