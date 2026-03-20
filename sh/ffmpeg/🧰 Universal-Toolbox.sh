@@ -222,81 +222,78 @@ while true; do
         # --- EXTRACT CONFIG & MAP TO CHOICES ---
         CHOICES=""
         _wizard_log "CONFIG_RESULT: [$CONFIG_RESULT]"
-        # Initialize array with 19 empty values to satisfy set -u Mapping for 19 fields (0-18):
-        # 0:Speed 1:Custom_Spd 2:Res 3:CustomW 4:Crop 5:Custom_Ratio 6:Rot 7:TrimS 8:TrimE
-        # 9:Audio 10:Custom_Audio 11:Subs 12:Custom_Subs 13:Qual 14:Custom_CRF 15:Target 16:Format 17:HW 18:Extra_Flags
-        declare -a VALS=("" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "")
-        declare -a NEW_VALS=()
-        IFS='|' read -ra NEW_VALS <<< "$CONFIG_RESULT"
-        _wizard_log "NEW_VALS length: ${#NEW_VALS[@]}"
-        # Copy newly read values into our base array
-        for i in "${!NEW_VALS[@]}"; do
-    # Strip any potential "(Inactive)" pollution from custom entry fields
-    val="${NEW_VALS[i]}"
-    [[ "$val" == *" (Inactive)"* ]] && val=""
-    VALS[i]="$val"
-done
+        
+        # Single source of truth for field mapping (19 fields)
+        FORM_KEYS=(
+            speed custom_speed resolution custom_width
+            crop custom_ratio rotation trim_start trim_end
+            audio custom_audio subtitles custom_subs
+            quality custom_crf target_size format hw_accel extra_flags
+        )
+        # Declare associative array for CONFIG
+        declare -A CONFIG
+        parse_forms_result "$CONFIG_RESULT" "${FORM_KEYS[@]}"
 
         # Mapping for 19 fields (0-indexed):
         # 0:Speed 1:Custom_Spd 2:Res 3:CustomW 4:Crop 5:Custom_Ratio 6:Rot 7:TrimS 8:TrimE
         # 9:Audio 10:Custom_Audio 11:Subs 12:Custom_Subs 13:Qual 14:Custom_CRF 15:Target 16:Format 17:HW 18:Extra_Flags
 
         # 0. Speed
-        PICK_spd="${VALS[0]}"; CUST_SPD="${VALS[1]}"
+        PICK_spd="${CONFIG[speed]}"; CUST_SPD="${CONFIG[custom_speed]}"
         if [ -n "$CUST_SPD" ]; then
             CHOICES+="Speed: ${CUST_SPD}|"
             USER_SPEED="$CUST_SPD"
-        elif [[ -n "$PICK_spd" && "$PICK_spd" != *"Inactive"* ]]; then
+        elif [ -n "$PICK_spd" ]; then
             CHOICES+="Speed: ${PICK_spd}|"
         fi
 
         # 1. Scale
-        PICK_res="${VALS[2]}"; CUST_W="${VALS[3]}"
+        PICK_res="${CONFIG[resolution]}"; CUST_W="${CONFIG[custom_width]}"
         if [ -n "$CUST_W" ]; then
             CHOICES+="Custom Scale Width:$CUST_W|"
             USER_W="$CUST_W"
-        elif [[ -n "$PICK_res" && "$PICK_res" != *"Inactive"* ]]; then
+        elif [ -n "$PICK_res" ]; then
             CHOICES+="Scale: ${PICK_res}|"
         fi
 
         # 3. Crop
-        PICK_crp="${VALS[4]}"; CUST_RATIO="${VALS[5]}"
+        PICK_crp="${CONFIG[crop]}"; CUST_RATIO="${CONFIG[custom_ratio]}"
         if [ -n "$CUST_RATIO" ]; then
             CHOICES+="Custom Aspect Ratio:$CUST_RATIO|"
             USER_RATIO="$CUST_RATIO"
-        elif [[ -n "$PICK_crp" && "$PICK_crp" != *"Inactive"* ]]; then
+        elif [ -n "$PICK_crp" ]; then
             CHOICES+="Crop: $PICK_crp|"
         fi
 
         # 4. Rotate
-        PICK_rot="${VALS[6]}"
-        [[ -n "$PICK_rot" && "$PICK_rot" != *"Inactive"* && "$PICK_rot" != "No Change" ]] && CHOICES+="$PICK_rot|"
+        PICK_rot="${CONFIG[rotation]}"
+        [[ -n "$PICK_rot" && "$PICK_rot" != "No Change" ]] && CHOICES+="$PICK_rot|"
 
         # 5. Trim
-        T_S="${VALS[7]}"; T_E="${VALS[8]}"
+        T_S="${CONFIG[trim_start]}"; T_E="${CONFIG[trim_end]}"
         [ -n "$T_S" ] && { CHOICES+="Trim: Start|"; USER_TRIM_S="$T_S"; }
         [ -n "$T_E" ] && { CHOICES+="Trim: End|"; USER_TRIM_E="$T_E"; }
 
         # 7. Audio
-        PICK_aud="${VALS[9]}"; CUST_AUD="${VALS[10]}"
+        PICK_aud="${CONFIG[audio]}"; CUST_AUD="${CONFIG[custom_audio]}"
         if [ -n "$CUST_AUD" ]; then
-            CHOICES+="Custom Audio Filter:$CUST_AUD|"
+            CHOICES+="Audio Filter: $CUST_AUD|"
             USER_AUDIO_FILTER="$CUST_AUD"
-        elif [[ -n "$PICK_aud" && "$PICK_aud" != *"Inactive"* && "$PICK_aud" != "No Change" ]]; then
+        elif [ -n "$PICK_aud" ]; then
             CHOICES+="$PICK_aud|"
         fi
 
-        # 8. Subs
-        PICK_sub="${VALS[11]}"; CUST_SUB="${VALS[12]}"
+        # 8. Subtitles
+        PICK_sub="${CONFIG[subtitles]}"; CUST_SUB="${CONFIG[custom_subs]}"
         if [ -n "$CUST_SUB" ]; then
-            CHOICES+="Custom Subtitle Style:$CUST_SUB|"
+            CHOICES+="Subtitle Style: $CUST_SUB|"
             USER_SUB_STYLE="$CUST_SUB"
-        elif [[ -n "$PICK_sub" && "$PICK_sub" != *"Inactive"* ]]; then
+        elif [ -n "$PICK_sub" ]; then
             CHOICES+="Subtitles: $PICK_sub|"
         fi
 
         # EXPORT
-        Q_STRAT="${VALS[13]}"; CUST_CRF="${VALS[14]}"; T_MB="${VALS[15]}"; O_FMT="${VALS[16]}"; H_ACCEL="${VALS[17]}"; EXTRA_OPTS="${VALS[18]}"
+        Q_STRAT="${CONFIG[quality]}"; CUST_CRF="${CONFIG[custom_crf]}"; T_MB="${CONFIG[target_size]}"; O_FMT="${CONFIG[format]}"; H_ACCEL="${CONFIG[hw_accel]}"; EXTRA_OPTS="${CONFIG[extra_flags]}"
         
         if [ -n "$CUST_CRF" ]; then
             CHOICES+="Custom CRF:$CUST_CRF|"
@@ -739,7 +736,7 @@ for f in "$@"; do
         # PASS 2 (Actual Encode)
         echo "# Pass 2: Encoding $(basename "$f")..."
         _wizard_log "Pass 2 command: ffmpeg -y -nostdin ${INPUT_OPTS[@]} ${CMD_HW[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_2PASS[@]} -b:v ${V_BR_INT}k -pass 2 -passlogfile $PASS_LOG ${CURRENT_ACORE[@]} ${FPS_ARG[@]} ${GLOBAL_OPTS[@]} ${EXTRA_OPTS} $OUT_FILE"
-        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" "${CMD_HW[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_2PASS[@]}" -b:v "${V_BR_INT}k" -nostats -progress /dev/stdout -pass 2 -passlogfile "$PASS_LOG" "${CURRENT_ACORE[@]}" "${FPS_ARG[@]}" "${GLOBAL_OPTS[@]}" "${EXTRA_OPTS}" "$OUT_FILE" 2>>"$LOG_FILE" | awk -v dur="$DUR" -F'=' '/out_time_us=/ { if(dur>0){ pct=50+($2/1000000)/dur*50; if(pct>99)pct=99; printf "%.0f\n", pct; fflush(); } }'
+        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" "${CMD_HW[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_2PASS[@]}" -b:v "${V_BR_INT}k" -nostats -progress /dev/stdout -pass 2 -passlogfile "$PASS_LOG" "${CURRENT_ACORE[@]}" "${FPS_ARG[@]}" "${GLOBAL_OPTS[@]}" ${EXTRA_OPTS} "$OUT_FILE" 2>>"$LOG_FILE" | awk -v dur="$DUR" -F'=' '/out_time_us=/ { if(dur>0){ pct=50+($2/1000000)/dur*50; if(pct>99)pct=99; printf "%.0f\n", pct; fflush(); } }'
         
         STATUS=${PIPESTATUS[0]}
         rm -f "${PASS_LOG}"*

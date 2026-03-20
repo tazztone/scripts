@@ -24,12 +24,12 @@ NC='\033[0m'
 setup_mock_zenity() {
     # Initialize call log
     printf "" > /tmp/zenity_call_log.txt
-    cat <<'EOF' > "$MOCK_BIN/zenity"
+    cat <<'MOCK_EOF' > "$MOCK_BIN/zenity"
 #!/bin/bash
 # Log every call for debugging and loop detection
 printf "CALL: %s\n" "$*" >> /tmp/zenity_call_log.txt
 
-# Handle --version
+# 1. Informational & Required Flags (no response needed)
 if [[ "$*" == *"--version"* ]]; then
     if [[ "${ZENITY_PROFILE:-}" == "zenity3" ]]; then
         echo "3.92.0"
@@ -39,32 +39,65 @@ if [[ "$*" == *"--version"* ]]; then
     exit 0
 fi
 
-# Handle --progress separately
 if [[ "$*" == *"--progress"* ]]; then
     while read -r line; do :; done
     exit 0
 fi
 
-# Question dialogs default to "No" (decline) to prevent preset-save stealing lines
 if [[ "$*" == *"--question"* ]]; then
     exit ${ZENITY_QUESTION_EXIT:-1}
 fi
 
-# Informational dialogs exit 0 by default in mock
 if [[ "$*" == *"--info"* || "$*" == *"--notification"* || "$*" == *"--error"* || "$*" == *"--warning"* ]]; then
-    exit ${ZENITY_MOCK_EXIT_CODE:-0}
+    exit 0
 fi
 
-# Override responses from environment variables if present
-if [[ "$*" == *"--list"* && -n "$ZENITY_LIST_RESPONSE" ]]; then
-    echo "$ZENITY_LIST_RESPONSE"
-    exit ${ZENITY_MOCK_EXIT_CODE:-0}
-fi
-if [[ ("$*" == *"--entry"* || "$*" == *"--forms"*) && -n "$ZENITY_ENTRY_RESPONSE" ]]; then
-    echo "$ZENITY_ENTRY_RESPONSE"
-    exit ${ZENITY_MOCK_EXIT_CODE:-0}
+# 2. Keyed Dispatch: Each dialog type reads from its own environment variable
+# If the variable has multiple lines, we consume them sequentially
+_consume_env_mock() {
+    local var_name="$1"
+    local val="${!var_name:-}"
+    # Debug: log seen variables
+    printf "MOCK DEBUG: %s=%s\n" "$var_name" "$val" >> /tmp/zenity_call_log.txt
+    [ -z "$val" ] && return 1
+    
+    # Use a temp file to track consumption state across subshells if needed
+    # (Actually, for most tests, the script runs in the same shell as the test, 
+    # but Zenity runs as a separate process. So we need a persistent state).
+    local state_file="/tmp/mock_state_${var_name}"
+    if [ ! -f "$state_file" ]; then
+        # Ensure it has content and is never truly empty during this call
+        echo "$val" > "$state_file"
+    fi
+    
+    if [ -s "$state_file" ]; then
+        local line
+        line=$(head -n 1 "$state_file")
+        echo "$line"
+        # Atomically remove the first line
+        sed -i '1d' "$state_file"
+        return 0
+    fi
+    return 1
+}
+
+if [[ "$*" == *"--list"* ]]; then
+    _consume_env_mock "MOCK_LIST" && exit 0
 fi
 
+if [[ "$*" == *"--forms"* ]]; then
+    _consume_env_mock "MOCK_FORMS" && exit 0
+fi
+
+if [[ "$*" == *"--entry"* ]]; then
+    _consume_env_mock "MOCK_ENTRY" && exit 0
+fi
+
+if [[ "$*" == *"--file-selection"* ]]; then
+    _consume_env_mock "MOCK_FILE" && exit 0
+fi
+
+# 3. Fallback: Legacy Sequential FIFO (for backwards compatibility)
 RESP_FILE="/tmp/zenity_responses"
 if [ -f "$RESP_FILE" ] && [ -s "$RESP_FILE" ]; then
     PICK=$(head -n 1 "$RESP_FILE")
@@ -76,7 +109,7 @@ else
     # Mock cancel/close for input-requiring dialogs (list, entry, etc.)
     exit ${ZENITY_MOCK_EXIT_CODE:-1}
 fi
-EOF
+MOCK_EOF
     chmod +x "$MOCK_BIN/zenity"
     export PATH="$MOCK_BIN:$PATH"
 }
@@ -152,11 +185,11 @@ validate_media() {
         
         case "$key" in
             vcodec)
-                local codec=$(ffprobe -v error -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 -select_streams v:0 "$file")
+                local codec=$(ffprobe -v error -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 -select_streams v:0 "$file" | head -n 1)
                 [[ "$codec" != *"$val"* ]] && { log_fail "V-Codec mismatch: expected $val, got $codec"; failed=1; }
                 ;;
             acodec)
-                local codec=$(ffprobe -v error -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 -select_streams a:0 "$file")
+                local codec=$(ffprobe -v error -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 -select_streams a:0 "$file" | head -n 1)
                 [[ "$codec" != *"$val"* ]] && { log_fail "A-Codec mismatch: expected $val, got $codec"; failed=1; }
                 ;;
             fps)
@@ -186,11 +219,23 @@ validate_media() {
             format)
                 local fmt=""
                 if [[ "$file" =~ \.(jpg|png|webp|gif|jpeg)$ ]]; then
-                    fmt=$(magick identify -format "%m" "$file" | tr '[:upper:]' '[:lower:]' | head -n 1)
+                    fmt=$(magick identify -format "%m" "$file" 2>/dev/null | tr '[:upper:]' '[:lower:]' | head -n 1)
                 else
-                    fmt=$(ffprobe -v error -show_entries format=format_name -of default=noprint_wrappers=1:nokey=1 "$file" | tr '[:upper:]' '[:lower:]')
+                    fmt=$(ffprobe -v error -show_entries format=format_name -of default=noprint_wrappers=1:nokey=1 "$file" | head -n 1 | cut -d',' -f1 | tr -d '\n\r' | tr '[:upper:]' '[:lower:]')
                 fi
-                [[ "$fmt" != *"$val"* ]] && { log_fail "Format mismatch: expected $val in $fmt"; failed=1; }
+                # Use simple substring match to handle redundant strings (e.g. gifgifgif)
+                if [[ "$fmt" != *"$val"* ]]; then
+                    # Compatibility for containers
+                    if [[ "$fmt" == "matroska" && "$val" == "webm" ]] || [[ "$fmt" == "webm" && "$val" == "matroska" ]]; then
+                        :
+                    # Fallback for image formats like 'jpeg' matching 'jpg'
+                    elif [[ "$fmt" == "jpeg" && "$val" == "jpg" ]] || [[ "$fmt" == "jpg" && "$val" == "jpeg" ]]; then
+                        :
+                    else
+                        log_fail "Format mismatch: expected $val in $fmt"
+                        failed=1
+                    fi
+                fi
                 ;;
             has_audio)
                 local a=$(ffprobe -v error -select_streams a -show_entries stream=index -of default=noprint_wrappers=1:nokey=1 "$file")
@@ -261,75 +306,82 @@ run_test() {
         pattern="$4"
         files_rel=("${@:5}")
     else
+        pattern=""
         files_rel=("${@:3}")
         local first_file="${files_rel[0]}"
-        # If first_file is a flag like --preset, pattern must be provided via --pattern
-        if [[ "$first_file" == "-"* ]]; then
-            log_fail "run_test: first file is a flag [$first_file], but --pattern was not used."
-            return 1
+        if [[ -n "$first_file" && "$first_file" != "-"* ]]; then
+            local base=$(basename -- "${first_file%.*}")
+            pattern="${base}_*.*"
         fi
-        local base=$(basename -- "${first_file%.*}")
-        pattern="${base}_*.*"
     fi
 
-    local files_abs=()
-    local files_base=()
-    for f in "${files_rel[@]}"; do 
-        if [[ "$f" == "-"* ]]; then
-            files_base+=("$f")
-        else
-            files_abs+=("$(readlink -f -- "$f")")
-            files_base+=("$(basename -- "$f")")
-        fi
-    done
-
-    # Get dir from first non-flag file
-    local dir="."
-    for f in "${files_rel[@]}"; do
-        if [[ "$f" != "-"* ]]; then
-            dir=$(dirname -- "$(readlink -f -- "$f")")
-            break
-        fi
-    done
-
-    local failed=0
-    
-    # Pre-run file list - support absolute paths or relative patterns
+    # Support absolute paths or relative patterns for finding output
     local find_arg="-name"
     [[ "$pattern" == *"/"* ]] && find_arg="-wholename"
-    
-    # Use a marker file for more reliable new file detection
-    local marker=$(mktemp)
-    touch -d "1 second ago" "$marker" 2>/dev/null
 
-    log_info "Testing: $(basename -- "$script_abs") with [${files_rel[*]}]"
+    # --- Isolation Layer ---
+    local TEMP_DIR=$(mktemp -d -p "/tmp" -t scripts_test_XXXXXX)
+    local INPUT_BASENAMES=()
+    for f in "${files_rel[@]}"; do
+        if [[ "$f" == "-"* ]]; then
+            INPUT_BASENAMES+=("$f")
+        elif [[ -f "$f" ]]; then
+            local fname=$(basename -- "$f")
+            cp "$(readlink -f "$f")" "$TEMP_DIR/$fname"
+            INPUT_BASENAMES+=("$fname")
+        else
+            INPUT_BASENAMES+=("$f")
+        fi
+    done
+
+    log_info "Testing: $(basename -- "$script_abs") in $TEMP_DIR"
     local out_log=$(mktemp)
     local trace_log=$(mktemp)
+    
     (
-        cd "$dir" || exit 1
-        # Run with -x and capture to trace_log
-        BASH_XTRACEFD=3 DEBUG_MODE=1 bash -x "$script_abs" "${files_base[@]}" 3>"$trace_log"
+        cd "$TEMP_DIR" || exit 1
+        # Clear mock state files to ensure fresh consumption for this run
+        rm -f /tmp/mock_state_*
+        # Run with -x and capture to trace_log (BASH_XTRACEFD is very robust)
+        BASH_XTRACEFD=3 DEBUG_MODE=1 bash -x "$script_abs" "${INPUT_BASENAMES[@]}" 3>"$trace_log"
     ) &> "$out_log"
     local status=$?
+    export LAST_TEMP_DIR="$TEMP_DIR"
     
-    # Post-run file list: find files newer than our marker
-    local newest_file=$(find "$dir" -maxdepth 1 "$find_arg" "$pattern" -newer "$marker" | head -n 1)
-    rm -f "$marker"
+    # Clear mock environment for next test in the same script
+    unset MOCK_LIST MOCK_FORMS MOCK_ENTRY MOCK_FILE MOCK_FFMPEG_NVENC MOCK_FFMPEG_QSV MOCK_FFMPEG_VAAPI
+
+    
+    # Post-run: Find the new output file in TEMP_DIR
+    local newest_file=""
+    if [[ -n "$pattern" ]]; then
+        newest_file=$(find "$TEMP_DIR" -maxdepth 1 $find_arg "$pattern" -type f -printf "%T@ %p\n" 2>/dev/null | sort -n | tail -1 | cut -d' ' -f2-)
+    fi
 
     if [ $status -ne 0 ] || [[ -z "$newest_file" ]]; then
-        log_fail "Test execution failed or no new output matching $pattern (Exit: $status)"
-        echo "--- LOG ---"
-        cat "$out_log"
-        echo "--- TRACE ---"
-        cat "$trace_log"
-        echo "-----------"
+        log_fail "Test execution failed or no output matching $pattern (Exit: $status)"
+        echo "--- LOG ---" >> "$REPORT_FILE"
+        cat "$out_log" >> "$REPORT_FILE"
+        echo "--- TRACE ---" >> "$REPORT_FILE"
+        cat "$trace_log" >> "$REPORT_FILE"
+        echo "-----------" >> "$REPORT_FILE"
         rm -f "$out_log" "$trace_log"
         return 1
     fi
     
     log_info "Detected: $(basename -- "$newest_file")"
+    validate_media "$newest_file" "$rules" || {
+        echo "--- LOG ---" >> "$REPORT_FILE"
+        cat "$out_log" >> "$REPORT_FILE"
+        echo "--- FILES in $TEMP_DIR ---" >> "$REPORT_FILE"
+        ls -R "$TEMP_DIR" >> "$REPORT_FILE"
+        echo "-----------" >> "$REPORT_FILE"
+        rm -f "$out_log" "$trace_log"
+        return 1
+    }
+    
     rm -f "$out_log" "$trace_log"
-    validate_media "$newest_file" "$rules" || return 1
+    return 0
 }
 
 # Negative testing: Expect script to FAIL (non-zero exit)

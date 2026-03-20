@@ -271,15 +271,10 @@ show_main_menu() {
                     "Scale & Resize")
                         RES=$(show_scale_interface || true)
                         if [ -z "$RES" ]; then continue; fi
-                        # Robust array extraction
-                        local -a NEW_VALS=()
-                        IFS='|' read -ra NEW_VALS <<< "$RES"
-                        VALS=("" "") # Reset/init
-                        for i in "${!NEW_VALS[@]}"; do VALS[i]="${NEW_VALS[i]}"; done
-
-                        local CLEAN_RES=$(echo "${VALS[0]}" | sed 's/ (.*)$//')
+                        parse_forms_result "$RES" "resolution" "custom_geometry"
+                        local CLEAN_RES=$(echo "${CONFIG[resolution]}" | sed 's/ (.*)$//')
                         if [[ "$CLEAN_RES" == "50%" ]]; then recipe_list+=("Scale: 50%")
-                        elif [[ "$CLEAN_RES" == "Custom" ]]; then recipe_list+=("CustomGeometry:${VALS[1]}")
+                        elif [[ "$CLEAN_RES" == "Custom" ]]; then recipe_list+=("CustomGeometry:${CONFIG[custom_geometry]}")
                         else recipe_list+=("Scale: $CLEAN_RES")
                         fi
                         ;;
@@ -306,36 +301,28 @@ show_main_menu() {
                     "Convert Format")
                         RES=$(show_convert_interface || true)
                         if [ -z "$RES" ]; then continue; fi
-                        local -a NEW_VALS=()
-                        IFS='|' read -ra NEW_VALS <<< "$RES"
-                        VALS=("" "" "") # Reset/init
-                        for i in "${!NEW_VALS[@]}"; do VALS[i]="${NEW_VALS[i]}"; done
-                        [ -z "${VALS[0]}" ] && continue
-                        recipe_list+=("Format: ${VALS[0]}|Optimize: ${VALS[1]}|CustomQuality: ${VALS[2]}")
+                        parse_forms_result "$RES" "format" "strategy" "custom_quality"
+                        [ -z "${CONFIG[format]}" ] && continue
+                        recipe_list+=("Format: ${CONFIG[format]}|Optimize: ${CONFIG[strategy]}|CustomQuality: ${CONFIG[custom_quality]}")
                         ;;
                     "Effects & Branding")
                         RES=$(show_effects_interface || true)
                         if [ -z "$RES" ]; then continue; fi
-                        local -a NEW_VALS=()
-                        IFS='|' read -ra NEW_VALS <<< "$RES"
-                        VALS=("" "" "" "") # Reset/init
-                        for i in "${!NEW_VALS[@]}"; do VALS[i]="${NEW_VALS[i]}"; done
+                        parse_forms_result "$RES" "effect" "branding" "payload" "extra_args"
                         # Only add if not "No Change" or "(Inactive)" or has extra args
-                        if [[ -n "${VALS[0]}" && "${VALS[0]}" != "No Change" ]] || [[ -n "${VALS[1]}" && "${VALS[1]}" != "(Inactive)" ]] || [[ -n "${VALS[3]}" ]]; then
-                            recipe_list+=("Effect: ${VALS[0]}|Branding: ${VALS[1]}|BrandingPayload: ${VALS[2]}|ExtraArgs: ${VALS[3]}")
+                        if [[ -n "${CONFIG[effect]}" && "${CONFIG[effect]}" != "No Change" ]] || \
+                           [[ -n "${CONFIG[branding]}" && "${CONFIG[branding]}" != "(Inactive)" ]] || \
+                           [[ -n "${CONFIG[extra_args]}" ]]; then
+                            recipe_list+=("Effect: ${CONFIG[effect]}|Branding: ${CONFIG[branding]}|BrandingPayload: ${CONFIG[payload]}|ExtraArgs: ${CONFIG[extra_args]}")
                         fi
                         ;;
                     "Montage & Grid")
                         RES=$(show_montage_interface || true)
                         if [ -z "$RES" ]; then continue; fi
-                        local -a NEW_VALS=()
-                        IFS='|' read -ra NEW_VALS <<< "$RES"
-                        VALS=("" "") # Reset/init
-                        for i in "${!NEW_VALS[@]}"; do VALS[i]="${NEW_VALS[i]}"; done
-                        
-                        local CLEAN_MONT=$(echo "${VALS[0]}" | sed 's/ (.*)$//')
-                        if [ -n "${VALS[1]}" ]; then
-                            echo "Canvas: CustomGrid:${VALS[1]}"
+                        parse_forms_result "$RES" "layout" "custom_grid"
+                        local CLEAN_MONT=$(echo "${CONFIG[layout]}" | sed 's/ (.*)$//')
+                        if [ -n "${CONFIG[custom_grid]}" ]; then
+                            echo "Canvas: CustomGrid:${CONFIG[custom_grid]}"
                         else
                             echo "Canvas: $CLEAN_MONT"
                         fi
