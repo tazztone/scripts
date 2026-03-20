@@ -32,6 +32,28 @@ USER_TARGET_MB=""
 USER_TRIM_S=""
 USER_TRIM_E=""
 USER_W=""
+USER_SPEED=""
+USER_RATIO=""
+USER_AUDIO_FILTER=""
+USER_SUB_STYLE=""
+USER_CRF=""
+EXTRA_OPTS=""
+DUR=""
+START=""
+PTS=""
+ATEMPO=""
+SPEED_VAL=""
+VAL_ispd=" (Inactive)"
+VAL_ires=" (Inactive)"
+VAL_icrp=" (Inactive)"
+VAL_ior=" (Inactive)"
+VAL_iaud=" (Inactive)"
+VAL_isub=" (Inactive)"
+REMOVE_AUDIO=false
+USE_GPU=false
+CMD_HW=()
+TAG=""
+CHOICES=""
 
 if [[ "${1:-}" == "--preset" ]] && [[ -n "${2:-}" ]]; then
     PRESET_NAME="$2"
@@ -155,6 +177,7 @@ while true; do
         VAL_icrp=" (Inactive)"
         [[ "$INTENTS" == *"Crop"* ]] && VAL_icrp="16:9 (Landscape)"
         ZENITY_FORMS+=( "--add-combo=🖼️ Crop/Aspect" "--combo-values=$VAL_icrp|9:16 (Vertical)|Square 1:1|4:3 (Classic)|21:9 (Cinema)" )
+        ZENITY_FORMS+=( "--add-entry=✍️ Custom Aspect Ratio (e.g. 21:9)" )
         
         VAL_ior=" (Inactive)"
         [[ "$INTENTS" == *"Rotate"* ]] && VAL_ior="No Change"
@@ -166,13 +189,16 @@ while true; do
         VAL_iaud=" (Inactive)"
         [[ "$INTENTS" == *"Audio"* ]] && VAL_iaud="No Change"
         ZENITY_FORMS+=( "--add-combo=🔊 Audio Action" "--combo-values=$VAL_iaud|Remove Audio Track|Normalize (R128)|Boost Volume (+6dB)|Downmix to Stereo|Recode to PCM (for Linux)|Extract MP3|Extract WAV" )
+        ZENITY_FORMS+=( "--add-entry=✍️ Custom Audio Filter (e.g. volume=2.0)" )
         
         VAL_isub=" (Inactive)"
         [[ "$INTENTS" == *"Subtitles"* ]] && VAL_isub="Burn-in"
         ZENITY_FORMS+=( "--add-combo=📝 Subtitles" "--combo-values=$VAL_isub|Burn-in|Mux (Softsub)" )
+        ZENITY_FORMS+=( "--add-entry=✍️ Custom Subtitle Style (e.g. Fontsize=30)" )
 
         # 5. EXPORT (Always active)
         ZENITY_FORMS+=( "--add-combo=💎 Quality Strategy" "--combo-values=Medium (CRF 23)|High (CRF 18)|Low (CRF 28)|Lossless (CRF 0)" )
+        ZENITY_FORMS+=( "--add-entry=✍️ Custom CRF (0-51)" )
         ZENITY_FORMS+=( "--add-entry=💾 Target Size MB (overrides)" )
         ZENITY_FORMS+=( "--add-combo=📦 Output Format" "--combo-values=Auto/MP4|H.265|AV1|WebM|ProRes|MOV|MKV|GIF" )
         
@@ -184,6 +210,7 @@ while true; do
         fi
         HW_OPTS="${HW_OPTS}None (CPU Only)"
         ZENITY_FORMS+=( "--add-combo=🏎️ Hardware" "--combo-values=$HW_OPTS" )
+        ZENITY_FORMS+=( "--add-entry=🔧 Extra FFmpeg Flags" )
 
         # Use || true to prevent set -e on Cancel (exit 1)
         CONFIG_RESULT=$(zenity "${ZENITY_FORMS[@]}" || true)
@@ -195,23 +222,31 @@ while true; do
         # --- EXTRACT CONFIG & MAP TO CHOICES ---
         CHOICES=""
         _wizard_log "CONFIG_RESULT: [$CONFIG_RESULT]"
-        # Initialize array with empty values to satisfy set -u
-        declare -a VALS=("" "" "" "" "" "" "" "" "" "" "" "" "" "")
+        # Initialize array with 19 empty values to satisfy set -u Mapping for 19 fields (0-18):
+        # 0:Speed 1:Custom_Spd 2:Res 3:CustomW 4:Crop 5:Custom_Ratio 6:Rot 7:TrimS 8:TrimE
+        # 9:Audio 10:Custom_Audio 11:Subs 12:Custom_Subs 13:Qual 14:Custom_CRF 15:Target 16:Format 17:HW 18:Extra_Flags
+        declare -a VALS=("" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "")
         declare -a NEW_VALS=()
         IFS='|' read -ra NEW_VALS <<< "$CONFIG_RESULT"
         _wizard_log "NEW_VALS length: ${#NEW_VALS[@]}"
         # Copy newly read values into our base array
-        for i in "${!NEW_VALS[@]}"; do VALS[i]="${NEW_VALS[i]}"; done
+        for i in "${!NEW_VALS[@]}"; do
+    # Strip any potential "(Inactive)" pollution from custom entry fields
+    val="${NEW_VALS[i]}"
+    [[ "$val" == *" (Inactive)"* ]] && val=""
+    VALS[i]="$val"
+done
 
-        # Mapping for 14 fields (0-indexed):
-        # 0:Speed 1:Custom_Spd 2:Res 3:CustomW 4:Crop 5:Rot 6:TrimS 7:TrimE 8:Audio 9:Subs 10:Qual 11:Target 12:Format 13:HW
+        # Mapping for 19 fields (0-indexed):
+        # 0:Speed 1:Custom_Spd 2:Res 3:CustomW 4:Crop 5:Custom_Ratio 6:Rot 7:TrimS 8:TrimE
+        # 9:Audio 10:Custom_Audio 11:Subs 12:Custom_Subs 13:Qual 14:Custom_CRF 15:Target 16:Format 17:HW 18:Extra_Flags
 
         # 0. Speed
         PICK_spd="${VALS[0]}"; CUST_SPD="${VALS[1]}"
         if [ -n "$CUST_SPD" ]; then
             CHOICES+="Speed: ${CUST_SPD}|"
             USER_SPEED="$CUST_SPD"
-        elif [[ "$PICK_spd" != *"Inactive"* ]]; then
+        elif [[ -n "$PICK_spd" && "$PICK_spd" != *"Inactive"* ]]; then
             CHOICES+="Speed: ${PICK_spd}|"
         fi
 
@@ -220,33 +255,53 @@ while true; do
         if [ -n "$CUST_W" ]; then
             CHOICES+="Custom Scale Width:$CUST_W|"
             USER_W="$CUST_W"
-        elif [[ "$PICK_res" != *"Inactive"* ]]; then
+        elif [[ -n "$PICK_res" && "$PICK_res" != *"Inactive"* ]]; then
             CHOICES+="Scale: ${PICK_res}|"
         fi
 
         # 3. Crop
-        PICK_crp="${VALS[4]}"
-        [[ "$PICK_crp" != *"Inactive"* ]] && CHOICES+="Crop: $PICK_crp|"
+        PICK_crp="${VALS[4]}"; CUST_RATIO="${VALS[5]}"
+        if [ -n "$CUST_RATIO" ]; then
+            CHOICES+="Custom Aspect Ratio:$CUST_RATIO|"
+            USER_RATIO="$CUST_RATIO"
+        elif [[ -n "$PICK_crp" && "$PICK_crp" != *"Inactive"* ]]; then
+            CHOICES+="Crop: $PICK_crp|"
+        fi
 
         # 4. Rotate
-        PICK_rot="${VALS[5]}"
-        [[ "$PICK_rot" != *"Inactive"* && "$PICK_rot" != "No Change" ]] && CHOICES+="$PICK_rot|"
+        PICK_rot="${VALS[6]}"
+        [[ -n "$PICK_rot" && "$PICK_rot" != *"Inactive"* && "$PICK_rot" != "No Change" ]] && CHOICES+="$PICK_rot|"
 
         # 5. Trim
-        T_S="${VALS[6]}"; T_E="${VALS[7]}"
+        T_S="${VALS[7]}"; T_E="${VALS[8]}"
         [ -n "$T_S" ] && { CHOICES+="Trim: Start|"; USER_TRIM_S="$T_S"; }
         [ -n "$T_E" ] && { CHOICES+="Trim: End|"; USER_TRIM_E="$T_E"; }
 
         # 7. Audio
-        PICK_aud="${VALS[8]}"
-        [[ "$PICK_aud" != *"Inactive"* && "$PICK_aud" != "No Change" ]] && CHOICES+="$PICK_aud|"
+        PICK_aud="${VALS[9]}"; CUST_AUD="${VALS[10]}"
+        if [ -n "$CUST_AUD" ]; then
+            CHOICES+="Custom Audio Filter:$CUST_AUD|"
+            USER_AUDIO_FILTER="$CUST_AUD"
+        elif [[ -n "$PICK_aud" && "$PICK_aud" != *"Inactive"* && "$PICK_aud" != "No Change" ]]; then
+            CHOICES+="$PICK_aud|"
+        fi
 
         # 8. Subs
-        PICK_sub="${VALS[9]}"
-        [[ "$PICK_sub" != *"Inactive"* ]] && CHOICES+="Subtitles: $PICK_sub|"
+        PICK_sub="${VALS[11]}"; CUST_SUB="${VALS[12]}"
+        if [ -n "$CUST_SUB" ]; then
+            CHOICES+="Custom Subtitle Style:$CUST_SUB|"
+            USER_SUB_STYLE="$CUST_SUB"
+        elif [[ -n "$PICK_sub" && "$PICK_sub" != *"Inactive"* ]]; then
+            CHOICES+="Subtitles: $PICK_sub|"
+        fi
 
         # EXPORT
-        Q_STRAT="${VALS[10]}"; T_MB="${VALS[11]}"; O_FMT="${VALS[12]}"; H_ACCEL="${VALS[13]}"
+        Q_STRAT="${VALS[13]}"; CUST_CRF="${VALS[14]}"; T_MB="${VALS[15]}"; O_FMT="${VALS[16]}"; H_ACCEL="${VALS[17]}"; EXTRA_OPTS="${VALS[18]}"
+        
+        if [ -n "$CUST_CRF" ]; then
+            CHOICES+="Custom CRF:$CUST_CRF|"
+            USER_CRF="$CUST_CRF"
+        fi
 
         if [ -n "$T_MB" ]; then
             CHOICES+="Target Size:$T_MB|"
@@ -295,6 +350,11 @@ if [[ "$CHOICES" =~ Target\ Size:([0-9.]+) ]]; then
     USER_TARGET_MB="$TARGET_MB" # Sync for consistency
 fi
 
+# Override CRF if custom entry is present
+if [ -n "$USER_CRF" ]; then
+    CRF_CPU="$USER_CRF"; CQ_NV="$USER_CRF"; GQ_QSV="$USER_CRF"; QP_VA="$USER_CRF"
+fi
+
 if [[ "$CHOICES" == *"Target Size"* ]]; then
     if [ -z "$TARGET_MB" ]; then
         TARGET_MB=$(zenity --entry --title="Target Size" --text="Total file size (MB):" --entry-text="25" --cancel-label="Cancel" || true)
@@ -316,9 +376,9 @@ EXT="mp4"
 TAG=""
 FILTER_COUNT=0
 FPS_OVERRIDE=""
-REMOVE_AUDIO=false
 USE_GPU=false
 GPU_TYPE=""
+CMD_HW=() # Initialize CMD_HW array
 
 # Quality Presets Logic
 CRF_CPU=23; CQ_NV=23; GQ_QSV=25; QP_VA=25
@@ -336,6 +396,12 @@ add_af() {
     if [ -z "$AF_CHAIN" ]; then AF_CHAIN="$1"; else AF_CHAIN="$AF_CHAIN,$1"; fi
     ((FILTER_COUNT += 1))
 }
+
+# --- CUSTOM AUDIO FILTER ---
+if [ -n "$USER_AUDIO_FILTER" ]; then
+    add_af "$USER_AUDIO_FILTER"
+    TAG="${TAG}_af"
+fi
 
 # --- CUSTOM INPUTS ---
 if [[ "$CHOICES" == *"Trim: Start"* ]]; then
@@ -403,11 +469,18 @@ if [ -n "$SPEED_VAL" ]; then
 fi
 
 # --- CROP ---
-if [[ "$CHOICES" == *"Crop: 9:16"* ]]; then add_vf "crop=ih*(9/16):ih:(iw-ow)/2:0"; TAG="${TAG}_9x16"; fi
-if [[ "$CHOICES" == *"Crop: 16:9"* ]]; then add_vf "crop=iw:iw*9/16:0:(ih-ow)/2"; TAG="${TAG}_16x9"; fi
-if [[ "$CHOICES" == *"Crop: Square"* ]]; then add_vf "crop=min(iw\,ih):min(iw\,ih):(iw-ow)/2:(ih-oh)/2"; TAG="${TAG}_sq"; fi
-if [[ "$CHOICES" == *"Crop: 4:3"* ]]; then add_vf "crop=ih*(4/3):ih:(iw-ow)/2:0"; TAG="${TAG}_4x3"; fi
-if [[ "$CHOICES" == *"Crop: 21:9"* ]]; then add_vf "crop=iw:iw*(9/21):0:(ih-oh)/2"; TAG="${TAG}_21x9"; fi
+if [ -n "$USER_RATIO" ]; then
+    # Custom Ratio (e.g. 2.35:1)
+    # We calculate based on width/height. 
+    # Logic: crop to the largest centered area matching the ratio.
+    add_vf "crop=ih*($USER_RATIO):ih:(iw-ow)/2:0"
+    TAG="${TAG}_ratio"
+elif [[ "$CHOICES" == *"Crop: 9:16"* ]]; then add_vf "crop=ih*(9/16):ih:(iw-ow)/2:0"; TAG="${TAG}_9x16"
+elif [[ "$CHOICES" == *"Crop: 16:9"* ]]; then add_vf "crop=iw:iw*9/16:0:(ih-ow)/2"; TAG="${TAG}_16x9"
+elif [[ "$CHOICES" == *"Crop: Square"* ]]; then add_vf "crop=min(iw\,ih):min(iw\,ih):(iw-ow)/2:(ih-oh)/2"; TAG="${TAG}_sq"
+elif [[ "$CHOICES" == *"Crop: 4:3"* ]]; then add_vf "crop=ih*(4/3):ih:(iw-ow)/2:0"; TAG="${TAG}_4x3"
+elif [[ "$CHOICES" == *"Crop: 21:9"* ]]; then add_vf "crop=iw:iw*(9/21):0:(ih-oh)/2"; TAG="${TAG}_21x9"
+fi
 
 # --- SCALE ---
 SCALE_W=""
@@ -455,9 +528,9 @@ else
 fi
 
 # --- GPU LOGIC ---
-if [[ "$CHOICES" == *"Use NVENC"* ]]; then USE_GPU=true; GPU_TYPE="nvenc"; TAG="${TAG}_nvenc"; fi
-if [[ "$CHOICES" == *"Use QSV"* ]]; then USE_GPU=true; GPU_TYPE="qsv"; TAG="${TAG}_qsv"; fi
-if [[ "$CHOICES" == *"Use VAAPI"* ]]; then USE_GPU=true; GPU_TYPE="vaapi"; TAG="${TAG}_vaapi"; fi
+if [[ "$CHOICES" == *"Use NVENC"* ]]; then USE_GPU=true; GPU_TYPE="nvenc"; TAG="${TAG}_nvenc"; CMD_HW=("-hwaccel" "cuda"); fi
+if [[ "$CHOICES" == *"Use QSV"* ]]; then USE_GPU=true; GPU_TYPE="qsv"; TAG="${TAG}_qsv"; CMD_HW=("-hwaccel" "qsv" "-init_hw_device" "qsv=hw" "-filter_hw_device" "hw"); fi
+if [[ "$CHOICES" == *"Use VAAPI"* ]]; then USE_GPU=true; GPU_TYPE="vaapi"; TAG="${TAG}_vaapi"; CMD_HW=("-hwaccel" "vaapi" "-init_hw_device" "vaapi=hw:/dev/dri/renderD128" "-filter_hw_device" "hw"); fi
 
 # --- FORMAT OVERRIDES ---
 IS_audio_only=false
@@ -467,7 +540,7 @@ if [[ "$CHOICES" == *"Output: H.265"* ]]; then
     if [ "$USE_GPU" = true ]; then
         if [ "$GPU_TYPE" = "nvenc" ]; then VCODEC_OPTS=("-c:v" "hevc_nvenc" "-preset" "slow" "-rc" "vbr" "-cq" "$CQ_NV" "-pix_fmt" "yuv420p"); fi
         if [ "$GPU_TYPE" = "qsv" ]; then VCODEC_OPTS=("-c:v" "hevc_qsv" "-load_plugin" "hevc_hw" "-preset" "medium" "-global_quality" "$GQ_QSV" "-pix_fmt" "yuv420p"); fi
-        if [ "$GPU_TYPE" = "vaapi" ]; then VCODEC_OPTS=("-c:v" "hevc_vaapi" "-rc_mode" "CQP" "-qp" "$QP_VA"); GLOBAL_OPTS+=("-vaapi_device" "/dev/dri/renderD128" "-vf" "format=nv12,hwupload"); fi
+        if [ "$GPU_TYPE" = "vaapi" ]; then VCODEC_OPTS=("-c:v" "hevc_vaapi" "-rc_mode" "CQP" "-qp" "$QP_VA"); GLOBAL_OPTS+=("-vf" "format=nv12,hwupload"); fi
     else
         VCODEC_OPTS=("-c:v" "libx265" "-crf" "$CRF_CPU" "-preset" "medium")
     fi
@@ -520,7 +593,7 @@ else
     if [ "$USE_GPU" = true ]; then
         if [ "$GPU_TYPE" = "nvenc" ]; then VCODEC_OPTS=("-c:v" "h264_nvenc" "-preset" "slow" "-rc" "vbr" "-cq" "$CQ_NV" "-pix_fmt" "yuv420p"); fi
         if [ "$GPU_TYPE" = "qsv" ]; then VCODEC_OPTS=("-c:v" "h264_qsv" "-preset" "medium" "-global_quality" "$GQ_QSV" "-pix_fmt" "yuv420p"); fi
-        if [ "$GPU_TYPE" = "vaapi" ]; then VCODEC_OPTS=("-c:v" "h264_vaapi" "-rc_mode" "CQP" "-qp" "$QP_VA"); GLOBAL_OPTS+=("-vaapi_device" "/dev/dri/renderD128" "-vf" "format=nv12,hwupload"); fi
+        if [ "$GPU_TYPE" = "vaapi" ]; then VCODEC_OPTS=("-c:v" "h264_vaapi" "-rc_mode" "CQP" "-qp" "$QP_VA"); GLOBAL_OPTS+=("-vf" "format=nv12,hwupload"); fi
     else
         # DEFAULT CPU H264
         VCODEC_OPTS=("-c:v" "libx264" "-crf" "$CRF_CPU" "-preset" "medium")
@@ -542,6 +615,9 @@ fi
 # Handled inside the loop now
 
 # --- EXECUTION ---
+FAIL_SENTINEL=$(get_sys_temp "toolbox_fail")
+rm -f "$FAIL_SENTINEL"
+
 (
 for f in "$@"; do
     FILE_TAG="$TAG"
@@ -564,7 +640,9 @@ for f in "$@"; do
             if [ "$SUB_TYPE" = "burn" ]; then
                 # Burn-in: Use relative path (best for ffmpeg)
                 REL_SRT="./$(basename "$SRT_FILE")"
-                SUB_FILTER="subtitles=filename='$REL_SRT':force_style='Fontsize=24,BorderStyle=3,Outline=2'"
+                STYLE="Fontsize=24,BorderStyle=3,Outline=2"
+                [ -n "$USER_SUB_STYLE" ] && STYLE="$USER_SUB_STYLE"
+                SUB_FILTER="subtitles=filename='$REL_SRT':force_style='$STYLE'"
             elif [ "$SUB_TYPE" = "mux" ]; then
                 # Mux: Add input and map it
                 SUB_MAPPING=("-i" "$SRT_FILE" "-c:s" "mov_text" "-metadata:s:s:0" "language=eng")
@@ -646,13 +724,22 @@ for f in "$@"; do
         
         # PASS 1 (Fast & Silent)
         echo "# Pass 1: Analyzing $(basename "$f")..."
-        _wizard_log "Pass 1 command: ffmpeg -y -nostdin ${INPUT_OPTS[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_2PASS[@]} -b:v ${V_BR_INT}k -pass 1 -passlogfile $PASS_LOG -an -f null /dev/null"
-        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_2PASS[@]}" -b:v "${V_BR_INT}k" -nostats -progress /dev/stdout -pass 1 -passlogfile "$PASS_LOG" -an -f null /dev/null 2>"$LOG_FILE" | awk -v dur="$DUR" -F'=' '/out_time_us=/ { if(dur>0){ pct=($2/1000000)/dur*50; printf "%.0f\n", pct; fflush(); } }'
+        _wizard_log "Pass 1 command: ffmpeg -y -nostdin ${INPUT_OPTS[@]} ${CMD_HW[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_2PASS[@]} -b:v ${V_BR_INT}k -pass 1 -passlogfile $PASS_LOG -an -f null /dev/null"
+        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" "${CMD_HW[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_2PASS[@]}" -b:v "${V_BR_INT}k" -nostats -progress /dev/stdout -pass 1 -passlogfile "$PASS_LOG" -an -f null /dev/null 2>"$LOG_FILE" | awk -v dur="$DUR" -F'=' '/out_time_us=/ { if(dur>0){ pct=($2/1000000)/dur*50; if(pct>49)pct=49; printf "%.0f\n", pct; fflush(); } }'
+        STATUS=${PIPESTATUS[0]}
+
+        if [ $STATUS -ne 0 ]; then
+            _wizard_log "Pass 1 failed for $f"
+            echo "FAIL" > "$FAIL_SENTINEL"
+            zenity --error --text="Encoding Pass 1 failed for: $(basename "$f")\n\nCheck $LOG_FILE for details."
+            rm -f "${PASS_LOG}"*
+            continue
+        fi
         
         # PASS 2 (Actual Encode)
         echo "# Pass 2: Encoding $(basename "$f")..."
-        _wizard_log "Pass 2 command: ffmpeg -y -nostdin ${INPUT_OPTS[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_2PASS[@]} -b:v ${V_BR_INT}k -pass 2 -passlogfile $PASS_LOG ${CURRENT_ACORE[@]} ${FPS_ARG[@]} ${GLOBAL_OPTS[@]} $OUT_FILE"
-        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_2PASS[@]}" -b:v "${V_BR_INT}k" -nostats -progress /dev/stdout -pass 2 -passlogfile "$PASS_LOG" "${CURRENT_ACORE[@]}" "${FPS_ARG[@]}" "${GLOBAL_OPTS[@]}" "$OUT_FILE" 2>>"$LOG_FILE" | awk -v dur="$DUR" -F'=' '/out_time_us=/ { if(dur>0){ pct=50+($2/1000000)/dur*50; printf "%.0f\n", pct; fflush(); } }'
+        _wizard_log "Pass 2 command: ffmpeg -y -nostdin ${INPUT_OPTS[@]} ${CMD_HW[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_2PASS[@]} -b:v ${V_BR_INT}k -pass 2 -passlogfile $PASS_LOG ${CURRENT_ACORE[@]} ${FPS_ARG[@]} ${GLOBAL_OPTS[@]} ${EXTRA_OPTS} $OUT_FILE"
+        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" "${CMD_HW[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_2PASS[@]}" -b:v "${V_BR_INT}k" -nostats -progress /dev/stdout -pass 2 -passlogfile "$PASS_LOG" "${CURRENT_ACORE[@]}" "${FPS_ARG[@]}" "${GLOBAL_OPTS[@]}" "${EXTRA_OPTS}" "$OUT_FILE" 2>>"$LOG_FILE" | awk -v dur="$DUR" -F'=' '/out_time_us=/ { if(dur>0){ pct=50+($2/1000000)/dur*50; if(pct>99)pct=99; printf "%.0f\n", pct; fflush(); } }'
         
         STATUS=${PIPESTATUS[0]}
         rm -f "${PASS_LOG}"*
@@ -663,21 +750,21 @@ for f in "$@"; do
         VF_GIF="palettegen"
         [ -n "$FULL_VF" ] && VF_GIF="$FULL_VF,palettegen"
         
-        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" -vf "$VF_GIF" "$PALETTE" 2>"$LOG_FILE"
+        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" "${CMD_HW[@]}" -i "$f" -vf "$VF_GIF" "$PALETTE" 2>"$LOG_FILE"
         _wizard_log "Creating GIF..."
         LAVFI_GIF="[0:v][1:v] paletteuse"
         [ -n "$FULL_VF" ] && LAVFI_GIF="$FULL_VF [x]; [x][1:v] paletteuse"
         
         echo "# Generating GIF for $(basename "$f")..."
-        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" -i "$PALETTE" -lavfi "$LAVFI_GIF" -nostats -progress /dev/stdout "${FPS_ARG[@]}" "$OUT_FILE" 2>>"$LOG_FILE" | awk -v dur="$DUR" -F'=' '/out_time_us=/ { if(dur>0){ pct=($2/1000000)/dur*100; printf "%.0f\n", pct; fflush(); } }'
+        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" "${CMD_HW[@]}" -i "$f" -i "$PALETTE" -lavfi "$LAVFI_GIF" -nostats -progress /dev/stdout "${FPS_ARG[@]}" "$OUT_FILE" 2>>"$LOG_FILE" | awk -v dur="$DUR" -F'=' '/out_time_us=/ { if(dur>0){ pct=($2/1000000)/dur*100; if(pct>99)pct=99; printf "%.0f\n", pct; fflush(); } }'
         rm "$PALETTE"
         STATUS=${PIPESTATUS[0]}
 
     else
         # Standard Video/Audio (CRF/CQ Mode)
         echo "# Encoding $(basename "$f")..."
-        _wizard_log "Executing: ffmpeg -y -nostdin ${INPUT_OPTS[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_OPTS[@]} ${CURRENT_ACORE[@]} ${FPS_ARG[@]} ${GLOBAL_OPTS[@]} $OUT_FILE"
-        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_OPTS[@]}" -nostats -progress /dev/stdout "${CURRENT_ACORE[@]}" "${FPS_ARG[@]}" "${GLOBAL_OPTS[@]}" "$OUT_FILE" 2>"$LOG_FILE" | awk -v dur="$DUR" -F'=' '/out_time_us=/ { if(dur>0){ pct=($2/1000000)/dur*100; printf "%.0f\n", pct; fflush(); } }'
+        _wizard_log "Executing: ffmpeg -y -nostdin ${INPUT_OPTS[@]} ${CMD_HW[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_OPTS[@]} ${CURRENT_ACORE[@]} ${FPS_ARG[@]} ${GLOBAL_OPTS[@]} ${EXTRA_OPTS} $OUT_FILE"
+        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" "${CMD_HW[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_OPTS[@]}" -nostats -progress /dev/stdout "${CURRENT_ACORE[@]}" "${FPS_ARG[@]}" "${GLOBAL_OPTS[@]}" ${EXTRA_OPTS} "$OUT_FILE" 2>"$LOG_FILE" | awk -v dur="$DUR" -F'=' '/out_time_us=/ { if(dur>0){ pct=($2/1000000)/dur*100; if(pct>99)pct=99; printf "%.0f\n", pct; fflush(); } }'
         STATUS=${PIPESTATUS[0]}
     fi
     
@@ -695,8 +782,8 @@ for f in "$@"; do
         
         # Clear VAAPI specific global opts safely
         if [ "$GPU_TYPE" = "vaapi" ]; then
-            local NEW_GLOBAL=()
-            local skip_next=false
+            NEW_GLOBAL=()
+            skip_next=false
             for opt in "${GLOBAL_OPTS[@]}"; do
                 if [ "$skip_next" = "true" ]; then skip_next=false; continue; fi
                 if [[ "$opt" == "-vaapi_device" || "$opt" == "-vf" ]]; then
@@ -710,17 +797,24 @@ for f in "$@"; do
         fi
 
         _wizard_log "Retrying with: ffmpeg -y -nostdin ${INPUT_OPTS[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_OPTS[@]} ${CURRENT_ACORE[@]} ${FPS_ARG[@]} ${GLOBAL_OPTS[@]} $OUT_FILE"
-        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_OPTS[@]}" -nostats -progress /dev/stdout "${CURRENT_ACORE[@]}" "${FPS_ARG[@]}" "${GLOBAL_OPTS[@]}" "$OUT_FILE" 2>>"$LOG_FILE" | awk -v dur="$DUR" -F'=' '/out_time_us=/ { if(dur>0){ pct=($2/1000000)/dur*100; printf "%.0f\n", pct; fflush(); } }'
+        ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_OPTS[@]}" ${EXTRA_OPTS} -nostats -progress /dev/stdout "${CURRENT_ACORE[@]}" "${FPS_ARG[@]}" "${GLOBAL_OPTS[@]}" "$OUT_FILE" 2>>"$LOG_FILE" | awk -v dur="$DUR" -F'=' '/out_time_us=/ { if(dur>0){ pct=($2/1000000)/dur*100; if(pct>99)pct=99; printf "%.0f\n", pct; fflush(); } }'
         STATUS=${PIPESTATUS[0]}
     fi
 
-    if [ $STATUS -ne 0 ]; then
-        _wizard_log "ERROR: Failed on file $f"
-        # Ensure LOG_FILE exists before trying to read it
-        [ ! -f "$LOG_FILE" ] && echo "FFmpeg failed. No log available." > "$LOG_FILE"
-        zenity --error --text="FFmpeg failed on $(basename "$f").\nCheck logs details." --ok-label="Close" --extra-button="Details" --title="Error" < "$LOG_FILE"
+    if [ $STATUS -eq 0 ]; then
+        _wizard_log "Successfully processed: $OUT_FILE"
+    else
+        _wizard_log "Failed to process: $f"
+        echo "FAIL" > "$FAIL_SENTINEL"
+        zenity --error --text="Encoding failed for: $(basename "$f")\n\nCheck $LOG_FILE for details."
     fi
+    # Final progress jump for item
+    echo "100"
 done
-) | zenity --progress --title="Universal Toolbox" --pulsate --auto-close
+) | zenity --progress --title="Universal Toolbox" --auto-close --auto-kill
 
-zenity --notification --text="Universal Toolbox Finished!"
+if [ -f "$FAIL_SENTINEL" ] && grep -q "FAIL" "$FAIL_SENTINEL"; then
+    rm -f "$FAIL_SENTINEL"
+    exit 1
+fi
+rm -f "$FAIL_SENTINEL"

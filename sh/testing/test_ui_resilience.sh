@@ -36,7 +36,7 @@ run_negative_test "ffmpeg/🧰 Universal-Toolbox.sh" "$TEST_DATA/src.mp4"
 # 5. Resilience: Image-Magick - Cancel Scale, then select BW and finish
 echo "Test 5: Image-Magick Resilience (Cancel Scale -> BW -> Success)"
 # Queue: 1. Menu (Scale), 2. Scale Dialog (Cancel), 3. Menu (Effects), 4. Effects Dialog (BW)
-printf "Scale & Resize\n\nEffects & Branding\nBlack & White| (Inactive)|\n" > /tmp/zenity_responses
+printf "Scale & Resize\n\nEffects & Branding\nBlack & White| (Inactive)||\n" > /tmp/zenity_responses
 export ZENITY_QUESTION_RESPONSE="NO"
 run_resilience_test "imagemagick/🖼️ Image-Magick-Toolbox.sh" "format=jpeg" "$TEST_DATA/src.jpg"
 unset ZENITY_QUESTION_RESPONSE

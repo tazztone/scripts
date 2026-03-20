@@ -153,18 +153,15 @@ show_convert_interface() {
     zenity --forms --title="📦 Convert & Optimize" --width=450 \
         --text="Select format and quality:" \
         --add-combo="Output Format" --combo-values="JPG|PNG|WEBP|TIFF|PDF" \
-        --add-combo="Optimize Strategy" --combo-values="Web Ready (Quality 85)|Max Compression|Archive (Lossless)" || true
+        --add-combo="Optimize Strategy" --combo-values="Web Ready (Quality 85)|Max Compression|Archive (Lossless)" \
+        --add-entry="✍️ Custom Quality (0-100)" || true
 }
 
 show_montage_interface() {
-    zenity --list --title="🖼️ Montage & Grid" --width=500 --height=400 \
-        --text="Select a montage layout:" \
-        --column="Layout" --column="Description" \
-        "🏁 2x Grid" "2-column grid layout" \
-        "🎲 3x Grid" "3-column grid layout" \
-        "📑 Contact Sheet" "Labeled thumbnail grid" \
-        "➡ Single Row" "Stitch images side-by-side" \
-        "⬇ Single Column" "Stitch images vertically" || true
+    zenity --forms --title="🖼️ Montage & Grid" --width=500 \
+        --text="Select a montage layout and custom shape:" \
+        --add-combo="Layout" --combo-values="🏁 2x Grid|🎲 3x Grid|📑 Contact Sheet|➡ Single Row|⬇ Single Column" \
+        --add-entry="✍️ Custom Grid Shape (e.g. 4x3)" || true
 }
 
 show_effects_interface() {
@@ -173,7 +170,8 @@ show_effects_interface() {
         --text="Apply effects or watermarks:" \
         --add-combo="Visual Effect" --combo-values="No Change|Rotate 90 CW|Rotate 90 CCW|Flip Horizontal|Black & White" \
         --add-combo="Branding" --combo-values="$branding_opts" \
-        --add-entry="Watermark Path / Text Content" || true
+        --add-entry="Watermark Path / Text Content" \
+        --add-entry="🔧 Extra Magick Args" || true
 }
 
 # Remove obsolete intent functions
@@ -310,28 +308,37 @@ show_main_menu() {
                         if [ -z "$RES" ]; then continue; fi
                         local -a NEW_VALS=()
                         IFS='|' read -ra NEW_VALS <<< "$RES"
-                        VALS=("" "") # Reset/init
+                        VALS=("" "" "") # Reset/init
                         for i in "${!NEW_VALS[@]}"; do VALS[i]="${NEW_VALS[i]}"; done
                         [ -z "${VALS[0]}" ] && continue
-                        recipe_list+=("Format: ${VALS[0]}|Optimize: ${VALS[1]}")
+                        recipe_list+=("Format: ${VALS[0]}|Optimize: ${VALS[1]}|CustomQuality: ${VALS[2]}")
                         ;;
                     "Effects & Branding")
                         RES=$(show_effects_interface || true)
                         if [ -z "$RES" ]; then continue; fi
                         local -a NEW_VALS=()
                         IFS='|' read -ra NEW_VALS <<< "$RES"
-                        VALS=("" "" "") # Reset/init
+                        VALS=("" "" "" "") # Reset/init
                         for i in "${!NEW_VALS[@]}"; do VALS[i]="${NEW_VALS[i]}"; done
-                        # Only add if not "No Change" or "(Inactive)"
-                        if [[ -n "${VALS[0]}" && "${VALS[0]}" != "No Change" ]] || [[ -n "${VALS[1]}" && "${VALS[1]}" != "(Inactive)" ]]; then
-                            recipe_list+=("Effect: ${VALS[0]}|Branding: ${VALS[1]}|BrandingPayload: ${VALS[2]}")
+                        # Only add if not "No Change" or "(Inactive)" or has extra args
+                        if [[ -n "${VALS[0]}" && "${VALS[0]}" != "No Change" ]] || [[ -n "${VALS[1]}" && "${VALS[1]}" != "(Inactive)" ]] || [[ -n "${VALS[3]}" ]]; then
+                            recipe_list+=("Effect: ${VALS[0]}|Branding: ${VALS[1]}|BrandingPayload: ${VALS[2]}|ExtraArgs: ${VALS[3]}")
                         fi
                         ;;
                     "Montage & Grid")
                         RES=$(show_montage_interface || true)
                         if [ -z "$RES" ]; then continue; fi
-                        # Montage is terminal/special
-                        echo "Canvas: $RES"
+                        local -a NEW_VALS=()
+                        IFS='|' read -ra NEW_VALS <<< "$RES"
+                        VALS=("" "") # Reset/init
+                        for i in "${!NEW_VALS[@]}"; do VALS[i]="${NEW_VALS[i]}"; done
+                        
+                        local CLEAN_MONT=$(echo "${VALS[0]}" | sed 's/ (.*)$//')
+                        if [ -n "${VALS[1]}" ]; then
+                            echo "Canvas: CustomGrid:${VALS[1]}"
+                        else
+                            echo "Canvas: $CLEAN_MONT"
+                        fi
                         return 0
                         ;;
                     "Flatten Background") recipe_list+=("Effect: Flatten") ;;
@@ -434,6 +441,12 @@ for opt in "${CHOICE_ARR[@]}"; do
                 *Row*) IM_ARGS+=("-tile" "x1" "-geometry" "+0+0" "-background" "none"); TAG="${TAG}_row"; DO_MONTAGE=true ;;
                 *Column*) IM_ARGS+=("-tile" "1x" "-geometry" "+0+0" "-background" "none"); TAG="${TAG}_col"; DO_MONTAGE=true ;;
                 *Sheet*) IM_ARGS+=("-thumbnail" "200x200>" "-geometry" "+10+10" "-tile" "4x"); TAG="${TAG}_sheet"; DO_MONTAGE=true ;;
+                *CustomGrid:*)
+                    GRID_VAL="${VAL#*CustomGrid:}"
+                    IM_ARGS+=("-tile" "$GRID_VAL" "-geometry" "+0+0")
+                    TAG="${TAG}_grid${GRID_VAL//x/_}"
+                    DO_MONTAGE=true
+                    ;;
             esac
             ;;
         
@@ -453,12 +466,12 @@ for opt in "${CHOICE_ARR[@]}"; do
         Effect:*)
             VAL=$(echo "$opt" | cut -d':' -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
             case "$VAL" in
-                *Rotate*90*CW*)  EFFECT_ARGS+=("-rotate" "90"); TAG="${TAG}_90cw" ;;
-                *Rotate*90*CCW*) EFFECT_ARGS+=("-rotate" "-90"); TAG="${TAG}_90ccw" ;;
-                *Flip*Horizontal*) EFFECT_ARGS+=("-flop"); TAG="${TAG}_flop" ;;
-                *Black*White*)    EFFECT_ARGS+=("-colorspace" "gray"); TAG="${TAG}_bw" ;;
-                *Flatten*)         EFFECT_ARGS+=("-background" "white" "-layers" "flatten"); TAG="${TAG}_flat" ;;
-                *sRGB*)            EFFECT_ARGS+=("-colorspace" "sRGB"); TAG="${TAG}_srgb" ;;
+                *"Black & White"*) EFFECT_ARGS+=("-colorspace" "gray"); TAG="${TAG}_bw" ;;
+                *"Rotate 90 CW"*)  EFFECT_ARGS+=("-rotate" "90"); TAG="${TAG}_90cw" ;;
+                *"Rotate 90 CCW"*) EFFECT_ARGS+=("-rotate" "-90"); TAG="${TAG}_90ccw" ;;
+                *"Flip Horizontal"*) EFFECT_ARGS+=("-flop"); TAG="${TAG}_flop" ;;
+                *"Flatten"*)      EFFECT_ARGS+=("-background" "white" "-flatten" "+repage"); TAG="${TAG}_flat" ;;
+                *"sRGB"*)         EFFECT_ARGS+=("-colorspace" "sRGB"); TAG="${TAG}_srgb" ;;
                 *Mute*)            DO_MUTE=true ;;
             esac
             ;;

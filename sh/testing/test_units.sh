@@ -67,11 +67,11 @@ PRESET_FILE="/tmp/scripts-sh-presets-test"
 > "$PRESET_FILE"
 setup_mock_zenity
 # Mock 'Yes' to Save and entry 'My Test Preset'
-# zenity --question (choice 1) 
-# zenity --entry (choice 2)
-# zenity --notification (choice 3) 
-printf "TRUE\nMy-Test-Preset\nSUCCESS\n" > /tmp/zenity_responses
-
+# zenity --question (intercepted, exit 0)
+# zenity --entry (consumes line 1)
+# zenity --notification (intercepted)
+printf "My-Test-Preset\nSUCCESS\n" > /tmp/zenity_responses
+export ZENITY_QUESTION_EXIT=0
 prompt_save_preset "$PRESET_FILE" "Intent:Scale|Intent:Crop" "Suggested" "false"
 if grep -q "My-Test-Preset" "$PRESET_FILE"; then
     log_pass "prompt_save_preset: Correctly saved new preset"
@@ -79,10 +79,12 @@ else
     log_fail "prompt_save_preset: Failed to save preset with mocked input"
     FAILED=$((FAILED+1))
 fi
+unset ZENITY_QUESTION_EXIT
 
 # 3. Test prompt_save_preset (Pipe Injection Security)
 # Mocking an evil preset name
-printf "TRUE\nEvil|Preset|Injection\nSUCCESS\n" > /tmp/zenity_responses
+printf "Evil|Preset|Injection\nSUCCESS\n" > /tmp/zenity_responses
+export ZENITY_QUESTION_EXIT=0
 prompt_save_preset "$PRESET_FILE" "Intent:Hide" "Sug" "false"
 if grep -q "EvilPresetInjection" "$PRESET_FILE"; then
     log_pass "prompt_save_preset: Successfully sanitized pipe injection"
@@ -90,6 +92,7 @@ else
     log_fail "prompt_save_preset: Failed to sanitize pipe injection"
     FAILED=$((FAILED+1))
 fi
+unset ZENITY_QUESTION_EXIT
 
 echo -e "\n${YELLOW}=== Unit Tests: ImageMagick Common ===${NC}"
 source "$PROJECT_ROOT/imagemagick/common.sh"
