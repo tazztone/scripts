@@ -33,7 +33,7 @@ test_time "10.5" "10.5" || FAILED=$((FAILED+1))
 
 # MM:SS
 test_time "01:30" "90" || FAILED=$((FAILED+1))
-test_time "90:00" "5400" || FAILED=$((FAILED+1))
+test_time "90:00" "FAIL" || FAILED=$((FAILED+1)) # Now fails due to [0-5][0-9] limit
 test_time "00:05.500" "5.500" || FAILED=$((FAILED+1))
 
 # HH:MM:SS

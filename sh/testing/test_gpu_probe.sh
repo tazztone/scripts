@@ -18,7 +18,7 @@ log_info "Testing probe_gpu cache logic..."
 # 1. Test Refresh Logic (Cache expiry)
 # Create an old cache file (25h ago)
 mkdir -p "$(dirname "$GPU_CACHE")"
-touch -t "$(date -d '24 hours 1 minute ago' +%Y%m%d%H%M)" "$GPU_CACHE" 2>/dev/null || touch -t "$(date -v-24H-1M +%Y%m%d%H%M)" "$GPU_CACHE"
+touch -t "$(date -d '24 hours 1 minute ago' +%Y%m%d%H%M 2>/dev/null || date -v-24H -v-1M +%Y%m%d%H%M 2>/dev/null)" "$GPU_CACHE"
 
 setup_mock_ffmpeg
 # Mock ffmpeg to always fail (no GPU)
@@ -35,7 +35,7 @@ fi
 # Mock 'nvenc' success
 export MOCK_FFMPEG_NVENC=1
 # Ensure cache is old to trigger probe
-touch -t "$(date -d '2 days ago' +%Y%m%d%H%M)" "$GPU_CACHE" 2>/dev/null || touch -t "$(date -v-2d +%Y%m%d%H%M)" "$GPU_CACHE"
+touch -t "$(date -d '2 days ago' +%Y%m%d%H%M 2>/dev/null || date -v-2d +%Y%m%d%H%M 2>/dev/null)" "$GPU_CACHE"
 
 probe_gpu
 if grep -q "nvenc" "$GPU_CACHE"; then

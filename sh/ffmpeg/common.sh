@@ -115,8 +115,8 @@ validate_time_format() {
         return 0
     fi
     
-    # Check if it's hh:mm:ss format
-    if [[ "$time_input" =~ ^([0-9]+):([0-5][0-9]):([0-5][0-9])(\.[0-9]+)?$ ]]; then
+    # Check if it's hh:mm:ss format (reject hours > 2 digits, minutes/seconds >= 60)
+    if [[ "$time_input" =~ ^([0-9]{1,2}):([0-5][0-9]):([0-5][0-9])(\.[0-9]+)?$ ]]; then
         local hours=${BASH_REMATCH[1]}
         local minutes=${BASH_REMATCH[2]}
         local seconds=${BASH_REMATCH[3]}
@@ -128,8 +128,8 @@ validate_time_format() {
         return 0
     fi
     
-    # Check if it's mm:ss format
-    if [[ "$time_input" =~ ^([0-9]+):([0-5][0-9])(\.[0-9]+)?$ ]]; then
+    # Check if it's mm:ss format (reject minutes >= 60)
+    if [[ "$time_input" =~ ^([0-5]?[0-9]):([0-5][0-9])(\.[0-9]+)?$ ]]; then
         local minutes=${BASH_REMATCH[1]}
         local seconds=${BASH_REMATCH[2]}
         local fraction=${BASH_REMATCH[3]:-}
