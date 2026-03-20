@@ -85,7 +85,7 @@ _wizard_build_args() {
         _ARGS+=(FALSE "═══" ".................................." "═══")
     fi
 
-    # 3. Add Presets
+    # 4. Add Presets
     if [ -s "$PRESET_FILE" ]; then
         local p_count=0
         while IFS='|' read -r name options || [ -n "$name" ]; do
@@ -97,7 +97,7 @@ _wizard_build_args() {
         done < "$PRESET_FILE"
     fi
 
-    # 4. Add History
+    # 5. Add History
     if [ -s "$HISTORY_FILE" ]; then
         local h_count=0
         while read -r line; do
@@ -108,7 +108,7 @@ _wizard_build_args() {
         done < "$HISTORY_FILE"
     fi
 
-    # 4. Hide ID column
+    # 6. Hide ID column
     _ARGS+=("--hide-column" "4")
 }
 
@@ -193,9 +193,10 @@ prompt_save_preset() {
                 if ! zenity --question --title="Overwrite?" --text="A favorite named '$PNAME' already exists.\nOverwrite it?" --ok-label="Overwrite" --cancel-label="Cancel" 2>/dev/null; then
                     return 0
                 fi
-                # Safer deletion without regex pitfalls
-                local tmp_preset=$(mktemp "${PRESET_FILE}.XXXXXX")
-                grep -v "^$PNAME|" "$PRESET_FILE" > "$tmp_preset" || true
+                # Safer deletion without regex pitfalls (fixed-string match)
+                local tmp_preset
+                tmp_preset=$(mktemp "${PRESET_FILE}.XXXXXX")
+                grep -vF "$PNAME|" "$PRESET_FILE" > "$tmp_preset" || true
                 mv -f "$tmp_preset" "$PRESET_FILE"
             fi
             echo "$PNAME|$CHOICES" >> "$PRESET_FILE"
