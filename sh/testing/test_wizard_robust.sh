@@ -45,6 +45,8 @@ log_info "--- Test Group 1: Zenity 4 (5 fields/row) ---"
 test_parser_isolated "Z4: Single selection" "TRUE|📐 Scale|Scale|Resize|Scale" "Scale" || FAILED=$((FAILED+1))
 test_parser_isolated "Z4: Double selection" "TRUE|📐 Scale|Scale|Resize|Scale|TRUE|✂️ Crop|Crop|Move|Crop" "Scale|Crop" || FAILED=$((FAILED+1))
 test_parser_isolated "Z4: Double-Click (All FALSE, one selected)" "FALSE|📐 Scale|Scale|Resize|Scale" "Scale" || FAILED=$((FAILED+1))
+test_parser_isolated "Z4: Double-Click (Omitted boolean)" "📐 Scale|Scale|Resize|Scale" "Scale" || FAILED=$((FAILED+1))
+test_parser_isolated "Z4: Omitted boolean duplicate description" "📦 Convert Format|JPG/PNG/WEBP|Convert Format|Convert Format" "Convert Format" || FAILED=$((FAILED+1))
 test_parser_isolated "Z4: Divider selected (Should skip)" "TRUE|═══|||═══" "" || FAILED=$((FAILED+1))
 test_parser_isolated "Z4: Mixed with divider" "TRUE|📐 Scale|Scale|Resize|Scale|TRUE|═══|||═══|TRUE|✂️ Crop|Crop|Move|Crop" "Scale|Crop" || FAILED=$((FAILED+1))
 
@@ -58,7 +60,7 @@ log_info "--- Test Group 3: Edge Cases ---"
 test_parser_isolated "Empty result" "" "" || FAILED=$((FAILED+1))
 test_parser_isolated "Wait/Cancel return" "FALSE" "" || FAILED=$((FAILED+1))
 test_parser_isolated "Pure TRUE" "TRUE" "" || FAILED=$((FAILED+1))
-test_parser_isolated "Garbage prefix" "nonsense|TRUE|📐 Scale|Scale|Resize|Scale|Scale" "nonsense|TRUE|📐 Scale|Scale|Resize|Scale|Scale" || FAILED=$((FAILED+1))
+test_parser_isolated "Garbage prefix" "nonsense|TRUE|📐 Scale|Scale|Resize|Scale|Scale" "nonsense|TRUE|📐 Scale|Scale|Resize" || FAILED=$((FAILED+1))
 
 if [ $FAILED -eq 0 ]; then
     log_info "Robust parser tests passed."
