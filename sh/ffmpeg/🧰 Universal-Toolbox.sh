@@ -203,14 +203,17 @@ while true; do
         # Copy newly read values into our base array
         for i in "${!NEW_VALS[@]}"; do VALS[i]="${NEW_VALS[i]}"; done
 
+        # Mapping for 13 fields (0-indexed):
+        # 0:Speed 1:Res 2:CustomW 3:Crop 4:Rot 5:TrimS 6:TrimE 7:Audio 8:Subs 9:Qual 10:Target 11:Format 12:HW
+
         # 0. Speed
-        PICK_spd="${VALS[0]}"; CUST_spd="${VALS[1]}"
+        PICK_spd="${VALS[0]}"
         if [[ "$PICK_spd" != *"Inactive"* ]]; then
-            [ -n "$CUST_spd" ] && CHOICES+="Speed: ${CUST_spd}x|" || CHOICES+="Speed: ${PICK_spd}|"
+            CHOICES+="Speed: ${PICK_spd}|"
         fi
 
-        # 2. Scale
-        PICK_res="${VALS[2]}"; CUST_W="${VALS[3]}"
+        # 1. Scale
+        PICK_res="${VALS[1]}"; CUST_W="${VALS[2]}"
         if [ -n "$CUST_W" ]; then
             CHOICES+="Custom Scale Width:$CUST_W|"
             USER_W="$CUST_W"
@@ -218,29 +221,29 @@ while true; do
             CHOICES+="Scale: ${PICK_res}|"
         fi
 
-        # 4. Crop
-        PICK_crp="${VALS[4]}"
+        # 3. Crop
+        PICK_crp="${VALS[3]}"
         [[ "$PICK_crp" != *"Inactive"* ]] && CHOICES+="Crop: $PICK_crp|"
 
-        # 5. Rotate
-        PICK_rot="${VALS[5]}"
+        # 4. Rotate
+        PICK_rot="${VALS[4]}"
         [[ "$PICK_rot" != *"Inactive"* && "$PICK_rot" != "No Change" ]] && CHOICES+="$PICK_rot|"
 
-        # 6. Trim
-        T_S="${VALS[6]}"; T_E="${VALS[7]}"
+        # 5. Trim
+        T_S="${VALS[5]}"; T_E="${VALS[6]}"
         [ -n "$T_S" ] && { CHOICES+="Trim: Start|"; USER_TRIM_S="$T_S"; }
         [ -n "$T_E" ] && { CHOICES+="Trim: End|"; USER_TRIM_E="$T_E"; }
 
-        # 8. Audio
-        PICK_aud="${VALS[8]}"
+        # 7. Audio
+        PICK_aud="${VALS[7]}"
         [[ "$PICK_aud" != *"Inactive"* && "$PICK_aud" != "No Change" ]] && CHOICES+="$PICK_aud|"
 
-        # 9. Subs
-        PICK_sub="${VALS[9]}"
+        # 8. Subs
+        PICK_sub="${VALS[8]}"
         [[ "$PICK_sub" != *"Inactive"* ]] && CHOICES+="Subtitles: $PICK_sub|"
 
         # EXPORT
-        Q_STRAT="${VALS[10]}"; T_MB="${VALS[11]}"; O_FMT="${VALS[12]}"; H_ACCEL="${VALS[13]}"
+        Q_STRAT="${VALS[9]}"; T_MB="${VALS[10]}"; O_FMT="${VALS[11]}"; H_ACCEL="${VALS[12]}"
 
         if [ -n "$T_MB" ]; then
             CHOICES+="Target Size:$T_MB|"
@@ -605,7 +608,7 @@ for f in "$@"; do
     echo "# Processing $f..."
     
     # --- TARGET SIZE (2-PASS) EXECUTION ---
-    if [ -n "$TARGET_MB" ]; then
+    if [[ -n "$TARGET_MB" && "$TARGET_MB" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
         _wizard_log "Calculating Bitrate for Target Size... MB=$TARGET_MB"
         DUR=$(get_duration "$f")
         _wizard_log "Duration for bitrate calc: [$DUR]"

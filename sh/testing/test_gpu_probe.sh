@@ -18,11 +18,11 @@ log_info "Testing probe_gpu cache logic..."
 # 1. Test Refresh Logic (Cache expiry)
 # Create an old cache file (25h ago)
 mkdir -p "$(dirname "$GPU_CACHE")"
-touch -t "$(date -d '25 hours ago' +%Y%m%d%H%M)" "$GPU_CACHE" 2>/dev/null || touch -t "$(date -v-25H +%Y%m%d%H%M)" "$GPU_CACHE"
+touch -t "$(date -d '24 hours 1 minute ago' +%Y%m%d%H%M)" "$GPU_CACHE" 2>/dev/null || touch -t "$(date -v-24H-1M +%Y%m%d%H%M)" "$GPU_CACHE"
 
+setup_mock_ffmpeg
 # Mock ffmpeg to always fail (no GPU)
-ffmpeg() { return 1; }
-export -f ffmpeg
+export MOCK_FFMPEG_NVENC=0 MOCK_FFMPEG_QSV=0 MOCK_FFMPEG_VAAPI=0
 
 probe_gpu
 if [ -s "$GPU_CACHE" ]; then
@@ -32,29 +32,21 @@ else
 fi
 
 # 2. Test Success Probe
-ffmpeg() {
-    # Check if we're probing for nvenc
-    if [[ "$*" == *"h264_nvenc"* ]]; then return 0; fi
-    return 1
-}
-export -f ffmpeg
+# Mock 'nvenc' success
+export MOCK_FFMPEG_NVENC=1
 # Ensure cache is old to trigger probe
 touch -t "$(date -d '2 days ago' +%Y%m%d%H%M)" "$GPU_CACHE" 2>/dev/null || touch -t "$(date -v-2d +%Y%m%d%H%M)" "$GPU_CACHE"
 
 probe_gpu
 if grep -q "nvenc" "$GPU_CACHE"; then
-    log_pass "Detected nvenc via mock ffmpeg"
+    log_pass "Detected nvenc via mock binary"
 else
     log_fail "Failed to detect nvenc in mock probe"
 fi
 
 # 3. Test Cache Skip (Fresh cache)
-# Mock ffmpeg to succeed for qsv now
-ffmpeg() {
-    if [[ "$*" == *"h264_qsv"* ]]; then return 0; fi
-    return 1
-}
-export -f ffmpeg
+# Mock 'qsv' success now
+export MOCK_FFMPEG_NVENC=0 MOCK_FFMPEG_QSV=1
 # Cache is now "fresh" (just wrote it)
 probe_gpu
 if grep -q "qsv" "$GPU_CACHE"; then

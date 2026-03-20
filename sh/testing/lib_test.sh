@@ -295,12 +295,15 @@ run_test() {
     
     # Use a marker file for more reliable new file detection
     local marker=$(mktemp)
-    
+    touch -d "1 second ago" "$marker" 2>/dev/null
+
     log_info "Testing: $(basename -- "$script_abs") with [${files_rel[*]}]"
     local out_log=$(mktemp)
+    local trace_log=$(mktemp)
     (
         cd "$dir" || exit 1
-        DEBUG_MODE=1 bash "$script_abs" "${files_base[@]}"
+        # Run with -x and capture to trace_log
+        BASH_XTRACEFD=3 DEBUG_MODE=1 bash -x "$script_abs" "${files_base[@]}" 3>"$trace_log"
     ) &> "$out_log"
     local status=$?
     
@@ -312,8 +315,10 @@ run_test() {
         log_fail "Test execution failed or no new output matching $pattern (Exit: $status)"
         echo "--- LOG ---"
         cat "$out_log"
+        echo "--- TRACE ---"
+        cat "$trace_log"
         echo "-----------"
-        rm -f "$out_log"
+        rm -f "$out_log" "$trace_log"
         return 1
     fi
     
@@ -405,6 +410,41 @@ run_negative_test() {
         rm -f "$out_log"
         return 1
     fi
+}
+
+# Setup a mock ffmpeg binary
+setup_mock_ffmpeg() {
+    mkdir -p "$MOCK_BIN"
+    export PATH="$MOCK_BIN:$PATH"
+    
+    cat <<'EOF' > "$MOCK_BIN/ffmpeg"
+#!/bin/bash
+# Find real ffmpeg by stripping any 'mock_bin' from PATH
+REAL_FFMPEG=$(PATH=$(echo "$PATH" | sed -E 's|[^:]*mock_bin:?||g') which ffmpeg)
+
+# Check for specific probing arguments
+if [[ "$*" == *"-c:v h264_nvenc"* ]]; then
+    [ "${MOCK_FFMPEG_NVENC:-0}" == "1" ] && exit 0 || exit 1
+fi
+if [[ "$*" == *"-c:v h264_qsv"* ]]; then
+    [ "${MOCK_FFMPEG_QSV:-0}" == "1" ] && exit 0 || exit 1
+fi
+if [[ "$*" == *"-c:v h264_vaapi"* ]]; then
+    [ "${MOCK_FFMPEG_VAAPI:-0}" == "1" ] && exit 0 || exit 1
+fi
+if [[ "$*" == *"-c:v h264_v4l2m2m"* ]]; then
+    [ "${MOCK_FFMPEG_V4L2:-0}" == "1" ] && exit 0 || exit 1
+fi
+
+# Not a probe? Delegate to real ffmpeg
+if [ -x "$REAL_FFMPEG" ]; then
+    exec "$REAL_FFMPEG" "$@"
+else
+    echo "Error: Real ffmpeg not found in PATH (after stripping mock)" >&2
+    exit 127
+fi
+EOF
+    chmod +x "$MOCK_BIN/ffmpeg"
 }
 
 # Resilience testing: Expect script to survive cancellations and eventually succeed
