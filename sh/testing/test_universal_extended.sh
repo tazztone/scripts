@@ -15,6 +15,14 @@ cat <<EOF > /tmp/zenity_responses
 EOF
 run_test "ffmpeg/🧰 Universal-Toolbox.sh" "duration=0.5" "$TEST_DATA/input.mp4" || FAILED=1
 
+# Test 9b: Extreme Speed (4x) -> Triggers atempo chaining (atempo=2.0,atempo=2.0)
+echo "Test 9b: Extreme Speed (4x)"
+cat <<EOF > /tmp/zenity_responses
+⏪|Speed Control
+4x (Super Fast)||||||||||Medium (CRF 23)||Auto/MP4|None (CPU Only)
+EOF
+run_test "ffmpeg/🧰 Universal-Toolbox.sh" "duration=0.25" "$TEST_DATA/input.mp4" || FAILED=1
+
 # Test 10: Fake Hardware Encoding (NVENC) + H.265
 echo "Test 10: Hardware Encoding (Mocked NVENC) + H.265"
 seed_gpu_cache "nvenc"

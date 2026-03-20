@@ -203,7 +203,7 @@ show_main_menu() {
     # 2. Contextual Image Ops
     if [[ "$HAS_ALPHA" -eq 1 ]]; then INTENTS+="🎨|Flatten Background|Remove transparency;"; fi
     if [[ "$IS_CMYK" -eq 1 ]]; then INTENTS+="🌈|Convert to sRGB|Fix colors for web;"; fi
-    if [[ "$MEDIA_FORMAT" == "PDF" ]]; then INTENTS+="📄|Extract Pages|Convert PDF to images;"; fi
+    if [[ "$MEDIA_FORMAT" == "PDF" ]]; then INTENTS+="📄|Action: ExtractPDF|Convert PDF to images;"; fi
 
     # 3. Standard Global Ops
     INTENTS+="📦|Convert Format|JPG/PNG/WEBP/PDF;✨|Effects & Branding|Rotation, Watermarks, BW"
@@ -319,7 +319,7 @@ show_main_menu() {
                     "Flatten Background") recipe_list+=("Effect: Flatten") ;;
                     "Convert to sRGB")    recipe_list+=("Effect: sRGB") ;;
                     "Remove Audio")       recipe_list+=("Effect: Mute") ;;
-                    "Extract Pages")      recipe_list+=("Action: ExtractPDF") ;;
+                    "Action: ExtractPDF") recipe_list+=("Action: ExtractPDF") ;;
                 esac
             done
             
@@ -470,7 +470,7 @@ for opt in "${CHOICE_ARR[@]}"; do
                 TAG="${TAG}_arch"
             fi
             ;;
-        Action:ExtractPDF)
+        Action:ExtractPDF | "Action: ExtractPDF")
             DO_PDF_EXTRACT=true
             ;;
     esac
@@ -516,7 +516,9 @@ fi
         
         # Handle PDF Extract
         if [[ "$IN_EXT" == "pdf" && "$DO_PDF_EXTRACT" == true ]]; then
-            $IM_EXE -density 300 "$f" "${IM_ARGS[@]}" "${BASE}${TAG}-%d.${OUT_EXT:-jpg}" 2>>"$ERR_LOG"
+            base_dir=$(dirname "$f")
+            base_name=$(basename "$BASE")
+            $IM_EXE -density 300 "$f" "${IM_ARGS[@]}" "${base_dir}/${base_name}${TAG}-%d.${OUT_EXT:-jpg}" 2>>"$ERR_LOG"
             continue
         fi
 

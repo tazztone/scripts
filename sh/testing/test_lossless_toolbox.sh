@@ -32,6 +32,35 @@ remove_audio
 EOF
 run_test "ffmpeg/🔒 Lossless-Operations-Toolbox.sh" "no_audio" "$TEST_DATA/input.mp4" || FAILED=$((FAILED+1))
 
+# Test 3b: Remove Video (Extract Audio Only)
+echo "Test 3b: Remove Video (Audio Only)"
+cat <<EOF > /tmp/zenity_responses
+Edit Streams
+remove_video
+EOF
+run_test "ffmpeg/🔒 Lossless-Operations-Toolbox.sh" "no_video,has_audio" "$TEST_DATA/input.mp4" || FAILED=$((FAILED+1))
+
+# Test 3c: Batch Remove Audio (Multi-file)
+echo "Test 3c: Batch Remove Audio"
+cp "$TEST_DATA/input.mp4" "$TEST_DATA/input_batch1.mp4"
+cp "$TEST_DATA/input.mp4" "$TEST_DATA/input_batch2.mp4"
+cat <<EOF > /tmp/zenity_responses
+Edit Streams
+remove_audio
+EOF
+run_test "ffmpeg/🔒 Lossless-Operations-Toolbox.sh" "no_audio" "$TEST_DATA/input_batch1.mp4" "$TEST_DATA/input_batch2.mp4" || FAILED=$((FAILED+1))
+
+# Check second file
+OUTPUT_B2=$(ls "$TEST_DATA"/input_batch2_no_audio*.mp4 2>/dev/null | head -1)
+if [[ -n "$OUTPUT_B2" ]]; then
+    log_pass "Batch processing: second output exists ($(basename "$OUTPUT_B2"))"
+    validate_media "$OUTPUT_B2" "no_audio" || FAILED=$((FAILED+1))
+else
+    log_fail "Batch processing: second output missing"
+    FAILED=$((FAILED+1))
+fi
+rm "$TEST_DATA/input_batch1.mp4" "$TEST_DATA/input_batch2.mp4"
+
 # Test 4: Metadata Title
 echo "Test 4: Metadata Title"
 cat <<EOF > /tmp/zenity_responses
