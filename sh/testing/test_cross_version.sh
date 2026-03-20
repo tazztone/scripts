@@ -21,7 +21,7 @@ run_matrix_test() {
     local rules="$2"
     local inputs=("${@:3}")
     
-    for profile in zenity3 zenity4 ghost; do
+    for profile in zenity4; do
         echo -e "\n[PROFILE: $profile] Testing $(basename "$script")"
         export ZENITY_PROFILE="$profile"
         

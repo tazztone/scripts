@@ -25,6 +25,15 @@ init_ffmpeg_script() {
         exit 1
     fi
 
+    # Zenity 4+ Requirement Check
+    local z_ver
+    z_ver=$(zenity --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -n 1)
+    if (( $(echo "${z_ver:-0} < 4.0" | bc -l) )); then
+        printf "Error: scripts-sh requires Zenity 4.0 or higher (found %s).\n" "${z_ver:-unknown}" >&2
+        zenity --error --text="Upgrade Required: Zenity 4.0+ is needed for the checklist UI.\nFound: ${z_ver:-unknown}"
+        exit 1
+    fi
+
     for cmd in ffmpeg ffprobe bc; do
         if ! command -v "$cmd" &> /dev/null; then
             zenity --error --text="Missing dependency: $cmd\nPlease install it."
@@ -42,6 +51,7 @@ Z_PROGRESS() {
 # Show Error and Exit
 # Usage: error_exit "Message"
 error_exit() {
+    echo "Error: $1" >&2
     zenity --error --text="$1" --no-markup
     exit 1
 }
@@ -52,7 +62,12 @@ get_duration() {
     local d
     d=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$1")
     _wizard_log "ffprobe duration for $1: [$d]"
-    if [ -z "$d" ]; then echo "0"; else echo "$d"; fi
+    if [ -z "$d" ]; then 
+        echo "0"
+        echo "Warning: Could not detect duration for $1" >&2
+    else 
+        echo "$d"
+    fi
 }
 
 # --- GPU PROBE (Run once at startup) ---
@@ -62,7 +77,15 @@ probe_gpu() {
     mkdir -p "$(dirname "$GPU_CACHE")"
     
     # Skip if fresh cache exists (<24h)
-    if [ -f "$GPU_CACHE" ] && [ $(( $(date +%s) - $(stat -c %Y "$GPU_CACHE") )) -lt 86400 ]; then
+    # Check modification time portably (GNU or BSD/macOS)
+    local mtime
+    if stat -c %Y "$GPU_CACHE" &>/dev/null; then
+        mtime=$(stat -c %Y "$GPU_CACHE") # GNU
+    else
+        mtime=$(stat -f %m "$GPU_CACHE" 2>/dev/null || echo "0") # BSD/macOS
+    fi
+
+    if [ -f "$GPU_CACHE" ] && [ $(( $(date +%s) - mtime )) -lt 86400 ]; then
         return 0
     fi
     # Use a fresh file to avoid accumulation
@@ -95,7 +118,7 @@ validate_time_format() {
     fi
     
     # Check if it's hh:mm:ss format
-    if [[ "$time_input" =~ ^([0-9]{1,2}):([0-9]{2}):([0-9]{2})(\.[0-9]+)?$ ]]; then
+    if [[ "$time_input" =~ ^([0-9]+):([0-9]{2}):([0-9]{2})(\.[0-9]+)?$ ]]; then
         local hours=${BASH_REMATCH[1]}
         local minutes=${BASH_REMATCH[2]}
         local seconds=${BASH_REMATCH[3]}
@@ -108,7 +131,7 @@ validate_time_format() {
     fi
     
     # Check if it's mm:ss format
-    if [[ "$time_input" =~ ^([0-9]{1,2}):([0-9]{2})(\.[0-9]+)?$ ]]; then
+    if [[ "$time_input" =~ ^([0-9]+):([0-9]{2})(\.[0-9]+)?$ ]]; then
         local minutes=${BASH_REMATCH[1]}
         local seconds=${BASH_REMATCH[2]}
         local fraction=${BASH_REMATCH[3]:-}
@@ -130,20 +153,35 @@ generate_safe_filename() {
     local ext="$3"
     
     # NEW: Strip existing known tags recursively from basename ONLY
-    local KNOWN_TAGS="_half|_1920p|_4k|_720p|_640p|_sq|_9x16|_16x9|_grid2x|_grid3x|_row|_col|_sheet|_90cw|_90ccw|_flop|_bw|_flat|_srgb|_text|_web|_min|_arch|_edit|_high|_low|_lossless|_nvenc|_qsv|_vaapi|_cut|_len|_audio|_av1|_mov|_mkv"
+    local KNOWN_TAGS=(
+        "_half" "_1920p" "_4k" "_720p" "_640p" "_sq" "_9x16" "_16x9"
+        "_grid2x" "_grid3x" "_row" "_col" "_sheet" "_90cw" "_90ccw" "_flop"
+        "_bw" "_flat" "_srgb" "_text" "_web" "_min" "_arch" "_edit" "_high"
+        "_low" "_lossless" "_nvenc" "_qsv" "_vaapi" "_cut" "_len" "_audio"
+        "_av1" "_mov" "_mkv"
+    )
+    local tag_regex
+    tag_regex=$(IFS='|'; echo "${KNOWN_TAGS[*]}")
     
     local dir=$(dirname "$base")
     local bname=$(basename "$base")
     local clean_bname="$bname"
     
     while true; do
-        local stripped=$(echo "$clean_bname" | sed -E "s/(${KNOWN_TAGS})(_v[0-9]+)?$//")
+        local stripped=$(echo "$clean_bname" | sed -E "s/(${tag_regex})(_v[0-9]+)?$//")
         [ "$stripped" == "$clean_bname" ] && break
         clean_bname="$stripped"
     done
     
-    local final_base="$clean_bname"
-    [ "$dir" != "." ] && final_base="${dir}/${clean_bname}"
+    local final_base="${dir}/${clean_bname}"
+    # Clean up ./ if it was added unnecessarily (e.g. if original base didn't have it)
+    # but the current logic is actually simpler: just use dir/name unless dir is empty.
+    # Wait, dirname returns "." if there's no slash.
+    if [[ "$base" == "./"* ]]; then
+        final_base="./${clean_bname}"
+    elif [ "$dir" == "." ]; then
+        final_base="$clean_bname"
+    fi
 
     local out="${final_base}${tag}.${ext}"
     local ctr=1

@@ -29,6 +29,16 @@ setup_mock_zenity() {
 # Log every call for debugging and loop detection
 printf "CALL: %s\n" "$*" >> /tmp/zenity_call_log.txt
 
+# Handle --version
+if [[ "$*" == *"--version"* ]]; then
+    if [[ "${ZENITY_PROFILE:-}" == "zenity3" ]]; then
+        echo "3.92.0"
+    else
+        echo "4.0.1"
+    fi
+    exit 0
+fi
+
 # Handle --progress separately
 if [[ "$*" == *"--progress"* ]]; then
     while read -r line; do :; done
@@ -69,9 +79,10 @@ EOF
 _count_test() {
     local pass=$1
     if [ -f /tmp/scripts_test_count.log ]; then
-        local counts=($(cat /tmp/scripts_test_count.log))
-        local total=$((counts[0] + 1))
-        local passed=$((counts[1] + pass))
+        local counts=()
+        mapfile -t counts < /tmp/scripts_test_count.log
+        local total=$(( ${counts[0]:-0} + 1 ))
+        local passed=$(( ${counts[1]:-0} + pass ))
         printf "%s\n%s\n" "$total" "$passed" > /tmp/scripts_test_count.log
     fi
 }
@@ -146,8 +157,12 @@ validate_media() {
             fps)
                 local fps_raw=$(ffprobe -v error -select_streams v:0 -show_entries stream=avg_frame_rate -of default=noprint_wrappers=1:nokey=1 "$file")
                 local fps=$(echo "scale=2; $fps_raw" | bc -l)
-                [[ "$val" =~ ^[0-9]+$ ]] && fps=$(printf "%.0f" "$fps")
-                [[ "$fps" != "$val" ]] && { log_fail "FPS mismatch: expected $val, got $fps"; failed=1; }
+                # Tolerance check for FPS (handles 29.97 vs 30 etc)
+                local diff=$(awk -v f="$fps" -v v="$val" 'BEGIN { d = f - v; if (d < 0) d = -d; print d }')
+                if (( $(echo "$diff > 0.1" | bc -l) )); then
+                    log_fail "FPS mismatch: expected $val, got $fps (diff=$diff)"
+                    failed=1
+                fi
                 ;;
             duration)
                 local d=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file")
@@ -277,8 +292,10 @@ run_test() {
     # Pre-run file list - support absolute paths or relative patterns
     local find_arg="-name"
     [[ "$pattern" == *"/"* ]] && find_arg="-wholename"
-    local before=$(find "$dir" -maxdepth 1 "$find_arg" "$pattern" | sort)
-
+    
+    # Use a marker file for more reliable new file detection
+    local marker=$(mktemp)
+    
     log_info "Testing: $(basename -- "$script_abs") with [${files_rel[*]}]"
     local out_log=$(mktemp)
     (
@@ -287,11 +304,9 @@ run_test() {
     ) &> "$out_log"
     local status=$?
     
-    # Post-run file list
-    local after=$(find "$dir" -maxdepth 1 "$find_arg" "$pattern" | sort)
-    
-    # Find new file (comm -13 shows lines only in 'after')
-    local newest_file=$(comm -13 <(echo "$before") <(echo "$after") | head -n 1)
+    # Post-run file list: find files newer than our marker
+    local newest_file=$(find "$dir" -maxdepth 1 "$find_arg" "$pattern" -newer "$marker" | head -n 1)
+    rm -f "$marker"
 
     if [ $status -ne 0 ] || [[ -z "$newest_file" ]]; then
         log_fail "Test execution failed or no new output matching $pattern (Exit: $status)"

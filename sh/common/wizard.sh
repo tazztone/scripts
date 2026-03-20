@@ -40,7 +40,14 @@ show_unified_wizard() {
     _wizard_build_args ARGS "$TITLE" "$INTENTS_RAW" "$PRESET_FILE" "$HISTORY_FILE"
 
     local RESULT
-    RESULT=$(zenity "${ARGS[@]}" || true)
+    local EXIT_CODE=0
+    RESULT=$(zenity "${ARGS[@]}") || EXIT_CODE=$?
+    
+    # Exit code handles: 0=OK, 1=Cancel/Close, >1=Error
+    if [ $EXIT_CODE -gt 1 ]; then
+        _wizard_log "zenity error (exit $EXIT_CODE). Check command args."
+        # Don't exit here, let the parser handle potential partial returns or empty
+    fi
     # Strip any trailing newlines or junk
     RESULT=$(echo -n "$RESULT" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
     _wizard_log "wizard raw return: [$RESULT]"
@@ -88,11 +95,11 @@ _wizard_build_args() {
     # 4. Add Presets
     if [ -s "$PRESET_FILE" ]; then
         local p_count=0
-        while IFS='|' read -r name options || [ -n "$name" ]; do
-            local name="${name:-}" options="${options:-}"
-            [ -z "$name" ] && continue
+        while IFS='|' read -r p_name p_options || [ -n "$p_name" ]; do
+            local p_name="${p_name:-}" p_options="${p_options:-}"
+            [ -z "$p_name" ] && continue
             [ "$p_count" -ge "$MAX_PRESETS" ] && break
-            _ARGS+=(FALSE "⭐ $name" "Saved Favorite" "PRESET:$name")
+            _ARGS+=(FALSE "⭐ $p_name" "Saved Favorite" "PRESET:$p_name")
             ((p_count++))
         done < "$PRESET_FILE"
     fi
@@ -159,7 +166,11 @@ save_to_history() {
     if [ "$CHOICES" != "$RECENT" ]; then
         # 2. Add to top atomically
         local tmp_file
-        tmp_file=$(mktemp "${HISTORY_FILE}.XXXXXX")
+        tmp_file=$(mktemp "${HISTORY_FILE}.XXXXXX" 2>/dev/null)
+        if [ $? -ne 0 ] || [ -z "$tmp_file" ]; then
+            _wizard_log "Failed to create temp file for history at ${HISTORY_FILE}"
+            return 1
+        fi
         echo "$CHOICES" > "$tmp_file"
         if [ -s "$HISTORY_FILE" ]; then
             head -n "$((MAX_HISTORY - 1))" "$HISTORY_FILE" >> "$tmp_file"
@@ -189,15 +200,18 @@ prompt_save_preset() {
         PNAME=$(zenity --entry --title="Save Favorite" --text="Enter a name for this recipe:" --entry-text="$SUGGESTED_NAME" --cancel-label="Cancel" 2>/dev/null || true)
         if [ -n "$PNAME" ]; then
             PNAME="${PNAME//|/}" # Sanitize: remove pipes
-            if [ -f "$PRESET_FILE" ] && grep -q "^$PNAME|" "$PRESET_FILE"; then
+            # Safer existence check using literal match with anchors
+            if [ -f "$PRESET_FILE" ] && grep -q "^$(printf '%s' "$PNAME" | sed 's/[.[\*^$/]/\\&/g')|" "$PRESET_FILE"; then
                 if ! zenity --question --title="Overwrite?" --text="A favorite named '$PNAME' already exists.\nOverwrite it?" --ok-label="Overwrite" --cancel-label="Cancel" 2>/dev/null; then
                     return 0
                 fi
                 # Safer deletion without regex pitfalls (fixed-string match)
                 local tmp_preset
-                tmp_preset=$(mktemp "${PRESET_FILE}.XXXXXX")
-                grep -vF "$PNAME|" "$PRESET_FILE" > "$tmp_preset" || true
-                mv -f "$tmp_preset" "$PRESET_FILE"
+                tmp_preset=$(mktemp "${PRESET_FILE}.XXXXXX" 2>/dev/null)
+                if [ -n "$tmp_preset" ]; then
+                    grep -vF "$PNAME|" "$PRESET_FILE" > "$tmp_preset" || true
+                    mv -f "$tmp_preset" "$PRESET_FILE"
+                fi
             fi
             echo "$PNAME|$CHOICES" >> "$PRESET_FILE"
             zenity --notification --text="Saved as '$PNAME'!" 2>/dev/null || true

@@ -1,0 +1,34 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg zenity bc imagemagick
+
+    - name: Run unit tests
+      run: |
+        chmod +x testing/*.sh
+        bash testing/test_filename_safe.sh
+        bash testing/test_gpu_probe.sh
+        bash testing/test_units.sh
+
+    - name: Run cross-version tests
+      run: |
+        bash testing/test_cross_version.sh
+
+    - name: Run main test runner
+      run: |
+        bash testing/test_runner.sh
