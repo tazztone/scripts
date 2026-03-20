@@ -87,5 +87,27 @@ No Change|Text Annotation|Watermark Text
 EOF
 run_test "$IM_TOOLBOX" "tags=text" "$TEST_DATA/input.jpg" || FAILED=1
 
+# Test 10: PDF Extract (Images from PDF)
+echo "Test 10: PDF Extract"
+# Mock a PDF file locally
+cp "$TEST_DATA/input.jpg" "$TEST_DATA/extract_test.jpg"
+magick "$TEST_DATA/extract_test.jpg" "$TEST_DATA/extract_test.pdf"
+cat <<EOF > /tmp/zenity_responses
+Action: ExtractPDF|Convert Format
+JPG|Web Ready (Quality 85)
+EOF
+run_test "$IM_TOOLBOX" "format=jpeg" --pattern "$TEST_DATA/extract_test_web-*" "$TEST_DATA/extract_test.pdf" || FAILED=1
+rm "$TEST_DATA/extract_test.jpg" "$TEST_DATA/extract_test.pdf"
+
+# Test 11: PDF Merge (Images to PDF)
+echo "Test 11: PDF Merge"
+cat <<EOF > /tmp/zenity_responses
+Convert Format
+PDF|Archive (Lossless)
+EOF
+# The script generates a name like merged_images_arch.pdf when multiple files passed
+# ImageMagick might report PDF or some viewers might see mjpeg stream, using a more lenient check
+run_test "$IM_TOOLBOX" "file_size_gt=1000" --pattern "merged_images_*.pdf" "$TEST_DATA/input.jpg" "$TEST_DATA/input.jpg" || FAILED=1
+
 echo -e "\n${GREEN}Image Toolbox Tests Finished!${NC}"
 exit $FAILED

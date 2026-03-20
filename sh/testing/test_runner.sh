@@ -69,6 +69,22 @@ EOF
 # 1280x720 -> height remains 720, width becomes 405 -> FFmpeg rounds to 404
 run_test "$SCRIPT_DIR/../ffmpeg/🧰 Universal-Toolbox.sh" "width=404,height=720" "$TEST_DATA/input.mp4" || FAILED=$((FAILED+1))
 
+echo "Test 5b: Crop (16:9 Landscape)"
+cat <<EOF > /tmp/zenity_responses
+Crop
+ (Inactive)|| (Inactive)||16:9 (Landscape)| (Inactive)||| (Inactive)| (Inactive)|Medium (CRF 23)||Auto/MP4|None (CPU Only)
+EOF
+# 1280x720 is already 16:9. Crop should technically do nothing but must pass.
+run_test "$SCRIPT_DIR/../ffmpeg/🧰 Universal-Toolbox.sh" "width=1280,height=720" "$TEST_DATA/input.mp4" || FAILED=$((FAILED+1))
+
+echo "Test 5c: Crop (Square 1:1)"
+cat <<EOF > /tmp/zenity_responses
+Crop
+ (Inactive)|| (Inactive)||Square 1:1| (Inactive)||| (Inactive)| (Inactive)|Medium (CRF 23)||Auto/MP4|None (CPU Only)
+EOF
+# 1280x720 -> 720x720
+run_test "$SCRIPT_DIR/../ffmpeg/🧰 Universal-Toolbox.sh" "width=720,height=720" "$TEST_DATA/input.mp4" || FAILED=$((FAILED+1))
+
 # 6. GIF Output
 echo "Test 6: GIF Output"
 cat <<EOF > /tmp/zenity_responses
@@ -76,6 +92,27 @@ Output
  (Inactive)|| (Inactive)|| (Inactive)| (Inactive)||| (Inactive)| (Inactive)|Medium (CRF 23)||GIF|None (CPU Only)
 EOF
 run_test "$SCRIPT_DIR/../ffmpeg/🧰 Universal-Toolbox.sh" "format=gif" "$TEST_DATA/input.mp4" || FAILED=$((FAILED+1))
+
+echo "Test 6b: AV1 Output"
+cat <<EOF > /tmp/zenity_responses
+Output
+ (Inactive)|| (Inactive)|| (Inactive)| (Inactive)||| (Inactive)| (Inactive)|Medium (CRF 23)||AV1|None (CPU Only)
+EOF
+run_test "$SCRIPT_DIR/../ffmpeg/🧰 Universal-Toolbox.sh" "vcodec=av1" "$TEST_DATA/input.mp4" || FAILED=$((FAILED+1))
+
+echo "Test 6c: WebM Output"
+cat <<EOF > /tmp/zenity_responses
+Output
+ (Inactive)|| (Inactive)|| (Inactive)| (Inactive)||| (Inactive)| (Inactive)|Medium (CRF 23)||WebM|None (CPU Only)
+EOF
+run_test "$SCRIPT_DIR/../ffmpeg/🧰 Universal-Toolbox.sh" "format=webm" "$TEST_DATA/input.mp4" || FAILED=$((FAILED+1))
+
+echo "Test 6d: ProRes Output"
+cat <<EOF > /tmp/zenity_responses
+Output
+ (Inactive)|| (Inactive)|| (Inactive)| (Inactive)||| (Inactive)| (Inactive)|Medium (CRF 23)||ProRes|None (CPU Only)
+EOF
+run_test "$SCRIPT_DIR/../ffmpeg/🧰 Universal-Toolbox.sh" "vcodec=prores" "$TEST_DATA/input.mp4" || FAILED=$((FAILED+1))
 
 # 7. Target Size (2-Pass)
 echo "Test 7: Target Size (0.5MB)"

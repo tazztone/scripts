@@ -274,8 +274,10 @@ run_test() {
 
     local failed=0
     
-    # Pre-run file list
-    local before=$(find "$dir" -maxdepth 1 -name "$pattern" | sort)
+    # Pre-run file list - support absolute paths or relative patterns
+    local find_arg="-name"
+    [[ "$pattern" == *"/"* ]] && find_arg="-wholename"
+    local before=$(find "$dir" -maxdepth 1 "$find_arg" "$pattern" | sort)
 
     log_info "Testing: $(basename -- "$script_abs") with [${files_rel[*]}]"
     local out_log=$(mktemp)
@@ -286,7 +288,7 @@ run_test() {
     local status=$?
     
     # Post-run file list
-    local after=$(find "$dir" -maxdepth 1 -name "$pattern" | sort)
+    local after=$(find "$dir" -maxdepth 1 "$find_arg" "$pattern" | sort)
     
     # Find new file (comm -13 shows lines only in 'after')
     local newest_file=$(comm -13 <(echo "$before") <(echo "$after") | head -n 1)
