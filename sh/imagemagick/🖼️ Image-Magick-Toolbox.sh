@@ -56,7 +56,8 @@ analyze_media() {
     local f="$1"
     if [ ! -f "$f" ]; then return; fi
     
-    local ext=$(echo "${f##*.}" | tr '[:upper:]' '[:lower:]')
+    local ext
+    ext=$(echo "${f##*.}" | tr '[:upper:]' '[:lower:]')
     
     # Image Analysis
     if [[ "$ext" =~ ^(jpg|jpeg|png|gif|tiff|webp)$ ]]; then
@@ -126,9 +127,6 @@ get_recipe_summary() {
     summary="${summary// /}" # Final sweep
     echo "${summary:-My-Recipe}"
 }
-
-DO_MUTE=false
-DO_TEXT_ANNOTATION=false
 
 # --- UI INTERFACES ---
 
@@ -310,6 +308,7 @@ show_main_menu() {
                         IFS='|' read -ra NEW_VALS <<< "$RES"
                         VALS=("" "") # Reset/init
                         for i in "${!NEW_VALS[@]}"; do VALS[i]="${NEW_VALS[i]}"; done
+                        [ -z "${VALS[0]}" ] && continue
                         recipe_list+=("Format: ${VALS[0]}|Optimize: ${VALS[1]}")
                         ;;
                     "Effects & Branding")
@@ -320,7 +319,7 @@ show_main_menu() {
                         VALS=("" "" "") # Reset/init
                         for i in "${!NEW_VALS[@]}"; do VALS[i]="${NEW_VALS[i]}"; done
                         # Only add if not "No Change" or "(Inactive)"
-                        if [[ "${VALS[0]}" != "No Change" || "${VALS[1]}" != "(Inactive)" ]]; then
+                        if [[ -n "${VALS[0]}" && "${VALS[0]}" != "No Change" ]] || [[ -n "${VALS[1]}" && "${VALS[1]}" != "(Inactive)" ]]; then
                             recipe_list+=("Effect: ${VALS[0]}|Branding: ${VALS[1]}|BrandingPayload: ${VALS[2]}")
                         fi
                         ;;

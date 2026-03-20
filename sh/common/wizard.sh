@@ -10,19 +10,20 @@ DEBUG_MODE="${DEBUG_MODE:-0}"
 [ "${_WIZARD_SH_LOADED:-0}" -eq 1 ] && return
 readonly _WIZARD_SH_LOADED=1
 
+# --- Requirements ---
+(( BASH_VERSINFO[0] >= 4 )) || { echo "Error: scripts-sh requires bash 4.0 or higher."; exit 1; }
+
 # --- Constants ---
-readonly WIZARD_ROW_SIZE=5
-readonly WIZARD_COL_RAWID=4 # Offset from row start (including boolean)
+readonly WIZARD_ROW_SIZE=4
+readonly WIZARD_COL_RAWID=3 # Offset from row start (including boolean)
 readonly MAX_HISTORY=10
 readonly MAX_PRESETS=20
 
 _wizard_log() {
     if [[ "${DEBUG_MODE:-0}" == "1" ]]; then
-        local log_dir="${LOG_DIR:-$HOME/.local/share/scripts-sh}"
-        local log_file="${LOG_FILE:-$log_dir/debug.log}"
-        mkdir -p "$log_dir"
-        chmod 700 "$log_dir" 2>/dev/null
-        echo "[DEBUG] $(date '+%Y-%m-%d %H:%M:%S') $1" >> "$log_file"
+        mkdir -p "$LOG_DIR"
+        chmod 700 "$LOG_DIR" 2>/dev/null
+        echo "[DEBUG] $(date '+%Y-%m-%d %H:%M:%S') $1" >> "$LOG_FILE"
     fi
 }
 
@@ -61,9 +62,9 @@ _wizard_build_args() {
 
     _ARGS+=(
         "--list" "--checklist" "--width" "700" "--height" "550"
-        "--title" "$TITLE" "--separator" "|" "--print-column" "ALL"
+        "--title" "$TITLE" "--separator" "|" "--print-column" "4"
         "--text" "Select fixes/edits OR load a preset below:"
-        "--column" "" "--column" "Action" "--column" "Description" "--column" "ID" "--column" "RawID"
+        "--column" "" "--column" "Action" "--column" "Description" "--column" "ID"
     )
 
     # 1. Add Intents
@@ -71,17 +72,17 @@ _wizard_build_args() {
     for item in "${INTENTS_ARR[@]}"; do
         local icon="" name="" desc=""
         IFS='|' read -r icon name desc <<< "$item"
-        _ARGS+=(FALSE "$icon $name" "$desc" "$name" "$name")
+        _ARGS+=(FALSE "$icon $name" "$desc" "$name")
     done
 
     # 2. Add Special Actions
     if [ -n "$PRESET_FILE" ]; then
-        _ARGS+=(FALSE "⭐ Save as Favorite" "Save current recipe to favorites" "ACTION:SAVE" "ACTION:SAVE")
+        _ARGS+=(FALSE "⭐ Save as Favorite" "Save current recipe to favorites" "ACTION:SAVE")
     fi
 
     # 3. Add Presets Divider if they exist
     if [ -s "$PRESET_FILE" ] || [ -s "$HISTORY_FILE" ]; then
-        _ARGS+=(FALSE "═══" ".................................." "═══" "═══")
+        _ARGS+=(FALSE "═══" ".................................." "═══")
     fi
 
     # 3. Add Presets
@@ -91,7 +92,7 @@ _wizard_build_args() {
             local name="${name:-}" options="${options:-}"
             [ -z "$name" ] && continue
             [ "$p_count" -ge "$MAX_PRESETS" ] && break
-            _ARGS+=(FALSE "⭐ $name" "Saved Favorite" "PRESET:$name" "PRESET:$name")
+            _ARGS+=(FALSE "⭐ $name" "Saved Favorite" "PRESET:$name")
             ((p_count++))
         done < "$PRESET_FILE"
     fi
@@ -102,13 +103,13 @@ _wizard_build_args() {
         while read -r line; do
             [ -z "$line" ] && continue
             [ "$h_count" -ge "$MAX_HISTORY" ] && break
-            _ARGS+=(FALSE "🕒 $line" "Recent Activity" "HISTORY:$line" "HISTORY:$line")
+            _ARGS+=(FALSE "🕒 $line" "Recent Activity" "HISTORY:$line")
             ((h_count++))
         done < "$HISTORY_FILE"
     fi
 
-    # 5. Hide columns (must come after headers, safer at the end)
-    _ARGS+=("--hide-column" "4" "--hide-column" "5")
+    # 4. Hide ID column
+    _ARGS+=("--hide-column" "4")
 }
 
 _wizard_parse_result() {
@@ -120,71 +121,29 @@ _wizard_parse_result() {
         return
     fi
     
-    # 2. Simple Strings (No pipes)
-    if [[ "$RESULT" != *"|"* ]]; then
-        echo "$RESULT"
-        return
-    fi
-
+    # Simple split and deduplicate
+    # This works because we now use --print-column 4, so zenity only returns IDs.
+    # It also handles legacy/mock returns which are often simple piped strings.
     local -a ALL_PARTS=()
     IFS='|' read -ra ALL_PARTS <<< "$RESULT"
-    local FIRST_UP=$(echo "${ALL_PARTS[0]:-}" | tr '[:lower:]' '[:upper:]')
     
-    # 3. Checklist Mode ([TRUE/FALSE] | [Icon Name] | [Desc] | [ID] | [RawID])
-    if [[ "$FIRST_UP" == "TRUE" || "$FIRST_UP" == "FALSE" ]]; then
-        for (( i=0; i<${#ALL_PARTS[@]}; i+=WIZARD_ROW_SIZE )); do
-            [ $i -ge ${#ALL_PARTS[@]} ] && break
-            local STATE=$(echo "${ALL_PARTS[i]:-}" | tr '[:lower:]' '[:upper:]')
-            if [[ "$STATE" == "TRUE" ]]; then
-                local VAL="${ALL_PARTS[i+WIZARD_COL_RAWID]:-}"
-                [[ -n "$VAL" && "$VAL" != "---" && "$VAL" != "═══" ]] && CLEAN_RESULT+="$VAL|"
-            fi
-        done
+    local deduplicated=""
+    declare -A SEEN
+    for part in "${ALL_PARTS[@]}"; do
+        # Strip whitespace
+        part=$(echo "$part" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        # Normalize to uppercase for comparison
+        local part_up=$(echo "$part" | tr '[:lower:]' '[:upper:]')
         
-        if [ -n "$CLEAN_RESULT" ]; then
-             echo "${CLEAN_RESULT%|}"
-             return
-        fi
-        
-        # Double-click case: Zenity returns one row with FALSE but we have pipes
-        if [[ "$FIRST_UP" == "FALSE" ]]; then
-             local VAL="${ALL_PARTS[WIZARD_COL_RAWID]:-}"
-             [[ -n "$VAL" && "$VAL" != "---" && "$VAL" != "═══" ]] && { echo "$VAL"; return; }
-        fi
-        echo ""
-        return
-    fi
-    
-    # 4. Fallback parsing for non-checklist list returns
-    # Try to extract RawID if the column count matches
-    if (( ${#ALL_PARTS[@]} % WIZARD_ROW_SIZE == 0 )); then
-        for (( i=0; i<${#ALL_PARTS[@]}; i+=WIZARD_ROW_SIZE )); do
-            local VAL="${ALL_PARTS[i+WIZARD_COL_RAWID]:-}"
-            [[ -n "$VAL" && "$VAL" != "---" && "$VAL" != "═══" ]] && CLEAN_RESULT+="$VAL|"
-        done
-        echo "${CLEAN_RESULT%|}"
-    elif (( ${#ALL_PARTS[@]} % (WIZARD_ROW_SIZE - 1) == 0 )); then
-        # Handle case where boolean column is omitted entirely by Zenity on double-click
-        for (( i=0; i<${#ALL_PARTS[@]}; i+=(WIZARD_ROW_SIZE - 1) )); do
-            local VAL="${ALL_PARTS[i+WIZARD_COL_RAWID-1]:-}"
-            [[ -n "$VAL" && "$VAL" != "---" && "$VAL" != "═══" ]] && CLEAN_RESULT+="$VAL|"
-        done
-        echo "${CLEAN_RESULT%|}"
-    else
-        # Last resort: just filter out dividers from whatever we got
-        # To avoid duplicating intents if they appear multiple times in a row, use a deduplicated list
-        declare -A SEEN
-        for part in "${ALL_PARTS[@]}"; do
-            part=$(echo "$part" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-            if [[ -n "$part" && "$part" != "---" && "$part" != "═══" ]]; then
-                if [[ -z "${SEEN[$part]:-}" ]]; then
-                    CLEAN_RESULT+="$part|"
-                    SEEN[$part]=1
-                fi
+        # Filter out noise: empty, dividers, and boolean artifacts
+        if [[ -n "$part" && "$part_up" != "---" && "$part_up" != "═══" && "$part_up" != "TRUE" && "$part_up" != "FALSE" ]]; then
+            if [[ -z "${SEEN[$part]:-}" ]]; then
+                deduplicated+="$part|"
+                SEEN[$part]=1
             fi
-        done
-        echo "${CLEAN_RESULT%|}"
-    fi
+        fi
+    done
+    echo "${deduplicated%|}"
 }
 
 # save_to_history "HistoryFile" "ChoiceString"
@@ -198,15 +157,14 @@ save_to_history() {
     local RECENT=""
     RECENT=$(head -n 1 "$HISTORY_FILE" 2>/dev/null || true)
     if [ "$CHOICES" != "$RECENT" ]; then
-        # 2. Add to top
-        local tmp_file="${HISTORY_FILE}.tmp"
+        # 2. Add to top atomically
+        local tmp_file
+        tmp_file=$(mktemp "${HISTORY_FILE}.XXXXXX")
         echo "$CHOICES" > "$tmp_file"
-        if [ -f "$HISTORY_FILE" ]; then
-            cat "$HISTORY_FILE" >> "$tmp_file"
+        if [ -s "$HISTORY_FILE" ]; then
+            head -n "$((MAX_HISTORY - 1))" "$HISTORY_FILE" >> "$tmp_file"
         fi
-        # 3. Keep last MAX_HISTORY
-        head -n "$MAX_HISTORY" "$tmp_file" > "$HISTORY_FILE"
-        rm -f "$tmp_file"
+        mv -f "$tmp_file" "$HISTORY_FILE"
     fi
 }
 
@@ -235,8 +193,10 @@ prompt_save_preset() {
                 if ! zenity --question --title="Overwrite?" --text="A favorite named '$PNAME' already exists.\nOverwrite it?" --ok-label="Overwrite" --cancel-label="Cancel" 2>/dev/null; then
                     return 0
                 fi
-                local ESC_PNAME=$(printf '%s\n' "$PNAME" | sed 's/[.[\*^$]/\\&/g')
-                sed -i "/^${ESC_PNAME}|/d" "$PRESET_FILE"
+                # Safer deletion without regex pitfalls
+                local tmp_preset=$(mktemp "${PRESET_FILE}.XXXXXX")
+                grep -v "^$PNAME|" "$PRESET_FILE" > "$tmp_preset" || true
+                mv -f "$tmp_preset" "$PRESET_FILE"
             fi
             echo "$PNAME|$CHOICES" >> "$PRESET_FILE"
             zenity --notification --text="Saved as '$PNAME'!" 2>/dev/null || true
