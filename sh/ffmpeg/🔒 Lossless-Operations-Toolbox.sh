@@ -545,6 +545,7 @@ execute_remuxing() {
     local input_file="$1"
     local output_file="$2"
     local target_container="$3"
+    local extra_flags="$4"
     
     # Validate operation first
     if ! validate_remuxing_operation "$input_file" "$target_container"; then
@@ -561,6 +562,12 @@ execute_remuxing() {
         # It's better to split them into the array
         read -ra opt_parts <<< "$optimization_flags"
         cmd_args+=("${opt_parts[@]}")
+    fi
+    
+    # Add extra FFmpeg flags if provided
+    if [ -n "$extra_flags" ]; then
+        read -ra extra_parts <<< "$extra_flags"
+        cmd_args+=("${extra_parts[@]}")
     fi
     
     cmd_args+=("$output_file")
@@ -692,6 +699,16 @@ execute_metadata_editing() {
                     cmd_args+=("-metadata:s:v:0" "rotate=0")
                     ;;
             esac
+            ;;
+        "set_custom")
+            # Expected value format: "key=value"
+            IFS='=' read -r key val <<< "$value"
+            if [ -n "$key" ] && [ -n "$val" ]; then
+                cmd_args+=("-metadata" "$value")
+            else
+                echo "WARNING: Invalid custom tag format: $value. Using comment=$value"
+                cmd_args+=("-metadata" "comment=$value")
+            fi
             ;;
         *)
             echo "ERROR: Unknown metadata operation: $operation"
@@ -1102,21 +1119,21 @@ show_remuxing_interface() {
         return 1
     fi
     
-    # Get target container with enhanced descriptions
-    local container=$(zenity --list --title="Select Target Container" --width=500 --height=350 \
-        --text="Choose output container format (lossless stream copy):" \
-        --column="Format" --column="Description" --column="Best For" \
-        "mp4" "MP4 - Universal compatibility" "Most devices, streaming" \
-        "mkv" "MKV - Open format, supports all codecs" "Archival, flexibility" \
-        "mov" "MOV - Apple QuickTime format" "Apple ecosystem, editing" \
-        "webm" "WebM - Web-optimized format" "Web playback, browsers") || true
+    # Get target container and extra flags
+    local RES=$(zenity --forms --title="📦 Remuxing Options" --width=500 \
+        --text="Choose output container and extra flags (lossless):" \
+        --add-combo="Target Container" --combo-values="mp4|mkv|mov|webm" \
+        --add-entry="🔧 Extra FFmpeg Flags" || true)
     
-    if [ -z "$container" ]; then
+    if [ -z "$RES" ]; then
         return 1
     fi
     
+    local container=$(echo "$RES" | cut -d'|' -f1)
+    local extra_flags=$(echo "$RES" | cut -d'|' -f2)
+    
     # Add to history
-    save_to_history "$HISTORY_FILE" "remux|$container"
+    save_to_history "$HISTORY_FILE" "remux|$container|$extra_flags"
     
     # Process files
     (
@@ -1281,7 +1298,8 @@ show_metadata_interface() {
         --column="Operation" --column="Description" --column="Privacy Level" \
         "clean_metadata" "Remove all metadata" "High - Complete privacy" \
         "set_rotation" "Set rotation metadata only" "Low - Orientation fix" \
-        "set_title" "Set custom title" "Medium - Basic info") || true
+        "set_title" "Set custom title" "Medium - Basic info" \
+        "set_custom" "Set custom tag (Key=Value)" "Variable - User defined") || true
     
     if [ -z "$operation" ]; then
         return 1
@@ -1301,6 +1319,10 @@ show_metadata_interface() {
         "set_title")
             value=$(zenity --entry --title="Set Title" --text="Enter new title for the video:" \
                 --entry-text="") || true
+            ;;
+        "set_custom")
+            value=$(zenity --entry --title="Set Custom Tag" --text="Enter custom metadata (e.g. comment=MyComment):" \
+                --entry-text="comment=") || true
             ;;
     esac
     
@@ -1328,6 +1350,7 @@ show_metadata_interface() {
                 "clean_metadata") suffix="_cleaned" ;;
                 "set_rotation") suffix="_rotated_${value}deg" ;;
                 "set_title") suffix="_titled" ;;
+                "set_custom") suffix="_metadata" ;;
             esac
             local output_file=$(generate_safe_filename "$base" "$suffix" "$ext")
             

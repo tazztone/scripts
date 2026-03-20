@@ -45,6 +45,11 @@ if [[ "$*" == *"--progress"* ]]; then
     exit 0
 fi
 
+# Question dialogs default to "No" (decline) to prevent preset-save stealing lines
+if [[ "$*" == *"--question"* ]]; then
+    exit ${ZENITY_QUESTION_EXIT:-1}
+fi
+
 # Informational dialogs exit 0 by default in mock
 if [[ "$*" == *"--info"* || "$*" == *"--notification"* || "$*" == *"--error"* || "$*" == *"--warning"* ]]; then
     exit ${ZENITY_MOCK_EXIT_CODE:-0}
@@ -422,15 +427,30 @@ setup_mock_ffmpeg() {
 # Find real ffmpeg by stripping any 'mock_bin' from PATH
 REAL_FFMPEG=$(PATH=$(echo "$PATH" | sed -E 's|[^:]*mock_bin:?||g') which ffmpeg)
 
-# Check for specific probing arguments
-if [[ "$*" == *"-c:v h264_nvenc"* ]]; then
-    [ "${MOCK_FFMPEG_NVENC:-0}" == "1" ] && exit 0 || exit 1
+# Check for hardware encoder usage (both probing and real encoding)
+if [[ "$*" == *"nvenc"* ]]; then
+    if [ "${MOCK_FFMPEG_NVENC:-0}" == "1" ]; then
+        touch "${@: -1}" 2>/dev/null
+        exit 0
+    else
+        exit 1
+    fi
 fi
-if [[ "$*" == *"-c:v h264_qsv"* ]]; then
-    [ "${MOCK_FFMPEG_QSV:-0}" == "1" ] && exit 0 || exit 1
+if [[ "$*" == *"qsv"* ]]; then
+    if [ "${MOCK_FFMPEG_QSV:-0}" == "1" ]; then
+        touch "${@: -1}" 2>/dev/null
+        exit 0
+    else
+        exit 1
+    fi
 fi
-if [[ "$*" == *"-c:v h264_vaapi"* ]]; then
-    [ "${MOCK_FFMPEG_VAAPI:-0}" == "1" ] && exit 0 || exit 1
+if [[ "$*" == *"vaapi"* ]]; then
+    if [ "${MOCK_FFMPEG_VAAPI:-0}" == "1" ]; then
+        touch "${@: -1}" 2>/dev/null
+        exit 0
+    else
+        exit 1
+    fi
 fi
 if [[ "$*" == *"-c:v h264_v4l2m2m"* ]]; then
     [ "${MOCK_FFMPEG_V4L2:-0}" == "1" ] && exit 0 || exit 1
