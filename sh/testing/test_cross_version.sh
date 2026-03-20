@@ -2,13 +2,14 @@
 # testing/test_cross_version.sh
 # Verifies all toolboxes against Zenity 3, 4, and Ghost profiles
 
-SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 source "$SCRIPT_DIR/lib_test.sh"
 
 log_info "Starting Cross-Version Compatibility Tests..."
 
 setup_mock_zenity
+setup_mock_ffmpeg
 generate_test_media
 # Ensure local copies with expected names for cross-version
 cp "$TEST_DATA/input.mp4" "$TEST_DATA/src.mp4"
@@ -25,28 +26,21 @@ run_matrix_test() {
         echo -e "\n[PROFILE: $profile] Testing $(basename "$script")"
         export ZENITY_PROFILE="$profile"
         
-        # Cleanup existing outputs from previous profiles to ensure detection
-        for inp in "${inputs[@]}"; do
-            local base=$(basename -- "${inp%.*}")
-            rm -f "$TEST_DATA/${base}"_*.*
-        done
-
-        # Clear and seed response queue
-        > /tmp/zenity_responses
+        # Cleanup is now handled by run_test itself in Phase 3
         
         case "$(basename "$script")" in
             *"Universal"*)
-                echo "Scale / Resize" > /tmp/zenity_responses
-                # Correct 19-field mapping for Universal Toolbox
-                echo "1x (Normal)||720p|| (Inactive)|| (Inactive)||| (Inactive)|| (Inactive)||Medium (CRF 23)|||Auto/MP4|None (CPU Only)||" >> /tmp/zenity_responses
+                export MOCK_LIST="Scale / Resize"
+                export MOCK_FORMS="1x (Normal)||720p|| (Inactive)|| (Inactive)||| (Inactive)|| (Inactive)||Medium (CRF 23)|||Auto/MP4|None (CPU Only)||"
                 ;;
             *"Image-Magick"*)
-                echo "Scale & Resize" > /tmp/zenity_responses
-                echo "1280x|" >> /tmp/zenity_responses
+                export MOCK_LIST="Scale & Resize"
+                export MOCK_FORMS="1280x||"  # resolution|custom_geometry
                 ;;
             *"Lossless"*)
-                echo "Edit Streams" > /tmp/zenity_responses
-                echo "remove_video" >> /tmp/zenity_responses
+                export MOCK_LIST="Edit Streams
+remove_video"
+                export MOCK_FORMS="" 
                 ;;
         esac
         

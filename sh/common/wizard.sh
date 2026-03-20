@@ -21,9 +21,12 @@ readonly MAX_PRESETS=20
 
 _wizard_log() {
     if [[ "${DEBUG_MODE:-0}" == "1" ]]; then
-        mkdir -p "$LOG_DIR"
-        chmod 700 "$LOG_DIR" 2>/dev/null
-        echo "[DEBUG] $(date '+%Y-%m-%d %H:%M:%S') $1" >> "$LOG_FILE"
+        local log_dir="${LOG_DIR:-$HOME/.local/share/scripts-sh}"
+        local log_file="${LOG_FILE:-$log_dir/debug.log}"
+        mkdir -p "$log_dir"
+        chmod 700 "$log_dir" 2>/dev/null
+        echo "[DEBUG] $(date '+%Y-%m-%d %H:%M:%S') $1" >> "$log_file"
+        echo "[DEBUG] $1" >&2
     fi
 }
 
@@ -217,4 +220,25 @@ prompt_save_preset() {
             zenity --notification --text="Saved as '$PNAME'!" 2>/dev/null || true
         fi
     fi
+}
+# parse_forms_result "RawResult" "key1 key2 key3..."
+# Maps pipe-delimited zenity results to the global associative array CONFIG
+parse_forms_result() {
+    local raw="$1"
+    shift
+    local keys=("$@")
+    
+    # Initialize global CONFIG array
+    declare -gA CONFIG=()
+    
+    local -a fields=()
+    IFS='|' read -ra fields <<< "$raw"
+    
+    for i in "${!keys[@]}"; do
+        local key="${keys[i]}"
+        local val="${fields[i]:-}"
+        # Strip "(Inactive)" if present (common in combos)
+        [[ "$val" == *" (Inactive)"* ]] && val=""
+        CONFIG["$key"]="$val"
+    done
 }

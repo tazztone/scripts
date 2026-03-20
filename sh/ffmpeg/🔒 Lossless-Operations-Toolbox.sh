@@ -545,7 +545,7 @@ execute_remuxing() {
     local input_file="$1"
     local output_file="$2"
     local target_container="$3"
-    local extra_flags="$4"
+    local extra_flags="${4:-}"
     
     # Validate operation first
     if ! validate_remuxing_operation "$input_file" "$target_container"; then

@@ -11,6 +11,7 @@ export GPU_CACHE="/tmp/scripts-sh-gpu-cache-test"
 rm -f "$GPU_CACHE"
 
 # Source common.sh after setting GPU_CACHE
+source "$PROJECT_ROOT/common/wizard.sh"
 source "$PROJECT_ROOT/ffmpeg/common.sh"
 
 log_info "Testing probe_gpu cache logic..."

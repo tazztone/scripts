@@ -4,16 +4,6 @@
 [ "${_FFMPEG_COMMON_SH_LOADED:-0}" -eq 1 ] && return
 readonly _FFMPEG_COMMON_SH_LOADED=1
 
-_wizard_log() {
-    if [[ "${DEBUG_MODE:-0}" == "1" ]]; then
-        local log_dir="${LOG_DIR:-$HOME/.local/share/scripts-sh}"
-        local log_file="${LOG_FILE:-$log_dir/debug.log}"
-        mkdir -p "$log_dir"
-        chmod 700 "$log_dir" 2>/dev/null
-        echo "[DEBUG] $(date '+%Y-%m-%d %H:%M:%S') $1" >> "$log_file"
-        echo "[DEBUG] $1" >&2
-    fi
-}
 
 # Ensure dependencies
 # Check zenity first to use it for errors

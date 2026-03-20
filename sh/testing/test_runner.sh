@@ -32,87 +32,64 @@ echo -e "\n${YELLOW}=== Universal Toolbox Core Tests ===${NC}"
 
 # 1. Basic Suite
 echo "Test 1: Core Recipe"
-cat <<EOF > /tmp/zenity_responses
-Speed Control|Scale / Resize|Audio Tools
-2x (Fast)||720p|||||||||||Medium (CRF 23)|||Auto/MP4|None (CPU Only)||
-EOF
+export MOCK_FORMS="2x (Fast)||720p|||||||||||Medium (CRF 23)|||Auto/MP4|None (CPU Only)|"
 run_test "$SCRIPT_DIR/../ffmpeg/🧰 Universal-Toolbox.sh" "vcodec=h264,fps=30,acodec=aac,tags=2x|720p" "$TEST_DATA/input.mp4" || FAILED=$((FAILED+1))
 
 # 2. Subtitle Burn-in
 echo "Test 2: Subtitle Burn-in"
 echo -e "1\n00:00:00,000 --> 00:00:01,000\nTest Subtitle" > "$TEST_DATA/input.srt"
-cat <<EOF > /tmp/zenity_responses
-Subtitles
-|||||||||||Burn-in||Medium (CRF 23)|||Auto/MP4|None (CPU Only)||
-EOF
+export MOCK_LIST="Subtitles"
+export MOCK_FORMS="|||||||||||Burn-in||Medium (CRF 23)|||Auto/MP4|None (CPU Only)|"
 run_test "$SCRIPT_DIR/../ffmpeg/🧰 Universal-Toolbox.sh" "vcodec=h264" "$TEST_DATA/input.mp4" || FAILED=$((FAILED+1))
 rm -f "$TEST_DATA/input.srt"
 
 # 4. Trim Test (0.5s duration)
 echo "Test 4: Trim (0.5s)"
-cat <<EOF > /tmp/zenity_responses
-Trim (Cut Time)
-1x (Normal)|||||||00:00:00.000|0.5||||||Medium (CRF 23)|||Auto/MP4|None (CPU Only)||
-EOF
+export MOCK_LIST="Trim (Cut Time)"
+export MOCK_FORMS="1x (Normal)|||||||00:00:00.000|0.5|||||Medium (CRF 23)|||Auto/MP4|None (CPU Only)|"
 run_test "$SCRIPT_DIR/../ffmpeg/🧰 Universal-Toolbox.sh" "duration=0.5" "$TEST_DATA/input.mp4" || FAILED=$((FAILED+1))
 
 # 5. Crop Test (9:16 Vertical)
 echo "Test 5: Crop (9:16 Vertical)"
-cat <<EOF > /tmp/zenity_responses
-Crop / Aspect Ratio
- (Inactive)||||9:16 (Vertical)|||||||||Medium (CRF 23)|||Auto/MP4|None (CPU Only)|
-EOF
+export MOCK_LIST="Crop / Aspect Ratio"
+export MOCK_FORMS=" (Inactive)||||9:16 (Vertical)|||||||||Medium (CRF 23)|||Auto/MP4|None (CPU Only)|"
 run_test "$SCRIPT_DIR/../ffmpeg/🧰 Universal-Toolbox.sh" "width=404,height=720" "$TEST_DATA/input.mp4" || FAILED=$((FAILED+1))
 
 echo "Test 5b: Crop (16:9 Landscape)"
-cat <<EOF > /tmp/zenity_responses
-Crop / Aspect Ratio
- (Inactive)||||16:9 (Landscape)|||||||||Medium (CRF 23)|||Auto/MP4|None (CPU Only)|
-EOF
+export MOCK_LIST="Crop / Aspect Ratio"
+export MOCK_FORMS=" (Inactive)||||16:9 (Landscape)|||||||||Medium (CRF 23)|||Auto/MP4|None (CPU Only)|"
 run_test "$SCRIPT_DIR/../ffmpeg/🧰 Universal-Toolbox.sh" "width=1280,height=720" "$TEST_DATA/input.mp4" || FAILED=$((FAILED+1))
 
 echo "Test 5c: Crop (Square 1:1)"
-cat <<EOF > /tmp/zenity_responses
-Crop / Aspect Ratio
- (Inactive)||||Square 1:1|||||||||Medium (CRF 23)|||Auto/MP4|None (CPU Only)|
-EOF
+export MOCK_LIST="Crop / Aspect Ratio"
+export MOCK_FORMS=" (Inactive)||||Square 1:1|||||||||Medium (CRF 23)|||Auto/MP4|None (CPU Only)|"
 run_test "$SCRIPT_DIR/../ffmpeg/🧰 Universal-Toolbox.sh" "width=720,height=720" "$TEST_DATA/input.mp4" || FAILED=$((FAILED+1))
 
 # 6. GIF Output
 echo "Test 6: GIF Output"
-cat <<EOF > /tmp/zenity_responses
-Output Format
- (Inactive)|||||||||||||Medium (CRF 23)|||GIF|None (CPU Only)||
-EOF
+export MOCK_LIST="Output Format"
+export MOCK_FORMS=" (Inactive)|||||||||||||Medium (CRF 23)|||GIF|None (CPU Only)|"
 run_test "$SCRIPT_DIR/../ffmpeg/🧰 Universal-Toolbox.sh" "format=gif" "$TEST_DATA/input.mp4" || FAILED=$((FAILED+1))
 
 echo "Test 6b: AV1 Output"
-cat <<EOF > /tmp/zenity_responses
-Output Format
- (Inactive)|||||||||||||Medium (CRF 23)|||AV1|None (CPU Only)||
-EOF
+export MOCK_LIST="Output Format"
+export MOCK_FORMS=" (Inactive)|||||||||||||Medium (CRF 23)|||AV1|None (CPU Only)|"
 run_test "$SCRIPT_DIR/../ffmpeg/🧰 Universal-Toolbox.sh" "vcodec=av1" "$TEST_DATA/input.mp4" || FAILED=$((FAILED+1))
 
 echo "Test 6c: WebM Output"
-cat <<EOF > /tmp/zenity_responses
-Output Format
- (Inactive)|||||||||||||Medium (CRF 23)|||WebM|None (CPU Only)||
-EOF
+export MOCK_LIST="Output Format"
+export MOCK_FORMS=" (Inactive)|||||||||||||Medium (CRF 23)|||WebM|None (CPU Only)|"
 run_test "$SCRIPT_DIR/../ffmpeg/🧰 Universal-Toolbox.sh" "format=webm" "$TEST_DATA/input.mp4" || FAILED=$((FAILED+1))
 
 echo "Test 6d: ProRes Output"
-cat <<EOF > /tmp/zenity_responses
-Output Format
- (Inactive)|||||||||||||Medium (CRF 23)|||ProRes|None (CPU Only)||
-EOF
+export MOCK_LIST="Output Format"
+export MOCK_FORMS=" (Inactive)|||||||||||||Medium (CRF 23)|||ProRes|None (CPU Only)|"
 run_test "$SCRIPT_DIR/../ffmpeg/🧰 Universal-Toolbox.sh" "vcodec=prores" "$TEST_DATA/input.mp4" || FAILED=$((FAILED+1))
 
 # 7. Target Size (2-Pass)
 echo "Test 7: Target Size (0.5MB)"
-cat <<EOF > /tmp/zenity_responses
-Quality Strategy
- (Inactive)|||||||||||||Medium (CRF 23)||0.5|Auto/MP4|None (CPU Only)|
-EOF
+export MOCK_LIST="Quality Strategy"
+export MOCK_FORMS=" (Inactive)|||||||||||||Medium (CRF 23)||0.5|Auto/MP4|None (CPU Only)|"
 run_test "$SCRIPT_DIR/../ffmpeg/🧰 Universal-Toolbox.sh" "file_size_lt=600000,vcodec=h264" "$TEST_DATA/input.mp4" || FAILED=$((FAILED+1))
 
 # 3. CLI Preset Test
