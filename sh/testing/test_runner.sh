@@ -21,6 +21,8 @@ echo -e "\n${YELLOW}=== Static Syntax Analysis (Linting) ===${NC}"
 bash "$SCRIPT_DIR/test_lint.sh" || FAILED=$((FAILED+1))
 
 echo -e "\n${YELLOW}=== Unit Tests ===${NC}"
+bash "$SCRIPT_DIR/test_filename_safe.sh" || FAILED=$((FAILED+1))
+bash "$SCRIPT_DIR/test_gpu_probe.sh" || FAILED=$((FAILED+1))
 bash "$SCRIPT_DIR/test_units.sh" || FAILED=$((FAILED+1))
 
 echo -e "\n${YELLOW}=== Isolated Wizard Parser & Contract Tests ===${NC}"

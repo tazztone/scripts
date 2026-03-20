@@ -1,5 +1,3 @@
-#!/bin/bash
-set -euo pipefail
 # Common utility functions for Nautilus FFmpeg Scripts
 
 # Sourcing Guard
@@ -28,7 +26,7 @@ init_ffmpeg_script() {
     # Zenity 4+ Requirement Check
     local z_ver
     z_ver=$(zenity --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -n 1)
-    if (( $(echo "${z_ver:-0} < 4.0" | bc -l) )); then
+    if [ "$(echo "${z_ver:-0} < 4.0" | bc -l)" -eq 1 ]; then
         printf "Error: scripts-sh requires Zenity 4.0 or higher (found %s).\n" "${z_ver:-unknown}" >&2
         zenity --error --text="Upgrade Required: Zenity 4.0+ is needed for the checklist UI.\nFound: ${z_ver:-unknown}"
         exit 1
@@ -118,7 +116,7 @@ validate_time_format() {
     fi
     
     # Check if it's hh:mm:ss format
-    if [[ "$time_input" =~ ^([0-9]+):([0-9]{2}):([0-9]{2})(\.[0-9]+)?$ ]]; then
+    if [[ "$time_input" =~ ^([0-9]+):([0-5][0-9]):([0-5][0-9])(\.[0-9]+)?$ ]]; then
         local hours=${BASH_REMATCH[1]}
         local minutes=${BASH_REMATCH[2]}
         local seconds=${BASH_REMATCH[3]}
@@ -131,7 +129,7 @@ validate_time_format() {
     fi
     
     # Check if it's mm:ss format
-    if [[ "$time_input" =~ ^([0-9]+):([0-9]{2})(\.[0-9]+)?$ ]]; then
+    if [[ "$time_input" =~ ^([0-9]+):([0-5][0-9])(\.[0-9]+)?$ ]]; then
         local minutes=${BASH_REMATCH[1]}
         local seconds=${BASH_REMATCH[2]}
         local fraction=${BASH_REMATCH[3]:-}

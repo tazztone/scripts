@@ -37,7 +37,9 @@ run_matrix_test() {
         case "$(basename "$script")" in
             *"Universal"*)
                 echo "Scale / Resize" > /tmp/zenity_responses
-                echo "1x (Normal)||720p||||||||||Auto/MP4" >> /tmp/zenity_responses
+                # Correct 13-field mapping for Universal Toolbox
+                # 1:Speed 2:Res 3:CustomW 4:Crop 5:Rot 6:TrimS 7:TrimE 8:Audio 9:Subs 10:Qual 11:Target 12:Format 13:HW
+                echo "1x (Normal)|720p|| (Inactive)| (Inactive)||| (Inactive)| (Inactive)|Medium (CRF 23)||Auto/MP4|None (CPU Only)" >> /tmp/zenity_responses
                 ;;
             *"Image-Magick"*)
                 echo "Scale & Resize" > /tmp/zenity_responses

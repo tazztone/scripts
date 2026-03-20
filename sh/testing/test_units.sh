@@ -42,10 +42,11 @@ test_time "00:01:30.500" "90.500" || FAILED=$((FAILED+1))
 
 # Boundary & Edge Cases
 log_info "Testing Boundary Cases..."
-test_time "00:60" "60" || FAILED=$((FAILED+1)) # 60s is 1m, technically valid but often an input error
-test_time "00:00:60" "60" || FAILED=$((FAILED+1))
+test_time "00:60" "FAIL" || FAILED=$((FAILED+1)) # Invalid seconds > 59
+test_time "01:60:00" "FAIL" || FAILED=$((FAILED+1)) # Invalid minutes > 59
+test_time "00:00:59" "59" || FAILED=$((FAILED+1))
 test_time "-10" "FAIL" || FAILED=$((FAILED+1)) # Negative not allowed
-test_time "999:99:99" "3602439" || FAILED=$((FAILED+1)) # Large value
+test_time "999:99:99" "FAIL" || FAILED=$((FAILED+1)) # Invalid minutes/seconds > 59
 
 echo -e "\n${YELLOW}=== Unit Tests: Wizard & History ===${NC}"
 source "$PROJECT_ROOT/common/wizard.sh"
@@ -76,6 +77,17 @@ if grep -q "My-Test-Preset" "$PRESET_FILE"; then
     log_pass "prompt_save_preset: Correctly saved new preset"
 else
     log_fail "prompt_save_preset: Failed to save preset with mocked input"
+    FAILED=$((FAILED+1))
+fi
+
+# 3. Test prompt_save_preset (Pipe Injection Security)
+# Mocking an evil preset name
+printf "TRUE\nEvil|Preset|Injection\nSUCCESS\n" > /tmp/zenity_responses
+prompt_save_preset "$PRESET_FILE" "Intent:Hide" "Sug" "false"
+if grep -q "EvilPresetInjection" "$PRESET_FILE"; then
+    log_pass "prompt_save_preset: Successfully sanitized pipe injection"
+else
+    log_fail "prompt_save_preset: Failed to sanitize pipe injection"
     FAILED=$((FAILED+1))
 fi
 

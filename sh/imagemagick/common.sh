@@ -1,5 +1,4 @@
 # Common utility functions for Nautilus ImageMagick Scripts
-set -euo pipefail
 
 # Sourcing Guard
 [ "${_IMAGEMAGICK_COMMON_SH_LOADED:-0}" -eq 1 ] && return
@@ -16,7 +15,7 @@ init_imagemagick_script() {
     # Zenity 4+ Requirement Check
     local z_ver
     z_ver=$(zenity --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -n 1)
-    if (( $(echo "${z_ver:-0} < 4.0" | bc -l) )); then
+    if [ "$(echo "${z_ver:-0} < 4.0" | bc -l)" -eq 1 ]; then
         printf "Error: scripts-sh requires Zenity 4.0 or higher (found %s).\n" "${z_ver:-unknown}" >&2
         zenity --error --text="Upgrade Required: Zenity 4.0+ is needed for the checklist UI.\nFound: ${z_ver:-unknown}"
         exit 1
