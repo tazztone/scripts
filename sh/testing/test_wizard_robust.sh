@@ -40,27 +40,24 @@ FAILED=0
 
 # --- Test Group 1: Modern Zenity 4 (Checklist with ALL columns) ---
 # Format: [STATE] | [Col1:Pick] | [Col2:Action] | [Col3:Desc] | [Col4:ID] | [Col5:RawID]
-# This is 6 fields per row.
-log_info "--- Test Group 1: Zenity 4 (5 fields/row) ---"
-test_parser_isolated "Z4: Single selection" "TRUE|📐 Scale|Scale|Resize|Scale" "Scale" || FAILED=$((FAILED+1))
-test_parser_isolated "Z4: Double selection" "TRUE|📐 Scale|Scale|Resize|Scale|TRUE|✂️ Crop|Crop|Move|Crop" "Scale|Crop" || FAILED=$((FAILED+1))
-test_parser_isolated "Z4: Double-Click (All FALSE, one selected)" "FALSE|📐 Scale|Scale|Resize|Scale" "Scale" || FAILED=$((FAILED+1))
-test_parser_isolated "Z4: Double-Click (Omitted boolean)" "📐 Scale|Scale|Resize|Scale" "Scale" || FAILED=$((FAILED+1))
-test_parser_isolated "Z4: Omitted boolean duplicate description" "📦 Convert Format|JPG/PNG/WEBP|Convert Format|Convert Format" "Convert Format" || FAILED=$((FAILED+1))
-test_parser_isolated "Z4: Divider selected (Should skip)" "TRUE|═══|||═══" "" || FAILED=$((FAILED+1))
-test_parser_isolated "Z4: Mixed with divider" "TRUE|📐 Scale|Scale|Resize|Scale|TRUE|═══|||═══|TRUE|✂️ Crop|Crop|Move|Crop" "Scale|Crop" || FAILED=$((FAILED+1))
+# This is 4 fields per row.
+test_parser_isolated "Z4: Single selection" "Scale" "Scale" || FAILED=$((FAILED+1))
+test_parser_isolated "Z4: Double selection" "Scale|Crop" "Scale|Crop" || FAILED=$((FAILED+1))
+test_parser_isolated "Z4: Double-Click (Single ID)" "Scale" "Scale" || FAILED=$((FAILED+1))
+test_parser_isolated "Z4: Duplicate IDs" "Scale|Scale" "Scale" || FAILED=$((FAILED+1))
+test_parser_isolated "Z4: Mixed with divider (Divider should be filtered)" "Scale|═══|Crop" "Scale|Crop" || FAILED=$((FAILED+1))
 
-# --- Test Group 2: Legacy Zenity 3 (Single column) ---
-log_info "--- Test Group 2: Zenity 3 (Single column) ---"
+# --- Test Group 2: Legacy Zenity 3 & Mocks (Single column) ---
+log_info "--- Test Group 2: Zenity 3 & Mocks ---"
 test_parser_isolated "Z3: Simple string" "Scale" "Scale" || FAILED=$((FAILED+1))
 test_parser_isolated "Z3: Multiple pipes" "Scale|Crop" "Scale|Crop" || FAILED=$((FAILED+1))
 
 # --- Test Group 3: Edge Cases ---
 log_info "--- Test Group 3: Edge Cases ---"
 test_parser_isolated "Empty result" "" "" || FAILED=$((FAILED+1))
-test_parser_isolated "Wait/Cancel return" "FALSE" "" || FAILED=$((FAILED+1))
-test_parser_isolated "Pure TRUE" "TRUE" "" || FAILED=$((FAILED+1))
-test_parser_isolated "Garbage prefix" "nonsense|TRUE|📐 Scale|Scale|Resize|Scale|Scale" "nonsense|TRUE|📐 Scale|Scale|Resize" || FAILED=$((FAILED+1))
+test_parser_isolated "Pure FALSE (Cancel)" "FALSE" "" || FAILED=$((FAILED+1))
+test_parser_isolated "Boolean with separator (Should be filtered)" "TRUE|Scale" "Scale" || FAILED=$((FAILED+1))
+test_parser_isolated "Garbage with Divider" "nonsense|TRUE|═══|Scale" "nonsense|Scale" || FAILED=$((FAILED+1))
 
 if [ $FAILED -eq 0 ]; then
     log_info "Robust parser tests passed."

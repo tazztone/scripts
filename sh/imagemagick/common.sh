@@ -59,22 +59,28 @@ generate_safe_filename() {
     local tag="$2"
     local ext="$3"
     
-    # NEW: Strip existing known tags recursively to prevent stacking (e.g. image_half_half)
+    # NEW: Strip existing known tags recursively from basename ONLY
     # This list should match common tags used across scripts
     local KNOWN_TAGS="_half|_1920p|_4k|_720p|_640p|_sq|_9x16|_16x9|_grid2x|_grid3x|_row|_col|_sheet|_90cw|_90ccw|_flop|_bw|_flat|_srgb|_text|_web|_min|_arch|_edit|_high|_low|_lossless|_nvenc|_qsv|_vaapi|_cut|_len|_audio|_av1|_mov|_mkv"
     
-    local clean_base="$base"
+    local dir=$(dirname "$base")
+    local bname=$(basename "$base")
+    local clean_bname="$bname"
+    
     while true; do
-        local stripped=$(echo "$clean_base" | sed -E "s/(${KNOWN_TAGS})(_v[0-9]+)?$//")
-        [ "$stripped" == "$clean_base" ] && break
-        clean_base="$stripped"
+        local stripped=$(echo "$clean_bname" | sed -E "s/(${KNOWN_TAGS})(_v[0-9]+)?$//")
+        [ "$stripped" == "$clean_bname" ] && break
+        clean_bname="$stripped"
     done
     
-    local out="${clean_base}${tag}.${ext}"
+    local final_base="$clean_bname"
+    [ "$dir" != "." ] && final_base="${dir}/${clean_bname}"
+
+    local out="${final_base}${tag}.${ext}"
     local ctr=1
     
     while [ -f "$out" ]; do
-        out="${clean_base}${tag}_v${ctr}.${ext}"
+        out="${final_base}${tag}_v${ctr}.${ext}"
         ((ctr++))
     done
     echo "$out"
