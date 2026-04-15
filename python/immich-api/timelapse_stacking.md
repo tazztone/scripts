@@ -26,8 +26,16 @@ Choose to:
 - **Restart**: Go back to Step 1 to re-tune filters if you saw false positives.
 - **Abort**: Clean up verification albums and exit without making changes.
 
-### 5. Undo / Re-run (Optional)
-If you stacked sequences and later realized your filters were too loose, you can unstack the last run. Restart the script and choose **[U] Unstack last run**. The script reads the `timelapse_stacking_last_run.json` log, deletes the stacks it created, and allows you to tune your filters again.
+### 5. Album Creation (Optional)
+After successful stacking, the wizard offers to create or update a permanent album (default: **"⏱ Timelapse Stacks"**). You can choose between two modes:
+- **Index Mode (Recommended)**: Adds only the **cover frame** (the first photo) of every timelapse. This creates a clean, browsable gallery.
+- **Collection Mode**: Adds **every single frame** from all timelapses into the album.
+
+### 6. Undo / Re-run (Optional)
+If you stacked sequences and later realized your filters were too loose, you can unstack the last run. Restart the script and choose **[U] Unstack last run**.
+1. The script reads `timelapse_stacking_last_run.json` and deletes the stacks it created.
+2. It will then ask if you want to **automatically delete the permanent album** as well.
+3. This leaves your library exactly as it was before, allowing you to tune filters and try again immediately.
 
 
 ## Config
