@@ -1,4 +1,5 @@
 import os
+import webbrowser
 import requests
 import statistics
 from datetime import datetime
@@ -9,25 +10,40 @@ load_dotenv()
 
 BASE_URL = os.getenv("IMMICH_BASE_URL") or "http://localhost:2283"
 API_KEY = os.getenv("IMMICH_API_KEY") or "YOUR_API_KEY_HERE"
-DRY_RUN = True  # ← Set to False to actually create stacks
-VERIFY_MODE = True    # Creates temporary albums for manual review
-VERIFY_COUNT = 20     # How many candidates to create albums for (highest CV first)
-VERIFY_PREFIX = "_VERIFY_"  # Prefix for temporary review albums
-
-# V2 configuration
-DETECTION_SOURCE = os.getenv("TIMELAPSE_DETECTION_SOURCE") or "duplicates"
-MIN_FRAMES = int(os.getenv("TIMELAPSE_MIN_FRAMES") or 10)
-MAX_GAP_SECONDS = int(os.getenv("TIMELAPSE_MAX_GAP_SECONDS") or 60)
-MIN_SPAN_SECONDS = int(os.getenv("TIMELAPSE_MIN_REQD_SPAN_SECONDS") or 5)
-MAX_CV_GAP = float(os.getenv("TIMELAPSE_MAX_CV_GAP") or 0.5)
-MAX_CV_SIZE = float(os.getenv("TIMELAPSE_MAX_CV_SIZE") or 0.2)
-FILTER_LOCATION = os.getenv("TIMELAPSE_FILTER_LOCATION", "false").lower() == "true"
+VERIFY_PREFIX = "_VERIFY_"
 
 headers = {"x-api-key": API_KEY, "Content-Type": "application/json"}
 
+# --- Helpers ---
+
+def ask(prompt, options):
+    """Print a menu and return the chosen key."""
+    print(f"\n{prompt}")
+    for key, label in options.items():
+        print(f"  [{key}] {label}")
+    while True:
+        choice = input("  → ").strip().upper()
+        if choice in options:
+            return choice
+        # Also check against lowercase version of keys if they aren't numbers
+        if choice.lower() in options:
+            return choice.lower()
+        print(f"  Please enter one of: {', '.join(options)}")
+
+def ask_int(prompt, default):
+    val = input(f"  {prompt} [{default}]: ").strip()
+    return int(val) if val.isdigit() else default
+
+def header(title, subtitle=""):
+    print(f"\n{'─'*50}")
+    print(f"  {title}")
+    if subtitle:
+        print(f"  {subtitle}")
+    print(f"{'─'*50}")
+
+# --- Filtering Logic ---
 
 def is_regular(assets, max_cv):
-    # Sort for gap calculation
     sorted_assets = sorted(assets, key=lambda a: a["localDateTime"])
     times = [datetime.fromisoformat(a["localDateTime"]) for a in sorted_assets]
     gaps = [(times[i + 1] - times[i]).total_seconds() for i in range(len(times) - 1)]
@@ -37,12 +53,10 @@ def is_regular(assets, max_cv):
     cv = statistics.stdev(gaps) / mean_gap if len(gaps) > 1 else 0
     return cv <= max_cv, cv
 
-
 def has_min_span(assets, min_span):
     times = sorted(datetime.fromisoformat(a["localDateTime"]) for a in assets)
     span = (times[-1] - times[0]).total_seconds()
     return span >= min_span, span
-
 
 def consistent_filesize(assets, max_cv):
     sizes = [a.get("exifInfo", {}).get("fileSizeInByte", 0) for a in assets]
@@ -53,7 +67,6 @@ def consistent_filesize(assets, max_cv):
     cv = statistics.stdev(sizes) / mean_size
     return cv <= max_cv, cv
 
-
 def same_location(assets, max_dist_deg=0.0005):
     coords = [
         (a.get("exifInfo", {}).get("latitude"), a.get("exifInfo", {}).get("longitude"))
@@ -61,162 +74,217 @@ def same_location(assets, max_dist_deg=0.0005):
         if a.get("exifInfo", {}).get("latitude")
     ]
     if len(coords) < 2:
-        return True  # No GPS data to compare, or only one point
+        return True
     lats = [c[0] for c in coords]
     lons = [c[1] for c in coords]
     dist = max(max(lats) - min(lats), max(lons) - min(lons))
     return dist < max_dist_deg
 
+def get_candidates(min_frames, max_cv_gap, max_cv_size, min_span, filter_location, detection_source, max_gap_seconds_search):
+    sequences = []
+    if detection_source == "duplicates":
+        print("  Fetching AI duplicate groups...")
+        resp = requests.get(f"{BASE_URL}/api/duplicates", headers=headers).json()
+        for group in resp:
+            sequences.append(group["assets"])
+    else:
+        print("  Fetching all assets and performing gap-based grouping...")
+        all_assets = []
+        page = 1
+        while True:
+            resp = requests.post(
+                f"{BASE_URL}/api/search/metadata",
+                headers=headers,
+                json={"size": 1000, "page": page},
+            ).json()
+            items = resp.get("assets", {}).get("items", [])
+            all_assets.extend(items)
+            if not resp["assets"].get("nextPage"):
+                break
+            page += 1
 
-def is_timelapse(assets):
-    if len(assets) < MIN_FRAMES:
-        return False, {}
+        unstacked = [a for a in all_assets if not a.get("stack")]
+        unstacked.sort(key=lambda a: a["localDateTime"])
 
-    # Always sort by localDateTime
-    assets.sort(key=lambda a: a["localDateTime"])
+        if unstacked:
+            current = [unstacked[0]]
+            for prev, curr in zip(unstacked, unstacked[1:]):
+                gap = (
+                    datetime.fromisoformat(curr["localDateTime"])
+                    - datetime.fromisoformat(prev["localDateTime"])
+                ).total_seconds()
+                if gap <= max_gap_seconds_search:
+                    current.append(curr)
+                else:
+                    sequences.append(current)
+                    current = [curr]
+            sequences.append(current)
 
-    ok_span, span = has_min_span(assets, MIN_SPAN_SECONDS)
-    ok_regular, cv_gap = is_regular(assets, MAX_CV_GAP)
-    ok_size, cv_size = consistent_filesize(assets, MAX_CV_SIZE)
-    ok_loc = same_location(assets) if FILTER_LOCATION else True
+    candidates = []
+    for seq in sequences:
+        if len(seq) < min_frames:
+            continue
+        
+        seq.sort(key=lambda a: a["localDateTime"])
+        ok_span, span = has_min_span(seq, min_span)
+        ok_regular, cv_gap = is_regular(seq, max_cv_gap)
+        ok_size, cv_size = consistent_filesize(seq, max_cv_size)
+        ok_loc = same_location(seq) if filter_location else True
 
-    stats = {"span": span, "cv_gap": cv_gap, "cv_size": cv_size}
+        if ok_span and ok_regular and ok_size and ok_loc:
+            candidates.append({
+                "assets": seq,
+                "span": span,
+                "cv_gap": cv_gap,
+                "cv_size": cv_size
+            })
+    return candidates
 
-    return (ok_span and ok_regular and ok_size and ok_loc), stats
+# --- Lifecycle Actions ---
 
+def create_verify_albums(candidates, count):
+    # Sort by CV descending to show most 'suspicious' / irregular ones first
+    to_verify = sorted(candidates, key=lambda x: x["cv_gap"], reverse=True)[:count]
+    print(f"\n  Creating {len(to_verify)} verification albums...")
+    for i, c in enumerate(to_verify):
+        date_str = c["assets"][0]["localDateTime"][:10]
+        name = (f"{VERIFY_PREFIX}{i+1:03d} | "
+                f"{date_str} | "
+                f"{len(c['assets'])}f | "
+                f"cv={c['cv_gap']:.2f}")
+
+        album = requests.post(f"{BASE_URL}/api/albums", headers=headers,
+                              json={"albumName": name}).json()
+        if "id" not in album:
+            print(f"    [!] Failed: {name}")
+            continue
+        album_id = album["id"]
+        
+        requests.put(f"{BASE_URL}/api/albums/{album_id}/assets",
+                     headers=headers,
+                     json={"ids": [a["id"] for a in c["assets"]]})
+        print(f"    ✓ {name}")
 
 def cleanup_verify_albums():
-    """Deletes all albums starting with the VERIFY_PREFIX."""
-    print(f"Fetching albums to clean up (prefix: '{VERIFY_PREFIX}')...")
+    print(f"\n  Cleaning up albums with prefix '{VERIFY_PREFIX}'...")
     albums = requests.get(f"{BASE_URL}/api/albums", headers=headers).json()
-    to_delete = [a for a in albums if a["albumName"].startswith(VERIFY_PREFIX)]
-    if not to_delete:
-        print("No verification albums found.")
+    targets = [a for a in albums if a["albumName"].startswith(VERIFY_PREFIX)]
+    if not targets:
+        print("  No verification albums found.")
         return
-    print(f"Deleting {len(to_delete)} verification albums...")
-    for a in to_delete:
+    for a in targets:
         requests.delete(f"{BASE_URL}/api/albums/{a['id']}", headers=headers)
-        print(f"  ✓ Deleted: {a['albumName']}")
-    print("Cleanup complete.")
+    print(f"  Deleted {len(targets)} albums.")
 
+def apply_stacks(candidates):
+    print(f"\n  Stacking {len(candidates)} sequences...")
+    for i, c in enumerate(candidates):
+        ids = [a["id"] for a in c["assets"]]
+        resp = requests.post(f"{BASE_URL}/api/stacks", headers=headers,
+                             json={"assetIds": ids})
+        status = "✓" if resp.status_code == 201 else f"✗ {resp.status_code}"
+        print(f"  [{i+1:3d}] {status}  {len(ids)}f @ {c['assets'][0]['localDateTime'][:19]}")
+    print("\n  Done!")
 
-# Phase 1: Gathering groups
-sequences = []
+# --- Wizard ---
 
-if DETECTION_SOURCE == "duplicates":
-    print("Fetching AI duplicate groups...")
-    resp = requests.get(f"{BASE_URL}/api/duplicates", headers=headers).json()
-    for group in resp:
-        sequences.append(group["assets"])
-else:
-    print("Fetching all assets and performing gap-based grouping...")
-    all_assets = []
-    page = 1
+def wizard():
+    header("Immich Timelapse Stacker", "Wizard mode")
+
+    # Load defaults from env
+    min_frames = int(os.getenv("TIMELAPSE_MIN_FRAMES") or 10)
+    max_cv_gap = float(os.getenv("TIMELAPSE_MAX_CV_GAP") or 0.35)
+    max_cv_size = float(os.getenv("TIMELAPSE_MAX_CV_SIZE") or 0.1)
+    min_span = int(os.getenv("TIMELAPSE_MIN_REQD_SPAN_SECONDS") or 5)
+    detection_source = os.getenv("TIMELAPSE_DETECTION_SOURCE") or "duplicates"
+    max_gap_seconds_search = int(os.getenv("TIMELAPSE_MAX_GAP_SECONDS") or 60)
+    filter_location = os.getenv("TIMELAPSE_FILTER_LOCATION", "false").lower() == "true"
+
     while True:
-        resp = requests.post(
-            f"{BASE_URL}/api/search/metadata",
-            headers=headers,
-            json={"size": 1000, "page": page},
-        ).json()
-        items = resp.get("assets", {}).get("items", [])
-        all_assets.extend(items)
-        if not resp["assets"].get("nextPage"):
-            break
-        page += 1
+        # Step 1 — Filters
+        header("Step 1 — Tune filters",
+               f"SOURCE={detection_source}  MIN_FRAMES={min_frames}  "
+               f"CV_GAP={max_cv_gap}  CV_SIZE={max_cv_size}  SPAN={min_span}s")
 
-    unstacked = [a for a in all_assets if not a.get("stack")]
-    unstacked.sort(key=lambda a: a["localDateTime"])
+        choice = ask("Options:", {"1": "Change filters", "2": "Run with current", "Q": "Quit"})
 
-    if unstacked:
-        current = [unstacked[0]]
-        for prev, curr in zip(unstacked, unstacked[1:]):
-            gap = (
-                datetime.fromisoformat(curr["localDateTime"])
-                - datetime.fromisoformat(prev["localDateTime"])
-            ).total_seconds()
-            if gap <= MAX_GAP_SECONDS:
-                current.append(curr)
-            else:
-                sequences.append(current)
-                current = [curr]
-        sequences.append(current)
+        if choice == "Q":
+            return
 
-# Phase 2: Filtering
-print(f"Analyzing {len(sequences)} potential groups...")
-timelapses = []
-for seq in sequences:
-    valid, stats = is_timelapse(seq)
-    if valid:
-        timelapses.append((seq, stats))
+        if choice == "1":
+            src_choice = ask("Detection Source:", {"1": "AI Duplicates (Fast)", "2": "Gap-based Search (Slow)"})
+            detection_source = "duplicates" if src_choice == "1" else "search"
+            
+            min_frames = ask_int("MIN_FRAMES (min frames per sequence)", min_frames)
+            
+            # Use fallbacks for float inputs to prevent crashes on empty input
+            raw_gap = input(f"  MAX_CV_GAP (regularity, 0-1) [{max_cv_gap}]: ").strip()
+            max_cv_gap = float(raw_gap) if raw_gap else max_cv_gap
+            
+            raw_size = input(f"  MAX_CV_SIZE (filesize, 0-1) [{max_cv_size}]: ").strip()
+            max_cv_size = float(raw_size) if raw_size else max_cv_size
+            
+            min_span = ask_int("MIN_SPAN (minimum total seconds)", min_span)
+            if detection_source == "search":
+                max_gap_seconds_search = ask_int("MAX_GAP_SECONDS (search gap)", max_gap_seconds_search)
+            filter_location = ask("Filter by Location?", {"Y": "Yes", "N": "No"}).upper() == "Y"
+            continue
 
-print(f"\nFound {len(timelapses)} timelapse candidates:\n")
-# Sort by CV descending to show most 'suspicious' / irregular ones first for verification
-timelapses.sort(key=lambda x: x[1]["cv_gap"], reverse=True)
+        candidates = get_candidates(min_frames, max_cv_gap, max_cv_size, min_span, filter_location, detection_source, max_gap_seconds_search)
 
-for i, (seq, stats) in enumerate(timelapses):
-    start = seq[0]["localDateTime"]
-    print(
-        f"  [{i + 1}] {len(seq):4d} frames | {start[:19]} | span {stats['span']:.0f}s | "
-        f"cv_gap={stats['cv_gap']:.3f} | cv_size={stats['cv_size']:.3f}"
-    )
+        if not candidates:
+            print("\n  [!] No candidates found with current filters.")
+            continue
 
-# Phase 3: Stacking / Verification
-if DRY_RUN:
-    print(f"\nDRY RUN — {len(timelapses)} stacks would be created.")
+        header("Step 2 — Verify", f"{len(candidates)} candidates found")
+        
+        # Display the candidate table before asking for verification
+        print(f"{'#':>3} | {'Frames':>6} | {'Timestamp':19} | {'Span':>6} | {'CV Gap':>7} | {'CV Size':>7}")
+        print(f"{'─'*3}─┼─{'─'*6}─┼─{'─'*19}─┼─{'─'*6}─┼─{'─'*7}─┼─{'─'*7}")
+        
+        # Sort by CV descending to show most 'suspicious' / irregular ones first
+        candidates.sort(key=lambda x: x["cv_gap"], reverse=True)
+        
+        for i, c in enumerate(candidates):
+            start = c["assets"][0]["localDateTime"]
+            print(f"  [{i+1:3d}] {len(c['assets']):6d} | {start[:19]} | {c['span']:5.0f}s | {c['cv_gap']:7.3f} | {c['cv_size']:7.3f}")
 
-    if VERIFY_MODE and timelapses:
-        print(f"\nCreating {min(VERIFY_COUNT, len(timelapses))} verification albums...\n")
-        for i, (seq, stats) in enumerate(timelapses[:VERIFY_COUNT]):
-            date_str = seq[0]["localDateTime"][:10]
-            name = (f"{VERIFY_PREFIX}{i+1:03d} | "
-                    f"{date_str} | "
-                    f"{len(seq)}f | "
-                    f"cv={stats['cv_gap']:.2f}")
+        choice = ask("Verify candidates?", {
+            "1": f"Create verification albums (max {min(20, len(candidates))})",
+            "2": "Skip to stacking",
+            "3": "Back to filters",
+            "4": "Abort"
+        })
 
-            # Create album
-            album = requests.post(f"{BASE_URL}/api/albums", headers=headers,
-                                  json={"albumName": name}).json()
-            if "id" not in album:
-                print(f"  [!] Failed to create album: {name} (Response: {album})")
+        if choice == "4":
+            return
+        if choice == "3":
+            continue
+        
+        if choice == "1":
+            count = ask_int("How many to verify", min(20, len(candidates)))
+            create_verify_albums(candidates, count)
+            
+            # Open browser
+            webbrowser.open(f"{BASE_URL}/albums")
+            header("Step 3 — Review in Immich")
+            input("  Albums created. Review them in Immich, then press Enter to continue...")
+            
+            choice = ask("Step 4 — Finalize", {
+                "1": f"Stack all {len(candidates)} candidates",
+                "2": "Restart (re-tune filters)",
+                "3": "Abort (clean up and exit)"
+            })
+            
+            cleanup_verify_albums()
+            
+            if choice == "3":
+                return
+            if choice == "2":
                 continue
-            album_id = album["id"]
 
-            # Add frames
-            requests.put(f"{BASE_URL}/api/albums/{album_id}/assets",
-                         headers=headers,
-                         json={"ids": [a["id"] for a in seq]})
+        apply_stacks(candidates)
+        break
 
-            url = f"{BASE_URL}/albums/{album_id}"
-            print(f"  [{i+1:3d}] {name}")
-            print(f"         {url}\n")
-
-        print(f"Review the albums in Immich, then run cleanup to delete them.")
-        print(f"To clean up, uncomment 'cleanup_verify_albums()' at the bottom of the script.")
-
-    else:
-        print(f"Spot-check the first {VERIFY_COUNT} candidates in Immich:\n")
-        for i, (seq, stats) in enumerate(timelapses[:VERIFY_COUNT]):
-            # Link to first frame of each group
-            asset_id = seq[0]["id"]
-            start = seq[0]["localDateTime"]
-            print(f"  [{i + 1}] {len(seq):4d} frames | {start[:19]} | "
-                  f"cv_gap={stats['cv_gap']:.3f} | cv_size={stats['cv_size']:.3f} | span {stats['span']:.0f}s")
-            print(f"        {BASE_URL}/photos/{asset_id}\n")
-
-    print("\nSet DRY_RUN = False in the script to apply final stacking.")
-else:
-    print(f"\nStacking {len(timelapses)} sequences...")
-    for i, (seq, stats) in enumerate(timelapses):
-        ids = [a["id"] for a in seq]
-        resp = requests.post(
-            f"{BASE_URL}/api/stacks", headers=headers, json={"assetIds": ids}
-        )
-        status = "✓" if resp.status_code == 201 else f"✗ ({resp.status_code})"
-        print(
-            f"  [{i + 1}] {status} {len(ids)} frames @ {seq[0]['localDateTime'][:19]}"
-        )
-    print("Done!")
-
-# --- Maintenance ---
-# Uncomment and run to delete all albums with the VERIFY_PREFIX:
-# cleanup_verify_albums()
+if __name__ == "__main__":
+    wizard()

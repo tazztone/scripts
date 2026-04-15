@@ -1,45 +1,58 @@
-# Immich Timelapse Stacking
+# Immich Timelapse Stacker
 
-This script detects potential timelapse sequences in your Immich timeline and groups them into [stacks](https://immich.app/docs/api/create-stack/).
+This script provides an interactive terminal wizard to detect potential timelapse sequences in your Immich timeline and group them into [stacks](https://immich.app/docs/api/create-stack/).
 
-## How it works (V2)
+## How it works
 
-The script supports two detection methods, configurable via `TIMELAPSE_DETECTION_SOURCE`:
+The script runs as a guided CLI wizard with four main steps:
 
-1.  **`duplicates` mode (Default)**: Uses Immich's AI-detected duplicate groups as the starting point. This is fast and accurate for high-frame-rate timelapses (bursts, hyperlapses) where frames look similar.
-2.  **`search` mode**: Scans your entire library and groups assets by capture time gaps. This is slower but essential for "slow" timelapses (clouds, construction) where frames look too different for AI detection.
+### 1. Tune Filters
+You can interactively adjust the detection parameters to fit your library:
+- **Detection Source**: Choose between `duplicates` (AI clusters, fast) and `search` (Time-gap scanning, slow).
+- **MIN_FRAMES**: Minimum assets in a sequence.
+- **MAX_CV_GAP**: Capture regularity (0.35 means 35% variation allowed).
+- **MAX_CV_SIZE**: File size consistency (0.10 means 10% variation allowed).
+- **MIN_SPAN**: Minimum total duration of the sequence in seconds.
 
-After gathering candidates, the script applies advanced statistical filters to eliminate "random similar photos":
-- **Regularity**: Checks if frames were captured at consistent intervals (using Coefficient of Variation).
-- **Duration**: Ensures the sequence spans a minimum time (to exclude sub-second bursts).
-- **Consistency**: Compares file sizes to ensure frames were shot with the same camera/settings.
-- **Location (Optional)**: Ensures all frames were shot from the same physical spot.
+### 2. Verify Candidates
+Once candidates are found, the wizard offers to create **temporary verification albums** in Immich. These albums are prefixed with `_VERIFY_` and are sorted "worst-first" (highest `cv_gap`) so you review the most suspicious ones first.
+
+### 3. Review in Immich
+If you choose to verify, the script will automatically attempt to open your browser to the Immich albums page. You can visually inspect the frames side-by-side to confirm they belong in a stack.
+
+### 4. Finalize
+Choose to:
+- **Stack all**: Converts all identified candidates into Immich stacks.
+- **Restart**: Go back to Step 1 to re-tune filters if you saw false positives.
+- **Abort**: Clean up verification albums and exit without making changes.
 
 ## Config
 
-Configuration is handled via environment variables in the `.env` file:
+Initial defaults are handled via environment variables in your `.env` file:
 
 - `IMMICH_BASE_URL` - Your Immich server URL.
 - `IMMICH_API_KEY` - Your Immich API key.
-- `TIMELAPSE_DETECTION_SOURCE` - `duplicates` (AI) or `search` (Time-gap).
-- `TIMELAPSE_MIN_FRAMES` - Minimum frames to consider a timelapse (default: `10`).
-- `TIMELAPSE_MAX_GAP_SECONDS` - (`search` mode only) Max seconds allowed between frames (default: `60`).
-- `TIMELAPSE_MIN_REQD_SPAN_SECONDS` - Minimum total sequence duration in seconds (default: `5`).
+- `TIMELAPSE_DETECTION_SOURCE` - Default mode (`duplicates` or `search`).
+- `TIMELAPSE_MIN_FRAMES` - Default min frames (default: `10`).
+- `TIMELAPSE_MAX_GAP_SECONDS` - Default search gap (default: `60`).
+- `TIMELAPSE_MIN_REQD_SPAN_SECONDS` - Default min span (default: `5`).
 - `TIMELAPSE_MAX_CV_GAP` - Max variation in timing intervals as a ratio (default: `0.35`).
 - `TIMELAPSE_MAX_CV_SIZE` - Max variation in file sizes as a ratio (default: `0.10`).
-- `TIMELAPSE_FILTER_LOCATION` - Set to `true` to require frames to be in the same spot (default: `false`).
+- `TIMELAPSE_FILTER_LOCATION` - Set to `true` to require frames to be in the same spot by default (default: `false`).
 
 ## Usage
 
-1.  **Dry Run**: By default, `DRY_RUN = True` is set. Run it to preview candidates:
-    ```bash
-    python3 timelapse_stacking.py
-    ```
-2.  **Verify**: The dry run output now includes **direct Immich links** for the first 10 candidates. Click them to spot-check your library.
-3.  **Apply**: Set `DRY_RUN = False` inside `timelapse_stacking.py` and run again.
+Run the script from the project directory:
+
+```bash
+cd python/immich-api
+python3 timelapse_stacking.py
+```
+
+Follow the prompts in your terminal. The script will handle the browser opening and the temporary album cleanup automatically.
 
 ## Notes
 
+- **Auto-Cleanup**: Verification albums are automatically deleted before you perform the final stacking or before the script exits on abort.
+- **Browser**: If your terminal environment doesn't support a browser, the `webbrowser` call will fail silently; you can just open the UI manually.
 - **Timestamps**: Uses `localDateTime` for all interval calculations to match the Immich timeline.
-- **Sorting**: Assets are always sorted chronologically before processing.
-- **Batching**: Large groups are stacked using the first asset in the sequence as the cover.
