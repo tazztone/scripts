@@ -226,3 +226,4 @@ Thumbs.db
 sh/testing/output/
 .vscode/settings.json
 .kiro/
+python/immich-api/timelapse_stacking_last_run.json
