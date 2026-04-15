@@ -10,7 +10,9 @@ load_dotenv()
 BASE_URL = os.getenv("IMMICH_BASE_URL") or "http://localhost:2283"
 API_KEY = os.getenv("IMMICH_API_KEY") or "YOUR_API_KEY_HERE"
 DRY_RUN = True  # ← Set to False to actually create stacks
-VERIFY_COUNT = 20  # How many candidates to show links for in dry run
+VERIFY_MODE = True    # Creates temporary albums for manual review
+VERIFY_COUNT = 20     # How many candidates to create albums for (highest CV first)
+VERIFY_PREFIX = "_VERIFY_"  # Prefix for temporary review albums
 
 # V2 configuration
 DETECTION_SOURCE = os.getenv("TIMELAPSE_DETECTION_SOURCE") or "duplicates"
@@ -83,6 +85,21 @@ def is_timelapse(assets):
     return (ok_span and ok_regular and ok_size and ok_loc), stats
 
 
+def cleanup_verify_albums():
+    """Deletes all albums starting with the VERIFY_PREFIX."""
+    print(f"Fetching albums to clean up (prefix: '{VERIFY_PREFIX}')...")
+    albums = requests.get(f"{BASE_URL}/api/albums", headers=headers).json()
+    to_delete = [a for a in albums if a["albumName"].startswith(VERIFY_PREFIX)]
+    if not to_delete:
+        print("No verification albums found.")
+        return
+    print(f"Deleting {len(to_delete)} verification albums...")
+    for a in to_delete:
+        requests.delete(f"{BASE_URL}/api/albums/{a['id']}", headers=headers)
+        print(f"  ✓ Deleted: {a['albumName']}")
+    print("Cleanup complete.")
+
+
 # Phase 1: Gathering groups
 sequences = []
 
@@ -133,6 +150,9 @@ for seq in sequences:
         timelapses.append((seq, stats))
 
 print(f"\nFound {len(timelapses)} timelapse candidates:\n")
+# Sort by CV descending to show most 'suspicious' / irregular ones first for verification
+timelapses.sort(key=lambda x: x[1]["cv_gap"], reverse=True)
+
 for i, (seq, stats) in enumerate(timelapses):
     start = seq[0]["localDateTime"]
     print(
@@ -140,20 +160,50 @@ for i, (seq, stats) in enumerate(timelapses):
         f"cv_gap={stats['cv_gap']:.3f} | cv_size={stats['cv_size']:.3f}"
     )
 
-# Phase 3: Stacking
+# Phase 3: Stacking / Verification
 if DRY_RUN:
     print(f"\nDRY RUN — {len(timelapses)} stacks would be created.")
-    print(f"Spot-check the first {VERIFY_COUNT} candidates in Immich:\n")
-    for i, (seq, stats) in enumerate(timelapses[:VERIFY_COUNT]):
-        # Link to first frame of each group
-        asset_id = seq[0]["id"]
-        start = seq[0]["localDateTime"]
-        print(
-            f"  [{i + 1}] {len(seq):4d} frames | {start[:19]} | "
-            f"cv_gap={stats['cv_gap']:.3f} | cv_size={stats['cv_size']:.3f} | span {stats['span']:.0f}s"
-        )
-        print(f"        {BASE_URL}/photos/{asset_id}\n")
-    print("Set DRY_RUN = False in the script to apply.")
+
+    if VERIFY_MODE and timelapses:
+        print(f"\nCreating {min(VERIFY_COUNT, len(timelapses))} verification albums...\n")
+        for i, (seq, stats) in enumerate(timelapses[:VERIFY_COUNT]):
+            date_str = seq[0]["localDateTime"][:10]
+            name = (f"{VERIFY_PREFIX}{i+1:03d} | "
+                    f"{date_str} | "
+                    f"{len(seq)}f | "
+                    f"cv={stats['cv_gap']:.2f}")
+
+            # Create album
+            album = requests.post(f"{BASE_URL}/api/albums", headers=headers,
+                                  json={"albumName": name}).json()
+            if "id" not in album:
+                print(f"  [!] Failed to create album: {name} (Response: {album})")
+                continue
+            album_id = album["id"]
+
+            # Add frames
+            requests.put(f"{BASE_URL}/api/albums/{album_id}/assets",
+                         headers=headers,
+                         json={"ids": [a["id"] for a in seq]})
+
+            url = f"{BASE_URL}/albums/{album_id}"
+            print(f"  [{i+1:3d}] {name}")
+            print(f"         {url}\n")
+
+        print(f"Review the albums in Immich, then run cleanup to delete them.")
+        print(f"To clean up, uncomment 'cleanup_verify_albums()' at the bottom of the script.")
+
+    else:
+        print(f"Spot-check the first {VERIFY_COUNT} candidates in Immich:\n")
+        for i, (seq, stats) in enumerate(timelapses[:VERIFY_COUNT]):
+            # Link to first frame of each group
+            asset_id = seq[0]["id"]
+            start = seq[0]["localDateTime"]
+            print(f"  [{i + 1}] {len(seq):4d} frames | {start[:19]} | "
+                  f"cv_gap={stats['cv_gap']:.3f} | cv_size={stats['cv_size']:.3f} | span {stats['span']:.0f}s")
+            print(f"        {BASE_URL}/photos/{asset_id}\n")
+
+    print("\nSet DRY_RUN = False in the script to apply final stacking.")
 else:
     print(f"\nStacking {len(timelapses)} sequences...")
     for i, (seq, stats) in enumerate(timelapses):
@@ -166,3 +216,7 @@ else:
             f"  [{i + 1}] {status} {len(ids)} frames @ {seq[0]['localDateTime'][:19]}"
         )
     print("Done!")
+
+# --- Maintenance ---
+# Uncomment and run to delete all albums with the VERIFY_PREFIX:
+# cleanup_verify_albums()
