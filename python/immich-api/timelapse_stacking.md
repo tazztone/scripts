@@ -25,18 +25,18 @@ Configuration is handled via environment variables in the `.env` file:
 - `TIMELAPSE_MIN_FRAMES` - Minimum frames to consider a timelapse (default: `10`).
 - `TIMELAPSE_MAX_GAP_SECONDS` - (`search` mode only) Max seconds allowed between frames (default: `60`).
 - `TIMELAPSE_MIN_REQD_SPAN_SECONDS` - Minimum total sequence duration in seconds (default: `5`).
-- `TIMELAPSE_MAX_CV_GAP` - Max variation in timing intervals as a ratio (default: `0.5` = 50% variation allowed).
-- `TIMELAPSE_MAX_CV_SIZE` - Max variation in file sizes as a ratio (default: `0.2` = 20% variation allowed).
+- `TIMELAPSE_MAX_CV_GAP` - Max variation in timing intervals as a ratio (default: `0.35`).
+- `TIMELAPSE_MAX_CV_SIZE` - Max variation in file sizes as a ratio (default: `0.10`).
 - `TIMELAPSE_FILTER_LOCATION` - Set to `true` to require frames to be in the same spot (default: `false`).
 
 ## Usage
 
-1.  **Dry Run**: By default, `DRY_RUN = True` is set in the script. Run it to preview candidates and see their CV values:
+1.  **Dry Run**: By default, `DRY_RUN = True` is set. Run it to preview candidates:
     ```bash
     python3 timelapse_stacking.py
     ```
-2.  **Verify**: Log entries like `cv_gap=0.040 | cv_size=0.020` indicate very consistent sequences.
-3.  **Apply**: Set `DRY_RUN = False` inside `timelapse_stacking.py` and run again to create the stacks.
+2.  **Verify**: The dry run output now includes **direct Immich links** for the first 10 candidates. Click them to spot-check your library.
+3.  **Apply**: Set `DRY_RUN = False` inside `timelapse_stacking.py` and run again.
 
 ## Notes
 
