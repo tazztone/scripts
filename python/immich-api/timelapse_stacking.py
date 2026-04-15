@@ -1,4 +1,5 @@
 import os
+import json
 import webbrowser
 import requests
 import statistics
@@ -11,6 +12,8 @@ load_dotenv()
 BASE_URL = os.getenv("IMMICH_BASE_URL") or "http://localhost:2283"
 API_KEY = os.getenv("IMMICH_API_KEY") or "YOUR_API_KEY_HERE"
 VERIFY_PREFIX = "_VERIFY_"
+
+LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "timelapse_stacking_last_run.json")
 
 headers = {"x-api-key": API_KEY, "Content-Type": "application/json"}
 
@@ -138,7 +141,43 @@ def get_candidates(min_frames, max_cv_gap, max_cv_size, min_span, filter_locatio
                 "cv_gap": cv_gap,
                 "cv_size": cv_size
             })
-    return candidates
+            
+    # Merge overlapping groups into unified sequences
+    candidates.sort(key=lambda c: c["cv_gap"])
+    merged = []
+
+    for c in candidates:
+        c_ids = set(a["id"] for a in c["assets"])
+        merged_into = None
+
+        for kept in merged:
+            kept_ids = set(a["id"] for a in kept["assets"])
+            intersection = len(c_ids & kept_ids)
+            overlap = intersection / min(len(c_ids), len(kept_ids)) if intersection else 0
+            if overlap >= 0.80:
+                merged_into = kept
+                break
+
+        if merged_into is not None:
+            # Union: add any frames not already in the kept group
+            existing_ids = {a["id"] for a in merged_into["assets"]}
+            new_frames = [a for a in c["assets"] if a["id"] not in existing_ids]
+            if new_frames:
+                merged_into["assets"].extend(new_frames)
+                # Re-sort chronologically after merge
+                merged_into["assets"].sort(key=lambda a: a["localDateTime"])
+                # Recalculate stats for the merged sequence
+                times = [datetime.fromisoformat(a["localDateTime"]) for a in merged_into["assets"]]
+                gaps = [(times[i+1]-times[i]).total_seconds() for i in range(len(times)-1)]
+                merged_into["span"] = (times[-1]-times[0]).total_seconds()
+                merged_into["cv_gap"] = statistics.stdev(gaps)/statistics.mean(gaps) if len(gaps) > 1 else 0
+                sizes = [a.get("exifInfo",{}).get("fileSizeInByte",0) for a in merged_into["assets"]]
+                sizes = [s for s in sizes if s]
+                merged_into["cv_size"] = statistics.stdev(sizes)/statistics.mean(sizes) if len(sizes) > 1 else 0
+        else:
+            merged.append(c)
+
+    return merged
 
 # --- Lifecycle Actions ---
 
@@ -178,13 +217,51 @@ def cleanup_verify_albums():
 
 def apply_stacks(candidates):
     print(f"\n  Stacking {len(candidates)} sequences...")
+    run_log = []
     for i, c in enumerate(candidates):
         ids = [a["id"] for a in c["assets"]]
         resp = requests.post(f"{BASE_URL}/api/stacks", headers=headers,
                              json={"assetIds": ids})
-        status = "✓" if resp.status_code == 201 else f"✗ {resp.status_code}"
-        print(f"  [{i+1:3d}] {status}  {len(ids)}f @ {c['assets'][0]['localDateTime'][:19]}")
+        if resp.status_code in (200, 201):
+            stack_id = resp.json().get("id")
+            run_log.append({"stack_id": stack_id, "asset_ids": ids,
+                            "date": c["assets"][0]["localDateTime"][:19],
+                            "frames": len(ids)})
+            print(f"  [{i+1:3d}] ✓  {len(ids)}f @ {c['assets'][0]['localDateTime'][:19]}")
+        else:
+            print(f"  [{i+1:3d}] ✗  {resp.status_code}")
+
+    with open(LOG_PATH, "w") as f:
+        json.dump(run_log, f, indent=2)
+    print(f"\n  Run log saved → {LOG_PATH}")
     print("\n  Done!")
+
+def unstack_last_run():
+    if not os.path.exists(LOG_PATH):
+        print("\n  No run log found. Nothing to unstack.")
+        return
+
+    with open(LOG_PATH) as f:
+        run_log = json.load(f)
+
+    print(f"\n  Unstacking {len(run_log)} stacks from last run...")
+    failed = []
+    for i, entry in enumerate(run_log):
+        resp = requests.delete(f"{BASE_URL}/api/stacks/{entry['stack_id']}",
+                               headers=headers)
+        if resp.status_code == 204:
+            print(f"  [{i+1:3d}] ✓  {entry['frames']}f @ {entry['date']}")
+        else:
+            failed.append(entry)
+            print(f"  [{i+1:3d}] ✗  {resp.status_code}  {entry['frames']}f @ {entry['date']}")
+
+    if failed:
+        with open(LOG_PATH, "w") as f:
+            json.dump(failed, f, indent=2)
+        print(f"\n  {len(failed)} stacks failed to delete — log updated with remaining entries.")
+    else:
+        os.remove(LOG_PATH)
+        print("\n  Log cleared. You can now re-run the wizard.")
 
 # --- Wizard ---
 
@@ -195,7 +272,7 @@ def wizard():
     min_frames = int(os.getenv("TIMELAPSE_MIN_FRAMES") or 10)
     max_cv_gap = float(os.getenv("TIMELAPSE_MAX_CV_GAP") or 0.35)
     max_cv_size = float(os.getenv("TIMELAPSE_MAX_CV_SIZE") or 0.1)
-    min_span = int(os.getenv("TIMELAPSE_MIN_REQD_SPAN_SECONDS") or 5)
+    min_span = int(os.getenv("TIMELAPSE_MIN_REQD_SPAN_SECONDS") or 15)
     detection_source = os.getenv("TIMELAPSE_DETECTION_SOURCE") or "duplicates"
     max_gap_seconds_search = int(os.getenv("TIMELAPSE_MAX_GAP_SECONDS") or 60)
     filter_location = os.getenv("TIMELAPSE_FILTER_LOCATION", "false").lower() == "true"
@@ -206,10 +283,19 @@ def wizard():
                f"SOURCE={detection_source}  MIN_FRAMES={min_frames}  "
                f"CV_GAP={max_cv_gap}  CV_SIZE={max_cv_size}  SPAN={min_span}s")
 
-        choice = ask("Options:", {"1": "Change filters", "2": "Run with current", "Q": "Quit"})
+        choice = ask("Options:", {
+            "1": "Change filters", 
+            "2": "Run with current", 
+            "U": "Unstack last run and start fresh", 
+            "Q": "Quit"
+        })
 
         if choice == "Q":
             return
+            
+        if choice == "U":
+            unstack_last_run()
+            continue
 
         if choice == "1":
             src_choice = ask("Detection Source:", {"1": "AI Duplicates (Fast)", "2": "Gap-based Search (Slow)"})

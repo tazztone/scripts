@@ -22,9 +22,13 @@ If you choose to verify, the script will automatically attempt to open your brow
 
 ### 4. Finalize
 Choose to:
-- **Stack all**: Converts all identified candidates into Immich stacks.
+- **Stack all**: Converts all identified candidates into Immich stacks. A local `timelapse_stacking_last_run.json` record is saved.
 - **Restart**: Go back to Step 1 to re-tune filters if you saw false positives.
 - **Abort**: Clean up verification albums and exit without making changes.
+
+### 5. Undo / Re-run (Optional)
+If you stacked sequences and later realized your filters were too loose, you can unstack the last run. Restart the script and choose **[U] Unstack last run**. The script reads the `timelapse_stacking_last_run.json` log, deletes the stacks it created, and allows you to tune your filters again.
+
 
 ## Config
 
@@ -35,7 +39,7 @@ Initial defaults are handled via environment variables in your `.env` file:
 - `TIMELAPSE_DETECTION_SOURCE` - Default mode (`duplicates` or `search`).
 - `TIMELAPSE_MIN_FRAMES` - Default min frames (default: `10`).
 - `TIMELAPSE_MAX_GAP_SECONDS` - Default search gap (default: `60`).
-- `TIMELAPSE_MIN_REQD_SPAN_SECONDS` - Default min span (default: `5`).
+- `TIMELAPSE_MIN_REQD_SPAN_SECONDS` - Default min span (default: `15`).
 - `TIMELAPSE_MAX_CV_GAP` - Max variation in timing intervals as a ratio (default: `0.35`).
 - `TIMELAPSE_MAX_CV_SIZE` - Max variation in file sizes as a ratio (default: `0.10`).
 - `TIMELAPSE_FILTER_LOCATION` - Set to `true` to require frames to be in the same spot by default (default: `false`).
