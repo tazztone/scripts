@@ -235,6 +235,49 @@ def apply_stacks(candidates):
         json.dump(run_log, f, indent=2)
     print(f"\n  Run log saved → {LOG_PATH}")
     print("\n  Done!")
+    return True
+
+def create_index_album(candidates, mode="index"):
+    album_name = "⏱ Timelapse Stacks"
+    print(f"\n  Preparing permanent album: '{album_name}' ({mode} mode)...")
+    
+    # Check if album already exists
+    albums = requests.get(f"{BASE_URL}/api/albums", headers=headers).json()
+    existing = [a for a in albums if a["albumName"] == album_name]
+    
+    if existing:
+        album_id = existing[0]["id"]
+        print(f"    Existing album found: {album_id}")
+    else:
+        album = requests.post(f"{BASE_URL}/api/albums", headers=headers,
+                              json={"albumName": album_name}).json()
+        if "id" not in album:
+            print(f"    [!] Failed to create album: {album}")
+            return
+        album_id = album["id"]
+        print(f"    ✓ Created new album: {album_id}")
+
+    if mode == "collection":
+        # Add ALL frames
+        ids_to_add = []
+        for c in candidates:
+            ids_to_add.extend([a["id"] for a in c["assets"]])
+    else:
+        # Index covers only (first asset of each sequence)
+        ids_to_add = [c["assets"][0]["id"] for c in candidates]
+    
+    print(f"    Adding {len(ids_to_add)} assets to album...")
+    
+    # Batch add (Immich handles duplicates automatically)
+    for i in range(0, len(ids_to_add), 500):
+        batch = ids_to_add[i:i+500]
+        resp = requests.put(f"{BASE_URL}/api/albums/{album_id}/assets",
+                            headers=headers,
+                            json={"ids": batch})
+        if resp.status_code != 200:
+            print(f"    [!] Failed to add batch {i//500 + 1}: {resp.status_code}")
+    
+    print(f"    ✓ Album updated: {BASE_URL}/albums/{album_id}")
 
 def unstack_last_run():
     if not os.path.exists(LOG_PATH):
@@ -260,6 +303,18 @@ def unstack_last_run():
             json.dump(failed, f, indent=2)
         print(f"\n  {len(failed)} stacks failed to delete — log updated with remaining entries.")
     else:
+        # Check for permanent index album to offer cleanup
+        albums = requests.get(f"{BASE_URL}/api/albums", headers=headers).json()
+        targets = [a for a in albums if a["albumName"] == "⏱ Timelapse Stacks"]
+        if targets:
+            print(f"\n  Found permanent album '{targets[0]['albumName']}'")
+            if ask("Delete this album as well?", {"Y": "Yes", "N": "No"}) == "Y":
+                 resp = requests.delete(f"{BASE_URL}/api/albums/{targets[0]['id']}", headers=headers)
+                 if resp.status_code == 204:
+                     print("    ✓ Album deleted.")
+                 else:
+                     print(f"    ✗ Failed to delete album: {resp.status_code}")
+
         os.remove(LOG_PATH)
         print("\n  Log cleared. You can now re-run the wizard.")
 
@@ -369,7 +424,18 @@ def wizard():
             if choice == "2":
                 continue
 
-        apply_stacks(candidates)
+        if apply_stacks(candidates):
+            header("Step 5 — Album Creation (Optional)")
+            choice = ask("What kind of album would you like to create?", {
+                "1": "Index Mode (Covers only) - RECOMMENDED",
+                "2": "Collection Mode (ALL frames)",
+                "3": "Skip / No album"
+            })
+            if choice == "1":
+                create_index_album(candidates, mode="index")
+            elif choice == "2":
+                create_index_album(candidates, mode="collection")
+        
         break
 
 if __name__ == "__main__":
