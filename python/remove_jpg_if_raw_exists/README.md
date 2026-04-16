@@ -31,6 +31,10 @@ With `uv` installed, run directly without environment setup:
 uv run remove_jpg_if_raw_exists.py <directory> [options]
 ```
 
+example command:
+`uv run remove_jpg_if_raw_exists.py "/mnt/wd14tb/_MY PHOTOS and VIDEOS/2026" --log remove_2026.log`
+
+
 ### Options
 
 | Flag | Description |
