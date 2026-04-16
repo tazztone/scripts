@@ -18,6 +18,7 @@ import logging
 import argparse
 import shutil
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logging.getLogger("exifread").setLevel(logging.ERROR)  # suppress MakerNote parse noise
 
@@ -79,6 +80,7 @@ MAKER_NOTE_PREFIXES = (
     "Samsung ",
     "Sigma ",
 )
+MAKER_SET = frozenset(MAKER_NOTE_PREFIXES)
 
 
 def parse_args():
@@ -142,8 +144,11 @@ def is_valid_raw(path: Path, min_size: int) -> bool:
 def read_exif(path: Path) -> dict:
     try:
         with open(path, "rb") as f:
-            # We need details=True to see MakerNote tags, which are stripped by editors.
-            return exifread.process_file(f, details=True)
+            # We must use details=True to see MakerNote tags, which are stripped by editors.
+            # stop_tag stops parsing once we have the critical safety tags.
+            return exifread.process_file(
+                f, details=True, stop_tag="EXIF DateTimeOriginal"
+            )
     except Exception:
         return {}
 
@@ -168,12 +173,10 @@ def _check_exif(jpg_path: Path) -> tuple[bool, str]:
 
     # --- Check 3: MakerNotes presence (camera-agnostic) ---
     # Captures both decoded tags (e.g., 'Sony Quality') and raw blobs (e.g., 'EXIF MakerNote').
-    maker_tags = [
-        k
-        for k in tags
-        if any(k.startswith(p) for p in MAKER_NOTE_PREFIXES) or "MakerNote" in k
-    ]
-    if not maker_tags:
+    has_maker = any(
+        any(k.startswith(p) for p in MAKER_SET) or "MakerNote" in k for k in tags
+    )
+    if not has_maker:
         return False, "no maker notes block — likely editor export"
 
     # --- Check 4: DateTimeOriginal must exist ---
@@ -240,42 +243,50 @@ def scan_and_remove(root: Path, trash_dir: Path | None, args):
     logging.info(f"Trash    : {trash_dir or 'hard delete'}")
     logging.info("-" * 60)
 
-    for dirpath, _, files in os.walk(root):
-        dir_ = Path(dirpath)
+    with ThreadPoolExecutor() as executor:
+        for dirpath, _, files in os.walk(root):
+            dir_ = Path(dirpath)
 
-        raw_map = {
-            p.stem.lower(): p
-            for f in files
-            if (p := dir_ / f).suffix.lower() in RAW_EXTENSIONS
-            and is_valid_raw(p, args.min_raw_size)
-        }
+            raw_map = {
+                p.stem.lower(): p
+                for f in files
+                if (p := dir_ / f).suffix.lower() in RAW_EXTENSIONS
+                and is_valid_raw(p, args.min_raw_size)
+            }
 
-        for f in files:
-            p = dir_ / f
-            if p.suffix.lower() not in JPG_EXTENSIONS:
-                continue
+            futures = []
+            for f in files:
+                p = dir_ / f
+                if p.suffix.lower() not in JPG_EXTENSIONS:
+                    continue
 
-            raw_counterpart = raw_map.get(p.stem.lower())
-            if raw_counterpart is None:
-                if args.verbose:
-                    logging.info(f"  SKIP  {p.name:<45}  [no RAW match]")
-                kept_no_raw += 1
-                continue
+                raw_counterpart = raw_map.get(p.stem.lower())
+                if raw_counterpart is None:
+                    if args.verbose:
+                        logging.info(f"  SKIP  {p.name:<45}  [no RAW match]")
+                    kept_no_raw += 1
+                    continue
 
-            result = process_jpg(
-                p,
-                raw_counterpart,
-                args.dry_run,
-                trash_dir,
-                args.skip_exif,
-                root,
-            )
-            if result == "deleted":
-                deleted += 1
-            elif result == "kept_edited":
-                kept_edited += 1
-            else:
-                errors += 1
+                futures.append(
+                    executor.submit(
+                        process_jpg,
+                        p,
+                        raw_counterpart,
+                        args.dry_run,
+                        trash_dir,
+                        args.skip_exif,
+                        root,
+                    )
+                )
+
+            for future in as_completed(futures):
+                result = future.result()
+                if result == "deleted":
+                    deleted += 1
+                elif result == "kept_edited":
+                    kept_edited += 1
+                else:
+                    errors += 1
 
     action = "Would remove" if args.dry_run else ("Moved" if trash_dir else "Deleted")
     logging.info("")
