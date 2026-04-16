@@ -243,7 +243,7 @@ def scan_and_remove(root: Path, trash_dir: Path | None, args):
     logging.info(f"Trash    : {trash_dir or 'hard delete'}")
     logging.info("-" * 60)
 
-    with ThreadPoolExecutor() as executor:
+    with ThreadPoolExecutor(max_workers=8) as executor:
         for dirpath, _, files in os.walk(root):
             dir_ = Path(dirpath)
 
@@ -279,7 +279,7 @@ def scan_and_remove(root: Path, trash_dir: Path | None, args):
                     )
                 )
 
-            for future in as_completed(futures):
+            for future in futures:
                 result = future.result()
                 if result == "deleted":
                     deleted += 1
