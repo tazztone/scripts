@@ -21,6 +21,8 @@ from pathlib import Path
 
 try:
     import exifread
+
+    logging.getLogger("exifread").setLevel(logging.ERROR)  # suppress MakerNote parse noise
 except ImportError:
     sys.exit("Missing dependency: pip install exifread")
 
@@ -88,12 +90,13 @@ def parse_args():
     return parser.parse_args()
 
 
-def setup_logging(log_file=None):
+def setup_logging(args, log_file=None):
+    level = logging.DEBUG if args.verbose else logging.INFO
     handlers = [logging.StreamHandler(sys.stdout)]
     if log_file:
         handlers.append(logging.FileHandler(log_file, encoding="utf-8"))
     logging.basicConfig(
-        level=logging.INFO,
+        level=level,
         format="%(asctime)s %(levelname)s %(message)s",
         handlers=handlers,
     )
@@ -106,8 +109,12 @@ def is_valid_raw(path: Path, min_size: int) -> bool:
         return False
 
 
-def read_exif(path: Path) -> dict:
+def read_exif(path: Path, max_size: int = 15_000_000) -> dict:
     try:
+        # Check size before opening to avoid unnecessary file handles
+        if path.stat().st_size > max_size:
+            logging.warning(f"Skipping EXIF read — file too large: {path}")
+            return {}
         with open(path, "rb") as f:
             # We need details=True to see MakerNote tags, which are stripped by editors.
             return exifread.process_file(f, details=True)
@@ -131,7 +138,9 @@ def is_camera_original(jpg_path: Path) -> tuple[bool, str]:
     if software_lower:
         for sig in EDITOR_SOFTWARE_SIGNATURES:
             if sig in software_lower:
-                return False, f"editor software tag: '{software}'"
+                reason = f"editor software tag: '{software}'"
+                logging.debug(f"EXIF check {jpg_path.name}: {reason}")
+                return False, reason
         # If software is present but NOT a known editor → likely camera firmware.
         # However, we still continue to other checks for extra safety.
 
@@ -139,7 +148,9 @@ def is_camera_original(jpg_path: Path) -> tuple[bool, str]:
     # Camera JPGs (Sony, Nikon, Canon etc.) use EXIF APP1, not JFIF APP0.
     # If JFIF tags appear, the file was re-encoded by software.
     if "JFIF JFIFVersion" in tags or any(k.startswith("JFIF") for k in tags):
-        return False, "JFIF header present — file was re-encoded by an editor"
+        reason = "JFIF header present — file was re-encoded by an editor"
+        logging.debug(f"EXIF check {jpg_path.name}: {reason}")
+        return False, reason
 
     # --- Check 3: MakerNotes presence (camera-agnostic) ---
     # Camera originals always have a rich maker notes block.
@@ -164,13 +175,21 @@ def is_camera_original(jpg_path: Path) -> tuple[bool, str]:
         )
     ]
     if not maker_tags:
-        return False, "no maker notes block — likely editor export (no camera maker tags found)"
+        reason = (
+            "no maker notes block — likely editor export (no camera maker tags found)"
+        )
+        logging.debug(f"EXIF check {jpg_path.name}: {reason}")
+        return False, reason
 
     # --- Check 4: DateTimeOriginal must exist ---
     if not tags.get("EXIF DateTimeOriginal"):
-        return False, "DateTimeOriginal missing — likely an edited export"
+        reason = "DateTimeOriginal missing — likely an edited export"
+        logging.debug(f"EXIF check {jpg_path.name}: {reason}")
+        return False, reason
 
-    return True, f"camera original (software='{software}')"
+    reason = f"camera original (software='{software}')"
+    logging.debug(f"EXIF check {jpg_path.name}: {reason}")
+    return True, reason
 
 
 def process_jpg(
@@ -265,7 +284,7 @@ def scan_and_remove(root: Path, args):
 
 def main():
     args = parse_args()
-    setup_logging(args.log)
+    setup_logging(args, args.log)
 
     root = Path(args.directory).resolve()
     if not root.is_dir():
