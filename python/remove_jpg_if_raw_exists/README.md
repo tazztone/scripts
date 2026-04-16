@@ -42,6 +42,7 @@ example command:
 | `--dry-run` | Preview additions — no files are deleted. |
 | `--trash DIR` | Move matched JPEGs to `DIR` instead of deleting. |
 | `--log FILE` | Write a high-fidelity audit log with timestamps to `FILE`. |
+| `--workers N` | Number of parallel threads (default: `4`). Use `2` for HDDs, `8+` for SSDs. |
 | `--skip-exif` | ⚠ **Safety override**: Reverts to filename-only matching. Use with caution. |
 | `--verbose` | Shows all skipped files and detailed EXIF reasoning. |
 | `--min-raw-size N` | Minimum RAW file size in bytes (default: 100 KB). |
