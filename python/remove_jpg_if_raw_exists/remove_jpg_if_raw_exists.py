@@ -109,6 +109,12 @@ def parse_args():
     parser.add_argument(
         "--verbose", action="store_true", help="Log skipped files with no RAW counterpart"
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=4,
+        help="Parallel EXIF threads (default: 4; use 2 for HDDs, 8+ for SSDs)",
+    )
     return parser.parse_args()
 
 
@@ -243,7 +249,7 @@ def scan_and_remove(root: Path, trash_dir: Path | None, args):
     logging.info(f"Trash    : {trash_dir or 'hard delete'}")
     logging.info("-" * 60)
 
-    with ThreadPoolExecutor(max_workers=8) as executor:
+    with ThreadPoolExecutor(max_workers=args.workers) as executor:
         for dirpath, _, files in os.walk(root):
             dir_ = Path(dirpath)
 
