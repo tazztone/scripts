@@ -60,6 +60,26 @@ EDITOR_SOFTWARE_SIGNATURES = [
     "skylum",
 ]
 
+# Manufacturer prefixes seen in exifread. Decoding varies by brand.
+MAKER_NOTE_PREFIXES = (
+    "MakerNote",  # Canon, Nikon, Olympus, Fuji, Apple, DJI, Casio, Panasonic raw
+    "Sony ",  # Sony decoded tags
+    "Canon ",  # Canon decoded (redundant but explicit)
+    "Nikon ",  # Nikon decoded
+    "Fujifilm ",
+    "Olympus ",
+    "Panasonic ",
+    "Pentax ",
+    "Leica ",
+    "Ricoh ",
+    "Apple ",  # iPhone MakerNotes
+    "DJI ",  # Drone cameras
+    "Casio ",
+    "Minolta ",
+    "Samsung ",
+    "Sigma ",
+)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -96,6 +116,7 @@ def setup_logging(args, log_file=None):
     # Terminal handler: clean message-only output
     console = logging.StreamHandler(sys.stdout)
     console.setFormatter(logging.Formatter("%(message)s"))
+
     handlers = [console]
 
     # File handler: full timestamps and levels for the audit trail
@@ -104,7 +125,11 @@ def setup_logging(args, log_file=None):
         fh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
         handlers.append(fh)
 
-    logging.basicConfig(level=level, handlers=handlers)
+    # Manual root logger configuration (safer than basicConfig)
+    logger = logging.getLogger()
+    logger.setLevel(level)
+    for h in handlers:
+        logger.addHandler(h)
 
 
 def is_valid_raw(path: Path, min_size: int) -> bool:
@@ -114,12 +139,8 @@ def is_valid_raw(path: Path, min_size: int) -> bool:
         return False
 
 
-def read_exif(path: Path, max_size: int = 15_000_000) -> dict:
+def read_exif(path: Path) -> dict:
     try:
-        # Check size before opening to avoid unnecessary file handles
-        if path.stat().st_size > max_size:
-            logging.warning(f"Skipping EXIF read — file too large: {path}")
-            return {}
         with open(path, "rb") as f:
             # We need details=True to see MakerNote tags, which are stripped by editors.
             return exifread.process_file(f, details=True)
@@ -146,17 +167,11 @@ def _check_exif(jpg_path: Path) -> tuple[bool, str]:
         return False, "JFIF header present — was re-encoded by software"
 
     # --- Check 3: MakerNotes presence (camera-agnostic) ---
+    # Captures both decoded tags (e.g., 'Sony Quality') and raw blobs (e.g., 'EXIF MakerNote').
     maker_tags = [
         k
         for k in tags
-        if k.startswith("MakerNote")
-        or any(
-            k.startswith(brand)
-            for brand in (
-                "Sony ", "Canon ", "Nikon ", "Fujifilm ", "Olympus ",
-                "Panasonic ", "Pentax ", "Leica ", "Ricoh ",
-            )
-        )
+        if any(k.startswith(p) for p in MAKER_NOTE_PREFIXES) or "MakerNote" in k
     ]
     if not maker_tags:
         return False, "no maker notes block — likely editor export"
@@ -188,11 +203,11 @@ def process_jpg(
     if not skip_exif:
         ok, reason = is_camera_original(jpg_path)
         if not ok:
-            logging.info(f"  KEPT  {jpg_path.name:<25}  ← {reason}")
+            logging.info(f"  KEPT  {jpg_path.name:<45}  ← {reason}")
             return "kept_edited"
 
     if dry_run:
-        logging.info(f"  DEL   {jpg_path.name:<25}  ← RAW: {raw_counterpart.name}")
+        logging.info(f"  DEL   {jpg_path.name:<45}  ← RAW: {raw_counterpart.name}")
         return "deleted"
 
     if trash_dir:
@@ -201,7 +216,7 @@ def process_jpg(
         dest.parent.mkdir(parents=True, exist_ok=True)
         try:
             shutil.move(str(jpg_path), dest)
-            logging.info(f"  DEL   {jpg_path.name:<25}  ← Moved to trash")
+            logging.info(f"  DEL   {jpg_path.name:<45}  ← Moved to trash")
             return "deleted"
         except OSError as e:
             logging.error(f"  ERROR Failed to move {jpg_path.name}: {e}")
@@ -209,20 +224,19 @@ def process_jpg(
     else:
         try:
             jpg_path.unlink()
-            logging.info(f"  DEL   {jpg_path.name:<25}  ← {raw_counterpart.name}")
+            logging.info(f"  DEL   {jpg_path.name:<45}  ← {raw_counterpart.name}")
             return "deleted"
         except OSError as e:
             logging.error(f"  ERROR Failed to delete {jpg_path.name}: {e}")
             return "error"
 
 
-def scan_and_remove(root: Path, args):
+def scan_and_remove(root: Path, trash_dir: Path | None, args):
     deleted = kept_no_raw = kept_edited = errors = 0
-    trash_dir = Path(args.trash).resolve() if args.trash else None
 
     logging.info(f"Scan dir : {root}")
     logging.info(f"Mode     : {'DRY RUN' if args.dry_run else 'LIVE'}")
-    logging.info(f"EXIF     : {'on' if not args.skip_exif else 'off (stem-only)'}")
+    logging.info(f"EXIF     : {'on' if not args.skip_exif else '⚠ OFF (stem-only — skipping safety checks)'}")
     logging.info(f"Trash    : {trash_dir or 'hard delete'}")
     logging.info("-" * 60)
 
@@ -244,17 +258,17 @@ def scan_and_remove(root: Path, args):
             raw_counterpart = raw_map.get(p.stem.lower())
             if raw_counterpart is None:
                 if args.verbose:
-                    logging.info(f"  SKIP  {p.name:<25}  [no RAW match]")
+                    logging.info(f"  SKIP  {p.name:<45}  [no RAW match]")
                 kept_no_raw += 1
                 continue
 
             result = process_jpg(
                 p,
                 raw_counterpart,
-                dry_run=args.dry_run,
-                trash_dir=trash_dir,
-                skip_exif=args.skip_exif,
-                root=root,
+                args.dry_run,
+                trash_dir,
+                args.skip_exif,
+                root,
             )
             if result == "deleted":
                 deleted += 1
@@ -265,7 +279,7 @@ def scan_and_remove(root: Path, args):
 
     action = "Would remove" if args.dry_run else ("Moved" if trash_dir else "Deleted")
     logging.info("")
-    logging.info(f"{action}: {deleted} JPGs removed")
+    logging.info(f"{action:<13}: {deleted} JPGs")
     logging.info(f"  No RAW match  : {kept_no_raw}")
     logging.info(f"  Editor export : {kept_edited}")
     logging.info(f"  Errors        : {errors}")
@@ -280,6 +294,7 @@ def main():
         logging.error(f"Not a directory: {root}")
         sys.exit(1)
 
+    trash_dir = None
     if args.trash:
         trash_dir = Path(args.trash).resolve()
         trash_dir.mkdir(parents=True, exist_ok=True)
@@ -287,8 +302,7 @@ def main():
             logging.error("Trash folder must be outside the scan directory.")
             sys.exit(1)
 
-    # (Header & setup info is already logged in scan_and_remove)
-    scan_and_remove(root, args)
+    scan_and_remove(root, trash_dir, args)
 
 
 if __name__ == "__main__":
