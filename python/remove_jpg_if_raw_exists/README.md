@@ -32,14 +32,14 @@ uv run remove_jpg_if_raw_exists.py <directory> [options]
 ```
 
 example command:
-`uv run remove_jpg_if_raw_exists.py "/mnt/wd14tb/_MY PHOTOS and VIDEOS/2026" --log remove_2026.log`
+`uv run remove_jpg_if_raw_exists.py "/path/to/photos/2026" --log remove_2026.log`
 
 
 ### Options
 
 | Flag | Description |
 |---|---|
-| `--dry-run` | Preview additions — no files are deleted. |
+| `--dry-run` | Preview deletions — no files are touched. |
 | `--trash DIR` | Move matched JPEGs to `DIR` instead of deleting. |
 | `--log FILE` | Write a high-fidelity audit log with timestamps to `FILE`. |
 | `--workers N` | Number of parallel threads (default: `4`). Use `2` for HDDs, `8+` for SSDs. |
@@ -49,13 +49,12 @@ example command:
 
 ---
 
-## Safety Architecture
-
-To prevent accidental data loss, the script passes every JPEG through a three-stage verification:
+To prevent accidental data loss, the script passes every JPEG through a four-stage verification:
 
 1.  **Software Signature**: Checks for known "export" headers (Adobe, Capture One, etc.).
 2.  **JFIF Header**: Detects if the file has been re-encoded by processing software.
-3.  **MakerNotes Presence**: Verifies the presence of proprietary camera metadata (Sony, Panasonic, Nikon, etc.) which is typically stripped by editors.
+3.  **MakerNotes Presence**: Verifies the presence of proprietary camera metadata (Sony, Panasonic, Nikon, etc.).
+4.  **DateTimeOriginal**: Ensures the original capture timestamp exists, further confirming the file hasn't been stripped by an editor.
 
 ---
 
