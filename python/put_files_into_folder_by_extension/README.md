@@ -1,100 +1,76 @@
-# put-files-into-folder-according-to-file-extension
-created with chatGPT 3.5
-This Python script organizes files in a specified folder based on their file extensions. Here's a breakdown of what each part of the script does:
+# put-files-into-folder-by-extension
 
-    Importing Modules:
+A Python script that organises files in a directory into sub-folders named after their file extension.
 
-    python
+```
+before/                       after/
+├── photo.jpg          →      ├── jpg/
+├── notes.txt          →      │   └── photo.jpg
+├── report.pdf         →      ├── txt/
+├── archive.zip        →      │   └── notes.txt
+└── data               →      ├── pdf/
+                       →      │   └── report.pdf
+                       →      ├── zip/
+                       →      │   └── archive.zip
+                       →      └── no_extension/
+                       →          └── data
+```
 
-import os
-import shutil
+## Features
 
-    os: Provides a way to interact with the operating system, such as listing files in a directory.
-    shutil: Offers high-level file operations, such as moving files.
+- **CLI interface** — pass any target folder as an argument, or omit it to use the current working directory
+- **Dry-run mode** — preview every planned move without touching files (`--dry-run`)
+- **Recursive mode** — also descend into sub-directories (`--recursive`)
+- **Conflict-safe** — if a file with the same name already exists in the destination, a numeric suffix is added (`file_1.txt`, `file_2.txt`, …) instead of overwriting
+- **Skip-list** — the script itself, `README.md`, `.gitignore`, and `.gitkeep` are never moved
+- **No-extension files** — files without an extension go into `no_extension/`
+- **Summary** — prints how many files were moved per extension
 
-Function Definition: organize_files_by_extension
+## Requirements
 
-python
+Python 3.9 or later. No third-party packages needed.
 
-def organize_files_by_extension(folder_path):
+## Usage
 
-    This function takes a folder_path as an argument, representing the path to the directory containing the files to be organized.
+```bash
+# Organize the current working directory
+python put_files_into_folder_by_extension.py
 
-Listing Files in the Specified Folder:
+# Organize a specific folder
+python put_files_into_folder_by_extension.py /path/to/folder
 
-python
+# Preview what would happen (no files moved)
+python put_files_into_folder_by_extension.py --dry-run /path/to/folder
 
-files = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f))]
+# Also organise files inside sub-directories
+python put_files_into_folder_by_extension.py --recursive /path/to/folder
 
-    It uses a list comprehension to get a list of all files in the specified folder by checking if each item is a file (not a directory).
+# Combine flags
+python put_files_into_folder_by_extension.py --dry-run --recursive /path/to/folder
 
-Creating a Dictionary to Organize Files by Extension:
+# Verbose output
+python put_files_into_folder_by_extension.py -v /path/to/folder
+```
 
-python
+## Options
 
-files_by_extension = {}
+| Flag | Description |
+|---|---|
+| `folder` | Directory to organise (default: CWD) |
+| `--dry-run` | Print planned moves without executing them |
+| `--recursive` | Also process files in sub-directories |
+| `-v` / `--verbose` | Show debug-level output |
 
-    This dictionary will store files based on their extensions.
+## Example output
 
-Organizing Files by Extension:
+```
+INFO: photo.jpg  →  jpg/photo.jpg
+INFO: notes.txt  →  txt/notes.txt
+INFO: report.pdf →  pdf/report.pdf
 
-python
-
-for file in files:
-    _, extension = os.path.splitext(file)
-    extension = extension.lower()  # Convert the extension to lowercase for case-insensitivity
-
-    if extension not in files_by_extension:
-        files_by_extension[extension] = []
-
-    files_by_extension[extension].append(file)
-
-    It iterates through the files, extracts the file extension (ignoring the filename itself), and organizes them into the files_by_extension dictionary.
-
-Creating Subfolders and Moving Files:
-
-python
-
-for extension, file_list in files_by_extension.items():
-    subfolder_path = os.path.join(folder_path, extension[1:])  # Remove the dot from the extension
-    os.makedirs(subfolder_path, exist_ok=True)
-
-    for file in file_list:
-        current_file_path = os.path.join(folder_path, file)
-        new_file_path = os.path.join(subfolder_path, file)
-
-        index = 1
-        while os.path.exists(new_file_path):
-            base_name, _ = os.path.splitext(file)
-            new_file_path = os.path.join(subfolder_path, f"{base_name}_{index}{extension}")
-            index += 1
-
-        shutil.move(current_file_path, new_file_path)
-
-    It creates a subfolder for each unique extension, then moves the corresponding files into their respective subfolders.
-    If a file with the same name already exists in the destination subfolder, it appends a suffix to the filename to avoid overwriting.
-
-Printing Completion Message:
-
-python
-
-print("Organizing files completed.")
-
-    It prints a message indicating that the file organization process is completed.
-
-Getting the Directory of the Script:
-
-python
-
-script_directory = os.path.dirname(__file__)
-
-    It gets the directory where the script is located using os.path.dirname(__file__).
-
-Calling the Function with the Script Directory:
-
-python
-
-    organize_files_by_extension(script_directory)
-
-        It calls the organize_files_by_extension function with the directory of the script, effectively organizing files in the same directory where the script is located.
-
+INFO: Summary:
+INFO:   .jpg                 1 file(s)
+INFO:   .pdf                 1 file(s)
+INFO:   .txt                 1 file(s)
+INFO: Moved 3 file(s) in total.
+```
