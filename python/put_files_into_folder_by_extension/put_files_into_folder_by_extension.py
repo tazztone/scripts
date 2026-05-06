@@ -18,16 +18,16 @@ Usage
 
 import argparse
 import logging
-import os
 import shutil
 from pathlib import Path
 
 # Files without an extension land in this folder
 NO_EXT_FOLDER = "no_extension"
 
-# Names (case-insensitive) that are never moved
+# Names (case-insensitive) that are never moved.
+# Using Path(__file__).name ensures the skip-list stays correct if the script is renamed.
 SKIP_NAMES: set[str] = {
-    "put_files_into_folder_by_extension.py",
+    Path(__file__).name.lower(),
     "readme.md",
     ".gitignore",
     ".gitkeep",
