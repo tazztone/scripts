@@ -18,7 +18,7 @@ import logging
 import argparse
 import shutil
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 
 logging.getLogger("exifread").setLevel(logging.ERROR)  # suppress MakerNote parse noise
 
