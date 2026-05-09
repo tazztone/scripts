@@ -17,6 +17,7 @@ import sys
 import logging
 import argparse
 import shutil
+import re
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -60,6 +61,8 @@ EDITOR_SOFTWARE_SIGNATURES = [
     "acdsee",
     "skylum",
 ]
+
+EDITOR_SOFTWARE_REGEX = re.compile("|".join(map(re.escape, EDITOR_SOFTWARE_SIGNATURES)))
 
 # Manufacturer prefixes seen in exifread. Decoding varies by brand.
 MAKER_NOTE_PREFIXES = (
@@ -168,10 +171,8 @@ def _check_exif(jpg_path: Path) -> tuple[bool, str]:
     # --- Check 1: Software tag (strong signal when present) ---
     software = str(tags.get("Image Software", "")).strip()
     software_lower = software.lower()
-    if software_lower:
-        for sig in EDITOR_SOFTWARE_SIGNATURES:
-            if sig in software_lower:
-                return False, f"editor software tag: '{software}'"
+    if software_lower and EDITOR_SOFTWARE_REGEX.search(software_lower):
+        return False, f"editor software tag: '{software}'"
 
     # --- Check 2: JFIF header (extremely reliable) ---
     if "JFIF JFIFVersion" in tags or any(k.startswith("JFIF") for k in tags):
