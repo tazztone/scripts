@@ -18,6 +18,7 @@ Usage
 
 import argparse
 import logging
+import os
 import shutil
 from pathlib import Path
 
@@ -45,11 +46,34 @@ def _unique_destination(dest: Path) -> Path:
         return dest
     stem, suffix = dest.stem, dest.suffix
     parent = dest.parent
-    index = 1
-    while True:
+
+    # Fast path: check first 10 indices directly.
+    for index in range(1, 10):
         candidate = parent / f"{stem}_{index}{suffix}"
         if not candidate.exists():
             return candidate
+
+    # For many duplicates, scanning the directory is much faster than repeatedly
+    # checking existence via the filesystem.
+    prefix = f"{stem}_"
+    existing_indices = set()
+    try:
+        with os.scandir(parent) as it:
+            for entry in it:
+                name = entry.name
+                if name.startswith(prefix) and name.endswith(suffix):
+                    mid = name[len(prefix):len(name)-len(suffix)]
+                    if mid.isdigit():
+                        existing_indices.add(int(mid))
+    except OSError:
+        pass
+
+    index = 10
+    while True:
+        if index not in existing_indices:
+            candidate = parent / f"{stem}_{index}{suffix}"
+            if not candidate.exists():
+                return candidate
         index += 1
 
 
