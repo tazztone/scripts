@@ -53,4 +53,11 @@ test_case "$TEST_DATA/version_test/shoot_720p_v2" "_edit" "mp4" "$TEST_DATA/vers
 
 rm -rf "$TEST_DATA/version_test"
 
+# 6. Edge Cases: Special characters and tricky tag placements
+test_case "my video_720p" "_1080p" "mp4" "my video_1080p.mp4" "Spaces in filename"
+test_case "video.name_720p" "_edit" "mp4" "video.name_edit.mp4" "Dots in filename"
+test_case "my-video_720p" "_edit" "mp4" "my-video_edit.mp4" "Hyphens in filename"
+test_case "my_720p_dir/video_720p" "_1080p" "mp4" "my_720p_dir/video_1080p.mp4" "Tags in directory name are preserved"
+test_case "video_720p_file" "_edit" "mp4" "video_720p_file_edit.mp4" "Tags in the middle of filename are preserved"
+
 log_info "Filename safety tests completed."
