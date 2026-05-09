@@ -149,5 +149,32 @@ class TestSelectionAssistant(unittest.TestCase):
         self.assertIn({"id": "file1_newest", "name": "b_longer_name.txt", "modifiedTime": "2023-01-02T10:00:00Z", "size": "200", "parents": ["folderB"]}, files_to_trash)
         self.assertIn({"id": "file1_oldest", "name": "a.txt", "modifiedTime": "2023-01-01T10:00:00Z", "size": "100", "parents": ["folderA"]}, files_to_trash)
 
+class TestFetchAllFiles(unittest.TestCase):
+    def test_fetch_all_files_http_error(self):
+        from duplicate_scanner import fetch_all_files
+        from googleapiclient.errors import HttpError
+        import httplib2
+
+        mock_service = Mock()
+
+        # We mock the files().list().execute() chain to raise HttpError
+        mock_execute = Mock()
+        # Mock a valid resp object for HttpError
+        mock_resp = httplib2.Response({'status': 500})
+        mock_execute.side_effect = HttpError(resp=mock_resp, content=b'{"error": "Simulated error"}')
+
+        mock_list = Mock()
+        mock_list.execute = mock_execute
+
+        mock_files = Mock()
+        mock_files.list.return_value = mock_list
+
+        mock_service.files.return_value = mock_files
+
+        # Ensure that fetch_all_files handles the HttpError and returns []
+        result = fetch_all_files(mock_service)
+
+        self.assertEqual(result, [])
+
 if __name__ == '__main__':
     unittest.main()

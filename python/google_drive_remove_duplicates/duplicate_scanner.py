@@ -119,7 +119,11 @@ def fetch_all_files(service, folder_id=None, recursive=False):
             page_token = None
             while True:
                 folder_query = f"'{current_folder_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-                response = service.files().list(q=folder_query, pageSize=1000, fields="nextPageToken, files(id, name)", pageToken=page_token).execute()
+                try:
+                    response = service.files().list(q=folder_query, pageSize=1000, fields="nextPageToken, files(id, name)", pageToken=page_token).execute()
+                except HttpError as error:
+                    logging.error(f"An error occurred: {error}")
+                    return []
                 subfolders = response.get('files', [])
                 for folder in subfolders:
                     all_folder_ids.append(folder['id'])
@@ -135,7 +139,11 @@ def fetch_all_files(service, folder_id=None, recursive=False):
             page_token = None
             while True:
                 file_query = f"'{f_id}' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false"
-                response = service.files().list(q=file_query, pageSize=1000, fields="nextPageToken, files(id, name, size, md5Checksum, trashed, parents)", pageToken=page_token).execute()
+                try:
+                    response = service.files().list(q=file_query, pageSize=1000, fields="nextPageToken, files(id, name, size, md5Checksum, trashed, parents)", pageToken=page_token).execute()
+                except HttpError as error:
+                    logging.error(f"An error occurred: {error}")
+                    return []
                 all_files.extend(response.get('files', []))
                 page_token = response.get('nextPageToken', None)
                 if page_token is None:
@@ -150,11 +158,15 @@ def fetch_all_files(service, folder_id=None, recursive=False):
         query += f" and '{folder_id}' in parents"
 
     while True:
-        response = service.files().list(
-            q=query,
-            pageSize=1000,
-            fields="nextPageToken, files(id, name, size, md5Checksum, trashed, parents)",
-            pageToken=page_token).execute()
+        try:
+            response = service.files().list(
+                q=query,
+                pageSize=1000,
+                fields="nextPageToken, files(id, name, size, md5Checksum, trashed, parents)",
+                pageToken=page_token).execute()
+        except HttpError as error:
+            logging.error(f"An error occurred: {error}")
+            return []
         all_files.extend(response.get('files', []))
         logging.info(f"Retrieved {len(all_files)} file's metadata so far...")
         page_token = response.get('nextPageToken', None)
