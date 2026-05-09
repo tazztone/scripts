@@ -39,16 +39,23 @@ def _setup_logging(verbose: bool) -> None:
     logging.basicConfig(format="%(levelname)s: %(message)s", level=level)
 
 
-def _unique_destination(dest: Path) -> Path:
+def _unique_destination(dest: Path, index_cache: dict[tuple[Path, str, str], int] | None = None) -> Path:
     """Return *dest* unchanged if it doesn't exist, otherwise append _1, _2 … """
     if not dest.exists():
         return dest
     stem, suffix = dest.stem, dest.suffix
     parent = dest.parent
+
+    cache_key = (parent, stem, suffix)
     index = 1
+    if index_cache is not None:
+        index = index_cache.get(cache_key, 1)
+
     while True:
         candidate = parent / f"{stem}_{index}{suffix}"
         if not candidate.exists():
+            if index_cache is not None:
+                index_cache[cache_key] = index + 1
             return candidate
         index += 1
 
@@ -70,6 +77,7 @@ def organize(
     ]
 
     summary: dict[str, int] = {}
+    index_cache: dict[tuple[Path, str, str], int] = {}
 
     for src in files:
         # Skip files that already live inside an extension sub-folder we created
@@ -83,7 +91,7 @@ def organize(
 
         ext = src.suffix.lower().lstrip(".") or NO_EXT_FOLDER
         target_dir = folder / ext
-        dest = _unique_destination(target_dir / src.name)
+        dest = _unique_destination(target_dir / src.name, index_cache=index_cache)
 
         logging.info("%s  →  %s", src.relative_to(folder), dest.relative_to(folder))
 
