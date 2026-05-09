@@ -17,8 +17,9 @@ import sys
 import logging
 import argparse
 import shutil
+import re
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 
 logging.getLogger("exifread").setLevel(logging.ERROR)  # suppress MakerNote parse noise
 
@@ -60,6 +61,10 @@ EDITOR_SOFTWARE_SIGNATURES = [
     "acdsee",
     "skylum",
 ]
+
+EDITOR_SOFTWARE_PATTERN = re.compile(
+    "|".join(map(re.escape, EDITOR_SOFTWARE_SIGNATURES))
+)
 
 # Manufacturer prefixes seen in exifread. Decoding varies by brand.
 MAKER_NOTE_PREFIXES = (
@@ -107,7 +112,9 @@ def parse_args():
         help="Skip EXIF check (revert to stem-only matching)",
     )
     parser.add_argument(
-        "--verbose", action="store_true", help="Log skipped files with no RAW counterpart"
+        "--verbose",
+        action="store_true",
+        help="Log skipped files with no RAW counterpart",
     )
     parser.add_argument(
         "--workers",
@@ -168,10 +175,8 @@ def _check_exif(jpg_path: Path) -> tuple[bool, str]:
     # --- Check 1: Software tag (strong signal when present) ---
     software = str(tags.get("Image Software", "")).strip()
     software_lower = software.lower()
-    if software_lower:
-        for sig in EDITOR_SOFTWARE_SIGNATURES:
-            if sig in software_lower:
-                return False, f"editor software tag: '{software}'"
+    if software_lower and EDITOR_SOFTWARE_PATTERN.search(software_lower):
+        return False, f"editor software tag: '{software}'"
 
     # --- Check 2: JFIF header (extremely reliable) ---
     if "JFIF JFIFVersion" in tags or any(k.startswith("JFIF") for k in tags):
@@ -245,7 +250,9 @@ def scan_and_remove(root: Path, trash_dir: Path | None, args):
 
     logging.info(f"Scan dir : {root}")
     logging.info(f"Mode     : {'DRY RUN' if args.dry_run else 'LIVE'}")
-    logging.info(f"EXIF     : {'on' if not args.skip_exif else '⚠ OFF (stem-only — skipping safety checks)'}")
+    logging.info(
+        f"EXIF     : {'on' if not args.skip_exif else '⚠ OFF (stem-only — skipping safety checks)'}"
+    )
     logging.info(f"Trash    : {trash_dir or 'hard delete'}")
     logging.info("-" * 60)
 
