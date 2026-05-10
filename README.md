@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue)](#)
 
-A unified collection of automation scripts and utilities for Windows, Linux, and Python. Covers media processing, file organization, AI/ML tooling, and cloud utilities.
+A unified collection of automation scripts and utilities for Windows, Linux, and Python. Covers media processing, file organization, AI/ML tooling, cloud utilities, and browser userscripts.
 
 ## Structure
 
@@ -16,10 +16,12 @@ scripts/
 │   ├── universal_toolbox.sh        # Universal utility menu
 │   ├── imagemagick_toolbox.sh      # ImageMagick batch operations
 │   └── lossless_ops_toolbox.sh     # Lossless media conversion and processing
-└── python/                         # Python utilities
-    ├── google_drive_remove_duplicates/  # Google Drive duplicate file scanner + remover
-    ├── lora_remove_te_weights/          # Strip TE (text encoder) weights from LoRA .safetensors
-    └── put_files_into_folder_by_extension/  # Auto-organizer: sort files into folders by extension
+├── python/                         # Python utilities
+│   ├── google_drive_remove_duplicates/  # Google Drive duplicate file scanner + remover
+│   ├── lora_remove_te_weights/          # Strip TE (text encoder) weights from LoRA .safetensors
+│   └── put_files_into_folder_by_extension/  # Auto-organizer: sort files into folders by extension
+└── userscripts/                    # Browser userscripts (Violentmonkey / Tampermonkey)
+    └── perplexity-auto-approve/    # Auto-click Approve on Perplexity agent action cards
 ```
 
 ## Highlights
@@ -38,6 +40,9 @@ scripts/
 - **LoRA TE Weight Remover** — strip text encoder weights from `.safetensors` LoRA models (reduce file size for SDXL/FLUX)
 - **Extension-based File Organizer** — auto-sorts a flat directory into sub-folders by file extension
 
+### `userscripts/` — Browser Userscripts
+- **Perplexity Auto Approve** — detects Perplexity agent approval cards and clicks Approve after a configurable delay; uses `MutationObserver` for React SPA compatibility
+
 ## Usage
 
 Each subdirectory contains its own `README.md` with specific requirements and usage instructions:
@@ -45,6 +50,7 @@ Each subdirectory contains its own `README.md` with specific requirements and us
 - Bash scripts: [`sh/README.md`](sh/README.md)
 - Python utilities: [`python/README.md`](python/README.md)
 - Windows Batch: [`bat/README.md`](bat/README.md)
+- Userscripts: [`userscripts/perplexity-auto-approve/README.md`](userscripts/perplexity-auto-approve/README.md)
 
 ### Quick examples
 
@@ -57,6 +63,11 @@ python python/put_files_into_folder_by_extension/organizer.py /path/to/folder
 
 # Strip TE weights from a LoRA
 python python/lora_remove_te_weights/remove_te.py model.safetensors
+```
+
+```
+# Install userscript (Violentmonkey → Install from URL):
+https://raw.githubusercontent.com/tazztone/scripts/main/userscripts/perplexity-auto-approve/perplexity-auto-approve.user.js
 ```
 
 ## License
