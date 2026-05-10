@@ -5,6 +5,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 import sys
 
 # Configure logging to write logs to a file and the console
@@ -36,9 +37,6 @@ def get_service():
     return build('drive', 'v3', credentials=creds, cache_discovery=False)
 
 
-from googleapiclient.errors import HttpError
-
-
 class SelectionAssistant:
     def __init__(self, service, duplicate_groups):
         self.service = service
@@ -50,13 +48,7 @@ class SelectionAssistant:
         logging.info(f"Applying 'mark all but one' strategy, keeping the {keep_strategy} file.")
         for md5, files in self.duplicate_groups.items():
             if len(files) > 1:
-                # Sort files based on strategy to determine which one to keep
                 if keep_strategy == 'oldest':
-                    # Google Drive API does not directly provide creationTime in list, only modifiedTime
-                    # For simplicity, we'll use modifiedTime for now, or assume the first one found is 'oldest'
-                    # A more robust solution would require fetching creationTime for each file if needed.
-                    # For now, let's just keep the first one in the list as a placeholder for 'oldest'
-                    # or implement a proper sort if creationTime becomes available.
                     files_sorted = sorted(files, key=lambda x: x.get('modifiedTime', ''))
                 elif keep_strategy == 'newest':
                     files_sorted = sorted(files, key=lambda x: x.get('modifiedTime', ''), reverse=True)
@@ -72,7 +64,6 @@ class SelectionAssistant:
                     logging.warning(f"Unknown keep strategy: {keep_strategy}. Defaulting to keeping the first file.")
                     files_sorted = files
 
-                # Keep the first file in the sorted list, trash the rest
                 self.files_to_trash.extend(files_sorted[1:])
                 logging.info(f"Marked {len(files_sorted) - 1} files for trashing in group {md5}.")
 
@@ -87,7 +78,6 @@ class SelectionAssistant:
 
     def get_files_to_trash(self):
         """Returns the list of files marked for trashing."""
-        # Remove duplicates from the list of files to trash (a file might be marked by multiple rules)
         unique_files_to_trash = []
         seen_ids = set()
         for file in self.files_to_trash:
@@ -108,7 +98,7 @@ def move_file_to_trash(service, file):
 
 def fetch_all_files(service, folder_id=None, recursive=False):
     """Fetch all file metadata from Google Drive."""
-    
+
     if folder_id and recursive:
         logging.info("Starting recursive folder scan...")
         all_folder_ids = [folder_id]
@@ -120,13 +110,16 @@ def fetch_all_files(service, folder_id=None, recursive=False):
             batch = all_folder_ids[idx:idx + batch_size]
             idx += len(batch)
 
-            # Construct OR query for parents
             parent_queries = " or ".join([f"'{fid}' in parents" for fid in batch])
             folder_query = f"({parent_queries}) and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
 
             page_token = None
             while True:
-                response = service.files().list(q=folder_query, pageSize=1000, fields="nextPageToken, files(id, name)", pageToken=page_token).execute()
+                try:
+                    response = service.files().list(q=folder_query, pageSize=1000, fields="nextPageToken, files(id, name)", pageToken=page_token).execute()
+                except HttpError as error:
+                    logging.error(f"An error occurred: {error}")
+                    return []
                 subfolders = response.get('files', [])
                 for folder in subfolders:
                     if folder['id'] not in all_folder_ids:
@@ -134,9 +127,9 @@ def fetch_all_files(service, folder_id=None, recursive=False):
                 page_token = response.get('nextPageToken', None)
                 if page_token is None:
                     break
-        
+
         logging.info(f"Found {len(all_folder_ids)} total folders to scan.")
-        
+
         # 2. Fetch all files from discovered folders using batched queries
         all_files = []
         for i in range(0, len(all_folder_ids), batch_size):
@@ -146,7 +139,11 @@ def fetch_all_files(service, folder_id=None, recursive=False):
 
             page_token = None
             while True:
-                response = service.files().list(q=file_query, pageSize=1000, fields="nextPageToken, files(id, name, size, md5Checksum, trashed, parents)", pageToken=page_token).execute()
+                try:
+                    response = service.files().list(q=file_query, pageSize=1000, fields="nextPageToken, files(id, name, size, md5Checksum, trashed, parents)", pageToken=page_token).execute()
+                except HttpError as error:
+                    logging.error(f"An error occurred: {error}")
+                    return []
                 all_files.extend(response.get('files', []))
                 page_token = response.get('nextPageToken', None)
                 if page_token is None:
@@ -161,11 +158,15 @@ def fetch_all_files(service, folder_id=None, recursive=False):
         query += f" and '{folder_id}' in parents"
 
     while True:
-        response = service.files().list(
-            q=query,
-            pageSize=1000,
-            fields="nextPageToken, files(id, name, size, md5Checksum, trashed, parents)",
-            pageToken=page_token).execute()
+        try:
+            response = service.files().list(
+                q=query,
+                pageSize=1000,
+                fields="nextPageToken, files(id, name, size, md5Checksum, trashed, parents)",
+                pageToken=page_token).execute()
+        except HttpError as error:
+            logging.error(f"An error occurred: {error}")
+            return []
         all_files.extend(response.get('files', []))
         logging.info(f"Retrieved {len(all_files)} file's metadata so far...")
         page_token = response.get('nextPageToken', None)
@@ -174,18 +175,15 @@ def fetch_all_files(service, folder_id=None, recursive=False):
     return all_files
 
 
-
-
 def find_duplicates(service, delete=False, folder_id=None, recursive=False, keep_strategy=None, trash_folder_id=None):
     """Find duplicate files in Google Drive."""
     if folder_id:
         logging.info(f"Scanning folder with ID: {folder_id}")
     else:
         logging.info("Scanning all files in Google Drive.")
-        
+
     all_files = fetch_all_files(service, folder_id, recursive)
     total_files = len(all_files)
-    # Change: Store lists of files for each md5Checksum
     file_dict = {}
     for i, file in enumerate(all_files, 1):
         if 'md5Checksum' in file:
@@ -197,7 +195,6 @@ def find_duplicates(service, delete=False, folder_id=None, recursive=False, keep
         if i % 100 == 0 or i == total_files:
             logging.info(f"Checked {i} out of {total_files} files.")
 
-    # Filter out unique files, leaving only groups with duplicates
     duplicate_groups = {md5: files for md5, files in file_dict.items() if len(files) > 1}
 
     if not duplicate_groups:
@@ -215,17 +212,14 @@ def find_duplicates(service, delete=False, folder_id=None, recursive=False, keep
                 logging.info(f"    - {file['name']} (ID: {file['id']})")
         return
 
-    # Initialize SelectionAssistant
     selection_assistant = SelectionAssistant(service, duplicate_groups)
 
-    # Apply selection strategies based on arguments
     if keep_strategy:
         selection_assistant.mark_all_but_one(keep_strategy)
-    
+
     if trash_folder_id:
         selection_assistant.mark_by_folder(trash_folder_id)
 
-    # Get the final list of files to trash
     files_to_trash = selection_assistant.get_files_to_trash()
 
     if files_to_trash:
@@ -234,7 +228,6 @@ def find_duplicates(service, delete=False, folder_id=None, recursive=False, keep
             move_file_to_trash(service, file_to_trash)
     else:
         logging.info("No files were marked for trashing based on the provided selection criteria.")
-
 
 
 def main():
@@ -250,11 +243,9 @@ def main():
 
     delete = args.delete or args.keep_strategy or args.trash_folder_id
 
-    find_duplicates(service, delete=delete, folder_id=args.folder, recursive=args.recursive, 
+    find_duplicates(service, delete=delete, folder_id=args.folder, recursive=args.recursive,
                     keep_strategy=args.keep_strategy, trash_folder_id=args.trash_folder_id)
 
 
 if __name__ == '__main__':
     main()
-
-
