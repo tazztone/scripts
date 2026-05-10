@@ -53,4 +53,9 @@ test_case "$TEST_DATA/version_test/shoot_720p_v2" "_edit" "mp4" "$TEST_DATA/vers
 
 rm -rf "$TEST_DATA/version_test"
 
+# 6. Edge Cases
+test_case "/input" "_edit" "mp4" "/input_edit.mp4" "Root directory handling"
+test_case "_half" "_edit" "mp4" "_half_edit.mp4" "Base name exhaustion prevention"
+test_case "my video_720p" "_edit" "mp4" "my video_edit.mp4" "Spaces in filename"
+
 log_info "Filename safety tests completed."
