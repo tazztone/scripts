@@ -157,6 +157,7 @@ generate_safe_filename() {
     
     while true; do
         local stripped=$(echo "$clean_bname" | sed -E "s/(${tag_regex})(_v[0-9]+)?$//")
+        [ -z "$stripped" ] && break
         [ "$stripped" == "$clean_bname" ] && break
         clean_bname="$stripped"
     done
@@ -169,6 +170,8 @@ generate_safe_filename() {
         final_base="./${clean_bname}"
     elif [ "$dir" == "." ]; then
         final_base="$clean_bname"
+    elif [ "$dir" == "/" ]; then
+        final_base="/${clean_bname}"
     fi
 
     local out="${final_base}${tag}.${ext}"
