@@ -113,34 +113,46 @@ def fetch_all_files(service, folder_id=None, recursive=False):
     if folder_id and recursive:
         logging.info("Starting recursive folder scan...")
         all_folder_ids = [folder_id]
-        folders_to_process = [folder_id]
-        while folders_to_process:
-            current_folder_id = folders_to_process.pop(0)
+
+        # 1. Discover all subfolders using batched queries
+        batch_size = 50
+        idx = 0
+        while idx < len(all_folder_ids):
+            batch = all_folder_ids[idx:idx + batch_size]
+            idx += len(batch)
+
+            # Construct OR query for parents
+            parent_queries = " or ".join([f"'{fid}' in parents" for fid in batch])
+            folder_query = f"({parent_queries}) and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+
             page_token = None
             while True:
-                folder_query = f"'{current_folder_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
                 response = service.files().list(q=folder_query, pageSize=1000, fields="nextPageToken, files(id, name)", pageToken=page_token).execute()
                 subfolders = response.get('files', [])
                 for folder in subfolders:
-                    all_folder_ids.append(folder['id'])
-                    folders_to_process.append(folder['id'])
+                    if folder['id'] not in all_folder_ids:
+                        all_folder_ids.append(folder['id'])
                 page_token = response.get('nextPageToken', None)
                 if page_token is None:
                     break
         
         logging.info(f"Found {len(all_folder_ids)} total folders to scan.")
         
+        # 2. Fetch all files from discovered folders using batched queries
         all_files = []
-        for i, f_id in enumerate(all_folder_ids, 1):
+        for i in range(0, len(all_folder_ids), batch_size):
+            batch = all_folder_ids[i:i + batch_size]
+            parent_queries = " or ".join([f"'{fid}' in parents" for fid in batch])
+            file_query = f"({parent_queries}) and mimeType != 'application/vnd.google-apps.folder' and trashed = false"
+
             page_token = None
             while True:
-                file_query = f"'{f_id}' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false"
                 response = service.files().list(q=file_query, pageSize=1000, fields="nextPageToken, files(id, name, size, md5Checksum, trashed, parents)", pageToken=page_token).execute()
                 all_files.extend(response.get('files', []))
                 page_token = response.get('nextPageToken', None)
                 if page_token is None:
                     break
-            logging.info(f"Scanned folder {i} of {len(all_folder_ids)}. Total files found: {len(all_files)}")
+            logging.info(f"Scanned {min(i + batch_size, len(all_folder_ids))} of {len(all_folder_ids)} folders. Total files found: {len(all_files)}")
         return all_files
 
     all_files = []
