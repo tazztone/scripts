@@ -1,8 +1,9 @@
 import pytest
 from pathlib import Path
-from unittest.mock import patch, mock_open
+from unittest.mock import patch, mock_open, MagicMock
 
 import sys
+sys.modules['exifread'] = MagicMock()
 sys.path.insert(0, str(Path(__file__).parent))
 from remove_jpg_if_raw_exists import is_valid_raw, read_exif, _check_exif
 
@@ -42,6 +43,14 @@ def test_read_exif_success(mock_process_file, tmp_path: Path):
 # Tests for _check_exif
 @patch("remove_jpg_if_raw_exists.read_exif")
 def test_check_exif_no_tags(mock_read_exif, tmp_path: Path):
+    mock_read_exif.return_value = {}
+    jpg_path = tmp_path / "test.jpg"
+    result, reason = _check_exif(jpg_path)
+    assert result == False
+    assert reason == "no EXIF data found"
+
+@patch("remove_jpg_if_raw_exists.read_exif")
+def test_check_exif_empty_dict(mock_read_exif, tmp_path: Path):
     mock_read_exif.return_value = {}
     jpg_path = tmp_path / "test.jpg"
     result, reason = _check_exif(jpg_path)
