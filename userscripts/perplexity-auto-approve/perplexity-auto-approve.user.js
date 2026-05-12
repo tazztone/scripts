@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Perplexity Auto Approve
 // @namespace    https://github.com/tazztone/scripts
-// @version      0.2.0
-// @description  Automatically clicks the Approve button on Perplexity agent action cards. Uses MutationObserver to handle SPA navigation. Includes a short delay before clicking so you can intervene.
+// @version      0.3.0
+// @description  Automatically clicks the Approve button on Perplexity agent action cards. Includes visual countdown, hover-to-pause, and auto-enables the GitHub connector.
 // @author       tazztone
 // @match        https://www.perplexity.ai/*
 // @match        https://perplexity.ai/*
@@ -12,114 +12,186 @@
 // ==/UserScript==
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
-// Set to false to disable auto-click without uninstalling the script.
-const AUTO_APPROVE_ENABLED = true;
+const CONFIG = {
+  AUTO_APPROVE: true,
+  AUTO_ENABLE_GITHUB: true,
+  CLICK_DELAY_MS: 3000, // Increased to 3s to make countdown visible
+  APPROVE_TEXTS: ['approve', 'confirm', 'allow'],
+  CHECK_INTERVAL_MS: 1000,
+  OBSERVER_DEBOUNCE_MS: 150,
+};
 
-// Milliseconds to wait after the button is detected before clicking.
-// Gives you a window to intervene if needed.
-const CLICK_DELAY_MS = 1500;
-
-// Optional: only auto-approve if the card contains one of these strings.
-// Leave empty [] to approve ALL action cards regardless of content.
-// Example: ["Merge PR", "push files"] — case-insensitive.
-const APPROVE_ONLY_IF_CARD_CONTAINS = [];
-
-// Debounce delay for MutationObserver callback (ms).
-// Prevents scanning the full DOM on every micro-mutation in a busy React app.
-const OBSERVER_DEBOUNCE_MS = 150;
+// CSS for the visual countdown
+const STYLE = `
+  .px-auto-approve-btn {
+    position: relative !important;
+    overflow: hidden !important;
+  }
+  .px-progress-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 4px;
+    background: #00cc66;
+    width: 100%;
+    transform-origin: left;
+    transition: transform linear;
+    z-index: 10;
+    pointer-events: none;
+  }
+  .px-paused .px-progress-bar {
+    background: #ffa500 !important;
+    animation-play-state: paused !important;
+  }
+`;
 // ─────────────────────────────────────────────────────────────────────────────
 
 (() => {
   'use strict';
 
+  // Inject styles
+  const styleEl = document.createElement('style');
+  styleEl.textContent = STYLE;
+  document.head.appendChild(styleEl);
+
   const normalize = (s) => (s || '').replace(/\s+/g, ' ').trim().toLowerCase();
 
-  // Treat both native disabled and aria-disabled="true" as disabled.
-  function isDisabled(el) {
-    return el.disabled || el.getAttribute('aria-disabled') === 'true';
-  }
-
-  // Check element is visible in the viewport (not hidden via CSS).
   function isVisible(el) {
     if (!document.contains(el)) return false;
     const style = window.getComputedStyle(el);
-    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
-    const rect = el.getBoundingClientRect();
-    return rect.width > 0 && rect.height > 0;
+    return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0' && el.getBoundingClientRect().width > 0;
   }
 
-  // Walk up to 6 ancestors looking for a card/dialog container.
-  // Falls back to gathering text from the button's siblings if no container found.
-  function getCardText(btn) {
-    let node = btn.parentElement;
-    for (let i = 0; i < 6 && node && node !== document.body; i++) {
-      const role = (node.getAttribute('role') || '').toLowerCase();
-      if (
-        role === 'dialog' ||
-        role === 'alertdialog' ||
-        node.tagName === 'DIALOG' ||
-        // Look for non-hashed semantic indicators in the class list
-        [...node.classList].some((c) => /^(card|modal|dialog|panel|action|approve)/i.test(c))
-      ) {
-        return normalize(node.textContent);
-      }
-      node = node.parentElement;
+  // --- CONNECTOR LOGIC ---
+  
+  let githubEnableAttempted = false;
+  let lastUrl = location.href;
+
+  function isGithubEnabled() {
+    const activeConnectors = document.querySelectorAll('[data-testid="message-input-active-connectors"], .flex.items-center.gap-x-2');
+    return Array.from(activeConnectors).some(el => el.textContent.toLowerCase().includes('github') || el.querySelector('svg path[d*="M12 2C6.477 2 2 6.477 2 12c0 4.419 2.865 8.166 6.839 9.489"]'));
+  }
+
+  async function ensureGithubEnabled() {
+    if (!CONFIG.AUTO_ENABLE_GITHUB || isGithubEnabled()) return;
+    
+    // Prevent infinite loops in SPA
+    githubEnableAttempted = true;
+
+    // Alternative Method: Try to click the suggestion pill if it appears above input
+    const suggestionPills = Array.from(document.querySelectorAll('button')).filter(el => normalize(el.textContent).includes('github'));
+    const suggestion = suggestionPills.find(el => isVisible(el));
+    if (suggestion) {
+      suggestion.click();
+      console.log('[Perplexity Auto Approve] GitHub connector enabled via suggestion pill.');
+      return;
     }
-    // Fallback: use the immediate parent's text
-    return normalize(btn.parentElement ? btn.parentElement.textContent : '');
+
+    // Method 1: Menu Sequence
+    const attachBtn = document.querySelector('button[aria-label*="Attach"], button:has(svg[data-icon="plus"])');
+    if (!attachBtn) return;
+    
+    attachBtn.click();
+    await new Promise(r => setTimeout(r, 300));
+
+    const connectorsMenu = Array.from(document.querySelectorAll('div, button, li')).find(el => el.textContent.includes('Connectors and sources'));
+    if (!connectorsMenu) return;
+    
+    // Hover over connectors menu to open flyout
+    connectorsMenu.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+    connectorsMenu.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    await new Promise(r => setTimeout(r, 300));
+
+    // Find and click the GitHub checkbox
+    const githubItem = Array.from(document.querySelectorAll('div, button, span')).find(el => normalize(el.textContent) === 'github');
+    if (githubItem) {
+      githubItem.click();
+      console.log('[Perplexity Auto Approve] GitHub connector enabled via menu.');
+    }
+
+    // Close menu by clicking backdrop or escape
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
   }
 
-  function cardAllowed(btn) {
-    if (!APPROVE_ONLY_IF_CARD_CONTAINS.length) return true;
-    const cardText = getCardText(btn);
-    return APPROVE_ONLY_IF_CARD_CONTAINS.some((phrase) =>
-      cardText.includes(phrase.toLowerCase())
-    );
-  }
+  // --- APPROVE LOGIC ---
 
-  // Returns ALL unhandled, enabled, visible Approve buttons on the page.
+  const activeTimers = new Map();
+
   function findApproveButtons() {
     return [...document.querySelectorAll('button, [role="button"]')].filter(
       (el) =>
-        normalize(el.textContent) === 'approve' &&
-        !isDisabled(el) &&
+        CONFIG.APPROVE_TEXTS.includes(normalize(el.textContent)) &&
+        !el.disabled &&
+        el.getAttribute('aria-disabled') !== 'true' &&
         !el.dataset.pxAutoClicked &&
         isVisible(el)
     );
   }
 
   function scheduleClick(btn) {
-    // Mark immediately so subsequent observer calls don't double-schedule.
-    btn.dataset.pxAutoClicked = '1';
-    console.log('[Perplexity Auto Approve] Approve button found — clicking in', CLICK_DELAY_MS, 'ms');
+    if (activeTimers.has(btn)) return;
 
-    setTimeout(() => {
-      if (isVisible(btn) && !isDisabled(btn)) {
+    btn.dataset.pxAutoClicked = '1';
+    btn.classList.add('px-auto-approve-btn');
+
+    const progressBar = document.createElement('div');
+    progressBar.className = 'px-progress-bar';
+    progressBar.style.transform = 'scaleX(1)';
+    btn.appendChild(progressBar);
+
+    let timeLeft = CONFIG.CLICK_DELAY_MS;
+    let isPaused = false;
+
+    const updateUI = () => {
+      const scale = timeLeft / CONFIG.CLICK_DELAY_MS;
+      progressBar.style.transform = `scaleX(${scale})`;
+    };
+
+    const tick = () => {
+      if (isPaused) return;
+      timeLeft -= 100;
+      updateUI();
+      if (timeLeft <= 0) {
+        clearInterval(timer);
         btn.click();
         console.log('[Perplexity Auto Approve] Clicked.');
-      } else {
-        console.log('[Perplexity Auto Approve] Button gone/disabled/hidden before click — skipped.');
       }
-    }, CLICK_DELAY_MS);
+    };
+
+    const timer = setInterval(tick, 100);
+    activeTimers.set(btn, timer);
+
+    btn.onmouseenter = () => {
+      isPaused = true;
+      btn.classList.add('px-paused');
+    };
+    btn.onmouseleave = () => {
+      isPaused = false;
+      btn.classList.remove('px-paused');
+    };
   }
 
-  function maybeClickApprove() {
-    if (!AUTO_APPROVE_ENABLED) return;
-    findApproveButtons().forEach((btn) => {
-      if (cardAllowed(btn)) scheduleClick(btn);
-    });
+  function run() {
+    if (lastUrl !== location.href) {
+      lastUrl = location.href;
+      githubEnableAttempted = false;
+    }
+
+    if (CONFIG.AUTO_APPROVE) {
+      findApproveButtons().forEach(scheduleClick);
+    }
+    if (CONFIG.AUTO_ENABLE_GITHUB && !githubEnableAttempted) {
+      ensureGithubEnabled();
+    }
   }
 
-  // Debounced MutationObserver — avoids scanning the whole DOM on every
-  // micro-mutation fired by React's render cycle.
   let debounceTimer = null;
   const observer = new MutationObserver(() => {
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(maybeClickApprove, OBSERVER_DEBOUNCE_MS);
+    debounceTimer = setTimeout(run, CONFIG.OBSERVER_DEBOUNCE_MS);
   });
 
   observer.observe(document.documentElement, { childList: true, subtree: true });
-
-  // Run once immediately in case the card is already present on load.
-  maybeClickApprove();
+  run();
 })();
+
