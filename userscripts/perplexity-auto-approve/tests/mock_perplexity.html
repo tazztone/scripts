@@ -62,6 +62,15 @@
             attachMenu.classList.toggle('visible');
         };
 
+        const connectorsItem = document.getElementById('connectors-item');
+        const showFlyout = () => {
+            const flyout = connectorsItem.querySelector('.flyout');
+            if (flyout) flyout.style.display = 'block';
+        };
+        connectorsItem.addEventListener('mouseenter', showFlyout);
+        connectorsItem.addEventListener('pointerenter', showFlyout);
+        connectorsItem.addEventListener('mouseover', showFlyout);
+
         githubCheckbox.onclick = () => {
             const pill = document.createElement('div');
             pill.textContent = 'GitHub';

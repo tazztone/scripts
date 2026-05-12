@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Perplexity Auto Approve
 // @namespace    https://github.com/tazztone/scripts
-// @version      0.3.1
+// @version      0.4.0
 // @description  Automatically clicks the Approve button on Perplexity agent action cards. Includes visual countdown, hover-to-pause, and auto-enables the GitHub connector.
 // @author       tazztone
 // @match        https://www.perplexity.ai/*
@@ -71,45 +71,59 @@ const STYLE = `
     return Array.from(activeConnectors).some(el => el.textContent.toLowerCase().includes('github') || el.querySelector('svg path[d*="M12 2C6.477 2 2 6.477 2 12c0 4.419 2.865 8.166 6.839 9.489"]'));
   }
 
-  async function ensureGithubEnabled() {
-    if (!CONFIG.AUTO_ENABLE_GITHUB || isGithubEnabled()) return;
-
-    // Prevent infinite loops in SPA
+  async function ensureGithubEnabledViaMenu() {
+    if (!CONFIG.AUTO_ENABLE_GITHUB || isGithubEnabled() || githubEnableAttempted) return;
     githubEnableAttempted = true;
 
-    // Alternative Method: Try to click the suggestion pill if it appears above input
-    const suggestionPills = Array.from(document.querySelectorAll('button')).filter(el => normalize(el.textContent).includes('github'));
-    const suggestion = suggestionPills.find(el => isVisible(el));
-    if (suggestion) {
-      suggestion.click();
-      console.log('[Perplexity Auto Approve] GitHub connector enabled via suggestion pill.');
-      return;
-    }
-
-    // Method 1: Menu Sequence
-    const attachBtn = document.querySelector('button[aria-label*="Attach"], button:has(svg[data-icon="plus"])');
+    // Try to find the + button by multiple selectors
+    const attachBtn = document.querySelector([
+      'button[aria-label="Add"]',
+      'button[aria-label*="attach" i]',
+      'button[aria-label*="add" i]',
+      'button:has(svg[data-icon="plus"])',
+    ].join(', '));
     if (!attachBtn) return;
 
     attachBtn.click();
-    await new Promise(r => setTimeout(r, 300));
+    await new Promise(r => setTimeout(r, 400));
 
-    const connectorsMenu = Array.from(document.querySelectorAll('div, button, li')).find(el => el.textContent.includes('Connectors and sources'));
+    const connectorsMenu = Array.from(document.querySelectorAll('div, button, li, [role="menuitem"]'))
+      .filter(el => {
+        const txt = el.textContent.trim().toLowerCase();
+        return (txt.startsWith('connectors') || txt.includes('connectors and sources')) && isVisible(el);
+      })
+      .sort((a, b) => a.textContent.length - b.textContent.length)[0];
     if (!connectorsMenu) return;
 
-    // Hover over connectors menu to open flyout
-    connectorsMenu.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
-    connectorsMenu.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-    await new Promise(r => setTimeout(r, 300));
+    // Use correct event constructors — required for React/Radix components
+    ['pointerenter', 'pointermove', 'mouseover', 'mouseenter'].forEach(type => {
+      const EventClass = type.startsWith('pointer') ? PointerEvent : MouseEvent;
+      connectorsMenu.dispatchEvent(new EventClass(type, { bubbles: true, cancelable: true }));
+    });
+    await new Promise(r => setTimeout(r, 400));
 
     // Find and click the GitHub checkbox
-    const githubItem = Array.from(document.querySelectorAll('div, button, span')).find(el => normalize(el.textContent) === 'github');
+    const githubItem = Array.from(document.querySelectorAll('div, button, span, [role="menuitem"], [role="option"]'))
+      .find(el => normalize(el.textContent) === 'github' && isVisible(el));
     if (githubItem) {
       githubItem.click();
-      console.log('[Perplexity Auto Approve] GitHub connector enabled via menu.');
+      console.log('[Perplexity Auto Approve] GitHub enabled via menu.');
     }
 
     // Close menu by pressing Escape
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  }
+
+  function tryClickSuggestionPill() {
+    if (!CONFIG.AUTO_ENABLE_GITHUB || isGithubEnabled()) return false;
+    const pill = Array.from(document.querySelectorAll('button'))
+      .find(el => normalize(el.textContent).includes('github') && isVisible(el));
+    if (pill) {
+      pill.click();
+      console.log('[Perplexity Auto Approve] GitHub enabled via suggestion pill.');
+      return true;
+    }
+    return false;
   }
 
   // --- APPROVE LOGIC ---
@@ -192,8 +206,10 @@ const STYLE = `
     if (CONFIG.AUTO_APPROVE) {
       findApproveButtons().forEach(scheduleClick);
     }
-    if (CONFIG.AUTO_ENABLE_GITHUB && !githubEnableAttempted) {
-      ensureGithubEnabled();
+    if (CONFIG.AUTO_ENABLE_GITHUB && !isGithubEnabled()) {
+      if (!tryClickSuggestionPill()) {
+        ensureGithubEnabledViaMenu();
+      }
     }
   }
 
