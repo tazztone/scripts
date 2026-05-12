@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      0.1.0
+// @version      0.2.0
 // @description  Automatically configures a price alarm (60% value, 2 years duration) on clicking the alarm bell.
 // @author       tazztone
 // @match        https://www.toppreise.ch/preisvergleich/*
@@ -22,12 +22,77 @@ const CONFIG = {
   DEBUG: true
 };
 
+// CSS Style Definition for Toast Notification
+const STYLES = `
+  #tp-toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 999999;
+    pointer-events: none;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  .tp-toast {
+    background: rgba(18, 18, 18, 0.9);
+    color: #ffffff;
+    padding: 12px 20px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    border-left: 4px solid #4caf50;
+    transform: translateX(100%);
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    font-size: 14px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    backdrop-filter: blur(5px);
+  }
+  .tp-toast.visible {
+    transform: translateX(0);
+    opacity: 1;
+  }
+`;
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 (() => {
   'use strict';
 
   const log = (...args) => { if (CONFIG.DEBUG) console.log('[Topp-Alarm]', ...args); };
+
+  // Inject CSS
+  const styleEl = document.createElement('style');
+  styleEl.textContent = STYLES;
+  document.head.appendChild(styleEl);
+
+  // Setup Container
+  let toastContainer = document.getElementById('tp-toast-container');
+  if (!toastContainer) {
+    toastContainer = document.createElement('div');
+    toastContainer.id = 'tp-toast-container';
+    document.body.appendChild(toastContainer);
+  }
+
+  function showToast(message) {
+    const toast = document.createElement('div');
+    toast.className = 'tp-toast';
+    toast.innerHTML = `<span>✅</span> <div>${message}</div>`;
+    toastContainer.appendChild(toast);
+    
+    // Trigger animation
+    requestAnimationFrame(() => {
+      toast.classList.add('visible');
+    });
+
+    // Remove after 5 seconds
+    setTimeout(() => {
+      toast.classList.remove('visible');
+      setTimeout(() => toast.remove(), 300);
+    }, 5000);
+  }
 
   function parsePrice(priceStr) {
     if (!priceStr) return 0;
@@ -101,13 +166,18 @@ const CONFIG = {
       }
     }
 
-    // 5. Submit the form automatically
+    // 5. Show Confirmation Toast
+    const readableDuration = CONFIG.DURATION_DAYS === "730" ? "2 Years" : `${CONFIG.DURATION_DAYS} Days`;
+    showToast(`Applied Alarm: <b>${targetPrice} CHF</b> | ${readableDuration}`);
+    log('Displayed success notification banner.');
+
+    // 6. Submit the form automatically
     if (CONFIG.AUTO_SUBMIT) {
       const submitBtn = modalContainer.querySelector('input.f_submitbtn[type="submit"]');
       if (submitBtn) {
         log('Submitting configuration...');
         // Brief delay before final submission to ensure standard scripts processes events
-        setTimeout(() => { submitBtn.click(); }, 200);
+        setTimeout(() => { submitBtn.click(); }, 300);
       } else {
         log('Error: Could not find submit button.');
       }
