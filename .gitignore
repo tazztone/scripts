@@ -229,3 +229,5 @@ sh/testing/output/
 python/immich-api/timelapse_stacking_last_run.json
 python/remove_jpg_if_raw_exists/test_years.sh
 python/remove_jpg_if_raw_exists/cleanup_history.sh
+userscripts/topp-alarm/bell.png
+userscripts/topp-alarm/alert.png
