@@ -2,9 +2,10 @@
 
 Userscript that fully automates the configuration of a price alarm on Toppreise.ch.
 ![alt text](image.png)
-## Installation
-Install this script via your preferred extension (Violentmonkey, Tampermonkey, Greasemonkey).
-Direct installation link: [topp-alarm.user.js](https://github.com/tazztone/scripts/raw/refs/heads/main/userscripts/topp-alarm/topp-alarm.user.js)
+## 🚀 Installation
+
+### 👉 [**CLICK HERE TO INSTALL USERSCRIPT**](https://github.com/tazztone/scripts/raw/refs/heads/main/userscripts/topp-alarm/topp-alarm.user.js)
+*(Requires Violentmonkey / Tampermonkey)*
 
 ## Logic
 When you are viewing a product page and click the "Preisalarm hinzufügen" (Bell icon) button:
