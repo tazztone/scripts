@@ -3,6 +3,7 @@ import json
 import webbrowser
 import requests
 import statistics
+from dataclasses import dataclass
 from datetime import datetime
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -95,17 +96,41 @@ def same_location(assets, max_dist_deg=0.0005):
     return dist < max_dist_deg
 
 
-def get_candidates(
-    min_frames,
-    max_cv_gap,
-    max_cv_size,
-    min_span,
-    filter_location,
-    detection_source,
-    max_gap_seconds_search,
-):
+@dataclass
+class ProcessOptions:
+    min_frames: int
+    max_cv_gap: float
+    max_cv_size: float
+    min_span: int
+    filter_location: bool
+    detection_source: str
+    max_gap_seconds_search: int
+
+
+def group_by_time_delta(assets, max_gap_seconds):
     sequences = []
-    if detection_source == "duplicates":
+    unstacked = [a for a in assets if not a.get("stack")]
+    unstacked.sort(key=lambda a: a["localDateTime"])
+
+    if unstacked:
+        current = [unstacked[0]]
+        for prev, curr in zip(unstacked, unstacked[1:]):
+            gap = (
+                datetime.fromisoformat(curr["localDateTime"])
+                - datetime.fromisoformat(prev["localDateTime"])
+            ).total_seconds()
+            if gap <= max_gap_seconds:
+                current.append(curr)
+            else:
+                sequences.append(current)
+                current = [curr]
+        sequences.append(current)
+    return sequences
+
+
+def get_candidates(options: ProcessOptions):
+    sequences = []
+    if options.detection_source == "duplicates":
         print("  Fetching AI duplicate groups...")
         resp = requests.get(f"{BASE_URL}/api/duplicates", headers=headers).json()
         for group in resp:
@@ -126,33 +151,18 @@ def get_candidates(
                 break
             page += 1
 
-        unstacked = [a for a in all_assets if not a.get("stack")]
-        unstacked.sort(key=lambda a: a["localDateTime"])
-
-        if unstacked:
-            current = [unstacked[0]]
-            for prev, curr in zip(unstacked, unstacked[1:]):
-                gap = (
-                    datetime.fromisoformat(curr["localDateTime"])
-                    - datetime.fromisoformat(prev["localDateTime"])
-                ).total_seconds()
-                if gap <= max_gap_seconds_search:
-                    current.append(curr)
-                else:
-                    sequences.append(current)
-                    current = [curr]
-            sequences.append(current)
+        sequences = group_by_time_delta(all_assets, options.max_gap_seconds_search)
 
     candidates = []
     for seq in sequences:
-        if len(seq) < min_frames:
+        if len(seq) < options.min_frames:
             continue
 
         seq.sort(key=lambda a: a["localDateTime"])
-        ok_span, span = has_min_span(seq, min_span)
-        ok_regular, cv_gap = is_regular(seq, max_cv_gap)
-        ok_size, cv_size = consistent_filesize(seq, max_cv_size)
-        ok_loc = same_location(seq) if filter_location else True
+        ok_span, span = has_min_span(seq, options.min_span)
+        ok_regular, cv_gap = is_regular(seq, options.max_cv_gap)
+        ok_size, cv_size = consistent_filesize(seq, options.max_cv_size)
+        ok_loc = same_location(seq) if options.filter_location else True
 
         if ok_span and ok_regular and ok_size and ok_loc:
             candidates.append(
@@ -562,15 +572,16 @@ def wizard():
             config = step1_tune_filters(config)
             continue
 
-        candidates = get_candidates(
-            config["min_frames"],
-            config["max_cv_gap"],
-            config["max_cv_size"],
-            config["min_span"],
-            config["filter_location"],
-            config["detection_source"],
-            config["max_gap_seconds_search"],
+        options = ProcessOptions(
+            min_frames=config["min_frames"],
+            max_cv_gap=config["max_cv_gap"],
+            max_cv_size=config["max_cv_size"],
+            min_span=config["min_span"],
+            filter_location=config["filter_location"],
+            detection_source=config["detection_source"],
+            max_gap_seconds_search=config["max_gap_seconds_search"],
         )
+        candidates = get_candidates(options)
 
         if not candidates:
             print("\n  [!] No candidates found with current filters.")

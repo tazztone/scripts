@@ -1,9 +1,16 @@
 import pytest
 from pathlib import Path
-from unittest.mock import patch, mock_open
+from unittest.mock import patch, mock_open, MagicMock
 
 import sys
+sys.modules['exifread'] = MagicMock()
 sys.path.insert(0, str(Path(__file__).parent))
+
+import types
+mock_exifread = types.ModuleType("exifread")
+mock_exifread.process_file = lambda *args, **kwargs: {}
+sys.modules["exifread"] = mock_exifread
+
 from remove_jpg_if_raw_exists import is_valid_raw, read_exif, _check_exif
 
 # Tests for is_valid_raw
@@ -22,6 +29,12 @@ def test_is_valid_raw_missing_file(tmp_path: Path):
     missing_file = tmp_path / "missing.raw"
     assert is_valid_raw(missing_file, min_size=500) == False
 
+@patch("pathlib.Path.stat")
+def test_is_valid_raw_oserror(mock_stat, tmp_path: Path):
+    mock_stat.side_effect = OSError("Mocked OSError")
+    test_file = tmp_path / "test.raw"
+    assert is_valid_raw(test_file, min_size=500) == False
+
 # Tests for read_exif
 def test_read_exif_missing_file(tmp_path: Path):
     missing_file = tmp_path / "missing.jpg"
@@ -39,9 +52,33 @@ def test_read_exif_success(mock_process_file, tmp_path: Path):
     assert tags == expected_tags
     mock_process_file.assert_called_once()
 
+@patch("remove_jpg_if_raw_exists.exifread.process_file")
+def test_read_exif_exception(mock_process_file, tmp_path: Path):
+    test_file = tmp_path / "test.jpg"
+    test_file.write_bytes(b"dummy")
+    mock_process_file.side_effect = Exception("corrupt file")
+    tags = read_exif(test_file)
+    assert tags == {}
+
 # Tests for _check_exif
 @patch("remove_jpg_if_raw_exists.read_exif")
+def test_check_exif_empty_exif_tags(mock_read_exif, tmp_path: Path):
+    mock_read_exif.return_value = {}
+    jpg_path = tmp_path / "test.jpg"
+    result, reason = _check_exif(jpg_path)
+    assert result == False
+    assert reason == "no EXIF data found"
+
+@patch("remove_jpg_if_raw_exists.read_exif")
 def test_check_exif_no_tags(mock_read_exif, tmp_path: Path):
+    mock_read_exif.return_value = {}
+    jpg_path = tmp_path / "test.jpg"
+    result, reason = _check_exif(jpg_path)
+    assert result == False
+    assert reason == "no EXIF data found"
+
+@patch("remove_jpg_if_raw_exists.read_exif")
+def test_check_exif_empty_dict(mock_read_exif, tmp_path: Path):
     mock_read_exif.return_value = {}
     jpg_path = tmp_path / "test.jpg"
     result, reason = _check_exif(jpg_path)
