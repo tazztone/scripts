@@ -413,24 +413,142 @@ def unstack_last_run():
 # --- Wizard ---
 
 
+def load_wizard_config():
+    return {
+        "min_frames": int(os.getenv("TIMELAPSE_MIN_FRAMES") or 10),
+        "max_cv_gap": float(os.getenv("TIMELAPSE_MAX_CV_GAP") or 0.35),
+        "max_cv_size": float(os.getenv("TIMELAPSE_MAX_CV_SIZE") or 0.1),
+        "min_span": int(os.getenv("TIMELAPSE_MIN_REQD_SPAN_SECONDS") or 15),
+        "detection_source": os.getenv("TIMELAPSE_DETECTION_SOURCE") or "duplicates",
+        "max_gap_seconds_search": int(os.getenv("TIMELAPSE_MAX_GAP_SECONDS") or 60),
+        "filter_location": os.getenv("TIMELAPSE_FILTER_LOCATION", "false").lower()
+        == "true",
+    }
+
+
+def step1_tune_filters(config):
+    src_choice = ask(
+        "Detection Source:",
+        {"1": "AI Duplicates (Fast)", "2": "Gap-based Search (Slow)"},
+    )
+    config["detection_source"] = "duplicates" if src_choice == "1" else "search"
+
+    config["min_frames"] = ask_int(
+        "MIN_FRAMES (min frames per sequence)", config["min_frames"]
+    )
+
+    # Use fallbacks for float inputs to prevent crashes on empty input
+    raw_gap = input(
+        f"  MAX_CV_GAP (regularity, 0-1) [{config['max_cv_gap']}]: "
+    ).strip()
+    config["max_cv_gap"] = float(raw_gap) if raw_gap else config["max_cv_gap"]
+
+    raw_size = input(
+        f"  MAX_CV_SIZE (filesize, 0-1) [{config['max_cv_size']}]: "
+    ).strip()
+    config["max_cv_size"] = float(raw_size) if raw_size else config["max_cv_size"]
+
+    config["min_span"] = ask_int("MIN_SPAN (minimum total seconds)", config["min_span"])
+    if config["detection_source"] == "search":
+        config["max_gap_seconds_search"] = ask_int(
+            "MAX_GAP_SECONDS (search gap)", config["max_gap_seconds_search"]
+        )
+    config["filter_location"] = (
+        ask("Filter by Location?", {"Y": "Yes", "N": "No"}).upper() == "Y"
+    )
+    return config
+
+
+def print_candidates(candidates):
+    # Display the candidate table before asking for verification
+    print(
+        f"{'#':>3} | {'Frames':>6} | {'Timestamp':19} | {'Span':>6} | {'CV Gap':>7} | {'CV Size':>7}"
+    )
+    print(f"{'─' * 3}─┼─{'─' * 6}─┼─{'─' * 19}─┼─{'─' * 6}─┼─{'─' * 7}─┼─{'─' * 7}")
+
+    # Sort by CV descending to show most 'suspicious' / irregular ones first
+    candidates.sort(key=lambda x: x["cv_gap"], reverse=True)
+
+    for i, c in enumerate(candidates):
+        start = c["assets"][0]["localDateTime"]
+        print(
+            f"  [{i + 1:3d}] {len(c['assets']):6d} | {start[:19]} | {c['span']:5.0f}s | {c['cv_gap']:7.3f} | {c['cv_size']:7.3f}"
+        )
+
+
+def step2_verify_candidates(candidates):
+    choice = ask(
+        "Verify candidates?",
+        {
+            "1": f"Create verification albums (max {min(20, len(candidates))})",
+            "2": "Skip to stacking",
+            "3": "Back to filters",
+            "4": "Abort",
+        },
+    )
+
+    if choice == "4":
+        return "abort"
+    if choice == "3":
+        return "back"
+
+    if choice == "1":
+        count = ask_int("How many to verify", min(20, len(candidates)))
+        create_verify_albums(candidates, count)
+
+        # Open browser
+        webbrowser.open(f"{BASE_URL}/albums")
+        header("Step 3 — Review in Immich")
+        input(
+            "  Albums created. Review them in Immich, then press Enter to continue..."
+        )
+
+        choice = ask(
+            "Step 4 — Finalize",
+            {
+                "1": f"Stack all {len(candidates)} candidates",
+                "2": "Restart (re-tune filters)",
+                "3": "Abort (clean up and exit)",
+            },
+        )
+
+        cleanup_verify_albums()
+
+        if choice == "3":
+            return "abort"
+        if choice == "2":
+            return "back"
+
+    return "continue"
+
+
+def step5_album_creation(candidates):
+    header("Step 5 — Album Creation (Optional)")
+    choice = ask(
+        "What kind of album would you like to create?",
+        {
+            "1": "Index Mode (Covers only) - RECOMMENDED",
+            "2": "Collection Mode (ALL frames)",
+            "3": "Skip / No album",
+        },
+    )
+    if choice == "1":
+        create_index_album(candidates, mode="index")
+    elif choice == "2":
+        create_index_album(candidates, mode="collection")
+
+
 def wizard():
     header("Immich Timelapse Stacker", "Wizard mode")
 
-    # Load defaults from env
-    min_frames = int(os.getenv("TIMELAPSE_MIN_FRAMES") or 10)
-    max_cv_gap = float(os.getenv("TIMELAPSE_MAX_CV_GAP") or 0.35)
-    max_cv_size = float(os.getenv("TIMELAPSE_MAX_CV_SIZE") or 0.1)
-    min_span = int(os.getenv("TIMELAPSE_MIN_REQD_SPAN_SECONDS") or 15)
-    detection_source = os.getenv("TIMELAPSE_DETECTION_SOURCE") or "duplicates"
-    max_gap_seconds_search = int(os.getenv("TIMELAPSE_MAX_GAP_SECONDS") or 60)
-    filter_location = os.getenv("TIMELAPSE_FILTER_LOCATION", "false").lower() == "true"
+    config = load_wizard_config()
 
     while True:
         # Step 1 — Filters
         header(
             "Step 1 — Tune filters",
-            f"SOURCE={detection_source}  MIN_FRAMES={min_frames}  "
-            f"CV_GAP={max_cv_gap}  CV_SIZE={max_cv_size}  SPAN={min_span}s",
+            f"SOURCE={config['detection_source']}  MIN_FRAMES={config['min_frames']}  "
+            f"CV_GAP={config['max_cv_gap']}  CV_SIZE={config['max_cv_size']}  SPAN={config['min_span']}s",
         )
 
         choice = ask(
@@ -451,39 +569,17 @@ def wizard():
             continue
 
         if choice == "1":
-            src_choice = ask(
-                "Detection Source:",
-                {"1": "AI Duplicates (Fast)", "2": "Gap-based Search (Slow)"},
-            )
-            detection_source = "duplicates" if src_choice == "1" else "search"
-
-            min_frames = ask_int("MIN_FRAMES (min frames per sequence)", min_frames)
-
-            # Use fallbacks for float inputs to prevent crashes on empty input
-            raw_gap = input(f"  MAX_CV_GAP (regularity, 0-1) [{max_cv_gap}]: ").strip()
-            max_cv_gap = float(raw_gap) if raw_gap else max_cv_gap
-
-            raw_size = input(f"  MAX_CV_SIZE (filesize, 0-1) [{max_cv_size}]: ").strip()
-            max_cv_size = float(raw_size) if raw_size else max_cv_size
-
-            min_span = ask_int("MIN_SPAN (minimum total seconds)", min_span)
-            if detection_source == "search":
-                max_gap_seconds_search = ask_int(
-                    "MAX_GAP_SECONDS (search gap)", max_gap_seconds_search
-                )
-            filter_location = (
-                ask("Filter by Location?", {"Y": "Yes", "N": "No"}).upper() == "Y"
-            )
+            config = step1_tune_filters(config)
             continue
 
         options = ProcessOptions(
-            min_frames=min_frames,
-            max_cv_gap=max_cv_gap,
-            max_cv_size=max_cv_size,
-            min_span=min_span,
-            filter_location=filter_location,
-            detection_source=detection_source,
-            max_gap_seconds_search=max_gap_seconds_search,
+            min_frames=config["min_frames"],
+            max_cv_gap=config["max_cv_gap"],
+            max_cv_size=config["max_cv_size"],
+            min_span=config["min_span"],
+            filter_location=config["filter_location"],
+            detection_source=config["detection_source"],
+            max_gap_seconds_search=config["max_gap_seconds_search"],
         )
         candidates = get_candidates(options)
 
@@ -493,77 +589,16 @@ def wizard():
 
         header("Step 2 — Verify", f"{len(candidates)} candidates found")
 
-        # Display the candidate table before asking for verification
-        print(
-            f"{'#':>3} | {'Frames':>6} | {'Timestamp':19} | {'Span':>6} | {'CV Gap':>7} | {'CV Size':>7}"
-        )
-        print(f"{'─' * 3}─┼─{'─' * 6}─┼─{'─' * 19}─┼─{'─' * 6}─┼─{'─' * 7}─┼─{'─' * 7}")
+        print_candidates(candidates)
 
-        # Sort by CV descending to show most 'suspicious' / irregular ones first
-        candidates.sort(key=lambda x: x["cv_gap"], reverse=True)
-
-        for i, c in enumerate(candidates):
-            start = c["assets"][0]["localDateTime"]
-            print(
-                f"  [{i + 1:3d}] {len(c['assets']):6d} | {start[:19]} | {c['span']:5.0f}s | {c['cv_gap']:7.3f} | {c['cv_size']:7.3f}"
-            )
-
-        choice = ask(
-            "Verify candidates?",
-            {
-                "1": f"Create verification albums (max {min(20, len(candidates))})",
-                "2": "Skip to stacking",
-                "3": "Back to filters",
-                "4": "Abort",
-            },
-        )
-
-        if choice == "4":
+        verify_result = step2_verify_candidates(candidates)
+        if verify_result == "abort":
             return
-        if choice == "3":
+        if verify_result == "back":
             continue
 
-        if choice == "1":
-            count = ask_int("How many to verify", min(20, len(candidates)))
-            create_verify_albums(candidates, count)
-
-            # Open browser
-            webbrowser.open(f"{BASE_URL}/albums")
-            header("Step 3 — Review in Immich")
-            input(
-                "  Albums created. Review them in Immich, then press Enter to continue..."
-            )
-
-            choice = ask(
-                "Step 4 — Finalize",
-                {
-                    "1": f"Stack all {len(candidates)} candidates",
-                    "2": "Restart (re-tune filters)",
-                    "3": "Abort (clean up and exit)",
-                },
-            )
-
-            cleanup_verify_albums()
-
-            if choice == "3":
-                return
-            if choice == "2":
-                continue
-
         if apply_stacks(candidates):
-            header("Step 5 — Album Creation (Optional)")
-            choice = ask(
-                "What kind of album would you like to create?",
-                {
-                    "1": "Index Mode (Covers only) - RECOMMENDED",
-                    "2": "Collection Mode (ALL frames)",
-                    "3": "Skip / No album",
-                },
-            )
-            if choice == "1":
-                create_index_album(candidates, mode="index")
-            elif choice == "2":
-                create_index_album(candidates, mode="collection")
+            step5_album_creation(candidates)
 
         break
 
