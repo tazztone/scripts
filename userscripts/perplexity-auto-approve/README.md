@@ -4,9 +4,9 @@ A [Violentmonkey](https://violentmonkey.github.io/) userscript that automaticall
 
 ## Features
 
-- **Auto-Approve**: Automatically clicks "Approve" or "Confirm" buttons.
-- **Visual Countdown**: A green progress bar appears on the button before it clicks.
-- **Hover-to-Pause**: Hovering over the button pauses the countdown (bar turns orange), giving you time to read or manually intervene.
+- **Auto-Approve**: Automatically clicks "Approve", "Confirm", or "Allow" buttons.
+- **Visual Countdown**: A green progress bar shrinks on the button before it clicks, giving you time to react.
+- **Hover-to-Pause**: Hovering over the button pauses the countdown (bar turns orange) so you can read the action or intervene manually. Moving the mouse away resumes it.
 - **GitHub Auto-Enable**: Ensures the GitHub connector is active in your chat session automatically.
 
 ## Requirements
@@ -16,10 +16,21 @@ A [Violentmonkey](https://violentmonkey.github.io/) userscript that automaticall
 
 ## Installation
 
-1. Install [Violentmonkey](https://addons.mozilla.org/en-US/firefox/addon/violentmonkey/)
-2. Click **New Script** in the Violentmonkey dashboard
+**One-click install** — open the raw script URL in your browser while Violentmonkey is active:
+
+> [`perplexity-auto-approve.user.js` (raw)](https://raw.githubusercontent.com/tazztone/scripts/main/userscripts/perplexity-auto-approve/perplexity-auto-approve.user.js)
+
+Violentmonkey will detect the `.user.js` file and show an install dialog automatically. Click **Confirm Installation**.
+
+<details>
+<summary>Manual install (copy-paste)</summary>
+
+1. Open the Violentmonkey dashboard
+2. Click **New Script**
 3. Paste the contents of [`perplexity-auto-approve.user.js`](perplexity-auto-approve.user.js)
 4. Save (`Ctrl+S`)
+
+</details>
 
 ## Configuration
 
@@ -27,10 +38,12 @@ All options are at the top of the script in the `CONFIG` object:
 
 | Variable | Default | Description |
 |---|---|---|
-| `AUTO_APPROVE` | `true` | Set to `false` to disable auto-click |
+| `AUTO_APPROVE` | `true` | Set to `false` to disable auto-click entirely |
 | `AUTO_ENABLE_GITHUB` | `true` | Set to `false` to stop auto-enabling the GitHub connector |
-| `CLICK_DELAY_MS` | `3000` | Delay in ms before clicking (3s) |
-| `APPROVE_TEXTS` | `['approve', 'confirm']` | Keywords to match on buttons |
+| `CLICK_DELAY_MS` | `3000` | Delay in ms before clicking (default: 3 s) |
+| `APPROVE_TEXTS` | `['approve', 'confirm', 'allow']` | Button text keywords to match (case-insensitive) |
+| `CHECK_INTERVAL_MS` | `1000` | How often (ms) to poll for new buttons |
+| `OBSERVER_DEBOUNCE_MS` | `150` | Debounce delay (ms) after a DOM change before running |
 
 ## Development & Testing
 
