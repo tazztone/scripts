@@ -3,6 +3,7 @@ import json
 import webbrowser
 import requests
 import statistics
+from dataclasses import dataclass
 from datetime import datetime
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -44,11 +45,11 @@ def ask_int(prompt, default):
 
 
 def header(title, subtitle=""):
-    print(f"\n{'─'*50}")
+    print(f"\n{'─' * 50}")
     print(f"  {title}")
     if subtitle:
         print(f"  {subtitle}")
-    print(f"{'─'*50}")
+    print(f"{'─' * 50}")
 
 
 # --- Filtering Logic ---
@@ -95,17 +96,41 @@ def same_location(assets, max_dist_deg=0.0005):
     return dist < max_dist_deg
 
 
-def get_candidates(
-    min_frames,
-    max_cv_gap,
-    max_cv_size,
-    min_span,
-    filter_location,
-    detection_source,
-    max_gap_seconds_search,
-):
+@dataclass
+class ProcessOptions:
+    min_frames: int
+    max_cv_gap: float
+    max_cv_size: float
+    min_span: int
+    filter_location: bool
+    detection_source: str
+    max_gap_seconds_search: int
+
+
+def group_by_time_delta(assets, max_gap_seconds):
     sequences = []
-    if detection_source == "duplicates":
+    unstacked = [a for a in assets if not a.get("stack")]
+    unstacked.sort(key=lambda a: a["localDateTime"])
+
+    if unstacked:
+        current = [unstacked[0]]
+        for prev, curr in zip(unstacked, unstacked[1:]):
+            gap = (
+                datetime.fromisoformat(curr["localDateTime"])
+                - datetime.fromisoformat(prev["localDateTime"])
+            ).total_seconds()
+            if gap <= max_gap_seconds:
+                current.append(curr)
+            else:
+                sequences.append(current)
+                current = [curr]
+        sequences.append(current)
+    return sequences
+
+
+def get_candidates(options: ProcessOptions):
+    sequences = []
+    if options.detection_source == "duplicates":
         print("  Fetching AI duplicate groups...")
         resp = requests.get(f"{BASE_URL}/api/duplicates", headers=headers).json()
         for group in resp:
@@ -126,33 +151,18 @@ def get_candidates(
                 break
             page += 1
 
-        unstacked = [a for a in all_assets if not a.get("stack")]
-        unstacked.sort(key=lambda a: a["localDateTime"])
-
-        if unstacked:
-            current = [unstacked[0]]
-            for prev, curr in zip(unstacked, unstacked[1:]):
-                gap = (
-                    datetime.fromisoformat(curr["localDateTime"])
-                    - datetime.fromisoformat(prev["localDateTime"])
-                ).total_seconds()
-                if gap <= max_gap_seconds_search:
-                    current.append(curr)
-                else:
-                    sequences.append(current)
-                    current = [curr]
-            sequences.append(current)
+        sequences = group_by_time_delta(all_assets, options.max_gap_seconds_search)
 
     candidates = []
     for seq in sequences:
-        if len(seq) < min_frames:
+        if len(seq) < options.min_frames:
             continue
 
         seq.sort(key=lambda a: a["localDateTime"])
-        ok_span, span = has_min_span(seq, min_span)
-        ok_regular, cv_gap = is_regular(seq, max_cv_gap)
-        ok_size, cv_size = consistent_filesize(seq, max_cv_size)
-        ok_loc = same_location(seq) if filter_location else True
+        ok_span, span = has_min_span(seq, options.min_span)
+        ok_regular, cv_gap = is_regular(seq, options.max_cv_gap)
+        ok_size, cv_size = consistent_filesize(seq, options.max_cv_size)
+        ok_loc = same_location(seq) if options.filter_location else True
 
         if ok_span and ok_regular and ok_size and ok_loc:
             candidates.append(
@@ -226,7 +236,7 @@ def create_verify_albums(candidates, count):
     for i, c in enumerate(to_verify):
         date_str = c["assets"][0]["localDateTime"][:10]
         name = (
-            f"{VERIFY_PREFIX}{i+1:03d} | "
+            f"{VERIFY_PREFIX}{i + 1:03d} | "
             f"{date_str} | "
             f"{len(c['assets'])}f | "
             f"cv={c['cv_gap']:.2f}"
@@ -295,10 +305,10 @@ def apply_stacks(candidates):
                 }
             )
             print(
-                f"  [{i+1:3d}] ✓  {len(ids)}f @ {c['assets'][0]['localDateTime'][:19]}"
+                f"  [{i + 1:3d}] ✓  {len(ids)}f @ {c['assets'][0]['localDateTime'][:19]}"
             )
         else:
-            print(f"  [{i+1:3d}] ✗  {resp.status_code}")
+            print(f"  [{i + 1:3d}] ✗  {resp.status_code}")
 
     with open(LOG_PATH, "w") as f:
         json.dump(run_log, f, indent=2)
@@ -348,7 +358,7 @@ def create_index_album(candidates, mode="index"):
             json={"ids": batch},
         )
         if resp.status_code != 200:
-            print(f"    [!] Failed to add batch {i//500 + 1}: {resp.status_code}")
+            print(f"    [!] Failed to add batch {i // 500 + 1}: {resp.status_code}")
 
     print(f"    ✓ Album updated: {BASE_URL}/albums/{album_id}")
 
@@ -368,11 +378,11 @@ def unstack_last_run():
             f"{BASE_URL}/api/stacks/{entry['stack_id']}", headers=headers
         )
         if resp.status_code == 204:
-            print(f"  [{i+1:3d}] ✓  {entry['frames']}f @ {entry['date']}")
+            print(f"  [{i + 1:3d}] ✓  {entry['frames']}f @ {entry['date']}")
         else:
             failed.append(entry)
             print(
-                f"  [{i+1:3d}] ✗  {resp.status_code}  {entry['frames']}f @ {entry['date']}"
+                f"  [{i + 1:3d}] ✗  {resp.status_code}  {entry['frames']}f @ {entry['date']}"
             )
 
     if failed:
@@ -466,15 +476,16 @@ def wizard():
             )
             continue
 
-        candidates = get_candidates(
-            min_frames,
-            max_cv_gap,
-            max_cv_size,
-            min_span,
-            filter_location,
-            detection_source,
-            max_gap_seconds_search,
+        options = ProcessOptions(
+            min_frames=min_frames,
+            max_cv_gap=max_cv_gap,
+            max_cv_size=max_cv_size,
+            min_span=min_span,
+            filter_location=filter_location,
+            detection_source=detection_source,
+            max_gap_seconds_search=max_gap_seconds_search,
         )
+        candidates = get_candidates(options)
 
         if not candidates:
             print("\n  [!] No candidates found with current filters.")
@@ -486,7 +497,7 @@ def wizard():
         print(
             f"{'#':>3} | {'Frames':>6} | {'Timestamp':19} | {'Span':>6} | {'CV Gap':>7} | {'CV Size':>7}"
         )
-        print(f"{'─'*3}─┼─{'─'*6}─┼─{'─'*19}─┼─{'─'*6}─┼─{'─'*7}─┼─{'─'*7}")
+        print(f"{'─' * 3}─┼─{'─' * 6}─┼─{'─' * 19}─┼─{'─' * 6}─┼─{'─' * 7}─┼─{'─' * 7}")
 
         # Sort by CV descending to show most 'suspicious' / irregular ones first
         candidates.sort(key=lambda x: x["cv_gap"], reverse=True)
@@ -494,7 +505,7 @@ def wizard():
         for i, c in enumerate(candidates):
             start = c["assets"][0]["localDateTime"]
             print(
-                f"  [{i+1:3d}] {len(c['assets']):6d} | {start[:19]} | {c['span']:5.0f}s | {c['cv_gap']:7.3f} | {c['cv_size']:7.3f}"
+                f"  [{i + 1:3d}] {len(c['assets']):6d} | {start[:19]} | {c['span']:5.0f}s | {c['cv_gap']:7.3f} | {c['cv_size']:7.3f}"
             )
 
         choice = ask(
