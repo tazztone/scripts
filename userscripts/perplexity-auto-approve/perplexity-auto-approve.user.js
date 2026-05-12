@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Perplexity Auto Approve
 // @namespace    https://github.com/tazztone/scripts
-// @version      0.4.4
+// @version      0.4.5
 // @description  Automatically clicks the Approve button on Perplexity agent action cards. Includes visual countdown, hover-to-pause, and auto-enables the GitHub connector.
 // @author       tazztone
 // @match        https://www.perplexity.ai/*
@@ -68,7 +68,7 @@ const STYLE = `
 
   function isGithubEnabled() {
     // 1. Check for the solid GitHub pill button (active connector) in the input area
-    // Active connectors have aria-haspopup="menu" and are usually near the input area
+    // Active connectors have aria-haspopup="menu" and a solid border/background.
     const activePill = Array.from(document.querySelectorAll('button[aria-haspopup="menu"], button[aria-expanded]'))
       .find(el => normalize(el.textContent).includes('github') && isVisible(el));
     if (activePill) return true;
@@ -141,28 +141,30 @@ const STYLE = `
     if (!CONFIG.AUTO_ENABLE_GITHUB || isGithubEnabled()) return false;
     
     // Look for the "Enable GitHub" suggestion pill
-    // These pills are characteristic: they contain "GitHub" and a "plus" icon or "+" text
     const buttons = Array.from(document.querySelectorAll('button'));
     const pill = buttons.find(el => {
       const text = normalize(el.textContent);
       if (!text.includes('github')) return false;
       if (!isVisible(el)) return false;
       
-      // DETECTION: Look for the "+" icon or text, which suggests enablement
-      const hasPlusIcon = el.querySelector('svg[data-icon="plus"]') || 
+      // DETECTION: Suggestion pills have specific features:
+      // 1. Dashed border (characteristic of "Add" suggestions on PPLX)
+      const isDashed = el.classList.contains('border-dashed') || 
+                       window.getComputedStyle(el).borderStyle === 'dashed';
+      
+      // 2. Contains a plus icon (either as a path or a use-ref)
+      const hasPlusIcon = el.querySelector('use[xlink\\:href*="plus"]') || 
+                          el.querySelector('svg path[d*="M12 5l0 14 M5 12l14 0"]') ||
                           el.querySelector('svg path[d*="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"]') ||
                           el.textContent.includes('+');
       
       // EXCLUSION: 
       // 1. Ignore active connectors (they have aria-haspopup="menu")
       const isActiveConnector = el.getAttribute('aria-haspopup') === 'menu';
+      // 2. Ignore Follow-ups (full-width rows)
+      const isFullWidthRow = el.offsetWidth > 500;
       
-      // 2. CRITICAL EXCLUSION: Ignore "Follow-ups" (search prompts).
-      // Follow-ups are wide full-width buttons (800px+), whereas enablement pills
-      // are small chips (~100-200px).
-      const isFullWidthRow = el.offsetWidth > 500; 
-      
-      return hasPlusIcon && !isActiveConnector && !isFullWidthRow;
+      return (isDashed || hasPlusIcon) && !isActiveConnector && !isFullWidthRow;
     });
 
     if (pill) {
