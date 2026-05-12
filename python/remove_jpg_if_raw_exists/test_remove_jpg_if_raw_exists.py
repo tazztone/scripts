@@ -39,7 +39,23 @@ def test_read_exif_success(mock_process_file, tmp_path: Path):
     assert tags == expected_tags
     mock_process_file.assert_called_once()
 
+@patch("remove_jpg_if_raw_exists.exifread.process_file")
+def test_read_exif_exception(mock_process_file, tmp_path: Path):
+    test_file = tmp_path / "test.jpg"
+    test_file.write_bytes(b"dummy")
+    mock_process_file.side_effect = Exception("corrupt file")
+    tags = read_exif(test_file)
+    assert tags == {}
+
 # Tests for _check_exif
+@patch("remove_jpg_if_raw_exists.read_exif")
+def test_check_exif_empty_exif_tags(mock_read_exif, tmp_path: Path):
+    mock_read_exif.return_value = {}
+    jpg_path = tmp_path / "test.jpg"
+    result, reason = _check_exif(jpg_path)
+    assert result == False
+    assert reason == "no EXIF data found"
+
 @patch("remove_jpg_if_raw_exists.read_exif")
 def test_check_exif_no_tags(mock_read_exif, tmp_path: Path):
     mock_read_exif.return_value = {}
