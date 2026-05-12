@@ -15,12 +15,15 @@ This document details the DOM structure and selection strategies used to automat
 
 **Selection Criteria**:
 - **Include**: Buttons containing "github" (case-insensitive).
-- **Detection**: Must contain a "+" icon (SVG path) or the "+" text character. This distinguishes "Add/Enable" actions from simple navigation.
-- **Location Check**: Prioritizes buttons found near the `#ask-input` or inside the `[data-testid="message-input-suggestions"]` container.
-- **CRITICAL EXCLUSION (Follow-ups)**: "Follow-ups" are search result prompts and **MUST NOT** be clicked. They are distinguished by:
-    - **Width**: Follow-ups are wide rows (`offsetWidth > 500`), while enablement pills are small chips.
-    - **Context**: Follow-ups are located in the main chat thread area, whereas enablement pills are tied to the input box.
-    - **Icons**: Follow-ups often have chevron icons (right arrow), whereas enablement pills have a plus icon.
+- **Detection (Visual)**: 
+    - **Dashed Border**: These pills typically use `border-dashed` or have a computed `border-style: dashed`. This is a very strong signal.
+    - **Plus Icon**: Must contain a "plus" icon. This is found via:
+        - `<use xlink:href="#pplx-icon-plus">`
+        - SVG path `M12 5l0 14 M5 12l14 0` (simple cross)
+        - SVG path `M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z` (standard plus)
+- **CRITICAL EXCLUSION (Follow-ups)**: Search prompts **MUST NOT** be clicked.
+    - **Width**: Follow-ups are wide rows (`offsetWidth > 500`), while enablement pills are small chips (~100-200px).
+    - **Active Connectors**: Buttons with `aria-haspopup="menu"` are already active and should be ignored to prevent settings menu loops.
 
 ## 3. Menu Sequence (The Fallback)
 **Steps**:
