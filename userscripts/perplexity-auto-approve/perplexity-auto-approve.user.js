@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Perplexity Auto Approve
 // @namespace    https://github.com/tazztone/scripts
-// @version      0.4.3
+// @version      0.4.4
 // @description  Automatically clicks the Approve button on Perplexity agent action cards. Includes visual countdown, hover-to-pause, and auto-enables the GitHub connector.
 // @author       tazztone
 // @match        https://www.perplexity.ai/*
@@ -67,24 +67,16 @@ const STYLE = `
   let lastUrl = location.href;
 
   function isGithubEnabled() {
-    // 1. Check for the solid GitHub pill button (active connector)
-    if (document.querySelector('button[aria-label="GitHub"]')) return true;
+    // 1. Check for the solid GitHub pill button (active connector) in the input area
+    // Active connectors have aria-haspopup="menu" and are usually near the input area
+    const activePill = Array.from(document.querySelectorAll('button[aria-haspopup="menu"], button[aria-expanded]'))
+      .find(el => normalize(el.textContent).includes('github') && isVisible(el));
+    if (activePill) return true;
 
-    // 2. Check for the GitHub icon image
-    if (document.querySelector('img[alt="GitHub"], img[src*="github.webp"]')) return true;
+    // 2. Check for the GitHub icon image in the active connectors area
+    if (document.querySelector('[data-testid="message-input-active-connectors"] img[alt*="GitHub"]')) return true;
 
-    // 3. Check for any button with "GitHub" text that is NOT a suggestion pill
-    // (Active connectors have aria-haspopup="menu" or specific data attributes)
-    const hasActiveConnector = Array.from(document.querySelectorAll('button'))
-      .some(el => {
-        const text = el.textContent.toLowerCase();
-        const hasGithub = text.includes('github');
-        const isAlreadyActive = el.getAttribute('aria-haspopup') === 'menu' || el.getAttribute('aria-expanded') !== null;
-        return hasGithub && isAlreadyActive;
-      });
-    if (hasActiveConnector) return true;
-
-    // 4. Legacy check for specific SVG path
+    // 3. Legacy check for specific SVG path (GitHub logo)
     return !!document.querySelector('svg path[d*="M12 2C6.477 2 2 6.477 2 12c0 4.419 2.865 8.166 6.839 9.489"]');
   }
 
@@ -148,21 +140,26 @@ const STYLE = `
   function tryClickSuggestionPill() {
     if (!CONFIG.AUTO_ENABLE_GITHUB || isGithubEnabled()) return false;
     
-    // Exclude buttons that are part of the search results or follow-up suggestions
+    // Look for the "Enable GitHub" suggestion pill
+    // These pills are characteristic: they contain "GitHub" and a "plus" icon or "+" text
     const buttons = Array.from(document.querySelectorAll('button'));
     const pill = buttons.find(el => {
       const text = normalize(el.textContent);
       if (!text.includes('github')) return false;
       if (!isVisible(el)) return false;
       
-      // EXCLUSION: 
-      // - Ignore active connectors (they have aria-haspopup="menu")
-      // - Ignore Follow-ups
-      const isActiveConnector = el.getAttribute('aria-haspopup') === 'menu';
-      const isFollowUp = el.closest('.gap-x-2, .w-full, .flex-col')?.textContent.includes('Follow-ups');
-      const hasSuggestionClasses = el.classList.contains('interactable') && el.classList.contains('w-full');
+      // DETECTION: Look for the "+" icon or text, which suggests enablement
+      const hasPlusIcon = el.querySelector('svg[data-icon="plus"]') || 
+                          el.querySelector('svg path[d*="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"]') ||
+                          el.textContent.includes('+');
       
-      return !isActiveConnector && !isFollowUp && !hasSuggestionClasses;
+      // EXCLUSION: 
+      // 1. Ignore active connectors (they have aria-haspopup="menu")
+      const isActiveConnector = el.getAttribute('aria-haspopup') === 'menu';
+      // 2. Ignore Follow-ups: They are usually w-full rows, whereas pills are small
+      const isFullWidthRow = el.offsetWidth > 500; // Pills are never this wide
+      
+      return hasPlusIcon && !isActiveConnector && !isFullWidthRow;
     });
 
     if (pill) {
