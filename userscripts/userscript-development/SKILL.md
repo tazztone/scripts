@@ -45,7 +45,7 @@ Use comprehensive headers compatible with standard engines:
 // ==UserScript==
 // @name         [Descriptive Name]
 // @namespace    https://github.com/tazztone/scripts
-// @version      0.1.0
+// @version      1.0.0
 // @description  [Action-oriented description]
 // @author       tazztone
 // @match        [Match specific URLs]
@@ -55,6 +55,18 @@ Use comprehensive headers compatible with standard engines:
 // ==/UserScript==
 ```
 
+**Versioning (semver)**: Use `MAJOR.MINOR.PATCH`.
+- `PATCH` (1.0.**1**): bug fixes, selector updates, typo corrections.
+- `MINOR` (1.**1**.0): new optional features, new CONFIG keys with defaults.
+- `MAJOR` (**2**.0.0): breaking changes to CONFIG structure, behaviour reversals, or complete rewrites.
+
+Always bump the version on every commit that touches the `.user.js` file so Violentmonkey/Tampermonkey can offer users an update prompt.
+
+**Grants — required additions**:
+- Add `@grant GM_setValue` / `@grant GM_getValue` when using persistent storage.
+- Add `@grant GM_xmlHttpRequest` **and** `@connect [hostname]` for every external domain you fetch. Missing `@connect` causes silent request failures even when `@grant` is present.
+- Add `@require https://cdn.example.com/lib.min.js` to bundle a trusted external library at install time (pinned URL strongly preferred over a `latest` alias).
+
 ### Component Separation
 1.  **CONFIG**: A clear constant object at the top for user tuning.
 2.  **STYLES**: CSS injected via code for UI additions (e.g., countdown bars, indicator dots).
@@ -62,11 +74,31 @@ Use comprehensive headers compatible with standard engines:
 4.  **CORE LOGIC**: Feature-centric logic functions (e.g., `findButtons`, `performAction`).
 5.  **ORCHESTRATION**: A debounced `MutationObserver` governing the `run()` loop to handle dynamic SPAs without thrashing.
 
+> **Scope rule**: Keep `CONFIG`, `STYLES`, and all logic inside the IIFE (`(() => { … })()`) to avoid polluting the global scope. The only things that may live outside are `// ==UserScript==` metadata and `@require`d library globals.
+
 ### Resiliency Principles
 - **Visibility Verification**: Always check `getBoundingClientRect().width > 0` and computed styles (`display`, `visibility`, `opacity`) before interacting. Be extra vigilant on responsive sites which often duplicate elements (e.g., one for Desktop, one for Mobile).
 - **Event Fidelity**: For modern UI libraries (React, Radix), simple `.click()` might fail. Fire complete chains of events (e.g., `PointerEvent` + `MouseEvent`) for hovers and clicks.
 - **Locks and Cooldowns**: Use flag locks (`isAttempting`, `cooldown`) when handling multi-step menu sequences or dynamic insertion to prevent infinite loop traps.
 - **State Resets**: Monitor `location.href` in the main loop and clear logic locks/state trackers when URL changes, supporting Single Page Applications navigation.
+- **Observer Error Guards**: Wrap the body of every `MutationObserver` callback and the `run()` function in `try/catch`. An uncaught exception inside an observer silently kills it — the script will appear to stop working with no visible error:
+  ```javascript
+  const observer = new MutationObserver(() => {
+    try {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(run, CONFIG.OBSERVER_DEBOUNCE_MS);
+    } catch (e) {
+      console.error('[Script] Observer error:', e);
+    }
+  });
+  ```
+- **Cleanup / Teardown**: When the script should stop operating (e.g., user navigates away from the target path), call `observer.disconnect()` and remove any event listeners added via `addEventListener`. This prevents memory leaks in long-lived SPA sessions:
+  ```javascript
+  function teardown() {
+    observer.disconnect();
+    self.navigation?.removeEventListener('navigatesuccess', handleUrlChange);
+  }
+  ```
 
 ---
 
@@ -93,9 +125,20 @@ if (self.navigation) {
 
 ### Persistent Storage & Networking
 When your script needs cross-page data memory or bypassing CORS:
-- **Headers**: Must add `@grant GM_setValue`, `@grant GM_getValue`, or `@grant GM_xmlHttpRequest`.
+- **Headers**: Must add `@grant GM_setValue`, `@grant GM_getValue`, or `@grant GM_xmlHttpRequest` **plus** `@connect [hostname]` for every domain targeted by `GM_xmlHttpRequest`.
 - **Storage**: Use `GM_setValue(key, value)` and `GM_getValue(key, defaultValue)` for user preferences that survive sessions.
 - **Async Network**: Modern engines support async fetching: `const res = await GM.xmlHttpRequest({ url });`.
+
+### Loading External Libraries
+Use `@require` in the metadata block to load a trusted CDN library at script install time:
+```javascript
+// ==UserScript==
+// ...
+// @require      https://cdn.jsdelivr.net/npm/dayjs@1.11.10/dayjs.min.js
+// ==/UserScript==
+```
+- **Pin to an exact version** in the URL — never use `@latest` or a major-only alias, as upstream changes can silently break your script.
+- Declare the library's global (e.g., `/* global dayjs */`) as a comment so linters don't flag it as undefined.
 
 ---
 
