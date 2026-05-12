@@ -67,22 +67,36 @@ const STYLE = `
   let lastUrl = location.href;
 
   function isGithubEnabled() {
-    const activeConnectors = document.querySelectorAll('[data-testid="message-input-active-connectors"], .flex.items-center.gap-x-2');
-    return Array.from(activeConnectors).some(el => el.textContent.toLowerCase().includes('github') || el.querySelector('svg path[d*="M12 2C6.477 2 2 6.477 2 12c0 4.419 2.865 8.166 6.839 9.489"]'));
+    // Check for "GitHub" text in active connector pills or specialized icons
+    const githubPill = Array.from(document.querySelectorAll('[data-testid="message-input-active-connectors"], .flex.items-center.gap-x-2'))
+      .some(el => {
+        const text = el.textContent.toLowerCase();
+        return text.includes('github') || el.querySelector('svg path[d*="M12 2C6.477 2 2 6.477 2 12c0 4.419 2.865 8.166 6.839 9.489"]');
+      });
+    
+    // Also check for the GitHub logo specifically anywhere in the message input area
+    const inputArea = document.querySelector('[data-testid="message-input-active-connectors"], #ask-input, .relative.flex.items-center');
+    const githubLogo = !!(inputArea && inputArea.querySelector('svg path[d*="M12 2C6.477 2 2 6.477 2 12c0 4.419 2.865 8.166 6.839 9.489"]'));
+    
+    return githubPill || githubLogo;
   }
 
   async function ensureGithubEnabledViaMenu() {
     if (!CONFIG.AUTO_ENABLE_GITHUB || isGithubEnabled() || githubEnableAttempted) return;
-    githubEnableAttempted = true;
 
     // Try to find the + button by multiple selectors
     const attachBtn = document.querySelector([
+      'button[aria-label="Add files or tools"]',
       'button[aria-label="Add"]',
       'button[aria-label*="attach" i]',
       'button[aria-label*="add" i]',
       'button:has(svg[data-icon="plus"])',
+      'button:has(svg path[d*="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"])',
     ].join(', '));
     if (!attachBtn) return;
+
+    // Prevent multiple attempts once we found the button
+    githubEnableAttempted = true;
 
     attachBtn.click();
     await new Promise(r => setTimeout(r, 400));
@@ -103,7 +117,7 @@ const STYLE = `
     await new Promise(r => setTimeout(r, 400));
 
     // Find and click the GitHub checkbox
-    const githubItem = Array.from(document.querySelectorAll('div, button, span, [role="menuitem"], [role="option"]'))
+    const githubItem = Array.from(document.querySelectorAll('div, button, span, [role="menuitem"], [role="option"], [role="menuitemcheckbox"]'))
       .find(el => normalize(el.textContent) === 'github' && isVisible(el));
     if (githubItem) {
       githubItem.click();
