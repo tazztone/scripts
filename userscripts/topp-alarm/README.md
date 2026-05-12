@@ -1,7 +1,7 @@
 # Toppreise Price Alarm Automator
 
 Userscript that fully automates the configuration of a price alarm on Toppreise.ch.
-
+![alt text](image.png)
 ## Installation
 Install this script via your preferred extension (Violentmonkey, Tampermonkey, Greasemonkey).
 Direct script file: [topp-alarm.user.js](./topp-alarm.user.js)
