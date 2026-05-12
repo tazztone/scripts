@@ -118,14 +118,25 @@ const STYLE = `
   const activeTimers = new Map();
 
   function findApproveButtons() {
-    return [...document.querySelectorAll('button, [role="button"]')].filter(
-      (el) =>
-        CONFIG.APPROVE_TEXTS.includes(normalize(el.textContent)) &&
-        !el.disabled &&
-        el.getAttribute('aria-disabled') !== 'true' &&
-        !el.dataset.pxAutoClicked &&
-        isVisible(el)
+    const allButtons = [...document.querySelectorAll('button, [role="button"]')];
+    
+    // Debug: Log all visible buttons if we can't find an approve button
+    const approveButtons = allButtons.filter(
+      (el) => {
+        const text = normalize(el.textContent);
+        const isMatch = CONFIG.APPROVE_TEXTS.some(t => text.startsWith(t));
+        const visible = isVisible(el);
+        const notClicked = !el.dataset.pxAutoClicked;
+        
+        return isMatch && !el.disabled && el.getAttribute('aria-disabled') !== 'true' && notClicked && visible;
+      }
     );
+
+    if (approveButtons.length > 0) {
+      console.log('[Perplexity Auto Approve] Found buttons:', approveButtons.map(b => b.textContent));
+    }
+    
+    return approveButtons;
   }
 
   function scheduleClick(btn) {

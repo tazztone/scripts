@@ -1,8 +1,13 @@
 # Perplexity Auto Approve
 
-A [Violentmonkey](https://violentmonkey.github.io/) userscript that automatically clicks the **Approve** button on Perplexity agent action cards.
+A [Violentmonkey](https://violentmonkey.github.io/) userscript that automatically clicks the **Approve** button on Perplexity agent action cards. It includes safety features like a visual countdown and auto-enables the GitHub connector.
 
-Perplexity's agentic features (GitHub integrations, file operations, etc.) occasionally pause to ask for user approval before executing an action. This script detects those cards and clicks Approve after a short configurable delay.
+## Features
+
+- **Auto-Approve**: Automatically clicks "Approve" or "Confirm" buttons.
+- **Visual Countdown**: A green progress bar appears on the button before it clicks.
+- **Hover-to-Pause**: Hovering over the button pauses the countdown (bar turns orange), giving you time to read or manually intervene.
+- **GitHub Auto-Enable**: Ensures the GitHub connector is active in your chat session automatically.
 
 ## Requirements
 
@@ -16,48 +21,33 @@ Perplexity's agentic features (GitHub integrations, file operations, etc.) occas
 3. Paste the contents of [`perplexity-auto-approve.user.js`](perplexity-auto-approve.user.js)
 4. Save (`Ctrl+S`)
 
-Or use the raw URL directly in Violentmonkey's "Install from URL" option:
-
-```
-https://raw.githubusercontent.com/tazztone/scripts/main/userscripts/perplexity-auto-approve/perplexity-auto-approve.user.js
-```
-
 ## Configuration
 
-All options are at the top of the script:
+All options are at the top of the script in the `CONFIG` object:
 
 | Variable | Default | Description |
 |---|---|---|
-| `AUTO_APPROVE_ENABLED` | `true` | Set to `false` to disable without uninstalling |
-| `CLICK_DELAY_MS` | `1500` | Delay in ms before clicking — gives you time to intervene |
-| `APPROVE_ONLY_IF_CARD_CONTAINS` | `[]` | Optional list of strings; only approves if the card text matches one. Empty = approve all. |
+| `AUTO_APPROVE` | `true` | Set to `false` to disable auto-click |
+| `AUTO_ENABLE_GITHUB` | `true` | Set to `false` to stop auto-enabling the GitHub connector |
+| `CLICK_DELAY_MS` | `3000` | Delay in ms before clicking (3s) |
+| `APPROVE_TEXTS` | `['approve', 'confirm']` | Keywords to match on buttons |
 
-### Restrict to specific actions
+## Development & Testing
 
-To only auto-approve certain operations, set `APPROVE_ONLY_IF_CARD_CONTAINS`:
+We use [Playwright](https://playwright.dev/) to test the script against a mock Perplexity DOM.
 
-```js
-const APPROVE_ONLY_IF_CARD_CONTAINS = ["Merge PR", "push files"];
-```
+1. **Install Dependencies**:
+   ```bash
+   pip install -r tests/requirements.txt
+   playwright install chromium
+   ```
 
-The match is case-insensitive and checks the full text of the card container.
+2. **Run Tests**:
+   ```bash
+   pytest tests/test_userscript.py
+   ```
 
-## How it works
-
-1. A `MutationObserver` watches the entire document for DOM changes (Perplexity is a React SPA — approval cards appear dynamically, not on page load)
-2. When a `<button>` or `[role="button"]` whose text is exactly `"Approve"` appears, it is detected
-3. After `CLICK_DELAY_MS` the button is clicked programmatically
-4. Each button is marked with `data-px-auto-clicked` to prevent double-clicks
-
-## Selector note
-
-The script currently matches buttons by **text content** (`"Approve"`), which is the most resilient approach against React's hashed/generated class names. If Perplexity adds a stable `data-testid` or `aria-label` to the button in the future, update `findApproveButton()` to use that for extra precision.
-
-## Safety
-
-- The `CLICK_DELAY_MS` window lets you scroll up and manually click **Deny** before the script fires
-- Use `APPROVE_ONLY_IF_CARD_CONTAINS` to whitelist only operations you trust
-- Set `AUTO_APPROVE_ENABLED = false` or disable the script in Violentmonkey to pause without uninstalling
+The tests verify auto-clicking, visual feedback, hover-to-pause logic, and the multi-step connector enablement sequence.
 
 ## License
 

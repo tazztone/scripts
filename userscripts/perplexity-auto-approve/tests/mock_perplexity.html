@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mock Perplexity</title>
+    <style>
+        body { font-family: sans-serif; padding: 50px; background: #111; color: white; }
+        .card { border: 1px solid #333; padding: 20px; border-radius: 8px; width: 400px; }
+        button { padding: 10px 20px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; }
+        .btn-approve { background: #00cc66; color: white; margin-left: 10px; }
+        .btn-attach { background: #333; color: white; font-size: 20px; }
+        .menu { display: none; background: #222; border: 1px solid #444; position: absolute; padding: 10px; border-radius: 4px; }
+        .menu.visible { display: block; }
+        .menu-item { padding: 8px; cursor: pointer; }
+        .menu-item:hover { background: #333; }
+        .flyout { display: none; background: #222; border: 1px solid #444; position: absolute; left: 100%; top: 0; padding: 10px; min-width: 150px; }
+        .menu-item:hover .flyout { display: block; }
+        .active-connectors { margin-top: 20px; display: flex; gap: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Mock Perplexity UI</h1>
+    
+    <div class="card">
+        <p>Agent Action: Create test.md</p>
+        <div style="display: flex; justify-content: flex-end;">
+            <button>Deny ^ Esc</button>
+            <button class="btn-approve" id="approve-btn">Approve ^ Enter</button>
+        </div>
+    </div>
+
+    <hr style="margin: 40px 0; border: 0; border-top: 1px solid #333;">
+
+    <div class="input-area">
+        <button class="btn-attach" id="attach-btn" aria-label="Attach">+</button>
+        <div class="menu" id="attach-menu">
+            <div class="menu-item" id="connectors-item">
+                Connectors and sources &gt;
+                <div class="flyout">
+                    <div class="menu-item" id="github-checkbox">GitHub</div>
+                    <div class="menu-item">Google Drive</div>
+                </div>
+            </div>
+            <div class="menu-item">Upload file</div>
+        </div>
+    </div>
+
+    <div class="active-connectors" id="active-connectors">
+        <!-- Icons go here -->
+    </div>
+
+    <script>
+        // Basic UI interaction logic for the mock
+        const attachBtn = document.getElementById('attach-btn');
+        const attachMenu = document.getElementById('attach-menu');
+        const githubCheckbox = document.getElementById('github-checkbox');
+        const activeConnectors = document.getElementById('active-connectors');
+        const approveBtn = document.getElementById('approve-btn');
+
+        attachBtn.onclick = () => {
+            attachMenu.classList.toggle('visible');
+        };
+
+        githubCheckbox.onclick = () => {
+            const pill = document.createElement('div');
+            pill.textContent = 'GitHub';
+            pill.style.padding = '4px 8px';
+            pill.style.background = '#444';
+            pill.style.borderRadius = '4px';
+            activeConnectors.appendChild(pill);
+            attachMenu.classList.remove('visible');
+        };
+
+        approveBtn.onclick = () => {
+            approveBtn.innerText = 'CLICKED';
+            approveBtn.style.background = '#222';
+        };
+    </script>
+</body>
+</html>
