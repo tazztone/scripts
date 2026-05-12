@@ -11,12 +11,16 @@ This document details the DOM structure and selection strategies used to automat
 - It is a trigger for a Radix-based menu.
 
 ## 2. Suggestion Pills (Reactive Enablement)
-**Logic**: Find a button containing "GitHub" that is NOT an active connector and NOT a search suggestion.
+**Goal**: ONLY click the small pill that appears immediately below or inside the message input area when the word "github" is mentioned.
 
 **Selection Criteria**:
 - **Include**: Buttons containing "github" (case-insensitive).
-- **Exclude (Active)**: Buttons with `aria-haspopup="menu"` or `aria-expanded`. These are active connectors; clicking them opens settings.
-- **Exclude (Follow-ups)**: Buttons inside containers with "Follow-ups" text or those with broad suggestion classes (`interactable w-full`).
+- **Detection**: Must contain a "+" icon (SVG path) or the "+" text character. This distinguishes "Add/Enable" actions from simple navigation.
+- **Location Check**: Prioritizes buttons found near the `#ask-input` or inside the `[data-testid="message-input-suggestions"]` container.
+- **CRITICAL EXCLUSION (Follow-ups)**: "Follow-ups" are search result prompts and **MUST NOT** be clicked. They are distinguished by:
+    - **Width**: Follow-ups are wide rows (`offsetWidth > 500`), while enablement pills are small chips.
+    - **Context**: Follow-ups are located in the main chat thread area, whereas enablement pills are tied to the input box.
+    - **Icons**: Follow-ups often have chevron icons (right arrow), whereas enablement pills have a plus icon.
 
 ## 3. Menu Sequence (The Fallback)
 **Steps**:

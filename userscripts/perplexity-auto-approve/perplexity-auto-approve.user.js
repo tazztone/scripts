@@ -156,8 +156,11 @@ const STYLE = `
       // EXCLUSION: 
       // 1. Ignore active connectors (they have aria-haspopup="menu")
       const isActiveConnector = el.getAttribute('aria-haspopup') === 'menu';
-      // 2. Ignore Follow-ups: They are usually w-full rows, whereas pills are small
-      const isFullWidthRow = el.offsetWidth > 500; // Pills are never this wide
+      
+      // 2. CRITICAL EXCLUSION: Ignore "Follow-ups" (search prompts).
+      // Follow-ups are wide full-width buttons (800px+), whereas enablement pills
+      // are small chips (~100-200px).
+      const isFullWidthRow = el.offsetWidth > 500; 
       
       return hasPlusIcon && !isActiveConnector && !isFullWidthRow;
     });
