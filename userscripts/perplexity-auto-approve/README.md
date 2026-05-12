@@ -2,6 +2,9 @@
 
 A [Violentmonkey](https://violentmonkey.github.io/) userscript that automatically clicks the **Approve** button on Perplexity agent action cards. It includes safety features like a visual countdown and auto-enables the GitHub connector.
 
+<img width="725" height="803" alt="image" src="https://github.com/user-attachments/assets/da5676da-5e95-4328-8df2-eb2389a8e843" />
+
+
 ## Features
 
 - **Auto-Approve**: Automatically clicks "Approve", "Confirm", or "Allow" buttons.
