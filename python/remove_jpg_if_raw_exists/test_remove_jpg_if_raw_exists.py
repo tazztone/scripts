@@ -4,6 +4,12 @@ from unittest.mock import patch, mock_open
 
 import sys
 sys.path.insert(0, str(Path(__file__).parent))
+
+import types
+mock_exifread = types.ModuleType("exifread")
+mock_exifread.process_file = lambda *args, **kwargs: {}
+sys.modules["exifread"] = mock_exifread
+
 from remove_jpg_if_raw_exists import is_valid_raw, read_exif, _check_exif
 
 # Tests for is_valid_raw
@@ -21,6 +27,12 @@ def test_is_valid_raw_too_small(tmp_path: Path):
 def test_is_valid_raw_missing_file(tmp_path: Path):
     missing_file = tmp_path / "missing.raw"
     assert is_valid_raw(missing_file, min_size=500) == False
+
+@patch("pathlib.Path.stat")
+def test_is_valid_raw_oserror(mock_stat, tmp_path: Path):
+    mock_stat.side_effect = OSError("Mocked OSError")
+    test_file = tmp_path / "test.raw"
+    assert is_valid_raw(test_file, min_size=500) == False
 
 # Tests for read_exif
 def test_read_exif_missing_file(tmp_path: Path):
