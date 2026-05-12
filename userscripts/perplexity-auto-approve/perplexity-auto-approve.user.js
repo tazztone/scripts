@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Perplexity Auto Approve
 // @namespace    https://github.com/tazztone/scripts
-// @version      0.4.0
+// @version      0.4.2
 // @description  Automatically clicks the Approve button on Perplexity agent action cards. Includes visual countdown, hover-to-pause, and auto-enables the GitHub connector.
 // @author       tazztone
 // @match        https://www.perplexity.ai/*
@@ -75,7 +75,7 @@ const STYLE = `
       });
     
     // Also check for the GitHub logo specifically anywhere in the message input area
-    const inputArea = document.querySelector('[data-testid="message-input-active-connectors"], #ask-input, .relative.flex.items-center');
+    const inputArea = document.querySelector('[data-testid="message-input-active-connectors"], #ask-input, [role="textbox"], .relative.flex.items-center');
     const githubLogo = !!(inputArea && inputArea.querySelector('svg path[d*="M12 2C6.477 2 2 6.477 2 12c0 4.419 2.865 8.166 6.839 9.489"]'));
     
     return githubPill || githubLogo;
@@ -119,9 +119,19 @@ const STYLE = `
     // Find and click the GitHub checkbox
     const githubItem = Array.from(document.querySelectorAll('div, button, span, [role="menuitem"], [role="option"], [role="menuitemcheckbox"]'))
       .find(el => normalize(el.textContent) === 'github' && isVisible(el));
+    
     if (githubItem) {
-      githubItem.click();
-      console.log('[Perplexity Auto Approve] GitHub enabled via menu.');
+      // Check if it's already enabled via aria-checked to avoid toggling it OFF
+      const checkbox = githubItem.querySelector('[role="checkbox"], [aria-checked]');
+      const isAlreadyOn = githubItem.getAttribute('aria-checked') === 'true' || 
+                         (checkbox && checkbox.getAttribute('aria-checked') === 'true');
+      
+      if (!isAlreadyOn) {
+        githubItem.click();
+        console.log('[Perplexity Auto Approve] GitHub enabled via menu.');
+      } else {
+        console.log('[Perplexity Auto Approve] GitHub is already enabled.');
+      }
     }
 
     // Close menu by pressing Escape
@@ -130,8 +140,21 @@ const STYLE = `
 
   function tryClickSuggestionPill() {
     if (!CONFIG.AUTO_ENABLE_GITHUB || isGithubEnabled()) return false;
-    const pill = Array.from(document.querySelectorAll('button'))
-      .find(el => normalize(el.textContent).includes('github') && isVisible(el));
+    
+    // Exclude buttons that are part of the search results or follow-up suggestions
+    const buttons = Array.from(document.querySelectorAll('button'));
+    const pill = buttons.find(el => {
+      const text = normalize(el.textContent);
+      if (!text.includes('github')) return false;
+      if (!isVisible(el)) return false;
+      
+      // EXCLUSION: Ignore buttons inside sections that are clearly for search suggestions
+      const isFollowUp = el.closest('.gap-x-2, .w-full, .flex-col')?.textContent.includes('Follow-ups');
+      const hasSuggestionClasses = el.classList.contains('interactable') && el.classList.contains('w-full');
+      
+      return !isFollowUp && !hasSuggestionClasses;
+    });
+
     if (pill) {
       pill.click();
       console.log('[Perplexity Auto Approve] GitHub enabled via suggestion pill.');
