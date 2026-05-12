@@ -56,8 +56,8 @@ def test_hover_pause_behavior(page: Page):
 
 def test_github_auto_enable(page: Page):
     # Script should automatically trigger the GitHub connector enable sequence
-    page.wait_for_selector('#active-connectors div:has-text("GitHub")', timeout=5000)
-    assert page.locator('#active-connectors div:has-text("GitHub")').is_visible()
+    page.wait_for_selector('#active-connectors :has-text("GitHub")', timeout=5000)
+    assert page.locator('#active-connectors :has-text("GitHub")').is_visible()
 
 
 if __name__ == '__main__':

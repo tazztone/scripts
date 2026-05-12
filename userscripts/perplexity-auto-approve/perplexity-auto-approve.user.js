@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Perplexity Auto Approve
 // @namespace    https://github.com/tazztone/scripts
-// @version      0.4.2
+// @version      0.4.3
 // @description  Automatically clicks the Approve button on Perplexity agent action cards. Includes visual countdown, hover-to-pause, and auto-enables the GitHub connector.
 // @author       tazztone
 // @match        https://www.perplexity.ai/*
@@ -67,18 +67,25 @@ const STYLE = `
   let lastUrl = location.href;
 
   function isGithubEnabled() {
-    // Check for "GitHub" text in active connector pills or specialized icons
-    const githubPill = Array.from(document.querySelectorAll('[data-testid="message-input-active-connectors"], .flex.items-center.gap-x-2'))
+    // 1. Check for the solid GitHub pill button (active connector)
+    if (document.querySelector('button[aria-label="GitHub"]')) return true;
+
+    // 2. Check for the GitHub icon image
+    if (document.querySelector('img[alt="GitHub"], img[src*="github.webp"]')) return true;
+
+    // 3. Check for any button with "GitHub" text that is NOT a suggestion pill
+    // (Active connectors have aria-haspopup="menu" or specific data attributes)
+    const hasActiveConnector = Array.from(document.querySelectorAll('button'))
       .some(el => {
         const text = el.textContent.toLowerCase();
-        return text.includes('github') || el.querySelector('svg path[d*="M12 2C6.477 2 2 6.477 2 12c0 4.419 2.865 8.166 6.839 9.489"]');
+        const hasGithub = text.includes('github');
+        const isAlreadyActive = el.getAttribute('aria-haspopup') === 'menu' || el.getAttribute('aria-expanded') !== null;
+        return hasGithub && isAlreadyActive;
       });
-    
-    // Also check for the GitHub logo specifically anywhere in the message input area
-    const inputArea = document.querySelector('[data-testid="message-input-active-connectors"], #ask-input, [role="textbox"], .relative.flex.items-center');
-    const githubLogo = !!(inputArea && inputArea.querySelector('svg path[d*="M12 2C6.477 2 2 6.477 2 12c0 4.419 2.865 8.166 6.839 9.489"]'));
-    
-    return githubPill || githubLogo;
+    if (hasActiveConnector) return true;
+
+    // 4. Legacy check for specific SVG path
+    return !!document.querySelector('svg path[d*="M12 2C6.477 2 2 6.477 2 12c0 4.419 2.865 8.166 6.839 9.489"]');
   }
 
   async function ensureGithubEnabledViaMenu() {
@@ -148,11 +155,14 @@ const STYLE = `
       if (!text.includes('github')) return false;
       if (!isVisible(el)) return false;
       
-      // EXCLUSION: Ignore buttons inside sections that are clearly for search suggestions
+      // EXCLUSION: 
+      // - Ignore active connectors (they have aria-haspopup="menu")
+      // - Ignore Follow-ups
+      const isActiveConnector = el.getAttribute('aria-haspopup') === 'menu';
       const isFollowUp = el.closest('.gap-x-2, .w-full, .flex-col')?.textContent.includes('Follow-ups');
       const hasSuggestionClasses = el.classList.contains('interactable') && el.classList.contains('w-full');
       
-      return !isFollowUp && !hasSuggestionClasses;
+      return !isActiveConnector && !isFollowUp && !hasSuggestionClasses;
     });
 
     if (pill) {
@@ -234,7 +244,9 @@ const STYLE = `
     });
   }
 
-  function run() {
+  let connectorLogicLock = false;
+
+  async function run() {
     if (lastUrl !== location.href) {
       lastUrl = location.href;
       githubEnableAttempted = false;
@@ -243,9 +255,16 @@ const STYLE = `
     if (CONFIG.AUTO_APPROVE) {
       findApproveButtons().forEach(scheduleClick);
     }
-    if (CONFIG.AUTO_ENABLE_GITHUB && !isGithubEnabled()) {
-      if (!tryClickSuggestionPill()) {
-        ensureGithubEnabledViaMenu();
+    
+    if (CONFIG.AUTO_ENABLE_GITHUB && !isGithubEnabled() && !connectorLogicLock) {
+      connectorLogicLock = true;
+      try {
+        if (!tryClickSuggestionPill()) {
+          await ensureGithubEnabledViaMenu();
+        }
+      } finally {
+        // Cooldown to prevent loops during UI transitions
+        setTimeout(() => { connectorLogicLock = false; }, 2000);
       }
     }
   }

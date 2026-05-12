@@ -47,7 +47,13 @@
     </div>
 
     <div class="active-connectors" id="active-connectors">
-        <!-- Icons go here -->
+        <!-- Active connectors will be appended here -->
+    </div>
+
+    <div class="suggestions" style="margin-top: 20px;">
+        <button id="suggestion-pill" style="border: 1px dashed #555; padding: 4px 8px; border-radius: 4px; color: #aaa;">
+            + GitHub
+        </button>
     </div>
 
     <div class="follow-ups" style="margin-top: 50px; border-top: 1px solid #333; padding-top: 20px;">
@@ -81,15 +87,28 @@
         connectorsItem.addEventListener('pointerenter', showFlyout);
         connectorsItem.addEventListener('mouseover', showFlyout);
 
-        githubCheckbox.onclick = () => {
-            const pill = document.createElement('div');
+        const createActivePill = () => {
+            const pill = document.createElement('button');
             pill.textContent = 'GitHub';
+            pill.setAttribute('aria-label', 'GitHub');
+            pill.setAttribute('aria-haspopup', 'menu');
             pill.style.padding = '4px 8px';
             pill.style.background = '#444';
             pill.style.borderRadius = '4px';
+            pill.style.color = 'white';
             activeConnectors.appendChild(pill);
             attachMenu.classList.remove('visible');
         };
+
+        githubCheckbox.onclick = createActivePill;
+        
+        const suggestionPill = document.getElementById('suggestion-pill');
+        if (suggestionPill) {
+            suggestionPill.onclick = () => {
+                createActivePill();
+                suggestionPill.remove(); // Suggestion pills usually disappear
+            };
+        }
 
         approveBtn.onclick = () => {
             approveBtn.innerText = 'CLICKED';
