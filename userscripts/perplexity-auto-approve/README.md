@@ -14,7 +14,9 @@ A [Violentmonkey](https://violentmonkey.github.io/) userscript that automaticall
 
 ## Requirements
 
-- Firefox (or any Chromium browser) with [Violentmonkey](https://addons.mozilla.org/en-US/firefox/addon/violentmonkey/) installed
+- Violentmonkey installed in your browser:
+  - [Firefox](https://addons.mozilla.org/en-US/firefox/addon/violentmonkey/)
+  - [Chrome / Brave](https://chrome.google.com/webstore/detail/violent-monkey/jinjaccalgkegednnccohejagnlnfdag)
 - A Perplexity account with agent/tool features enabled
 
 ## Installation
@@ -45,7 +47,6 @@ All options are at the top of the script in the `CONFIG` object:
 | `AUTO_ENABLE_GITHUB` | `true` | Set to `false` to stop auto-enabling the GitHub connector |
 | `CLICK_DELAY_MS` | `3000` | Delay in ms before clicking (default: 3 s) |
 | `APPROVE_TEXTS` | `['approve', 'confirm', 'allow']` | Button text keywords to match (case-insensitive) |
-| `CHECK_INTERVAL_MS` | `1000` | How often (ms) to poll for new buttons |
 | `OBSERVER_DEBOUNCE_MS` | `150` | Debounce delay (ms) after a DOM change before running |
 
 ## Development & Testing
