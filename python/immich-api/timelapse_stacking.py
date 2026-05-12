@@ -44,11 +44,11 @@ def ask_int(prompt, default):
 
 
 def header(title, subtitle=""):
-    print(f"\n{'─'*50}")
+    print(f"\n{'─' * 50}")
     print(f"  {title}")
     if subtitle:
         print(f"  {subtitle}")
-    print(f"{'─'*50}")
+    print(f"{'─' * 50}")
 
 
 # --- Filtering Logic ---
@@ -226,7 +226,7 @@ def create_verify_albums(candidates, count):
     for i, c in enumerate(to_verify):
         date_str = c["assets"][0]["localDateTime"][:10]
         name = (
-            f"{VERIFY_PREFIX}{i+1:03d} | "
+            f"{VERIFY_PREFIX}{i + 1:03d} | "
             f"{date_str} | "
             f"{len(c['assets'])}f | "
             f"cv={c['cv_gap']:.2f}"
@@ -295,10 +295,10 @@ def apply_stacks(candidates):
                 }
             )
             print(
-                f"  [{i+1:3d}] ✓  {len(ids)}f @ {c['assets'][0]['localDateTime'][:19]}"
+                f"  [{i + 1:3d}] ✓  {len(ids)}f @ {c['assets'][0]['localDateTime'][:19]}"
             )
         else:
-            print(f"  [{i+1:3d}] ✗  {resp.status_code}")
+            print(f"  [{i + 1:3d}] ✗  {resp.status_code}")
 
     with open(LOG_PATH, "w") as f:
         json.dump(run_log, f, indent=2)
@@ -348,7 +348,7 @@ def create_index_album(candidates, mode="index"):
             json={"ids": batch},
         )
         if resp.status_code != 200:
-            print(f"    [!] Failed to add batch {i//500 + 1}: {resp.status_code}")
+            print(f"    [!] Failed to add batch {i // 500 + 1}: {resp.status_code}")
 
     print(f"    ✓ Album updated: {BASE_URL}/albums/{album_id}")
 
@@ -363,16 +363,32 @@ def unstack_last_run():
 
     print(f"\n  Unstacking {len(run_log)} stacks from last run...")
     failed = []
-    for i, entry in enumerate(run_log):
-        resp = requests.delete(
-            f"{BASE_URL}/api/stacks/{entry['stack_id']}", headers=headers
-        )
+
+    session = requests.Session()
+    session.headers.update(headers)
+
+    def delete_stack(i, entry):
+        resp = session.delete(f"{BASE_URL}/api/stacks/{entry['stack_id']}")
+        return i, entry, resp
+
+    with ThreadPoolExecutor(max_workers=min(10, len(run_log) or 1)) as executor:
+        futures = {
+            executor.submit(delete_stack, i, entry): (i, entry)
+            for i, entry in enumerate(run_log)
+        }
+
+        results = [None] * len(run_log)
+        for future in as_completed(futures):
+            i, entry, resp = future.result()
+            results[i] = (entry, resp)
+
+    for i, (entry, resp) in enumerate(results):
         if resp.status_code == 204:
-            print(f"  [{i+1:3d}] ✓  {entry['frames']}f @ {entry['date']}")
+            print(f"  [{i + 1:3d}] ✓  {entry['frames']}f @ {entry['date']}")
         else:
             failed.append(entry)
             print(
-                f"  [{i+1:3d}] ✗  {resp.status_code}  {entry['frames']}f @ {entry['date']}"
+                f"  [{i + 1:3d}] ✗  {resp.status_code}  {entry['frames']}f @ {entry['date']}"
             )
 
     if failed:
@@ -486,7 +502,7 @@ def wizard():
         print(
             f"{'#':>3} | {'Frames':>6} | {'Timestamp':19} | {'Span':>6} | {'CV Gap':>7} | {'CV Size':>7}"
         )
-        print(f"{'─'*3}─┼─{'─'*6}─┼─{'─'*19}─┼─{'─'*6}─┼─{'─'*7}─┼─{'─'*7}")
+        print(f"{'─' * 3}─┼─{'─' * 6}─┼─{'─' * 19}─┼─{'─' * 6}─┼─{'─' * 7}─┼─{'─' * 7}")
 
         # Sort by CV descending to show most 'suspicious' / irregular ones first
         candidates.sort(key=lambda x: x["cv_gap"], reverse=True)
@@ -494,7 +510,7 @@ def wizard():
         for i, c in enumerate(candidates):
             start = c["assets"][0]["localDateTime"]
             print(
-                f"  [{i+1:3d}] {len(c['assets']):6d} | {start[:19]} | {c['span']:5.0f}s | {c['cv_gap']:7.3f} | {c['cv_size']:7.3f}"
+                f"  [{i + 1:3d}] {len(c['assets']):6d} | {start[:19]} | {c['span']:5.0f}s | {c['cv_gap']:7.3f} | {c['cv_size']:7.3f}"
             )
 
         choice = ask(
