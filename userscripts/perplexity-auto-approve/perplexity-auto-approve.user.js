@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Perplexity Auto Approve
 // @namespace    https://github.com/tazztone/scripts
-// @version      0.3.0
+// @version      0.3.1
 // @description  Automatically clicks the Approve button on Perplexity agent action cards. Includes visual countdown, hover-to-pause, and auto-enables the GitHub connector.
 // @author       tazztone
 // @match        https://www.perplexity.ai/*
@@ -15,9 +15,8 @@
 const CONFIG = {
   AUTO_APPROVE: true,
   AUTO_ENABLE_GITHUB: true,
-  CLICK_DELAY_MS: 3000, // Increased to 3s to make countdown visible
+  CLICK_DELAY_MS: 3000,
   APPROVE_TEXTS: ['approve', 'confirm', 'allow'],
-  CHECK_INTERVAL_MS: 1000,
   OBSERVER_DEBOUNCE_MS: 150,
 };
 
@@ -63,7 +62,7 @@ const STYLE = `
   }
 
   // --- CONNECTOR LOGIC ---
-  
+
   let githubEnableAttempted = false;
   let lastUrl = location.href;
 
@@ -74,7 +73,7 @@ const STYLE = `
 
   async function ensureGithubEnabled() {
     if (!CONFIG.AUTO_ENABLE_GITHUB || isGithubEnabled()) return;
-    
+
     // Prevent infinite loops in SPA
     githubEnableAttempted = true;
 
@@ -90,13 +89,13 @@ const STYLE = `
     // Method 1: Menu Sequence
     const attachBtn = document.querySelector('button[aria-label*="Attach"], button:has(svg[data-icon="plus"])');
     if (!attachBtn) return;
-    
+
     attachBtn.click();
     await new Promise(r => setTimeout(r, 300));
 
     const connectorsMenu = Array.from(document.querySelectorAll('div, button, li')).find(el => el.textContent.includes('Connectors and sources'));
     if (!connectorsMenu) return;
-    
+
     // Hover over connectors menu to open flyout
     connectorsMenu.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
     connectorsMenu.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
@@ -109,7 +108,7 @@ const STYLE = `
       console.log('[Perplexity Auto Approve] GitHub connector enabled via menu.');
     }
 
-    // Close menu by clicking backdrop or escape
+    // Close menu by pressing Escape
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
   }
 
@@ -119,30 +118,24 @@ const STYLE = `
 
   function findApproveButtons() {
     const allButtons = [...document.querySelectorAll('button, [role="button"]')];
-    
-    // Debug: Log all visible buttons if we can't find an approve button
-    const approveButtons = allButtons.filter(
-      (el) => {
-        const text = normalize(el.textContent);
-        const isMatch = CONFIG.APPROVE_TEXTS.some(t => text.startsWith(t));
-        const visible = isVisible(el);
-        const notClicked = !el.dataset.pxAutoClicked;
-        
-        return isMatch && !el.disabled && el.getAttribute('aria-disabled') !== 'true' && notClicked && visible;
-      }
-    );
+    const approveButtons = allButtons.filter((el) => {
+      const text = normalize(el.textContent);
+      const isMatch = CONFIG.APPROVE_TEXTS.some(t => text.startsWith(t));
+      const visible = isVisible(el);
+      const notScheduled = !activeTimers.has(el) && !el.dataset.pxClicked;
+      return isMatch && !el.disabled && el.getAttribute('aria-disabled') !== 'true' && notScheduled && visible;
+    });
 
     if (approveButtons.length > 0) {
       console.log('[Perplexity Auto Approve] Found buttons:', approveButtons.map(b => b.textContent));
     }
-    
+
     return approveButtons;
   }
 
   function scheduleClick(btn) {
     if (activeTimers.has(btn)) return;
 
-    btn.dataset.pxAutoClicked = '1';
     btn.classList.add('px-auto-approve-btn');
 
     const progressBar = document.createElement('div');
@@ -159,11 +152,19 @@ const STYLE = `
     };
 
     const tick = () => {
+      // If button was removed from DOM, clean up and abort
+      if (!isVisible(btn)) {
+        clearInterval(timer);
+        activeTimers.delete(btn);
+        return;
+      }
       if (isPaused) return;
       timeLeft -= 100;
       updateUI();
       if (timeLeft <= 0) {
         clearInterval(timer);
+        activeTimers.delete(btn);
+        btn.dataset.pxClicked = '1';
         btn.click();
         console.log('[Perplexity Auto Approve] Clicked.');
       }
@@ -172,14 +173,14 @@ const STYLE = `
     const timer = setInterval(tick, 100);
     activeTimers.set(btn, timer);
 
-    btn.onmouseenter = () => {
+    btn.addEventListener('mouseenter', () => {
       isPaused = true;
       btn.classList.add('px-paused');
-    };
-    btn.onmouseleave = () => {
+    });
+    btn.addEventListener('mouseleave', () => {
       isPaused = false;
       btn.classList.remove('px-paused');
-    };
+    });
   }
 
   function run() {
@@ -205,4 +206,3 @@ const STYLE = `
   observer.observe(document.documentElement, { childList: true, subtree: true });
   run();
 })();
-
