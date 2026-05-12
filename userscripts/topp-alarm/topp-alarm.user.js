@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      0.2.0
+// @version      0.2.1
 // @description  Automatically configures a price alarm (60% value, 2 years duration) on clicking the alarm bell.
 // @author       tazztone
 // @match        https://www.toppreise.ch/preisvergleich/*
@@ -63,6 +63,10 @@ const STYLES = `
 
   const log = (...args) => { if (CONFIG.DEBUG) console.log('[Topp-Alarm]', ...args); };
 
+  // Rate limiting to prevent duplicate runs on rapid sequential DOM mutations
+  let lastRunTimestamp = 0;
+  const THROTTLE_MS = 2000; 
+
   // Inject CSS
   const styleEl = document.createElement('style');
   styleEl.textContent = STYLES;
@@ -108,6 +112,14 @@ const STYLES = `
   }
 
   function performAutomation(modalContainer) {
+    // Double-guard check
+    const now = Date.now();
+    if (now - lastRunTimestamp < THROTTLE_MS) {
+      log('Execution throttled (duplicate prevented).');
+      return;
+    }
+    lastRunTimestamp = now;
+
     log('Processing price alarm modal...');
 
     // 1. Extract Base Price
