@@ -7,10 +7,11 @@ A [Violentmonkey](https://violentmonkey.github.io/) userscript that automaticall
 
 ## Features
 
-- **Auto-Approve**: Automatically clicks "Approve", "Confirm", or "Allow" buttons.
-- **Visual Countdown**: A green progress bar shrinks on the button before it clicks, giving you time to react.
-- **Hover-to-Pause**: Hovering over the button pauses the countdown (bar turns orange) so you can read the action or intervene manually. Moving the mouse away resumes it.
-- **GitHub Auto-Enable**: Ensures the GitHub connector is active in your chat session automatically.
+- **Automated Clicking**: Clicks "Approve", "Confirm", or "Allow" buttons on action cards.
+- **Visual Countdown**: Displays a progress bar on the button before clicking.
+- **Hover to Pause**: Hovering over a button pauses the countdown.
+- **GitHub Auto-Enable**: Automatically enables the GitHub connector via suggestion pills or the connectors menu.
+  - See [RESEARCH_LOG.md](./RESEARCH_LOG.md) for details on the DOM selection logic.
 
 ## Requirements
 
