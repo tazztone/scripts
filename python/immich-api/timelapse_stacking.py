@@ -373,10 +373,26 @@ def unstack_last_run():
 
     print(f"\n  Unstacking {len(run_log)} stacks from last run...")
     failed = []
-    for i, entry in enumerate(run_log):
-        resp = requests.delete(
-            f"{BASE_URL}/api/stacks/{entry['stack_id']}", headers=headers
-        )
+
+    session = requests.Session()
+    session.headers.update(headers)
+
+    def delete_stack(i, entry):
+        resp = session.delete(f"{BASE_URL}/api/stacks/{entry['stack_id']}")
+        return i, entry, resp
+
+    with ThreadPoolExecutor(max_workers=min(10, len(run_log) or 1)) as executor:
+        futures = {
+            executor.submit(delete_stack, i, entry): (i, entry)
+            for i, entry in enumerate(run_log)
+        }
+
+        results = [None] * len(run_log)
+        for future in as_completed(futures):
+            i, entry, resp = future.result()
+            results[i] = (entry, resp)
+
+    for i, (entry, resp) in enumerate(results):
         if resp.status_code == 204:
             print(f"  [{i + 1:3d}] ✓  {entry['frames']}f @ {entry['date']}")
         else:
