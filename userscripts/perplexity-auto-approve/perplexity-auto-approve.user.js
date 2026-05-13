@@ -63,9 +63,6 @@ const STYLE = `
 
   // --- CONNECTOR LOGIC ---
 
-  let githubEnableAttempted = false;
-  let lastUrl = location.href;
-
   function isGithubEnabled() {
     // 1. Check for the solid GitHub pill button (active connector) in the input area
     // Active connectors have aria-haspopup="menu" and a solid border/background.
@@ -80,63 +77,6 @@ const STYLE = `
     return !!document.querySelector('svg path[d*="M12 2C6.477 2 2 6.477 2 12c0 4.419 2.865 8.166 6.839 9.489"]');
   }
 
-  async function ensureGithubEnabledViaMenu() {
-    if (!CONFIG.AUTO_ENABLE_GITHUB || isGithubEnabled() || githubEnableAttempted) return;
-
-    // Try to find the + button by multiple selectors
-    const attachBtn = document.querySelector([
-      'button[aria-label="Add files or tools"]',
-      'button[aria-label="Add"]',
-      'button[aria-label*="attach" i]',
-      'button[aria-label*="add" i]',
-      'button:has(svg[data-icon="plus"])',
-      'button:has(svg path[d*="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"])',
-    ].join(', '));
-    if (!attachBtn) return;
-
-    // Prevent multiple attempts once we found the button
-    githubEnableAttempted = true;
-
-    attachBtn.click();
-    await new Promise(r => setTimeout(r, 400));
-
-    const connectorsMenu = Array.from(document.querySelectorAll('div, button, li, [role="menuitem"]'))
-      .filter(el => {
-        const txt = el.textContent.trim().toLowerCase();
-        return (txt.startsWith('connectors') || txt.includes('connectors and sources')) && isVisible(el);
-      })
-      .sort((a, b) => a.textContent.length - b.textContent.length)[0];
-    if (!connectorsMenu) return;
-
-    // Use correct event constructors — required for React/Radix components
-    ['pointerenter', 'pointermove', 'mouseover', 'mouseenter'].forEach(type => {
-      const EventClass = type.startsWith('pointer') ? PointerEvent : MouseEvent;
-      connectorsMenu.dispatchEvent(new EventClass(type, { bubbles: true, cancelable: true }));
-    });
-    await new Promise(r => setTimeout(r, 400));
-
-    // Find and click the GitHub checkbox
-    const githubItem = Array.from(document.querySelectorAll('div, button, span, [role="menuitem"], [role="option"], [role="menuitemcheckbox"]'))
-      .find(el => normalize(el.textContent) === 'github' && isVisible(el));
-    
-    if (githubItem) {
-      // Check if it's already enabled via aria-checked to avoid toggling it OFF
-      const checkbox = githubItem.querySelector('[role="checkbox"], [aria-checked]');
-      const isAlreadyOn = githubItem.getAttribute('aria-checked') === 'true' || 
-                         (checkbox && checkbox.getAttribute('aria-checked') === 'true');
-      
-      if (!isAlreadyOn) {
-        githubItem.click();
-        console.log('[Perplexity Auto Approve] GitHub enabled via menu.');
-      } else {
-        console.log('[Perplexity Auto Approve] GitHub is already enabled.');
-      }
-    }
-
-    // Close menu by pressing Escape
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-  }
-
   function tryClickSuggestionPill() {
     if (!CONFIG.AUTO_ENABLE_GITHUB || isGithubEnabled()) return false;
     
@@ -144,7 +84,11 @@ const STYLE = `
     const buttons = Array.from(document.querySelectorAll('button'));
     const pill = buttons.find(el => {
       const text = normalize(el.textContent);
-      if (!text.includes('github')) return false;
+      
+      // Strict matching to avoid clicking search suggestions that contain the word "github"
+      const exactMatches = ['github', '+ github', 'github +', 'add github', 'enable github'];
+      if (!exactMatches.includes(text)) return false;
+
       if (!isVisible(el)) return false;
       
       // DETECTION: Suggestion pills have specific features:
@@ -155,8 +99,7 @@ const STYLE = `
       // 2. Contains a plus icon (either as a path or a use-ref)
       const hasPlusIcon = el.querySelector('use[xlink\\:href*="plus"]') || 
                           el.querySelector('svg path[d*="M12 5l0 14 M5 12l14 0"]') ||
-                          el.querySelector('svg path[d*="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"]') ||
-                          el.textContent.includes('+');
+                          el.querySelector('svg path[d*="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"]');
       
       // EXCLUSION: 
       // 1. Ignore active connectors (they have aria-haspopup="menu")
@@ -248,12 +191,7 @@ const STYLE = `
 
   let connectorLogicLock = false;
 
-  async function run() {
-    if (lastUrl !== location.href) {
-      lastUrl = location.href;
-      githubEnableAttempted = false;
-    }
-
+  function run() {
     if (CONFIG.AUTO_APPROVE) {
       findApproveButtons().forEach(scheduleClick);
     }
@@ -261,9 +199,7 @@ const STYLE = `
     if (CONFIG.AUTO_ENABLE_GITHUB && !isGithubEnabled() && !connectorLogicLock) {
       connectorLogicLock = true;
       try {
-        if (!tryClickSuggestionPill()) {
-          await ensureGithubEnabledViaMenu();
-        }
+        tryClickSuggestionPill();
       } finally {
         // Cooldown to prevent loops during UI transitions
         setTimeout(() => { connectorLogicLock = false; }, 2000);
