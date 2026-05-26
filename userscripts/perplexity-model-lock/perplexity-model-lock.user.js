@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Perplexity Model Lock
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.0.0
+// @version      1.0.1
 // @description  Automatically selects Claude Sonnet 4.6 and enables Thinking mode on Perplexity.ai when the site resets it.
 // @author       tazztone
 // @match        https://www.perplexity.ai/*
@@ -16,7 +16,7 @@ const CONFIG = {
   TARGET_MODEL: 'Claude Sonnet 4.6', // Case-insensitive model name to select
   ENABLE_THINKING: true,              // Whether to ensure "Thinking" mode is enabled
   OBSERVER_DEBOUNCE_MS: 150,          // Debounce for DOM mutation reactions
-  COOLDOWN_MS: 3000,                  // Cooldown after an auto-lock operation to prevent loops
+  COOLDOWN_MS: 3000,                  // Cooldown after an auto-lock selection to prevent loops
   DEBUG: true                         // Log debug info to console
 };
 
@@ -113,44 +113,87 @@ const STYLE = `
   function findDropdownModelItem(targetModel) {
     const triggerBtn = findModelButton();
     const targetNormalized = normalize(targetModel);
-    const candidates = Array.from(document.querySelectorAll('[role="menuitem"], [role="option"], button, div'));
     
+    // 1. Look for interactive option roles
+    const candidates = Array.from(document.querySelectorAll('[role="menuitem"], [role="option"], [role="menuitemcheckbox"], button, .dropdown-item'));
     for (const el of candidates) {
       if (!isVisible(el)) continue;
       if (triggerBtn && (triggerBtn === el || triggerBtn.contains(el))) continue;
       
       const text = normalize(el.textContent);
-      
-      // Ensure we target a discrete list option row rather than the whole dropdown panel
-      const rect = el.getBoundingClientRect();
-      if (rect.height > 80 || rect.width > 400) continue;
-      
-      if (text === targetNormalized || text.startsWith(targetNormalized)) {
+      if (text.includes(targetNormalized)) {
         return el;
       }
     }
-    return null;
+    
+    // 2. Fallback: Search visible divs and pick the deepest leaf node containing the text to avoid parent menu containers
+    const divs = Array.from(document.querySelectorAll('div'));
+    let bestMatch = null;
+    let bestDepth = -1;
+    
+    for (const el of divs) {
+      if (!isVisible(el)) continue;
+      if (triggerBtn && (triggerBtn === el || triggerBtn.contains(el))) continue;
+      
+      const text = normalize(el.textContent);
+      if (text.includes(targetNormalized)) {
+        let depth = 0;
+        let temp = el;
+        while (temp.parentElement) {
+          depth++;
+          temp = temp.parentElement;
+        }
+        if (depth > bestDepth) {
+          bestDepth = depth;
+          bestMatch = el;
+        }
+      }
+    }
+    
+    return bestMatch;
   }
 
   function findDropdownThinkingRow() {
     const triggerBtn = findModelButton();
-    const candidates = Array.from(document.querySelectorAll('[role="menuitem"], button, div'));
     
+    // 1. Look for interactive elements
+    const candidates = Array.from(document.querySelectorAll('[role="menuitem"], [role="option"], [role="menuitemcheckbox"], button, .dropdown-item'));
     for (const el of candidates) {
       if (!isVisible(el)) continue;
       if (triggerBtn && (triggerBtn === el || triggerBtn.contains(el))) continue;
       
       const text = normalize(el.textContent);
-      
-      // Ensure we target a discrete row rather than the whole dropdown panel
-      const rect = el.getBoundingClientRect();
-      if (rect.height > 80 || rect.width > 400) continue;
-      
-      if (text === 'thinking' || text.startsWith('thinking')) {
+      // Ensure we match "thinking" but skip other model rows containing "thinking" descriptions
+      if (text.includes('thinking') && !text.includes('claude') && !text.includes('gpt') && !text.includes('sonar') && !text.includes('gemini')) {
         return el;
       }
     }
-    return null;
+    
+    // 2. Fallback: Deepest div matching
+    const divs = Array.from(document.querySelectorAll('div'));
+    let bestMatch = null;
+    let bestDepth = -1;
+    
+    for (const el of divs) {
+      if (!isVisible(el)) continue;
+      if (triggerBtn && (triggerBtn === el || triggerBtn.contains(el))) continue;
+      
+      const text = normalize(el.textContent);
+      if (text.includes('thinking') && !text.includes('claude') && !text.includes('gpt') && !text.includes('sonar') && !text.includes('gemini')) {
+        let depth = 0;
+        let temp = el;
+        while (temp.parentElement) {
+          depth++;
+          temp = temp.parentElement;
+        }
+        if (depth > bestDepth) {
+          bestDepth = depth;
+          bestMatch = el;
+        }
+      }
+    }
+    
+    return bestMatch;
   }
 
   function getSwitchState(rowEl) {
@@ -209,13 +252,13 @@ const STYLE = `
   // --- ORCHESTRATION ---
 
   let isInteracting = false;
-  let lastInteractionTime = 0;
+  let lastSelectionTime = 0;
 
   function run() {
     try {
       const now = Date.now();
-      // Skip logic if we are actively interacting or inside a cooldown period
-      if (isInteracting || (now - lastInteractionTime < CONFIG.COOLDOWN_MS)) {
+      // Skip logic if we are actively interacting or inside a selection cooldown
+      if (isInteracting || (now - lastSelectionTime < CONFIG.COOLDOWN_MS)) {
         return;
       }
       
@@ -241,14 +284,15 @@ const STYLE = `
         isInteracting = true;
         dispatchClickEvents(modelBtn);
         
+        // Brief 300ms lock to let dropdown render, then unlock for the next mutation observer tick
         setTimeout(() => {
           isInteracting = false;
-          lastInteractionTime = Date.now();
-        }, 500); // 500ms lock for menu rendering
+        }, 300);
         return;
       }
       
       // Dropdown menu is currently open
+      log('Model dropdown is open. Adjusting state...');
       isInteracting = true;
       let actionTaken = false;
       
@@ -269,12 +313,12 @@ const STYLE = `
         actionTaken = true;
       }
       
-      // Release logic lock and start the cooldown to avoid flickering
+      // Release logic lock and start selection cooldown (800ms buffer for click propagation)
       setTimeout(() => {
         isInteracting = false;
-        lastInteractionTime = Date.now();
+        lastSelectionTime = Date.now();
         log('Interaction completed, locking model state.');
-      }, 800); // 800ms cooldown for selections to commit and menu to close
+      }, 800);
       
     } catch (errEl) {
       err('Error inside execution run:', errEl);
@@ -297,7 +341,7 @@ const STYLE = `
   function handleUrlChange() {
     log('SPA Page transition detected, resetting interaction states...');
     isInteracting = false;
-    lastInteractionTime = 0;
+    lastSelectionTime = 0;
     run();
   }
 
