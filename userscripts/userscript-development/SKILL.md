@@ -32,6 +32,13 @@ If the target leverages heavy dynamic AJAX rendering or cookie-guarded sessions 
 - **Headless Execution**: Do not waste time brute-forcing raw HTTP headers. Use a headless engine (like Playwright) to perform a live render and dump the DOM.
 - **Bypass Constraints**: Use raw JS evaluation (`document.querySelector().click()`) during verification runs to force interactions past hidden responsive overlaps.
 - **Centralized Tooling**: Maintain a shared `venv` containing automated extraction libraries in the root `/userscripts/` folder to optimize analysis speed and avoid bloat.
+- **Virtual Environment Maintenance**: OS-level Python upgrades (e.g., 3.13 to 3.14) will break virtual environments because internal symlinks redirect to the new interpreter, while existing binary C-extensions (such as Playwright's dependency `greenlet`) remain compiled for the older ABI version. When this occurs, recreate the environment using `uv`:
+  ```bash
+  # Recreate the virtual environment clearing old state
+  uv venv --clear --python 3.14 venv
+  # Re-install dependencies
+  uv pip install -r perplexity-auto-approve/tests/requirements.txt
+  ```
 
 ---
 

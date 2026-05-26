@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mock Perplexity Model Selector</title>
+    <style>
+        body { font-family: sans-serif; padding: 50px; background: #111; color: white; }
+        .input-container { border: 1px solid #333; padding: 20px; border-radius: 8px; width: 500px; position: relative; }
+        textarea { width: 100%; height: 60px; background: transparent; border: none; color: white; resize: none; outline: none; }
+        .footer-row { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+        button { cursor: pointer; font-weight: bold; border: none; }
+        
+        /* The Model selector button trigger */
+        .btn-model-trigger {
+            background: #222;
+            color: #ccc;
+            padding: 6px 12px;
+            border-radius: 9999px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            border: 1px solid #333;
+        }
+        .btn-model-trigger:hover {
+            background: #2a2a2a;
+        }
+
+        /* The Portal-rendered Dropdown */
+        .dropdown-portal {
+            display: none;
+            background: #1c1c1e;
+            border: 1px solid #2c2c2e;
+            border-radius: 12px;
+            padding: 8px;
+            width: 240px;
+            position: absolute;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            z-index: 9999;
+        }
+        .dropdown-portal.open {
+            display: block;
+        }
+        .dropdown-item {
+            padding: 10px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            color: #e5e5ea;
+        }
+        .dropdown-item:hover {
+            background: #2c2c2e;
+        }
+        .dropdown-item.selected::after {
+            content: "✓";
+            color: #0a84ff;
+            font-weight: bold;
+        }
+        
+        /* The Thinking toggle row */
+        .thinking-row {
+            border-top: 1px solid #2c2c2e;
+            margin-top: 6px;
+            padding-top: 6px;
+        }
+        .switch-btn {
+            width: 36px;
+            height: 20px;
+            border-radius: 9999px;
+            background: #3a3a3c;
+            position: relative;
+            outline: none;
+            transition: background 0.2s;
+        }
+        .switch-btn[aria-checked="true"] {
+            background: #30d158;
+        }
+        .switch-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: white;
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            transition: transform 0.2s;
+        }
+        .switch-btn[aria-checked="true"] .switch-thumb {
+            transform: translateX(16px);
+        }
+    </style>
+</head>
+<body>
+    <h1>Perplexity Model Lock - Mock Interface</h1>
+    <p>Simulating Perplexity AI prompt input with dynamic model switcher dropdown.</p>
+    
+    <div class="input-container">
+        <textarea placeholder="Ask anything..."></textarea>
+        <div class="footer-row">
+            <!-- Selector Button Trigger (1) -->
+            <button class="btn-model-trigger" id="model-select-btn">
+                Best
+            </button>
+            <button style="background: #3a3a3c; color: white; padding: 6px 12px; border-radius: 9999px;">
+                Focus
+            </button>
+        </div>
+
+        <!-- Portal Rendered Dropdown Menu (2 & 3) -->
+        <div class="dropdown-portal" id="model-dropdown">
+            <div class="dropdown-item selected" data-model="Best">Best</div>
+            <div class="dropdown-item" data-model="Sonar 2">Sonar 2</div>
+            <div class="dropdown-item" data-model="GPT-5.4">GPT-5.4</div>
+            <div class="dropdown-item" data-model="Gemini 3.1 Pro">Gemini 3.1 Pro</div>
+            <div class="dropdown-item" data-model="Claude Sonnet 4.6">Claude Sonnet 4.6</div>
+            
+            <!-- Thinking switch row -->
+            <div class="dropdown-item thinking-row" style="cursor: default; hover: none;">
+                <span>Thinking</span>
+                <button class="switch-btn" id="thinking-switch" role="switch" aria-checked="false">
+                    <div class="switch-thumb"></div>
+                </button>
+            </div>
+            <div class="dropdown-item" style="opacity: 0.5; cursor: not-allowed;" data-model="Claude Opus 4.7">Claude Opus 4.7 Max</div>
+        </div>
+    </div>
+
+    <script>
+        const triggerBtn = document.getElementById('model-select-btn');
+        const dropdown = document.getElementById('model-dropdown');
+        const thinkingSwitch = document.getElementById('thinking-switch');
+        const items = Array.from(document.querySelectorAll('.dropdown-item[data-model]'));
+
+        let selectedModel = 'Best';
+        let isThinkingEnabled = false;
+
+        function updateUI() {
+            // Update selected indicator checkmark
+            items.forEach(item => {
+                if (item.getAttribute('data-model') === selectedModel) {
+                    item.classList.add('selected');
+                } else {
+                    item.classList.remove('selected');
+                }
+            });
+
+            // Update thinking switch attribute
+            thinkingSwitch.setAttribute('aria-checked', isThinkingEnabled ? 'true' : 'false');
+
+            // Update button label
+            let label = selectedModel;
+            if (isThinkingEnabled && selectedModel !== 'Best') {
+                label = selectedModel + ' Thinking';
+            }
+            // Preserve the indicator if the userscript added one
+            const indicator = triggerBtn.querySelector('.px-model-lock-indicator');
+            triggerBtn.textContent = label;
+            if (indicator) {
+                triggerBtn.appendChild(indicator);
+            }
+        }
+
+        // Click trigger to toggle menu
+        triggerBtn.addEventListener('click', (e) => {
+            const rect = triggerBtn.getBoundingClientRect();
+            // Position dropdown right above/below the trigger button
+            dropdown.style.left = triggerBtn.offsetLeft + 'px';
+            dropdown.style.top = (triggerBtn.offsetTop + triggerBtn.offsetHeight + 5) + 'px';
+            dropdown.classList.toggle('open');
+        });
+
+        // Click dropdown items to select model and close dropdown
+        items.forEach(item => {
+            item.addEventListener('click', () => {
+                if (item.style.opacity === '0.5') return; // Locked item
+                selectedModel = item.getAttribute('data-model');
+                updateUI();
+                dropdown.classList.remove('open');
+            });
+        });
+
+        // Click thinking toggle switch (stays open)
+        thinkingSwitch.addEventListener('click', (e) => {
+            e.stopPropagation();
+            isThinkingEnabled = !isThinkingEnabled;
+            updateUI();
+        });
+
+        // Initialize state
+        updateUI();
+    </script>
+</body>
+</html>
