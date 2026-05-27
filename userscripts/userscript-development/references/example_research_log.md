@@ -4,7 +4,7 @@ This document details the DOM structure and selection strategies used to automat
 
 ---
 
-## 1. Triggering Selector
+## 1. Trigger & Target Elements
 
 **Goal**: Locate the "Confirm" button that appears inside a dynamic modal after adding an item to the cart.
 
@@ -22,9 +22,23 @@ This document details the DOM structure and selection strategies used to automat
 
 ---
 
-## 2. Exclusion Logic
+## 2. Element Selectors
 
-**Goal**: Avoid accidentally clicking the "Cancel" or "Save for later" buttons that share the same modal.
+### Confirm Button
+- **Selector**: `button[aria-label="Confirm order"]`
+- **Fallback**: `button:has(svg path[d*="M5 13l4 4L19 7"])`
+
+### Cancel Button (exclusion target)
+- **Selector**: `button[aria-label="Cancel"]`
+- **Note**: Shares the same modal — must not be clicked.
+
+### Modal Container
+- **Selector**: `.modal-overlay [role="dialog"]`
+- **Visibility Detection**: The dialog is injected dynamically. Check for presence of the confirm button inside before acting.
+
+---
+
+## 3. Exclusion Logic
 
 **Include**:
 - `button[aria-label^="Confirm"]` — label starts with "Confirm"
@@ -37,30 +51,26 @@ This document details the DOM structure and selection strategies used to automat
 
 ---
 
-## 3. Event Handling
+## 4. Event Management
 
 **Events needed** (Radix UI Dialog button, React synthetic events):
 ```javascript
 const el = document.querySelector('button[aria-label="Confirm order"]');
-el.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
-el.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true }));
-el.dispatchEvent(new MouseEvent('mouseover',   { bubbles: true }));
-el.dispatchEvent(new MouseEvent('mouseenter',  { bubbles: true }));
-el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-el.dispatchEvent(new MouseEvent('mousedown',   { bubbles: true }));
-el.dispatchEvent(new PointerEvent('pointerup',   { bubbles: true }));
-el.dispatchEvent(new MouseEvent('mouseup',     { bubbles: true }));
-el.dispatchEvent(new MouseEvent('click',        { bubbles: true }));
+el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+el.dispatchEvent(new PointerEvent('pointerup',   { bubbles: true, cancelable: true }));
+el.dispatchEvent(new MouseEvent('mousedown',   { bubbles: true, cancelable: true }));
+el.dispatchEvent(new MouseEvent('mouseup',     { bubbles: true, cancelable: true }));
+el.dispatchEvent(new MouseEvent('click',        { bubbles: true, cancelable: true }));
 ```
 
-**Why**: Radix uses `onPointerDown` to open/close state machines. A bare `.click()` fires after `pointerup` and is ignored by the state machine.
+**Why**: Radix uses `onPointerDown` to drive open/close state machines. A bare `.click()` fires after `pointerup` and is ignored by the state machine.
 
 ---
 
-## 4. State Tracking
+## 5. Lifecycle & SPA Behavior
 
 **SPA Notes** (site uses React Router v6 + history API):
-- URL changes on every step of the checkout flow; reset `logicLock` on each `navigatesuccess` event.
+- URL changes on every step of the checkout flow; reset `logicLock` and `lastActionTime` on each `navigatesuccess` event.
 - Modal mounts and unmounts on `/cart/review` only; skip `run()` on all other paths:
   ```javascript
   if (!location.pathname.startsWith('/cart/review')) return;
@@ -68,3 +78,5 @@ el.dispatchEvent(new MouseEvent('click',        { bubbles: true }));
 - Observed a double-mount bug on fast network tabs (React StrictMode in dev): add a 200 ms debounce before acting to let the second mount settle.
 
 **Cooldown**: 1500 ms after a successful click — the site re-renders the modal briefly during the POST response, which can re-trigger the observer.
+
+**Processed Marker**: After clicking, set `modal.dataset.processed = 'true'` to prevent duplicate action on subsequent observer fires.

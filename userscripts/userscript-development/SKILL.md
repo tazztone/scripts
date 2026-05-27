@@ -22,31 +22,35 @@ Always produce or maintain these three core artifacts:
 Before writing the main script logic, create or update `RESEARCH_LOG.md`. This ensures robust selection logic that doesn't break on small UI updates.
 
 ### Research Structure
-- **Target Elements**: Document the exact selectors used. Provide Primary and Fallback options (e.g., check `aria-label`, then specific SVG paths, then text node content).
-- **Visual Detection**: Note the specific visual heuristics (e.g., "Dashed borders usually denote suggestion pills").
-- **Inclusions & Exclusions**: Explicitly define what NOT to click or interact with (e.g., "Ignore full-width elements as they are search suggestions, not buttons").
-- **Application State**: How to handle SPAs? (e.g., resets on `location.href` change, `MutationObserver` cooldowns).
+
+Use numbered sections that mirror the script's logical phases:
+
+1. **Trigger & Target Elements**: Document the exact selectors used. Provide Primary and Fallback options (e.g., check `aria-label`, then specific SVG paths, then text node content).
+2. **Element Selectors**: Catalog every interactive element the script touches — inputs, buttons, toggles, containers — with primary and fallback selectors.
+3. **Exclusion Logic**: Explicitly define what NOT to interact with (e.g., "Ignore full-width elements as they are search suggestions, not buttons"; "Skip elements inside `[aria-hidden='true']` containers").
+4. **Event Management**: Document how to reliably trigger actions on the target. Note whether standard `.click()` suffices or if a full `PointerEvent` + `MouseEvent` chain is required (common with Radix/React).
+5. **Lifecycle & SPA Behavior**: How does the site handle navigation? Does it reset state on route changes? What mutation patterns trigger re-renders? Document debounce and cooldown requirements.
 
 ### Automated Extraction (Agent-Assisted)
-If the target leverages heavy dynamic AJAX rendering or cookie-guarded sessions that block static fetching:
+
+If the target site uses heavy dynamic AJAX rendering or cookie-guarded sessions that block static fetching:
 - **Headless Execution**: Do not waste time brute-forcing raw HTTP headers. Use a headless engine (like Playwright) to perform a live render and dump the DOM.
 - **Bypass Constraints**: Use raw JS evaluation (`document.querySelector().click()`) during verification runs to force interactions past hidden responsive overlaps.
 - **Centralized Tooling**: Maintain a shared `venv` containing automated extraction libraries in the root `/userscripts/` folder to optimize analysis speed and avoid bloat.
-- **Virtual Environment Maintenance**: OS-level Python upgrades (e.g., 3.13 to 3.14) will break virtual environments because internal symlinks redirect to the new interpreter, while existing binary C-extensions (such as Playwright's dependency `greenlet`) remain compiled for the older ABI version. When this occurs, recreate the environment using `uv`:
+- **Virtual Environment Maintenance**: OS-level Python upgrades will break virtual environments because internal symlinks redirect to the new interpreter, while existing binary C-extensions remain compiled for the older ABI version. When this occurs, recreate the environment using `uv`:
   ```bash
-  # Recreate the virtual environment clearing old state
-  uv venv --clear --python 3.14 venv
-  # Re-install dependencies
-  uv pip install -r perplexity-auto-approve/tests/requirements.txt
+  uv venv --clear --python <new-version> venv
+  uv pip install -r <project>/tests/requirements.txt
   ```
 
 ---
 
 ## 2. Implementation Architecture
 
-Structure your `.user.js` files strictly as follows:
+Structure your `.user.js` files strictly as follows.
 
 ### Metadata Block
+
 Use comprehensive headers compatible with standard engines:
 ```javascript
 // ==UserScript==
@@ -72,54 +76,125 @@ Always bump the version on every commit that touches the `.user.js` file so Viol
 **Grants — required additions**:
 - Add `@grant GM_setValue` / `@grant GM_getValue` when using persistent storage.
 - Add `@grant GM_xmlHttpRequest` **and** `@connect [hostname]` for every external domain you fetch. Missing `@connect` causes silent request failures even when `@grant` is present.
-- Add `@require https://cdn.example.com/lib.min.js` to bundle a trusted external library at install time (pinned URL strongly preferred over a `latest` alias).
+- Add `@require https://cdn.example.com/lib.min.js` to bundle a trusted external library at install time. **Pin to an exact version** in the URL — never use `@latest` or a major-only alias, as upstream changes can silently break the script. Declare the library's global (e.g., `/* global dayjs */`) as a comment so linters don't flag it as undefined.
 
-### Component Separation
-1.  **CONFIG**: A clear constant object at the top for user tuning.
-2.  **STYLES**: CSS injected via code for UI additions (e.g., countdown bars, indicator dots).
-3.  **UTILITIES**: Standardized helpers for DOM parsing (`isVisible`, `normalize`).
-4.  **CORE LOGIC**: Feature-centric logic functions (e.g., `findButtons`, `performAction`).
-5.  **ORCHESTRATION**: A debounced `MutationObserver` governing the `run()` loop to handle dynamic SPAs without thrashing.
+### Component Separation & Scope
 
-> **Scope rule**: Keep `CONFIG`, `STYLES`, and all logic inside the IIFE (`(() => { … })()`) to avoid polluting the global scope. The only things that may live outside are `// ==UserScript==` metadata and `@require`d library globals.
+Place **CONFIG** and **STYLES** constants *outside* the IIFE, directly after the metadata block. This gives users a clear, unfenced area to edit without scrolling into logic. Everything else lives inside the IIFE:
+
+```javascript
+// ==UserScript== ... ==/UserScript==
+
+// ─── CONFIG ──────────────────────────────────────────────
+const CONFIG = { /* user-tunable values */ };
+
+// ─── STYLES ──────────────────────────────────────────────
+const STYLE = ` /* injected CSS */ `;
+
+// ─────────────────────────────────────────────────────────
+
+(() => {
+  'use strict';
+
+  // 1. STYLE INJECTION — mount CSS into the page
+  // 2. UTILITIES       — isVisible, normalize, log, dispatchClickEvents
+  // 3. CORE LOGIC      — feature-centric functions (findButtons, performAction)
+  // 4. ORCHESTRATION   — MutationObserver, SPA navigation, bootstrap
+})();
+```
+
+### Standard Utilities
+
+Every script should include these foundational helpers inside the IIFE:
+
+```javascript
+// Debug-gated logging — controlled by CONFIG.DEBUG
+const log = (...args) => { if (CONFIG.DEBUG) console.log('[ScriptName]', ...args); };
+const err = (...args) => { console.error('[ScriptName] Error:', ...args); };
+
+// Whitespace-normalized, lowercase text for reliable comparisons
+const normalize = (s) => (s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+// Comprehensive visibility check — catches hidden duplicates on responsive sites
+function isVisible(el) {
+  if (!document.contains(el)) return false;
+  const style = window.getComputedStyle(el);
+  return (
+    style.display !== 'none' &&
+    style.visibility !== 'hidden' &&
+    style.opacity !== '0' &&
+    el.getBoundingClientRect().width > 0
+  );
+}
+```
 
 ### Resiliency Principles
-- **Visibility Verification**: Always check `getBoundingClientRect().width > 0` and computed styles (`display`, `visibility`, `opacity`) before interacting. Be extra vigilant on responsive sites which often duplicate elements (e.g., one for Desktop, one for Mobile).
-- **Event Fidelity**: For modern UI libraries (React, Radix), simple `.click()` might fail. Fire complete chains of events (e.g., `PointerEvent` + `MouseEvent`) for hovers and clicks.
-- **Locks and Cooldowns**: Use flag locks (`isAttempting`, `cooldown`) when handling multi-step menu sequences or dynamic insertion to prevent infinite loop traps.
-- **State Resets**: Monitor `location.href` in the main loop and clear logic locks/state trackers when URL changes, supporting Single Page Applications navigation.
-- **Observer Error Guards**: Wrap the body of every `MutationObserver` callback and the `run()` function in `try/catch`. An uncaught exception inside an observer silently kills it — the script will appear to stop working with no visible error:
+
+- **Visibility Verification**: Always check `isVisible()` before interacting. Be extra vigilant on responsive sites which often duplicate elements (e.g., one for Desktop, one for Mobile).
+- **Event Fidelity**: For modern UI libraries (React, Radix), simple `.click()` may fail. Fire complete chains of events (`PointerEvent` + `MouseEvent`) for hovers and clicks. Document the required chain in `RESEARCH_LOG.md`.
+- **Locks and Cooldowns**: Use flag locks (`isInteracting`) when handling multi-step menu sequences. Use timestamp-based throttles (`lastActionTime`) to enforce cooldowns that survive re-entrant observer callbacks:
   ```javascript
-  const observer = new MutationObserver(() => {
-    try {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(run, CONFIG.OBSERVER_DEBOUNCE_MS);
-    } catch (e) {
-      console.error('[Script] Observer error:', e);
-    }
-  });
-  ```
-- **Cleanup / Teardown**: When the script should stop operating (e.g., user navigates away from the target path), call `observer.disconnect()` and remove any event listeners added via `addEventListener`. This prevents memory leaks in long-lived SPA sessions:
-  ```javascript
-  function teardown() {
-    observer.disconnect();
-    self.navigation?.removeEventListener('navigatesuccess', handleUrlChange);
+  let lastActionTime = 0;
+  function run() {
+    if (Date.now() - lastActionTime < CONFIG.COOLDOWN_MS) return;
+    // ... perform action ...
+    lastActionTime = Date.now();
   }
   ```
+- **Processed Markers**: For one-shot actions on dynamically injected elements (modals, cards), mark the element with a `dataset` attribute immediately to prevent duplicate processing. This is critical for idempotency:
+  ```javascript
+  if (modal.dataset.processed) return;
+  modal.dataset.processed = 'true';
+  ```
+- **State Resets**: Monitor `location.href` and clear logic locks/state trackers when URL changes, supporting SPA navigation.
+- **Observer Error Guards**: Wrap the body of every `MutationObserver` callback and the `run()` function in `try/catch`. An uncaught exception inside an observer silently kills it — the script will appear to stop working with no visible error.
+- **Safety Interval**: Add a periodic `setInterval(run, 5000)` as a fallback alongside the MutationObserver. Observers can be killed by uncaught errors or edge-case browser behavior; the interval guarantees eventual recovery.
+- **Cleanup / Teardown**: When the script should stop operating (e.g., user navigates away from the target path), call `observer.disconnect()` and remove any event listeners. This prevents memory leaks in long-lived SPA sessions.
+
+### User Feedback
+
+Give the user visual confirmation that the script is active and working:
+
+- **Indicator dots**: Append a small glowing `<span>` to the target element (green = locked/active, amber = syncing). Useful for continuous-state scripts.
+- **Toast notifications**: For one-shot actions (form fills, auto-clicks), inject a temporary toast with the result. Use `position: fixed`, `z-index: 999999`, `backdrop-filter: blur()`, and slide-in animations for a premium feel.
+- Always inject feedback styles via the `STYLE` constant — never inline.
 
 ---
 
-## 3. Advanced Framework Integration
+## 3. Orchestration Patterns
 
-Leverage modern UserScript APIs for smoother operations:
+### Debounced MutationObserver
+
+The primary execution driver. Debounce prevents thrashing on highly dynamic SPAs:
+
+```javascript
+let debounceTimer = null;
+const observer = new MutationObserver(() => {
+  try {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(run, CONFIG.OBSERVER_DEBOUNCE_MS);
+  } catch (e) {
+    err('Observer error:', e);
+  }
+});
+observer.observe(document.documentElement, { childList: true, subtree: true });
+```
 
 ### Reliable SPA Navigation
-Instead of manually checking `location.href` in polling loops, use explicit event hooks for navigation events:
+
+Use the Navigation API with a MutationObserver fallback for browsers that lack support:
+
 ```javascript
+function handleUrlChange() {
+  log('URL changed:', location.href);
+  logicLock = false;
+  lastActionTime = 0;
+  run();
+}
+
 if (self.navigation) {
   navigation.addEventListener('navigatesuccess', handleUrlChange);
 } else {
-  // Fallback observer for browsers/contexts without Navigation API
   let lastPath = location.href;
   new MutationObserver(() => {
     if (lastPath !== location.href) {
@@ -130,26 +205,34 @@ if (self.navigation) {
 }
 ```
 
-### Persistent Storage & Networking
-When your script needs cross-page data memory or bypassing CORS:
-- **Headers**: Must add `@grant GM_setValue`, `@grant GM_getValue`, or `@grant GM_xmlHttpRequest` **plus** `@connect [hostname]` for every domain targeted by `GM_xmlHttpRequest`.
-- **Storage**: Use `GM_setValue(key, value)` and `GM_getValue(key, defaultValue)` for user preferences that survive sessions.
-- **Async Network**: Modern engines support async fetching: `const res = await GM.xmlHttpRequest({ url });`.
+### Bootstrap Sequence
 
-### Loading External Libraries
-Use `@require` in the metadata block to load a trusted CDN library at script install time:
+Always end the IIFE with:
+
 ```javascript
-// ==UserScript==
-// ...
-// @require      https://cdn.jsdelivr.net/npm/dayjs@1.11.10/dayjs.min.js
-// ==/UserScript==
+// Primary: reactive observer
+observer.observe(document.documentElement, { childList: true, subtree: true });
+
+// Immediate: handle already-present DOM state
+run();
+
+// Safety net: periodic fallback if the observer dies
+setInterval(run, 5000);
 ```
-- **Pin to an exact version** in the URL — never use `@latest` or a major-only alias, as upstream changes can silently break your script.
-- Declare the library's global (e.g., `/* global dayjs */`) as a comment so linters don't flag it as undefined.
 
 ---
 
-## 4. Documentation Standard
+## 4. Testing
+
+Real scripts should include a `tests/` directory with automated verification:
+
+- **Playwright Tests**: Use a headless browser to load the target page, inject the userscript via `page.addScriptTag()` or `page.evaluate()`, and assert the expected DOM mutations occurred.
+- **Selector Validation**: Test that every primary and fallback selector from `RESEARCH_LOG.md` resolves to the expected element on a live page snapshot.
+- **Centralized Dependencies**: Keep test dependencies in the shared `/userscripts/venv` environment to avoid per-script bloat.
+
+---
+
+## 5. Documentation Standard
 
 The `README.md` should facilitate quick user onboarding:
 - **Installation**: Must provide direct links to the raw script URL for one-click Violentmonkey installs.

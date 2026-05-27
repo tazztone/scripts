@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Perplexity Model Lock
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.0.1
+// @version      1.0.3
 // @description  Automatically selects Claude Sonnet 4.6 and enables Thinking mode on Perplexity.ai when the site resets it.
 // @author       tazztone
 // @match        https://www.perplexity.ai/*
@@ -79,6 +79,82 @@ const STYLE = `
   // --- CORE SELECTION LOGIC ---
 
   function findModelButton() {
+    try {
+      // 1. Locate the main search query textarea as the stable anchor
+      const textarea = document.querySelector('textarea[placeholder*="Ask"], textarea[placeholder*="anything"], textarea');
+      if (!textarea) return findModelButtonKeywordFallback();
+      
+      // Find the closest shared container (the prompt input box)
+      const promptBox = textarea.closest('form') || textarea.parentElement?.closest('div');
+      if (!promptBox) return findModelButtonKeywordFallback();
+      
+      // 2. Scan all visible buttons within the prompt box context
+      const buttons = Array.from(promptBox.querySelectorAll('button'));
+      
+      for (const btn of buttons) {
+        if (!isVisible(btn)) continue;
+        
+        const text = normalize(btn.textContent);
+        
+        // 3. STRUCTURAL EXCLUSIONS: Ignore obviously non-model action buttons
+        if (text.includes('github') || text.includes('attach') || text.includes('focus') || text.includes('search')) {
+          continue;
+        }
+        
+        // Filter out Voice/Microphone button
+        const hasMicIcon = btn.querySelector('svg path[d*="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3"]') || 
+                           btn.getAttribute('aria-label')?.toLowerCase().includes('voice') ||
+                           btn.getAttribute('aria-label')?.toLowerCase().includes('dictate') ||
+                           btn.querySelector('svg[class*="mic"]');
+        if (hasMicIcon) continue;
+        
+        // Filter out circular Submit/Send button based on square aspect ratio & typical sizes
+        const rect = btn.getBoundingClientRect();
+        const isCircularSubmit = Math.abs(rect.width - rect.height) < 4 && rect.width < 50;
+        const hasSendIcon = btn.querySelector('svg path[d*="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"]') ||
+                            btn.querySelector('svg[class*="send"]') ||
+                            btn.querySelector('svg[class*="arrow-up"]');
+        if (isCircularSubmit || hasSendIcon) continue;
+        
+        // Filter out simple plus/attachment buttons
+        if (text === '+' || text === '') {
+          const hasPlusIcon = btn.querySelector('svg path[d*="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"]');
+          if (hasPlusIcon) continue;
+        }
+        
+        // 4. POSITIVE STRUCTURAL INDICATORS
+        // A. Menu role triggers
+        const hasMenuPopup = btn.getAttribute('aria-haspopup') === 'menu' || 
+                             btn.getAttribute('aria-haspopup') === 'listbox' ||
+                             btn.getAttribute('aria-haspopup') === 'dialog' ||
+                             btn.getAttribute('aria-expanded') !== null;
+                             
+        // B. Contains a dropdown arrow/chevron or SVG icon
+        const hasChevron = btn.querySelector('svg path[d*="M6 9l6 6 6-6"]') || 
+                           btn.querySelector('svg[class*="chevron"]') ||
+                           btn.querySelector('svg[class*="arrow-down"]') ||
+                           text.includes('⌵') || 
+                           text.includes('▼') ||
+                           btn.querySelector('svg'); // any icon if placed next to text
+                           
+        // C. Model terms fallback reinforcement
+        const keywords = ['model', 'best', 'sonar', 'gpt-', 'gemini', 'claude'];
+        const hasKeyword = keywords.some(keyword => text.includes(keyword));
+        
+        if (hasMenuPopup || hasChevron || hasKeyword) {
+          return btn;
+        }
+      }
+    } catch (e) {
+      err('Error inside structural finder:', e);
+    }
+    
+    // Page-wide fallback
+    return findModelButtonKeywordFallback();
+  }
+
+  // Page-wide fallback based strictly on model keyword matching
+  function findModelButtonKeywordFallback() {
     const allButtons = Array.from(document.querySelectorAll('button'));
     const keywords = ['best', 'sonar', 'gpt-5.4', 'gpt-5.5', 'gemini 3.1', 'claude sonnet', 'claude opus', 'gpt-', 'gemini', 'claude'];
     
@@ -86,12 +162,14 @@ const STYLE = `
       if (!isVisible(btn)) return false;
       const text = normalize(btn.textContent);
       
-      // Exclude active tools/connectors (e.g. GitHub connector, attachment buttons)
       if (text.includes('github') || text.includes('files or tools') || text.includes('attach')) {
         return false;
       }
       
-      return keywords.some(keyword => text.includes(keyword));
+      const isGenericModelBtn = text === 'model' || text.startsWith('model ') || text.endsWith(' model');
+      const matchesKeyword = keywords.some(keyword => text.includes(keyword));
+      
+      return isGenericModelBtn || matchesKeyword;
     });
   }
 
@@ -196,6 +274,7 @@ const STYLE = `
     return bestMatch;
   }
 
+  // Helper to determine the state of the switch toggle
   function getSwitchState(rowEl) {
     const switchEl = rowEl.querySelector('button[role="switch"], input[type="checkbox"]');
     if (switchEl) {

@@ -10,28 +10,34 @@
 // @noframes
 // ==/UserScript==
 
+// ─── CONFIG ──────────────────────────────────────────────────────────────────
+const CONFIG = {
+  ENABLED: true,
+  ACTION_DELAY_MS: 1000,
+  OBSERVER_DEBOUNCE_MS: 150,
+  DEBUG: true,
+};
+
+// ─── STYLES ──────────────────────────────────────────────────────────────────
+const STYLE = `
+  .my-custom-class {
+    border: 2px solid red !important;
+  }
+`;
+// ─────────────────────────────────────────────────────────────────────────────
+
 (() => {
   'use strict';
 
-  // ─── CONFIG ────────────────────────────────────────────────────────────────
-  const CONFIG = {
-    ENABLED: true,
-    ACTION_DELAY_MS: 1000,
-    OBSERVER_DEBOUNCE_MS: 150,
-  };
-
-  // ─── STYLES ─────────────────────────────────────────────────────────────────
-  const STYLE = `
-    .my-custom-class {
-      border: 2px solid red !important;
-    }
-  `;
+  // Inject styles
   const styleEl = document.createElement('style');
   styleEl.textContent = STYLE;
   document.head.appendChild(styleEl);
-  // ───────────────────────────────────────────────────────────────────────────
 
   // ─── UTILITIES ──────────────────────────────────────────────────────────────
+  const log = (...args) => { if (CONFIG.DEBUG) console.log('[Script]', ...args); };
+  const err = (...args) => { console.error('[Script] Error:', ...args); };
+
   const normalize = (s) => (s || '').replace(/\s+/g, ' ').trim().toLowerCase();
 
   function isVisible(el) {
@@ -47,6 +53,7 @@
 
   // ─── CORE LOGIC ─────────────────────────────────────────────────────────────
   let logicLock = false;
+  let lastActionTime = 0;
 
   function performLogic() {
     if (!CONFIG.ENABLED) return;
@@ -54,27 +61,29 @@
     const target = document.querySelector('.target-class');
     if (target && isVisible(target)) {
       target.click();
-      console.log('[Script] Action performed.');
+      log('Action performed.');
     }
   }
 
-  async function run() {
+  function run() {
     if (logicLock) return;
+    if (Date.now() - lastActionTime < CONFIG.ACTION_DELAY_MS) return;
     logicLock = true;
     try {
       performLogic();
+      lastActionTime = Date.now();
     } catch (e) {
-      console.error('[Script] run() error:', e);
+      err('run() error:', e);
     } finally {
-      // Cooldown delay to throttle execution on highly dynamic SPAs
-      setTimeout(() => { logicLock = false; }, CONFIG.ACTION_DELAY_MS);
+      logicLock = false;
     }
   }
 
   // ─── ORCHESTRATION ──────────────────────────────────────────────────────────
   function handleUrlChange() {
-    console.log('[Script] URL changed:', location.href);
-    logicLock = false; // Clear logical blocks on SPA route swaps
+    log('URL changed:', location.href);
+    logicLock = false;
+    lastActionTime = 0;
     run();
   }
 
@@ -98,19 +107,16 @@
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(run, CONFIG.OBSERVER_DEBOUNCE_MS);
     } catch (e) {
-      console.error('[Script] Observer error:', e);
+      err('Observer error:', e);
     }
   });
 
+  // Primary: reactive observer
   observer.observe(document.documentElement, { childList: true, subtree: true });
 
-  // Cleanup: disconnect when navigating away from the target path.
-  function teardown() {
-    observer.disconnect();
-    self.navigation?.removeEventListener('navigatesuccess', handleUrlChange);
-    console.log('[Script] Torn down.');
-  }
-
-  // Bootstrap execution
+  // Immediate: handle already-present DOM state
   run();
+
+  // Safety net: periodic fallback if the observer dies
+  setInterval(run, 5000);
 })();
