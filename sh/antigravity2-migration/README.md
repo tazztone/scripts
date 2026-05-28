@@ -10,12 +10,12 @@ This directory contains the automated installation/migration script (`antigravit
    * Package all original configurations, logs, and shortcuts into a compressed tarball: `~/antigravity_backup_pre_v2.tar.gz`.
    * **Frozen Fallback Policy:** The legacy apt-installed package `antigravity` remains completely untouched, and v1 configuration directories are treated as read-only snapshots to serve as a reliable fallback.
 
-2. **Account 1 (`tazztone2@gmail.com`) Migration:**
+2. **Account 1 Migration:**
    * Duplicated all **100+ conversation history files** (`.pb` protobuf files), brain states, and knowledge metadata from `~/.gemini/antigravity` into `~/.gemini/antigravity-ide`.
    * Merged user configurations and terminal profiles from `~/.config/Antigravity/User/settings.json` to `~/.config/Antigravity IDE/User/settings.json`, keeping the new Google Cloud project ID token (`gen-lang-client-...`) intact.
    * Extensions were skipped per user preference to allow a clean set of manual v2 installs.
 
-3. **Account 2 (`nataliegemini91@gmail.com`) Setup:**
+3. **Account 2 Setup:**
    * Configured an isolated, fresh config directory `~/.config/antigravity-ide-account2` (skipping old config copying to ensure complete compatibility).
    * Generates a custom, isolated user profile upon launch to let the user switch between Tazztone and Natalie seamlessly.
 
