@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      0.3.0
+// @version      0.3.1
 // @description  Automatically configures a price alarm (60% value, 2 years duration) on clicking the alarm bell.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -190,7 +190,29 @@ const STYLES = `
       if (submitBtn) {
         log('Submitting configuration...');
         // Brief delay before final submission to ensure standard scripts processes events
-        setTimeout(() => { submitBtn.click(); }, 300);
+        setTimeout(() => {
+          submitBtn.click();
+          
+          // Auto-close confirmation screen after successful submission
+          let closeAttempts = 0;
+          const autoCloseInterval = setInterval(() => {
+            const dialog = modalContainer.closest('.AbstractDialog');
+            const closeBtn = dialog?.querySelector('.AbstractDialog_CloseButton');
+            const formEl = dialog?.querySelector('#f_NewInfoMailForm_priceFrom');
+            
+            closeAttempts++;
+            if (!formEl) {
+              clearInterval(autoCloseInterval);
+              if (closeBtn) {
+                closeBtn.click();
+                log('Closed confirmation screen.');
+              }
+            } else if (closeAttempts > 15) {
+              clearInterval(autoCloseInterval);
+              log('Timeout waiting for form submission to complete.');
+            }
+          }, 200);
+        }, 300);
       } else {
         log('Error: Could not find submit button.');
       }

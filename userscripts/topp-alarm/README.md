@@ -14,7 +14,7 @@ When you click the "Preisalarm hinzufügen" (Bell icon) button on either a produ
 3. Calculates the target alert at **60%** of the value.
 4. Sets duration automatically to **2 years**.
 5. Ensures the GDPR/Privacy Policy checkbox is selected.
-6. Automatically submits the form to finalize the alert.
+6. Automatically submits the form and closes the confirmation modal upon successful creation.
 
 ## Configuration
 Edit the `CONFIG` block at the top of the file to customize settings:
