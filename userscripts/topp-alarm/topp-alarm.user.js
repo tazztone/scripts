@@ -1,12 +1,10 @@
 // ==UserScript==
 // @name         Toppreise.ch Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      0.2.1
+// @version      0.3.0
 // @description  Automatically configures a price alarm (60% value, 2 years duration) on clicking the alarm bell.
 // @author       tazztone
-// @match        https://www.toppreise.ch/preisvergleich/*
-// @match        https://www.toppreise.ch/price-comparison/*
-// @match        https://www.toppreise.ch/comparison-prix/*
+// @match        https://www.toppreise.ch/*
 // @run-at       document-idle
 // @grant        none
 // @noframes
@@ -124,9 +122,12 @@ const STYLES = `
 
     // 1. Extract Base Price
     // Prefer shipping price wrapper first as defined in Research Log
+    const isProductPage = window.location.pathname.startsWith('/preisvergleich/') 
+                       || window.location.pathname.startsWith('/price-comparison/') 
+                       || window.location.pathname.startsWith('/comparison-prix/');
     const priceEl = modalContainer.querySelector('.shippingPrice .Plugin_Price') 
                  || modalContainer.querySelector('.productPrice .Plugin_Price')
-                 || document.querySelector('.pageContent .priceContainer .Plugin_Price'); // Fallback global
+                 || (isProductPage ? document.querySelector('.pageContent .priceContainer .Plugin_Price') : null);
 
     if (!priceEl) {
       log('Error: Could not locate base price element.');

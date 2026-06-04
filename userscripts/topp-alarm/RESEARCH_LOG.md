@@ -60,3 +60,13 @@ The script employs a `MutationObserver` tracking insertions to the DOM.
   4. Trigger the duration click or value set.
   5. Ensure GDPR checkbox is checked.
   6. Click submit.
+
+---
+
+## 5. Overview List & Search Pages
+
+On overview list pages (e.g. `/produktsuche/*` or search lists):
+- **Bell Icon (Trigger)**: Hovering over any product row reveals a bell icon (`A.Plugin_NewInfoMailButton.Plugin_Button.icon-notify`).
+- **Modal Dialog**: Clicking the bell icon mounts the exact same dynamic modal container (`.Plugin_NewInfoMailForm`) under `#tmpAbstractDialogContainer`.
+- **Price Element**: The modal contains `.shippingPrice .Plugin_Price` or `.productPrice .Plugin_Price` representing the specific clicked product's price, ensuring the script successfully parses and configures the alarm target for that product.
+- **Global Fallback Safeguard**: The global fallback selector (`document.querySelector('.pageContent .priceContainer .Plugin_Price')`) is restricted to product pages only. This prevents list/search pages from incorrectly picking up a global price container of an unrelated product.

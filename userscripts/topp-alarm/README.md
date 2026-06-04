@@ -8,7 +8,7 @@ Userscript that fully automates the configuration of a price alarm on Toppreise.
 *(Requires Violentmonkey / Tampermonkey)*
 
 ## Logic
-When you are viewing a product page and click the "Preisalarm hinzufügen" (Bell icon) button:
+When you click the "Preisalarm hinzufügen" (Bell icon) button on either a product page or an overview/search list page:
 1. The script instantly intercepts the dynamic modal mounting.
 2. It extracts the present reference price (shipping incl.) from the header.
 3. Calculates the target alert at **60%** of the value.
