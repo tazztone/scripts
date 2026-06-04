@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      0.3.1
+// @version      0.3.2
 // @description  Automatically configures a price alarm (60% value, 2 years duration) on clicking the alarm bell.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -189,6 +189,12 @@ const STYLES = `
       const submitBtn = modalContainer.querySelector('input.f_submitbtn[type="submit"]');
       if (submitBtn) {
         log('Submitting configuration...');
+        
+        // Resolve dialog container and close button references before submission
+        // (Since the form element becomes detached from the DOM during AJAX content swap)
+        const dialog = modalContainer.closest('.AbstractDialog');
+        const closeBtn = dialog?.querySelector('.AbstractDialog_CloseButton');
+
         // Brief delay before final submission to ensure standard scripts processes events
         setTimeout(() => {
           submitBtn.click();
@@ -196,15 +202,16 @@ const STYLES = `
           // Auto-close confirmation screen after successful submission
           let closeAttempts = 0;
           const autoCloseInterval = setInterval(() => {
-            const dialog = modalContainer.closest('.AbstractDialog');
-            const closeBtn = dialog?.querySelector('.AbstractDialog_CloseButton');
-            const formEl = dialog?.querySelector('#f_NewInfoMailForm_priceFrom');
+            // Check if the form is no longer inside the document flow (detached)
+            const formStillAttached = dialog && document.contains(modalContainer);
             
             closeAttempts++;
-            if (!formEl) {
+            if (!formStillAttached) {
               clearInterval(autoCloseInterval);
-              if (closeBtn) {
-                closeBtn.click();
+              // Re-query close button in case the dialog DOM refreshed, using cached closeBtn as fallback
+              const currentCloseBtn = dialog?.querySelector('.AbstractDialog_CloseButton') || closeBtn;
+              if (currentCloseBtn) {
+                currentCloseBtn.click();
                 log('Closed confirmation screen.');
               }
             } else if (closeAttempts > 15) {
