@@ -10,13 +10,13 @@
 // @noframes
 // ==/UserScript==
 
-// ─── CONFIG ──────────────────────────────────────────────────────────────────
+// ─── CONFIG ────────────────────1──────────────────────────────────────────────
 const CONFIG = {
   ENABLED: true,
   COLOR_IDLE: '#fbbf24',    // Tailwind Amber 400
   COLOR_HOVER: '#f59e0b',   // Tailwind Amber 500
-  SCALE_IDLE: '1.35',
-  SCALE_HOVER: '1.6',
+  SCALE_IDLE: '2',
+  SCALE_HOVER: '2',
 };
 
 // ─── STYLES ──────────────────────────────────────────────────────────────────
@@ -54,7 +54,7 @@ const STYLE = `
   // Inject styles immediately at document-start
   const styleEl = document.createElement('style');
   styleEl.textContent = STYLE;
-  
+
   // Append to head or documentElement depending on DOM load state
   const target = document.head || document.documentElement;
   if (target) {

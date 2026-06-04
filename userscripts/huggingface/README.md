@@ -12,8 +12,21 @@ A lightweight, zero-JS-observer userscript to make the heart/like icons on the H
 
 ## Installation
 
-1.  Ensure you have a userscript manager installed (e.g. Tampermonkey, Violentmonkey).
-2.  Install the userscript directly from [huggingface-heart.user.js](./huggingface-heart.user.js).
+**One-click install** — open the raw script URL in your browser while Violentmonkey is active:
+
+> [`huggingface-heart.user.js` (raw)](https://raw.githubusercontent.com/tazztone/scripts/main/userscripts/huggingface/huggingface-heart.user.js)
+
+Violentmonkey will detect the `.user.js` file and show an install dialog automatically. Click **Confirm Installation**.
+
+<details>
+<summary>Manual install (copy-paste)</summary>
+
+1. Open the Violentmonkey dashboard
+2. Click **New Script**
+3. Paste the contents of [`huggingface-heart.user.js`](huggingface-heart.user.js)
+4. Save (`Ctrl+S`)
+
+</details>
 
 ## Configuration
 
