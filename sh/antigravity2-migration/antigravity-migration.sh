@@ -116,7 +116,7 @@ mkdir -p "$CONFIG_V2_NATALIE"
 # Configure global skills plugin for v2 IDE to load ~/.agents/skills/ globally
 echo "    Configuring global skills plugin for v2 IDE..."
 rm -f "$HOME/.gemini/antigravity-ide/skills" # Clean up legacy direct link if present
-local plugin_dir="$HOME/.gemini/config/plugins/custom-skills"
+plugin_dir="$HOME/.gemini/config/plugins/custom-skills"
 mkdir -p "$plugin_dir"
 echo '{"name": "custom-skills"}' > "$plugin_dir/plugin.json"
 ln -sf "$HOME/.agents/skills" "$plugin_dir/skills"
@@ -161,8 +161,9 @@ if [ ! -f "$IDE_PATH" ]; then
   exit 1
 fi
 nohup "$IDE_PATH" \
+  --class="antigravity-ide-account2" \
   --user-data-dir="$HOME/.config/antigravity-ide-account2" \
-  --remote-debugging-port=9000 \
+  --remote-debugging-port=9001 \
   "$@" >/dev/null 2>&1 &
 EOF
 
@@ -181,7 +182,7 @@ cat > "$LOCAL_APP_DIR/antigravity-ide.desktop" << EOF
 [Desktop Entry]
 Type=Application
 Name=AG2-IDE tazz
-Exec=$V2_IDE_DIR/antigravity-ide
+Exec=$BIN_DIR/antigravity-account1.sh
 Icon=$V2_IDE_DIR/resources/app/resources/linux/code.png
 Terminal=false
 Categories=Development;IDE;
@@ -193,7 +194,7 @@ cat > "$LOCAL_APP_DIR/antigravity-ide-account2.desktop" << EOF
 [Desktop Entry]
 Type=Application
 Name=AG2-IDE natalie
-Exec=$V2_IDE_DIR/antigravity-ide --user-data-dir "$CONFIG_V2_NATALIE"
+Exec=$BIN_DIR/antigravity-account2.sh
 Icon=$NATALIE_ICON
 Terminal=false
 Categories=Development;IDE;
@@ -243,7 +244,7 @@ cat > "$DESKTOP_DIR/antigravity-account2.desktop" << EOF
 Version=1.0
 Type=Application
 Name=AG2-IDE natalie
-Comment=Launch Antigravity IDE for Account 2 (Port 9000)
+Comment=Launch Antigravity IDE for Account 2 (Port 9001)
 Exec=$BIN_DIR/antigravity-account2.sh
 Icon=$NATALIE_ICON
 Terminal=false
