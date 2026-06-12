@@ -88,3 +88,26 @@ Because v2 generated a fresh `installation_id` upon its first run, it may fail t
    ```
 2. **Re-Open Project folders:**
    Open the target directories (e.g. `/home/tazztone`) inside the v2 IDE. Antigravity will scan the folders and map past project history metadata matching the aligned installation UUID.
+
+---
+
+## 🧠 Architectural Lessons & Roadblocks Resolved
+
+Here are the key roadblocks encountered during the session and how they were resolved. Documented here for reference to prevent regressions:
+
+### 1. Keyring Leakage & DBus Session Fallbacks
+* **Problem:** Isolating `$HOME` for the `agy2` CLI session still resulted in it reading and displaying Tazz's login profile (`tazztone2@gmail.com`).
+* **Root Cause:** The Go-based CLI uses `go-keyring`, which connects to the system's shared Secret Service via DBus. If `DBUS_SESSION_BUS_ADDRESS` is empty or unset, modern DBus clients automatically fallback to `$XDG_RUNTIME_DIR/bus` (resolving to `/run/user/1000/bus`), accessing your main user session keyring anyway.
+* **Resolution:** Set `export DBUS_SESSION_BUS_ADDRESS="unix:path=/dev/null/nonexistent"` (a valid DBus format pointing to a dead socket). This forces the keyring connection to immediately fail and aborts the automatic socket fallback, cleanly triggering the CLI's native file-based token storage fallback inside the isolated `~/.antigravity-cli-account2` directory.
+
+### 2. Parent Process Environment Hijacking (`ANTIGRAVITY_LS_ADDRESS`)
+* **Problem:** Running the isolated CLI `agy2` from inside an IDE terminal shell or subagent terminal hijacked the parent IDE's active server context.
+* **Root Cause:** The CLI detects `ANTIGRAVITY_LS_ADDRESS` to latch onto a running IDE server instead of launching its own process.
+* **Resolution:** Natalie's wrapper script explicitly clears the parent shell environment by matching and unsetting all `ANTIGRAVITY_*` environment variables.
+
+### 3. GNOME Dock Stacking & Sorting UX
+* **Problem:** GNOME stacked all running IDE instances behind a single icon, making switches confusing, and truncated sorting names on search.
+* **Resolution:** 
+  1. Set custom `--class="<id>"` startup arguments for Account 2 profile wrappers.
+  2. Sync `StartupWMClass` matching entries inside desktop launcher files.
+  3. Prepend short, unique alphabetical sorting labels (`AG2-IDE tazz`, `AG2-IDE natalie`) to bypass GNOME menu label truncation.
