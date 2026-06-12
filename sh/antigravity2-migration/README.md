@@ -42,9 +42,16 @@ This directory contains the automated installation/migration script (`antigravit
    * Configures Tazz (Port 9002) and Natalie (Port 9003) on isolated profiles and distinct WM classes (`--class`).
    * Backs up existing launcher files before writing updates and persists icons under `~/.local/share/icons/`.
 
+8. **CLI (agy) Multi-Profile Isolation Setup:**
+   * Created `setup-ag2-cli-multi.sh` to configure isolated environments for the `agy` CLI tool.
+   * Configures Tazz (`agy` / `agy-tazz` using default home path) and Natalie (`agy2` using `HOME=~/.antigravity-cli-account2`).
+   * Ensures Natalie's CLI config, conversation history, brain state, and logs are kept 100% separate from Tazz's CLI session.
+
 ---
 
 ## Directory & Port Mappings Summary
+
+### IDE & Standalone Clients
 
 | Component | v1.23 Legacy (Frozen Fallback) | v2.x Tazz IDE | v2.x Natalie IDE | v2.x Tazz Standalone | v2.x Natalie Standalone |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -54,7 +61,14 @@ This directory contains the automated installation/migration script (`antigravit
 | **Debug Port** | N/A | `9000` | `9001` | `9002` | `9003` |
 | **GNOME WM Class**| `antigravity` | `antigravity-ide` | `antigravity-ide-account2` | `antigravity` | `antigravity-standalone-account2` |
 
-*Note: CLI configuration registries remain fully isolated in `~/.antigravitycli` and `~/.gemini/antigravity-cli` and are never touched by this script.*
+### CLI (agy) Client
+
+| Profile | Command | Config / History Directory | Log File Path |
+| :--- | :--- | :--- | :--- |
+| **Tazz CLI** | `agy` (or `agy-tazz`) | `~/.gemini/antigravity-cli` | `~/.gemini/antigravity-cli/cli.log` |
+| **Natalie CLI** | `agy2` | `~/.antigravity-cli-account2/.gemini/antigravity-cli` | `~/.antigravity-cli-account2/.gemini/antigravity-cli/cli.log` |
+
+*Note: CLI configuration registries are isolated under separate HOME roots for `agy` and `agy2` to ensure complete authentication and history division.*
 
 ---
 
