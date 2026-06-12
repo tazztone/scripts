@@ -37,15 +37,22 @@ This directory contains the automated installation/migration script (`antigravit
    * Opening project subdirectories (e.g. `/home/tazztone/_coding/shinestacker`) hid your home directory's custom skills directory (`~/.agents/skills`) from the v2 IDE.
    * **Fix applied:** Created a global plugin `~/.gemini/config/plugins/custom-skills` containing a `plugin.json` manifest and a symbolic link `skills` pointing directly to `~/.agents/skills`. This maps your custom skills globally so they automatically load in the v2 IDE across all projects!
 
+7. **Standalone Multi-Profile Isolation Setup:**
+   * Created `setup-ag2-standalone-multi.sh` to configure isolated environments for Antigravity Standalone.
+   * Configures Tazz (Port 9002) and Natalie (Port 9003) on isolated profiles and distinct WM classes (`--class`).
+   * Backs up existing launcher files before writing updates and persists icons under `~/.local/share/icons/`.
+
 ---
 
-## Directory Mappings Summary
+## Directory & Port Mappings Summary
 
-| Component | v1.23 Legacy (Frozen Fallback) | v2.x Tazztone IDE | v2.x Natalie IDE | v2.x Standalone App |
-| :--- | :--- | :--- | :--- | :--- |
-| **Settings Directory** | `~/.config/Antigravity` | `~/.config/Antigravity IDE` | `~/.config/antigravity-ide-account2` | `~/.config/Antigravity` |
-| **Extensions Directory** | `~/.antigravity` | `~/.antigravity-ide` | `~/.antigravity-ide` (Shared) | N/A |
-| **Logs & History Data** | `~/.gemini/antigravity` | `~/.gemini/antigravity-ide` | `~/.gemini/antigravity-ide` | `~/.gemini/antigravity-cli` |
+| Component | v1.23 Legacy (Frozen Fallback) | v2.x Tazz IDE | v2.x Natalie IDE | v2.x Tazz Standalone | v2.x Natalie Standalone |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Settings Dir** | `~/.config/Antigravity` | `~/.config/Antigravity IDE` | `~/.config/antigravity-ide-account2` | `~/.config/Antigravity Standalone` | `~/.config/antigravity-standalone-account2` |
+| **Extensions Dir** | `~/.antigravity` | `~/.antigravity-ide` | `~/.antigravity-ide` (Shared) | N/A | N/A |
+| **Logs/History Dir**| `~/.gemini/antigravity` | `~/.gemini/antigravity-ide` | `~/.gemini/antigravity-ide` | `~/.gemini/antigravity-cli` | `~/.gemini/antigravity-cli` |
+| **Debug Port** | N/A | `9000` | `9001` | `9002` | `9003` |
+| **GNOME WM Class**| `antigravity` | `antigravity-ide` | `antigravity-ide-account2` | `antigravity` | `antigravity-standalone-account2` |
 
 *Note: CLI configuration registries remain fully isolated in `~/.antigravitycli` and `~/.gemini/antigravity-cli` and are never touched by this script.*
 
