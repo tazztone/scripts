@@ -21,7 +21,7 @@ if [ -f "/home/tazztone/Downloads/install2.sh" ]; then
 else
   log "install2.sh not found, running manual cleanup of second install files..."
   rm -rf /opt/antigravity2 /opt/antigravity-ide2
-  rm -f /usr/local/bin/antigravity2 /usr/local/bin/antigravity-ide2 /usr/local/bin/update-antigravity2 /usr/local/bin/update-antigravity-ide2 /usr/local/bin/antigravity-linux2
+  rm -f /usr/local/bin/antigravity2 /usr/local/bin/antigravity-ide2 /usr/local/bin/update-antigravity2 /usr/local/bin/update-antigravity-ide2 /usr/local/bin/antigravity-linux2 /usr/local/bin/agy2 /usr/local/bin/agy-profile2
   rm -f /usr/share/applications/antigravity2.desktop /usr/share/applications/antigravity-ide2.desktop
   rm -f /usr/share/icons/hicolor/512x512/apps/antigravity2.png /usr/share/icons/hicolor/512x512/apps/antigravity-ide2.png
   rm -f /usr/share/nautilus-python/extensions/open-in-antigravity-ide2.py
@@ -44,6 +44,19 @@ cat > /usr/local/bin/antigravity-ide-profile2 <<'EOF'
 exec "/usr/local/bin/antigravity-ide" --user-data-dir="$HOME/.config/Antigravity-IDE-profile2" "$@"
 EOF
 chmod +x /usr/local/bin/antigravity-ide-profile2
+
+# CLI app wrapper
+if [ -f "/home/tazztone/.local/bin/agy" ]; then
+  cat > /usr/local/bin/agy2 <<'EOF'
+#!/usr/bin/env bash
+# Run original Antigravity CLI with Profile 2 configuration (no global API key, isolated keyring)
+exec env HOME="/home/tazztone/.antigravity-cli-account2" \
+         DBUS_SESSION_BUS_ADDRESS="unix:path=/dev/null" \
+         GOOGLE_API_KEY="" \
+         "/home/tazztone/.local/bin/agy" "$@"
+EOF
+  chmod +x /usr/local/bin/agy2
+fi
 
 
 log "3. Creating desktop entries for Profile 2..."
@@ -88,6 +101,9 @@ log "--------------------------------------------------------"
 log "Installed commands:"
 log "- Desktop (Profile 2): /usr/local/bin/antigravity-profile2"
 log "- IDE (Profile 2):     /usr/local/bin/antigravity-ide-profile2"
+if [ -f "/usr/local/bin/agy2" ]; then
+  log "- CLI (Profile 2):     /usr/local/bin/agy2"
+fi
 log ""
 log "These launch the original application binaries but save settings to:"
 log "- Desktop settings: ~/.config/antigravity-profile2"
