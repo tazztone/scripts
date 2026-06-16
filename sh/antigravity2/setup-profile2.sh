@@ -37,11 +37,11 @@ exec "/usr/local/bin/antigravity" --user-data-dir="$HOME/.config/antigravity-pro
 EOF
 chmod +x /usr/local/bin/antigravity-profile2
 
-# IDE app wrapper
+# IDE app wrapper (shares extensions with Profile 1)
 cat > /usr/local/bin/antigravity-ide-profile2 <<'EOF'
 #!/usr/bin/env bash
-# Run original Antigravity IDE with Profile 2 configuration & extensions folder
-exec "/usr/local/bin/antigravity-ide" --user-data-dir="$HOME/.config/Antigravity-IDE-profile2" --extensions-dir="$HOME/.antigravity-ide-profile2/extensions" "$@"
+# Run original Antigravity IDE with Profile 2 configuration
+exec "/usr/local/bin/antigravity-ide" --user-data-dir="$HOME/.config/Antigravity-IDE-profile2" "$@"
 EOF
 chmod +x /usr/local/bin/antigravity-ide-profile2
 
@@ -92,7 +92,7 @@ log ""
 log "These launch the original application binaries but save settings to:"
 log "- Desktop settings: ~/.config/antigravity-profile2"
 log "- IDE settings:     ~/.config/Antigravity-IDE-profile2"
-log "- IDE extensions:   ~/.antigravity-ide-profile2/extensions"
+log "- IDE extensions:   Shared with Profile 1 (~/.antigravity-ide/extensions)"
 log ""
 log "The duplicate installations have been completely uninstalled."
 log "--------------------------------------------------------"

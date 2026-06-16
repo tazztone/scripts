@@ -2,7 +2,7 @@
 
 Instead of installing two completely separate copies of the application (which duplicates binaries, consumes excess disk space, and complicates updating), the recommended way to run two isolated user profiles/accounts side-by-side is to use command-line flags on the *original* installation.
 
-We have created a ready-to-run setup script at [setup-profile2.sh](file:///home/tazztone/Downloads/setup-profile2.sh) that cleans up the duplicate installation and sets this up automatically.
+We have created a ready-to-run setup script at [setup-profile2.sh](file:///home/tazztone/_coding/scripts/sh/antigravity2/setup-profile2.sh) that configures these isolated launchers automatically.
 
 ---
 
@@ -12,7 +12,7 @@ Both profiles use the same application binary from the original installation.
 
 When you launch the second profile:
 1. **The Desktop App** is launched with `--user-data-dir="$HOME/.config/antigravity-profile2"`, isolating all logins and state.
-2. **The IDE App** is launched with `--user-data-dir="$HOME/.config/Antigravity-IDE-profile2"` and `--extensions-dir="$HOME/.antigravity-ide-profile2/extensions"`, isolating settings, workspace states, and installed extensions.
+2. **The IDE App** is launched with `--user-data-dir="$HOME/.config/Antigravity-IDE-profile2"`. By omitting the extensions directory flag, it shares all installed extensions with Profile 1 (stored in `~/.antigravity-ide/extensions`) while keeping settings, workspace states, and login sessions separate.
 
 This allows you to run both profiles simultaneously without them conflicting or sharing sessions.
 
@@ -20,16 +20,11 @@ This allows you to run both profiles simultaneously without them conflicting or 
 
 ## How to Set It Up
 
-To perform the cleanup of the second install and automatically configure the second profile launchers:
+To configure the second profile launchers:
 
-1. Execute the helper script we created:
+1. Execute the helper script from the scripts folder:
    ```bash
-   sudo /home/tazztone/Downloads/setup-profile2.sh
-   ```
-
-2. Once done, you can delete the script:
-   ```bash
-   rm /home/tazztone/Downloads/setup-profile2.sh
+   sudo /home/tazztone/_coding/scripts/sh/antigravity2/setup-profile2.sh
    ```
 
 ---
