@@ -29,6 +29,7 @@ Both profiles use the same application binaries from the original installation. 
 
 * **Desktop App (Profile 2):** Launched with `--user-data-dir="$HOME/.config/antigravity-profile2"` to isolate all login sessions and application state.
 * **IDE App (Profile 2):** Launched with `--user-data-dir="$HOME/.config/Antigravity-IDE-profile2"`. By omitting the extensions directory flag, it shares all installed extensions with Profile 1 (stored in `~/.antigravity-ide/extensions`) while keeping settings, workspace states, and login sessions completely separate.
+* **CLI App (Profile 2):** Launched with `env HOME="/home/tazztone/.antigravity-cli-account2"`, with `DBUS_SESSION_BUS_ADDRESS` set to `unix:path=/dev/null` (disabling GNOME Keyring access by blocking D-Bus fallbacks, forcing token storage inside the isolated home folder) and `GOOGLE_API_KEY` cleared (forcing the OAuth flow).
 
 This prevents configuration/login collisions and allows you to run both sessions simultaneously.
 
@@ -53,5 +54,6 @@ Once the setup script completes, you can launch the second profile:
 * **From your Application Menu:**
   * Search for and click on **Antigravity (Profile 2)** or **Antigravity IDE (Profile 2)**.
 * **From the Command Line:**
-  * Launch the Desktop App: `antigravity-profile2`
-  * Launch the IDE App: `antigravity-ide-profile2`
+  * Run Desktop: `antigravity-profile2`
+  * Run IDE: `antigravity-ide-profile2`
+  * Run CLI: `agy2`
