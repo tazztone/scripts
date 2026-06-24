@@ -1,0 +1,38 @@
+{
+  "skip_names": [
+    "organize.py",
+    "put_files_into_folder_by_extension.py",
+    "categorize_organized_folders.py",
+    "readme.md",
+    ".gitignore",
+    ".gitkeep",
+    "config.json"
+  ],
+  "no_extension_folder": "no_extension",
+  "categories": {
+    "Images": [
+      "png", "jpg", "jpeg", "webp", "gif", "avif", "heic", "svg", "psd", "cr2", "ico"
+    ],
+    "Documents": [
+      "pdf", "doc", "docx", "txt", "rtf", "ppt", "pptx", "xls", "xlsx", "md", "csv", "xps", "epub", "azw3", "opml", "resolved", "_PDF", "_EBOOKS"
+    ],
+    "Video": [
+      "mp4", "mkv", "avi", "flv", "wmv", "mpg", "m4v", "ogv", "swf", "drp", "prproj", "pdrproj", "mov"
+    ],
+    "Audio": [
+      "mp3", "wav", "flac", "ogg", "m4a", "m4b", "aac", "pls", "m3u", "xm", "_AUDIOBOOKS"
+    ],
+    "Software_and_Archives": [
+      "zip", "rar", "7z", "gz", "bz2", "deb", "msi", "exe", "iso", "ova", "jar", "apk", "vsix", "nzb", "dlc", "btsearch", "_SOFTWARE"
+    ],
+    "Code_and_Scripts": [
+      "py", "html", "htm", "js", "css", "sh", "bat", "ps1", "lua", "xml", "xht", "ejs", "c", "cpp", "h"
+    ],
+    "AI_and_Models": [
+      "safetensors", "gguf", "pt", "_AI"
+    ],
+    "Data_and_Config": [
+      "json", "yaml", "yml", "ini", "log", "db", "sqlite3", "dat", "tpx", "synapse4", "ica", "jnlp", "crdownload", "pp3", "mcf", "abs", "aspx"
+    ]
+  }
+}

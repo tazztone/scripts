@@ -231,3 +231,5 @@ python/remove_jpg_if_raw_exists/test_years.sh
 python/remove_jpg_if_raw_exists/cleanup_history.sh
 userscripts/topp-alarm/bell.png
 userscripts/topp-alarm/alert.png
+.specstory/
+python/put_files_into_folder_by_extension/mock_dir/
