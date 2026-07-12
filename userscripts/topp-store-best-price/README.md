@@ -2,6 +2,8 @@
 
 Userscript that highlights or filters products on Toppreise.ch based on whether a filtered store currently offers the cheapest price (or within a customizable margin %).
 
+![Toppreise Store Best Price Highlighter](Best%20Price%20Highlighter%20Filter.webp)
+
 ## 🚀 Installation
 
 ### 👉 [**CLICK HERE TO INSTALL USERSCRIPT**](https://github.com/tazztone/scripts/raw/refs/heads/main/userscripts/topp-store-best-price/topp-store-best-price.user.js)
