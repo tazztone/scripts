@@ -79,6 +79,11 @@ const STYLE = ` /* injected CSS */ `;
 - **Locks and Cooldowns**: Use flag locks (`isInteracting`) and timestamp-based throttles to enforce cooldowns.
 - **Processed Markers**: For one-shot actions on dynamically injected elements, mark the element with a `dataset.processed` attribute to prevent duplicate processing.
 - **Observer Error Guards**: Wrap `MutationObserver` callbacks and the `run()` function in `try/catch`. An uncaught exception inside an observer silently kills it.
+- **Mutation Loop Avoidance**: When modifying classes, styles, or contents of observed elements from inside a `MutationObserver` callback, those modifications trigger the observer again. Avoid infinite recursion loops by disabling attribute/character observation (`attributes: false, characterData: false`) or checking explicit processed flags to short-circuit.
+- **Text Normalization**: When matching text identifiers parsed from distinct DOM elements (e.g. comparing UI filter tags to card labels), normalize names to avoid spacing, casing, and symbol mismatching:
+  ```javascript
+  const normalize = str => str.toLowerCase().replace(/[^a-z0-9]/g, '');
+  ```
 
 ### User Feedback
 - **Indicator dots**: Append a small glowing `<span>` (green = active, amber = syncing) to target elements.
