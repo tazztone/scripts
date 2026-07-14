@@ -48,7 +48,7 @@ See the complete architectural rules, metadata guidelines, and code patterns in 
 
 ## 4. Orchestration & Debugging
 
-- **Debugging**: Debug where the code really runs (Foreground = page console; Background = ScriptCat run log).
+- **Debugging**: Debug where the code really runs (Foreground = page console; Background = ScriptCat run log). Bypass raw script installation caches using query-parameter cache-busters on raw GitHub links.
 - **SPA Handling**: Use a debounced `MutationObserver` combined with the `Navigation API` (or fallback observer) to handle route changes in foreground scripts.
 - **Safety Net**: Always include a periodic `setInterval` fallback in case observers die.
 

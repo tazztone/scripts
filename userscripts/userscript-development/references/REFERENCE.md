@@ -130,3 +130,7 @@ setInterval(run, 5000); // Safety net fallback
 - **Debugging**: Debug where the code really runs (Foreground = page console; Background = manager run log).
 - **Playwright Tests**: Use a headless browser to load the target page, inject the userscript, and assert DOM mutations.
 - **README**: Provide direct installation links and a configuration mapping table.
+- **Raw CDN Caching Gotchas**: When installing/reinstalling scripts via GitHub Raw URLs (`raw.githubusercontent.com`), changes are cached by the GitHub CDN for ~5 minutes. If a reinstall prompt continues to present the old version:
+  - Add a temporary query parameter cache-buster (e.g. `?v=VERSION` or `?t=TIMESTAMP`) to the raw URL.
+  - Open the raw URL in a browser tab and force-reload (`Ctrl + F5` or `Cmd + Shift + R`) to bust the browser's local cache.
+  - Manually delete the existing script inside the userscript manager's dashboard before triggering the installation link.
