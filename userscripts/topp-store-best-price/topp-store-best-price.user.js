@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Store Best Price Highlighter & Filter
 // @namespace    https://github.com/tazztone/scripts
-// @version      0.2.0
+// @version      0.3.0
 // @description  Highlights, dims, or hides products on Toppreise.ch based on whether a filtered store offers the best price.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -13,22 +13,11 @@
 
 // ─── CONFIG DEFAULT VALUES ───────────────────────────────────────────────────
 const DEFAULTS = {
-  // Mode of action: 'hide' | 'dim' | 'highlight-only'
   MODE: 'dim',
-  
-  // Margin percentage to count as "cheapest" (e.g., 0.0 = absolute cheapest, 2.5 = within 2.5%)
   MARGIN_PERCENT: 0.0,
-  
-  // Opacity for non-cheapest products (only applied in 'dim' mode)
   DIM_OPACITY: 0.25,
-  
-  // Use price including shipping. If false, compares base price excluding shipping.
   USE_SHIPPING_PRICE: true,
-  
-  // Debounce time for DOM updates to avoid layout thrashing
   OBSERVER_DEBOUNCE_MS: 200,
-  
-  // Enable debug logging in the browser console
   DEBUG: true
 };
 
@@ -143,7 +132,7 @@ const STYLES = `
   /* Glassmorphic Modal Dialog Box */
   #tp-settings-modal {
     width: 90%;
-    max-width: 440px;
+    max-width: 480px;
     background: rgba(30, 41, 59, 0.85);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
@@ -181,6 +170,7 @@ const STYLES = `
     font-size: 13px;
     font-weight: 600;
     color: #94a3b8;
+    margin: 0;
   }
   
   /* Segmented Control for Mode selection */
@@ -216,6 +206,12 @@ const STYLES = `
     box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
   }
 
+  /* Blue color variation for Alarm segmented controls */
+  .tp-segmented-control-blue input[type="radio"]:checked + label {
+    background: #3b82f6 !important;
+    box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3) !important;
+  }
+
   /* Range and Number sliders */
   .tp-range-container {
     display: flex;
@@ -230,6 +226,9 @@ const STYLES = `
     border-radius: 3px;
     outline: none;
     -webkit-appearance: none;
+  }
+  .tp-range-container.tp-blue input[type="range"] {
+    accent-color: #3b82f6;
   }
   .tp-range-container input[type="range"]::-webkit-slider-runnable-track {
     background: transparent;
@@ -298,6 +297,10 @@ const STYLES = `
   .tp-switch input:checked + .tp-slider {
     background-color: #10b981;
     border-color: rgba(16, 185, 129, 0.2);
+  }
+  .tp-switch.tp-blue input:checked + .tp-slider {
+    background-color: #3b82f6;
+    border-color: rgba(59, 130, 246, 0.2);
   }
   .tp-switch input:checked + .tp-slider:before {
     transform: translateX(20px);
@@ -393,10 +396,13 @@ const STYLES = `
 
   const log = (...args) => { if (CONFIG.DEBUG) console.log('[Topp-Best-Price]', ...args); };
 
-  // Inject Custom Stylesheet
-  const styleEl = document.createElement('style');
-  styleEl.textContent = STYLES;
-  document.head.appendChild(styleEl);
+  // Inject Custom Stylesheet safely
+  if (!document.getElementById('tp-unified-settings-styles')) {
+    const styleEl = document.createElement('style');
+    styleEl.id = 'tp-unified-settings-styles';
+    styleEl.textContent = STYLES;
+    document.head.appendChild(styleEl);
+  }
 
   function updateBodyClasses() {
     document.body.classList.remove('tp-mode-dim', 'tp-mode-hide', 'tp-mode-highlight-only');
@@ -525,27 +531,82 @@ const STYLES = `
     });
   }
 
+  // Ensure Skeleton Modal is loaded (and shared between scripts)
+  function ensureSkeleton() {
+    // 1. Ensure FAB exists
+    let fabButton = document.getElementById('tp-settings-fab');
+    if (!fabButton) {
+      const fabContainer = document.createElement('div');
+      fabContainer.innerHTML = `
+        <button id="tp-settings-fab" title="Configure Toppreise Enhancements">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </button>
+      `;
+      fabButton = fabContainer.firstElementChild;
+      document.body.appendChild(fabButton);
+    }
+
+    // 2. Ensure Modal Backdrop and Container exists
+    let backdrop = document.getElementById('tp-settings-modal-backdrop');
+    if (!backdrop) {
+      const modalContainer = document.createElement('div');
+      modalContainer.innerHTML = `
+        <div id="tp-settings-modal-backdrop">
+          <div id="tp-settings-modal">
+            <h3>Toppreise Enhancements</h3>
+            <div id="tp-settings-sections" style="display: flex; flex-direction: column; gap: 24px; max-height: 70vh; overflow-y: auto; padding-right: 4px;">
+              <!-- Individual settings groups are dynamically appended here -->
+            </div>
+            <div class="tp-modal-actions">
+              <button type="button" class="tp-btn tp-btn-secondary" id="tp-btn-close">Cancel</button>
+              <button type="button" class="tp-btn tp-btn-primary" id="tp-btn-save">Save Settings</button>
+            </div>
+          </div>
+        </div>
+      `;
+      backdrop = modalContainer.firstElementChild;
+      document.body.appendChild(backdrop);
+
+      // Handle close dialog
+      const btnClose = document.getElementById('tp-btn-close');
+      const closeModal = () => backdrop.classList.remove('open');
+      btnClose.addEventListener('click', closeModal);
+      backdrop.addEventListener('click', (e) => {
+        if (e.target === backdrop) closeModal();
+      });
+
+      // Show dialog + trigger fields sync across all scripts
+      fabButton.addEventListener('click', () => {
+        document.dispatchEvent(new CustomEvent('tp-settings-open'));
+        backdrop.classList.add('open');
+      });
+
+      // Save configurations across all scripts
+      const btnSave = document.getElementById('tp-btn-save');
+      btnSave.addEventListener('click', () => {
+        document.dispatchEvent(new CustomEvent('tp-settings-save'));
+        closeModal();
+      });
+    }
+
+    return { fabButton, backdrop };
+  }
+
   // Setup Floating Settings Icon & Glassmorphic Configuration Dialog
   function setupUI() {
-    // 1. Inject Settings Floating Button (FAB)
-    const fabContainer = document.createElement('div');
-    fabContainer.innerHTML = `
-      <button id="tp-settings-fab" title="Configure Toppreise Best Price Highlighter">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-        </svg>
-      </button>
-    `;
-    const fabButton = fabContainer.firstElementChild;
-    document.body.appendChild(fabButton);
+    ensureSkeleton();
 
-    // 2. Inject Modal Layout
-    const modalContainer = document.createElement('div');
-    modalContainer.innerHTML = `
-      <div id="tp-settings-modal-backdrop">
-        <div id="tp-settings-modal">
-          <h3>Best Price Highlights</h3>
+    // Inject Best Price Section if not already there
+    let section = document.getElementById('tp-section-best-price');
+    if (!section) {
+      const sectionsHolder = document.getElementById('tp-settings-sections');
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = `
+        <div id="tp-section-best-price">
+          <h4 style="margin: 0 0 16px 0; color: #10b981; font-size: 13px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 6px;">Best Price Highlights</h4>
           
           <div class="tp-settings-group">
             <label>Filter Mode</label>
@@ -587,16 +648,11 @@ const STYLES = `
               <span class="tp-slider"></span>
             </label>
           </div>
-          
-          <div class="tp-modal-actions">
-            <button type="button" class="tp-btn tp-btn-secondary" id="tp-btn-close">Cancel</button>
-            <button type="button" class="tp-btn tp-btn-primary" id="tp-btn-save">Save</button>
-          </div>
         </div>
-      </div>
-    `;
-    const backdrop = modalContainer.firstElementChild;
-    document.body.appendChild(backdrop);
+      `;
+      section = tempDiv.firstElementChild;
+      sectionsHolder.appendChild(section);
+    }
 
     // Form DOM Elements
     const modeHighlight = document.getElementById('tp-mode-highlight-only');
@@ -607,8 +663,6 @@ const STYLES = `
     const opacityRange = document.getElementById('tp-opacity-range');
     const opacityVal = document.getElementById('tp-opacity-val');
     const shippingToggle = document.getElementById('tp-shipping-toggle');
-    const btnSave = document.getElementById('tp-btn-save');
-    const btnClose = document.getElementById('tp-btn-close');
 
     // Populate current config values into form fields
     function syncFieldsFromConfig() {
@@ -641,7 +695,10 @@ const STYLES = `
       }
     }
 
-    // Two-way binding for margin range/number fields
+    // Initialize UI fields
+    syncFieldsFromConfig();
+
+    // Two-way bindings for margin range/number fields
     marginRange.addEventListener('input', (e) => {
       marginVal.value = e.target.value;
     });
@@ -669,36 +726,27 @@ const STYLES = `
       });
     });
 
-    // Open Config Modal
-    fabButton.addEventListener('click', () => {
+    // Register listeners for shared dialog open and save triggers
+    document.addEventListener('tp-settings-open', () => {
       syncFieldsFromConfig();
-      backdrop.classList.add('open');
     });
 
-    // Close Config Modal
-    const closeModal = () => backdrop.classList.remove('open');
-    btnClose.addEventListener('click', closeModal);
-    backdrop.addEventListener('click', (e) => {
-      if (e.target === backdrop) closeModal();
-    });
-
-    // Save and apply configurations
-    btnSave.addEventListener('click', () => {
-      const mode = document.querySelector('input[name="tp-mode"]:checked').value;
-      const margin = parseFloat(marginVal.value) || 0;
-      const opacity = parseFloat(opacityRange.value) || 0.25;
+    document.addEventListener('tp-settings-save', () => {
+      const checkedModeEl = document.querySelector('input[name="tp-mode"]:checked');
+      if (!checkedModeEl) return;
+      
+      const mode = checkedModeEl.value;
+      const margin = Math.max(0, Math.min(100, parseFloat(marginVal.value) || 0));
+      const opacity = Math.max(0.05, Math.min(0.95, parseFloat(opacityRange.value) || 0.25));
       const useShipping = shippingToggle.checked;
 
-      // Persist values
+      // Persist configuration
       CONFIG.MODE = mode;
       CONFIG.MARGIN_PERCENT = margin;
       CONFIG.DIM_OPACITY = opacity;
       CONFIG.USE_SHIPPING_PRICE = useShipping;
 
       updateBodyClasses();
-      closeModal();
-      
-      // Run processing immediately with new config
       processListings();
     });
   }

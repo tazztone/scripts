@@ -17,14 +17,17 @@ When you click the "Preisalarm hinzufügen" (Bell icon) button on either a produ
 6. Automatically submits the form and closes the confirmation modal upon successful creation.
 
 ## Configuration
-Edit the `CONFIG` block at the top of the file to customize settings:
 
-| Key | Default | Description |
-| :--- | :--- | :--- |
-| `TARGET_PERCENT` | `0.60` | Ratio of the present value to set target alarm (e.g. `0.6` is 60%). |
-| `DURATION_DAYS` | `"730"` | Internal code for alert duration expiry (730 = 2 years). |
-| `AUTO_SUBMIT` | `true` | Instantly commits the submission. Set `false` for filling only. |
-| `ACTION_DELAY_MS`| `300` | Safety buffer to wait for site UI scripting to stabilize. |
+You can configure this script directly on Toppreise.ch! A small floating **gear button** appears in the bottom-right corner of the window. Clicking it opens a premium, glassmorphic settings panel where you can edit and apply settings instantly:
+
+- **Enable Auto-Fill**: Toggle switch to turn the alarm automatic filling functionality on or off.
+- **Target Price Percent (%)**: Adjust the percentage value (slider and number input) to set the target threshold for price alerts.
+- **Alarm Expiry Duration**: Choose the duration for the price alarm (options: `3m` / `6m` / `1y` / `2y`).
+- **Auto-Submit**: Toggle switch to instantly submit the alarm once the fields are filled.
+
+These settings are saved persistently in your browser using the userscript manager's `GM_getValue` and `GM_setValue` APIs (with an automatic `localStorage` fallback).
+
+For manual default configurations, you can also edit the `DEFAULTS` block at the top of the userscript.
 
 ## Requirements
 - You must be logged in to your Toppreise.ch user account beforehand so the system attaches the alert to your profile instantly.
