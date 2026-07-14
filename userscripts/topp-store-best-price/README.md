@@ -6,7 +6,7 @@ Userscript that highlights or filters products on Toppreise.ch based on whether 
 
 ## 🚀 Installation
 
-### 👉 [**CLICK HERE TO INSTALL USERSCRIPT**](https://github.com/tazztone/scripts/raw/refs/heads/main/userscripts/topp-store-best-price/topp-store-best-price.user.js)
+### 👉 [**CLICK HERE TO INSTALL USERSCRIPT**](https://github.com/tazztone/scripts/raw/refs/heads/main/userscripts/topp-store-best-price/topp-store-best-price.user.js?v=0.3.0)
 *(Requires Violentmonkey / Tampermonkey)*
 
 ## Logic

@@ -4,7 +4,7 @@ Userscript that fully automates the configuration of a price alarm on Toppreise.
 ![alt text](image.png)
 ## 🚀 Installation
 
-### 👉 [**CLICK HERE TO INSTALL USERSCRIPT**](https://github.com/tazztone/scripts/raw/refs/heads/main/userscripts/topp-alarm/topp-alarm.user.js)
+### 👉 [**CLICK HERE TO INSTALL USERSCRIPT**](https://github.com/tazztone/scripts/raw/refs/heads/main/userscripts/topp-alarm/topp-alarm.user.js?v=0.4.0)
 *(Requires Violentmonkey / Tampermonkey)*
 
 ## Logic
