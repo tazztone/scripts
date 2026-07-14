@@ -20,12 +20,14 @@ When you filter a search page or product listing by a dealer/store (e.g. `Anbiet
 If no store filter is active, the script stays inactive and the page renders normally.
 
 ## Configuration
-Edit the `CONFIG` block at the top of the script to customize settings:
 
-| Key | Default | Description |
-| :--- | :--- | :--- |
-| `MODE` | `'dim'` | Action for non-cheapest products. Choose `'dim'` (reduce opacity), `'hide'` (remove from display), or `'highlight-only'` (only show badge on cheapest). |
-| `MARGIN_PERCENT` | `0.0` | Margin percentage to count as cheapest (e.g. `0.0` means absolute cheapest, `3.0` means within 3% of the lowest price). |
-| `DIM_OPACITY` | `0.25` | Opacity of non-cheapest products when `MODE` is set to `'dim'`. |
-| `USE_SHIPPING_PRICE` | `true` | Compare price including shipping. Set `false` to compare base product prices excluding shipping. |
-| `OBSERVER_DEBOUNCE_MS`| `200` | Safety debounce time to prevent layout thrashing on dynamic updates. |
+You can configure the script directly on Toppreise.ch! A small floating **gear button** appears in the bottom-right corner of the window. Clicking it opens a premium, glassmorphic settings panel where you can edit and apply configurations instantly:
+
+- **Filter Mode**: `'dim'` (reduce opacity of non-cheapest listings), `'hide'` (remove from view), or `'highlight-only'` (only show badges).
+- **Price Margin Tolerance (%)**: The percentage difference allowed for the store to still be considered "cheapest".
+- **Non-Cheapest Opacity**: Opacity level for dimmed listings (5% to 95%).
+- **Compare Shipping**: Compare prices including or excluding shipping costs.
+
+These settings are saved persistently in your browser using the userscript manager's `GM_getValue` and `GM_setValue` APIs (with an automatic `localStorage` fallback).
+
+For manual default settings, you can also edit the `DEFAULTS` block at the top of the userscript.
