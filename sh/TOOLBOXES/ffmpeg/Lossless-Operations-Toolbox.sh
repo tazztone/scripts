@@ -10,11 +10,6 @@ source "$SCRIPT_DIR/../common/wizard.sh"
 
 init_ffmpeg_script
 
-# Function to analyze codec information
-analyze_codec() {
-    local file="$1"
-    ffprobe -v quiet -print_format json -show_format -show_streams "$file" 2>/dev/null
-}
 
 # Function to extract video codec information
 get_video_codec_info() {
@@ -41,42 +36,7 @@ get_audio_codec_info() {
     echo "AUDIO:$codec_name:$sample_rate:$channels:$channel_layout"
 }
 
-# Function to get container format
-get_container_format() {
-    local file="$1"
-    local format=$(ffprobe -v error -show_entries format=format_name -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null | cut -d',' -f1)
-    echo "$format"
-}
 
-# Function to check if codecs are supported for lossless operations
-is_codec_supported() {
-    local codec="$1"
-    local type="$2"  # video or audio
-    
-    case "$type" in
-        "video")
-            case "$codec" in
-                "h264"|"hevc"|"vp8"|"vp9"|"av01"|"prores")
-                    return 0
-                    ;;
-                *)
-                    return 1
-                    ;;
-            esac
-            ;;
-        "audio")
-            case "$codec" in
-                "aac"|"mp3"|"opus"|"flac"|"vorbis"|"pcm_s16le")
-                    return 0
-                    ;;
-                *)
-                    return 1
-                    ;;
-            esac
-            ;;
-    esac
-    return 1
-}
 
 # Function to validate codec compatibility between files
 validate_codec_compatibility() {
@@ -110,25 +70,6 @@ validate_codec_compatibility() {
     return 0
 }
 
-# Function to validate if operation can be performed losslessly
-validate_lossless_operation() {
-    local operation="$1"
-    local file="$2"
-    
-    case "$operation" in
-        "trim"|"remux"|"metadata"|"stream_select")
-            return 0  # These operations are always lossless with stream copy
-            ;;
-        "merge")
-            # Merging requires codec compatibility validation (handled separately)
-            return 0
-            ;;
-        *)
-            echo "ERROR: Operation '$operation' is not supported in lossless mode"
-            return 1
-            ;;
-    esac
-}
 
 # Function to validate trimming operation
 validate_trimming_operation() {
@@ -281,37 +222,6 @@ validate_stream_selection() {
     return 0
 }
 
-# Function to suggest alternative lossless operations
-suggest_lossless_alternatives() {
-    local requested_operation="$1"
-    local file="$2"
-    
-    case "$requested_operation" in
-        "scale"|"resize")
-            echo "ALTERNATIVE: Use container remuxing to change format, or trim to reduce file size"
-            echo "ALTERNATIVE: Use metadata editing to change display aspect ratio without re-encoding"
-            ;;
-        "crop")
-            echo "ALTERNATIVE: Use trimming to cut time segments instead of spatial cropping"
-            echo "ALTERNATIVE: Use metadata rotation to change orientation without re-encoding"
-            ;;
-        "speed"|"tempo")
-            echo "ALTERNATIVE: Use trimming to extract shorter segments"
-            echo "ALTERNATIVE: Use stream selection to remove audio if speed change was for audio"
-            ;;
-        "filter"|"effect")
-            echo "ALTERNATIVE: Use metadata editing to add information without changing content"
-            echo "ALTERNATIVE: Use stream selection to remove unwanted tracks"
-            ;;
-        "quality"|"compress")
-            echo "ALTERNATIVE: Use container remuxing to a more efficient format"
-            echo "ALTERNATIVE: Use trimming to reduce content length"
-            ;;
-        *)
-            echo "ALTERNATIVE: Consider using trimming, remuxing, merging, or metadata editing"
-            ;;
-    esac
-}
 
 # Container-codec compatibility matrix
 declare -A CONTAINER_CODECS
@@ -341,42 +251,6 @@ check_container_compatibility() {
         fi
     fi
     return 1
-}
-
-# Core data model for file processing state
-declare -A FILE_STATES
-declare -A FILE_CODECS
-declare -A FILE_PROGRESS
-
-# Initialize file processing state
-init_file_state() {
-    local file="$1"
-    local id=$(basename "$file" | tr '.' '_')
-    
-    FILE_STATES[$id]="pending"
-    FILE_PROGRESS[$id]=0
-    
-    # Analyze codec information
-    local codec_info=$(analyze_codec "$file")
-    FILE_CODECS[$id]="$codec_info"
-}
-
-# Update file processing state
-update_file_state() {
-    local file="$1"
-    local status="$2"
-    local progress="${3:-0}"
-    
-    local id=$(basename "$file" | tr '.' '_')
-    FILE_STATES[$id]="$status"
-    FILE_PROGRESS[$id]="$progress"
-}
-
-# Get file processing state
-get_file_state() {
-    local file="$1"
-    local id=$(basename "$file" | tr '.' '_')
-    echo "${FILE_STATES[$id]:-unknown}"
 }
 
 # Configuration directory
@@ -445,31 +319,6 @@ fi
 # History management functions
 # (Using shared save_to_history from wizard.sh)
 
-# Preset management functions
-save_preset() {
-    local name="$1"
-    local operation="$2"
-    shift 2
-    local params="$@"
-    
-    # Use a fresh temp file
-    local tmp_file=$(get_sys_temp "preset")
-    
-    # Remove existing preset with same name if file exists
-    if [ -f "$PRESET_FILE" ]; then
-        grep -v "^$name|" "$PRESET_FILE" > "$tmp_file" 2>/dev/null
-    fi
-    
-    # Add new preset
-    echo "$name|$operation|$params" >> "$tmp_file"
-    
-    mv "$tmp_file" "$PRESET_FILE"
-}
-
-load_preset() {
-    local name="$1"
-    grep "^$name|" "$PRESET_FILE" | head -n 1 | cut -d'|' -f2-
-}
 
 # Main execution starts here
 echo "Lossless Operations Toolbox - Initializing..."
@@ -731,25 +580,6 @@ execute_metadata_editing() {
     fi
 }
 
-# Subtitle auto-detection function
-detect_subtitles() {
-    local video_file="$1"
-    local base_name="${video_file%.*}"
-    
-    # Common subtitle extensions
-    local subtitle_extensions=("srt" "vtt" "ass" "ssa" "sub")
-    local found_subtitles=()
-    
-    for ext in "${subtitle_extensions[@]}"; do
-        local subtitle_file="${base_name}.${ext}"
-        if [ -f "$subtitle_file" ]; then
-            found_subtitles+=("$subtitle_file")
-        fi
-    done
-    
-    # Return found subtitles (space-separated)
-    echo "${found_subtitles[@]}"
-}
 
 # Enhanced container-specific optimization flags
 get_container_optimization_flags() {
@@ -773,213 +603,7 @@ get_container_optimization_flags() {
             ;;
     esac
 }
-# ===== BATCH PROCESSING SYSTEM =====
-
-# Batch processing state tracking
-declare -A BATCH_STATES
-declare -A BATCH_PROGRESS
-declare -A BATCH_SUMMARIES
-
-# Initialize batch processing
-init_batch_processing() {
-    local batch_id="$1"
-    shift
-    local files=("$@")
-    
-    BATCH_STATES[$batch_id]="pending"
-    BATCH_PROGRESS[$batch_id]=0
-    BATCH_SUMMARIES[$batch_id]="total:${#files[@]},completed:0,failed:0,skipped:0"
-    
-    echo "Batch $batch_id initialized with ${#files[@]} files"
-}
-
-# Update batch progress
-update_batch_progress() {
-    local batch_id="$1"
-    local completed="$2"
-    local failed="$3"
-    local skipped="$4"
-    local total="$5"
-    
-    local progress=$(( (completed + failed + skipped) * 100 / total ))
-    BATCH_PROGRESS[$batch_id]=$progress
-    BATCH_SUMMARIES[$batch_id]="total:$total,completed:$completed,failed:$failed,skipped:$skipped"
-    
-    if [ $((completed + failed + skipped)) -eq $total ]; then
-        if [ $failed -eq 0 ]; then
-            BATCH_STATES[$batch_id]="completed"
-        else
-            BATCH_STATES[$batch_id]="partial_failure"
-        fi
-    else
-        BATCH_STATES[$batch_id]="running"
-    fi
-}
-
-# Execute batch trimming operation
-execute_batch_trimming() {
-    local batch_id="$1"
-    local start_time="$2"
-    local end_time="$3"
-    shift 3
-    local files=("$@")
-    
-    init_batch_processing "$batch_id" "${files[@]}"
-    
-    local completed=0
-    local failed=0
-    local skipped=0
-    local total=${#files[@]}
-    
-    echo "Starting batch trimming: $total files"
-    
-    for file in "${files[@]}"; do
-        echo "Processing: $(basename "$file")"
-        
-        # Validate file first
-        if ! validate_trimming_operation "$file" "$start_time" "$end_time"; then
-            echo "SKIPPED: $(basename "$file") - validation failed"
-            ((skipped += 1))
-            update_batch_progress "$batch_id" $completed $failed $skipped $total
-            continue
-        fi
-        
-        # Generate output filename
-        local base="${file%.*}"
-        local ext="${file##*.}"
-        local output_file="${base}_trimmed_${start_time}s-${end_time}s.${ext}"
-        
-        # Execute trimming
-        if execute_trimming "$file" "$output_file" "$start_time" "$end_time" >/dev/null 2>&1; then
-            echo "SUCCESS: $(basename "$output_file")"
-            (( completed += 1 ))
-        else
-            echo "FAILED: $(basename "$file")"
-            (( failed += 1 ))
-        fi
-        
-        update_batch_progress "$batch_id" $completed $failed $skipped $total
-    done
-    
-    echo "Batch trimming completed: $completed successful, $failed failed, $skipped skipped"
-    return 0
-}
-
-# Execute batch remuxing operation
-execute_batch_remuxing() {
-    local batch_id="$1"
-    local target_container="$2"
-    shift 2
-    local files=("$@")
-    
-    init_batch_processing "$batch_id" "${files[@]}"
-    
-    local completed=0
-    local failed=0
-    local skipped=0
-    local total=${#files[@]}
-    
-    echo "Starting batch remuxing to $target_container: $total files"
-    
-    for file in "${files[@]}"; do
-        echo "Processing: $(basename "$file")"
-        
-        # Validate file first
-        if ! validate_remuxing_operation "$file" "$target_container"; then
-            echo "SKIPPED: $(basename "$file") - validation failed"
-            ((skipped += 1))
-            update_batch_progress "$batch_id" $completed $failed $skipped $total
-            continue
-        fi
-        
-        # Generate output filename
-        local base="${file%.*}"
-        local output_file="${base}_remuxed.${target_container}"
-        
-        # Execute remuxing
-        if execute_remuxing "$file" "$output_file" "$target_container" >/dev/null 2>&1; then
-            echo "SUCCESS: $(basename "$output_file")"
-            (( completed += 1 ))
-        else
-            echo "FAILED: $(basename "$file")"
-            (( failed += 1 ))
-        fi
-        
-        update_batch_progress "$batch_id" $completed $failed $skipped $total
-    done
-    
-    echo "Batch remuxing completed: $completed successful, $failed failed, $skipped skipped"
-    return 0
-}
-
-# Execute batch stream selection operation
-execute_batch_stream_selection() {
-    local batch_id="$1"
-    local operation="$2"
-    shift 2
-    local files=("$@")
-    
-    init_batch_processing "$batch_id" "${files[@]}"
-    
-    local completed=0
-    local failed=0
-    local skipped=0
-    local total=${#files[@]}
-    
-    echo "Starting batch stream selection ($operation): $total files"
-    
-    for file in "${files[@]}"; do
-        echo "Processing: $(basename "$file")"
-        
-        # Validate file first
-        if ! validate_stream_selection "$file" "$operation"; then
-            echo "SKIPPED: $(basename "$file") - validation failed"
-            ((skipped += 1))
-            update_batch_progress "$batch_id" $completed $failed $skipped $total
-            continue
-        fi
-        
-        # Generate output filename
-        local base="${file%.*}"
-        local ext="${file##*.}"
-        local suffix=""
-        case "$operation" in
-            "remove_audio") suffix="_no_audio" ;;
-            "remove_video") suffix="_audio_only" ;;
-            "video_only") suffix="_video_only" ;;
-            "audio_only") suffix="_audio_only" ;;
-        esac
-        local output_file="${base}${suffix}.${ext}"
-        
-        # Execute stream selection
-        if execute_stream_selection "$file" "$output_file" "$operation" >/dev/null 2>&1; then
-            echo "SUCCESS: $(basename "$output_file")"
-            (( completed += 1 ))
-        else
-            echo "FAILED: $(basename "$file")"
-            (( failed += 1 ))
-        fi
-        
-        update_batch_progress "$batch_id" $completed $failed $skipped $total
-    done
-    
-    echo "Batch stream selection completed: $completed successful, $failed failed, $skipped skipped"
-    return 0
-}
-
-# Get batch processing summary
-get_batch_summary() {
-    local batch_id="$1"
-    local summary="${BATCH_SUMMARIES[$batch_id]}"
-    local state="${BATCH_STATES[$batch_id]}"
-    local progress="${BATCH_PROGRESS[$batch_id]}"
-    
-    echo "Batch ID: $batch_id"
-    echo "Status: $state"
-    echo "Progress: $progress%"
-    echo "Summary: $summary"
-}
-# ===== USER INTERFACE =====
+## ===== USER INTERFACE =====
 
 # Enhanced main menu with unified wizard
 # Enhanced main menu with unified wizard

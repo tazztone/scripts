@@ -13,6 +13,22 @@ readonly _WIZARD_SH_LOADED=1
 # --- Requirements ---
 (( BASH_VERSINFO[0] >= 4 )) || { echo "Error: scripts-sh requires bash 4.0 or higher."; exit 1; }
 
+# Helper to check for Zenity 4.0+ dependency
+_wizard_check_zenity() {
+    if ! command -v zenity &> /dev/null; then
+        printf "Error: zenity is not installed. Please install it (sudo apt install zenity).\n" >&2
+        exit 1
+    fi
+
+    local z_ver
+    z_ver=$(zenity --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -n 1)
+    if [ "$(echo "${z_ver:-0} < 4.0" | bc -l)" -eq 1 ]; then
+        printf "Error: scripts-sh requires Zenity 4.0 or higher (found %s).\n" "${z_ver:-unknown}" >&2
+        zenity --error --text="Upgrade Required: Zenity 4.0+ is needed for the checklist UI.\nFound: ${z_ver:-unknown}"
+        exit 1
+    fi
+}
+
 # --- Constants ---
 readonly WIZARD_ROW_SIZE=4
 readonly WIZARD_COL_RAWID=3 # Offset from row start (including boolean)
@@ -241,4 +257,53 @@ parse_forms_result() {
         [[ "$val" == *" (Inactive)"* ]] && val=""
         CONFIG["$key"]="$val"
     done
+}
+
+# Generate safe output filename (avoids overwrite)
+# Usage: generate_safe_filename "base" "tag" "ext"
+generate_safe_filename() {
+    local base="$1"
+    local tag="$2"
+    local ext="$3"
+    
+    # Strip existing known tags recursively from basename ONLY
+    local KNOWN_TAGS=(
+        "_half" "_1920p" "_4k" "_720p" "_640p" "_sq" "_9x16" "_16x9"
+        "_grid2x" "_grid3x" "_row" "_col" "_sheet" "_90cw" "_90ccw" "_flop"
+        "_bw" "_flat" "_srgb" "_text" "_web" "_min" "_arch" "_edit" "_high"
+        "_low" "_lossless" "_nvenc" "_qsv" "_vaapi" "_cut" "_len" "_audio"
+        "_av1" "_mov" "_mkv"
+    )
+    local tag_regex
+    tag_regex=$(IFS='|'; echo "${KNOWN_TAGS[*]}")
+    
+    local dir=$(dirname "$base")
+    local bname=$(basename "$base")
+    local clean_bname="$bname"
+    
+    while true; do
+        local stripped=$(echo "$clean_bname" | sed -E "s/(${tag_regex})(_v[0-9]+)?$//")
+        [ -z "$stripped" ] && break
+        [ "$stripped" == "$clean_bname" ] && break
+        clean_bname="$stripped"
+    done
+    
+    local final_base="${dir}/${clean_bname}"
+    # Clean up ./ if it was added unnecessarily (e.g. if original base didn't have it)
+    if [[ "$base" == "./"* ]]; then
+        final_base="./${clean_bname}"
+    elif [ "$dir" == "." ]; then
+        final_base="$clean_bname"
+    elif [ "$dir" == "/" ]; then
+        final_base="/${clean_bname}"
+    fi
+
+    local out="${final_base}${tag}.${ext}"
+    local ctr=1
+    
+    while [ -f "$out" ]; do
+        out="${final_base}${tag}_v${ctr}.${ext}"
+        ((ctr++))
+    done
+    echo "$out"
 }

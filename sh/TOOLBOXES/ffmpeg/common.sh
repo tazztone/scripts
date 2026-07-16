@@ -8,19 +8,7 @@ readonly _FFMPEG_COMMON_SH_LOADED=1
 # Ensure dependencies
 # Check zenity first to use it for errors
 init_ffmpeg_script() {
-    if ! command -v zenity &> /dev/null; then
-        printf "Error: zenity is not installed. Please install it (sudo apt install zenity).\n" >&2
-        exit 1
-    fi
-
-    # Zenity 4+ Requirement Check
-    local z_ver
-    z_ver=$(zenity --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -n 1)
-    if [ "$(echo "${z_ver:-0} < 4.0" | bc -l)" -eq 1 ]; then
-        printf "Error: scripts-sh requires Zenity 4.0 or higher (found %s).\n" "${z_ver:-unknown}" >&2
-        zenity --error --text="Upgrade Required: Zenity 4.0+ is needed for the checklist UI.\nFound: ${z_ver:-unknown}"
-        exit 1
-    fi
+    _wizard_check_zenity
 
     for cmd in ffmpeg ffprobe bc; do
         if ! command -v "$cmd" &> /dev/null; then
@@ -30,19 +18,6 @@ init_ffmpeg_script() {
     done
 }
 
-# Zenity Progress Command Standard
-# Usage: ( ... ) | $Z_PROGRESS "Title"
-Z_PROGRESS() {
-    zenity --progress --title="$1" --pulsate --auto-close
-}
-
-# Show Error and Exit
-# Usage: error_exit "Message"
-error_exit() {
-    echo "Error: $1" >&2
-    zenity --error --text="$1" --no-markup
-    exit 1
-}
 
 # Get Video Duration in Seconds (float)
 # Usage: get_duration "filename"
@@ -131,63 +106,6 @@ validate_time_format() {
     fi
     
     return 1
-}
-
-# Generate safe output filename (avoids overwrite)
-# Usage: generate_safe_filename "base" "tag" "ext"
-generate_safe_filename() {
-    local base="$1"
-    local tag="$2"
-    local ext="$3"
-    
-    # NEW: Strip existing known tags recursively from basename ONLY
-    local KNOWN_TAGS=(
-        "_half" "_1920p" "_4k" "_720p" "_640p" "_sq" "_9x16" "_16x9"
-        "_grid2x" "_grid3x" "_row" "_col" "_sheet" "_90cw" "_90ccw" "_flop"
-        "_bw" "_flat" "_srgb" "_text" "_web" "_min" "_arch" "_edit" "_high"
-        "_low" "_lossless" "_nvenc" "_qsv" "_vaapi" "_cut" "_len" "_audio"
-        "_av1" "_mov" "_mkv"
-    )
-    local tag_regex
-    tag_regex=$(IFS='|'; echo "${KNOWN_TAGS[*]}")
-    
-    local dir=$(dirname "$base")
-    local bname=$(basename "$base")
-    local clean_bname="$bname"
-    
-    while true; do
-        local stripped=$(echo "$clean_bname" | sed -E "s/(${tag_regex})(_v[0-9]+)?$//")
-        [ -z "$stripped" ] && break
-        [ "$stripped" == "$clean_bname" ] && break
-        clean_bname="$stripped"
-    done
-    
-    local final_base="${dir}/${clean_bname}"
-    # Clean up ./ if it was added unnecessarily (e.g. if original base didn't have it)
-    # but the current logic is actually simpler: just use dir/name unless dir is empty.
-    # Wait, dirname returns "." if there's no slash.
-    if [[ "$base" == "./"* ]]; then
-        final_base="./${clean_bname}"
-    elif [ "$dir" == "." ]; then
-        final_base="$clean_bname"
-    elif [ "$dir" == "/" ]; then
-        final_base="/${clean_bname}"
-    fi
-
-    local out="${final_base}${tag}.${ext}"
-    local ctr=1
-    
-    while [ -f "$out" ]; do
-        out="${final_base}${tag}_v${ctr}.${ext}"
-        ((ctr++))
-    done
-    echo "$out"
-}
-
-# Generate unique temp file in current directory (for concat lists etc)
-# Usage: get_temp_file "prefix"
-get_cwd_temp() {
-    mktemp "./${1:-tmp}_XXXXXX"
 }
 
 # Generate unique temp file in /tmp (for large logs/transforms)
