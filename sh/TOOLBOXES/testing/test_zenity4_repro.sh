@@ -21,7 +21,7 @@ export DEBUG_MODE=1
 
 echo "Running Image-Magick-Toolbox.sh with Zenity 4.x mock..."
 # Run the script with timeout just in case it hard-loops
-timeout 5s bash "imagemagick/🖼️ Image-Magick-Toolbox.sh" "$TEST_DATA/src.jpg" > "$log_file" 2>&1
+timeout 5s bash "imagemagick/Image-Magick-Toolbox.sh" "$TEST_DATA/src.jpg" > "$log_file" 2>&1
 STATUS=$?
 
 # If the fix works, it should exit 0 immediately after receiving "FALSE"

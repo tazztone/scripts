@@ -297,11 +297,11 @@ bash testing/test_lossless_toolbox.sh
 ```
 === Lossless Operations Toolbox Tests ===
 Test 1: Remux (MOV -> MP4)
-[INFO] Testing: 🔒 Lossless-Operations-Toolbox.sh with [/tmp/scripts_test_data/input.mp4]
+[INFO] Testing: Lossless-Operations-Toolbox.sh with [/tmp/scripts_test_data/input.mp4]
 [INFO] Detected: input_remuxed.mp4
 ...
 Test 6: Merge Videos
-[INFO] Testing: 🔒 Lossless-Operations-Toolbox.sh with [/tmp/scripts_test_data/input.mp4 /tmp/scripts_test_data/input2.mp4]
+[INFO] Testing: Lossless-Operations-Toolbox.sh with [/tmp/scripts_test_data/input.mp4 /tmp/scripts_test_data/input2.mp4]
 [INFO] Detected: merged.mp4
 
 Lossless Toolbox Tests Finished!

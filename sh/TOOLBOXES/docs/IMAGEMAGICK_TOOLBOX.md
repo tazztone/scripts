@@ -1,6 +1,6 @@
 # 🖼️ ImageMagick Toolbox
 
-The **ImageMagick Toolbox** (`🖼️ Image-Magick-Toolbox.sh`) is a high-performance batch image processing utility designed for Nautilus. It leverages `imagemagick` and `zenity` to provide a user-friendly GUI for complex image manipulation tasks.
+The **ImageMagick Toolbox** (`Image-Magick-Toolbox.sh`) is a high-performance batch image processing utility designed for Nautilus. It leverages `imagemagick` and `zenity` to provide a user-friendly GUI for complex image manipulation tasks.
 
 ## 📋 Table of Contents
 
@@ -95,7 +95,7 @@ The ImageMagick Toolbox follows the principle of **"Parallel Processing + Smart 
 ### Interactive Mode
 
 1. **Select Images**: Highlight one or more images in Nautilus.
-2. **Right-Click → Scripts → 🖼️ Image-Magick-Toolbox**.
+2. **Right-Click → Scripts → Image-Magick-Toolbox**.
 3. **Choose Intent**: Select what you want to do (e.g., "Scale", "Canvas", "Format").
 4. **Configure**: Fine-tune settings in the pop-up form.
 5. **Run**: The script processes files in background.
@@ -115,10 +115,10 @@ The toolbox automatically adapts its interface based on the selected files:
 
 ```bash
 # Basic usage with files
-./🖼️\ Image-Magick-Toolbox.sh image1.jpg image2.png
+./Image-Magick-Toolbox.sh image1.jpg image2.png
 
 # Process entire directory
-./🖼️\ Image-Magick-Toolbox.sh /path/to/images/*.jpg
+./Image-Magick-Toolbox.sh /path/to/images/*.jpg
 ```
 
 ---
@@ -225,8 +225,8 @@ bash testing/test_image_toolbox.sh
 
 | Goal | Command |
 |------|----------|
-| Resize to web size | `./🖼️\ Image-Magick-Toolbox.sh --preset "Web Ready" *.jpg` |
-| Create Instagram square | `./🖼️\ Image-Magick-Toolbox.sh --preset "Square Crop" photo.jpg` |
+| Resize to web size | `./Image-Magick-Toolbox.sh --preset "Web Ready" *.jpg` |
+| Create Instagram square | `./Image-Magick-Toolbox.sh --preset "Square Crop" photo.jpg` |
 | Convert HEIC to JPG | Select files → Format → JPG |
 | Merge images to PDF | Select files → Format → PDF |
 | Extract PDF pages | Select PDF → Format → JPG/PNG |

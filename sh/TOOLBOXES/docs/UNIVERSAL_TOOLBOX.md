@@ -127,11 +127,11 @@ Unified configuration window with dynamic fields based on selected intents:
 
 ```bash
 # Basic usage with files
-./🧰\ Universal-Toolbox.sh video.mp4
+./Universal-Toolbox.sh video.mp4
 
 # Use saved presets for automation
-./🧰\ Universal-Toolbox.sh --preset "Social Speed Edit" *.mp4
-./🧰\ Universal-Toolbox.sh --preset "4K Archival (H.265)" video.mov
+./Universal-Toolbox.sh --preset "Social Speed Edit" *.mp4
+./Universal-Toolbox.sh --preset "4K Archival (H.265)" video.mov
 ```
 
 ---
@@ -270,10 +270,10 @@ bash testing/test_runner.sh
 
 | Goal | Command |
 |------|----------|
-| Fast social media clip | `./🧰\ Universal-Toolbox.sh --preset "Social Speed Edit" video.mp4` |
-| YouTube upload ready | `./🧰\ Universal-Toolbox.sh --preset "YouTube 1080p (Fast)" *.mov` |
+| Fast social media clip | `./Universal-Toolbox.sh --preset "Social Speed Edit" video.mp4` |
+| YouTube upload ready | `./Universal-Toolbox.sh --preset "YouTube 1080p (Fast)" *.mov` |
 | Discord-friendly size | Set Target Size: 25MB in wizard |
-| Archive quality | `./🧰\ Universal-Toolbox.sh --preset "4K Archival (H.265)" video.mp4` |
+| Archive quality | `./Universal-Toolbox.sh --preset "4K Archival (H.265)" video.mp4` |
 
 ---
 
