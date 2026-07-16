@@ -93,6 +93,7 @@ if [[ -z "$PRELOADED_CHOICES" ]]; then
 fi
 
 # --- GPU PROBE (Run once at startup) ---
+probe_gpu
 
 # --- UNIFIED LAUNCHPAD ---
 # 🧰 Universal-Toolbox v3.1

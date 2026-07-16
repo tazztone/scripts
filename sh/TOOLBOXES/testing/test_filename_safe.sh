@@ -5,6 +5,7 @@
 SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 source "$SCRIPT_DIR/lib_test.sh"
+source "$PROJECT_ROOT/common/wizard.sh"
 source "$PROJECT_ROOT/ffmpeg/common.sh"
 
 log_info "Testing generate_safe_filename..."
