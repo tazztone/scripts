@@ -6,12 +6,7 @@ setup_mock_ffmpeg
 generate_test_media
 FAILED=0
 
-# Ensure the symlink exists to avoid emoji issues in shell call
-IM_REAL_PATH="imagemagick/🖼️ Image-Magick-Toolbox.sh"
-IM_TOOLBOX="imagemagick/im_toolbox.sh"
-if [ ! -L "$IM_TOOLBOX" ]; then
-    ln -sf "$(basename "$IM_REAL_PATH")" "$IM_TOOLBOX"
-fi
+IM_TOOLBOX="imagemagick/Image-Magick-Toolbox.sh"
 
 echo -e "\n${YELLOW}=== Image Toolbox Tests ===${NC}"
 

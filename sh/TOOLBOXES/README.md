@@ -71,8 +71,8 @@ sudo apt install ffmpeg zenity bc
 3.  **Right-Click** the selection.
 4.  Navigate to **Scripts** in the context menu.
 5.  Choose the tool you want to run:
-    - **🧰 Universal-Toolbox**: Full-featured video processing with transcoding
-    - **🔒 Lossless-Operations-Toolbox**: Quality-preserving operations only
+    - **Universal-Toolbox**: Full-featured video processing with transcoding
+    - **Lossless-Operations-Toolbox**: Quality-preserving operations only
 
 *A popup window will appear showing the progress, and the new file will be created in the same folder as the original.*
 
@@ -80,9 +80,9 @@ sudo apt install ffmpeg zenity bc
 
 The project has been streamlined into **two powerful master tools** that provide comprehensive video processing capabilities through intelligent, guided interfaces.
 
-### 0. 🧰 Universal Toolbox (`0-*`)
+### 0. Universal Toolbox (`0-*`)
 *The Swiss Army Knife for FFmpeg. A powerful, workstation-grade tool for all operations.*
-- **0-00 🧰 Universal-Toolbox**: The ultimate one-stop shop for video editing. **[📖 Full Documentation](docs/UNIVERSAL_TOOLBOX.md)**
+- **0-00 Universal-Toolbox**: The ultimate one-stop shop for video editing. **[📖 Full Documentation](docs/UNIVERSAL_TOOLBOX.md)**
     - **🧙‍♂️ Guided 2-Step Wizard**:
         1. **Unified Wizard (Fix 2)**: Robust multi-selection parsing that intelligently handles complex recipes (Starred, History, and custom categories) while ignoring UI metadata.
         2. **Dashboard**: Configure everything in a single, unified window with dynamic fields.
@@ -93,7 +93,7 @@ The project has been streamlined into **two powerful master tools** that provide
     - **💾 Persistent Custom Presets**: Saved favorites now remember your manual entries (e.g. Custom Width, Target Size) and reload them instantly.
     - **📝 Smart Subtitles**: Auto-detects `.srt` files and offers styled **Burn-in** or **Mux** options.
 
-- **0-01 🔒 Lossless-Operations-Toolbox**: Specialized tool for quality-preserving operations only. **[📖 Full Documentation](docs/LOSSLESS_TOOLBOX.md)**
+- **0-01 Lossless-Operations-Toolbox**: Specialized tool for quality-preserving operations only. **[📖 Full Documentation](docs/LOSSLESS_TOOLBOX.md)**
     - **🚀 Zero Quality Loss**: All operations use FFmpeg stream copy - no re-encoding, no quality degradation.
     - **⚡ Lightning Fast**: Operations complete in seconds, not minutes (no CPU/GPU encoding).
     - **🎯 Curated Operations**: Only truly lossless operations - trimming, remuxing, stream editing, metadata changes.
@@ -104,9 +104,9 @@ The project has been streamlined into **two powerful master tools** that provide
     - **📦 Container Optimization**: Format-specific flags for better compatibility (faststart, index space).
     - **🏷️ Smart Auto-Rename**: Prevents file overwrites with intelligent incremental naming.
 
-### 1. 🖼️ ImageMagick Toolbox (`1-*`)
+### 1. ImageMagick Toolbox (`1-*`)
 *High-performance batch image processing directly from Nautilus.*
-- **1-00 🖼️ Image-Magick-Toolbox**: Comprehensive image manipulation with "Smart" logic. **[📖 Full Documentation](docs/IMAGEMAGICK_TOOLBOX.md)**
+- **1-00 Image-Magick-Toolbox**: Comprehensive image manipulation with "Smart" logic. **[📖 Full Documentation](docs/IMAGEMAGICK_TOOLBOX.md)**
     - **⚡ Parallel Batch Processing**: Uses background jobs to process image libraries at maximum CPU speed.
     - **📱 Modern Format Support**: Automated handling of **HEIC/RAW** to sRGB JPG conversion.
     - **📐 Smart Resizing**: Aspect ratio preservation with "Fit to Height/Width" and HD presets.

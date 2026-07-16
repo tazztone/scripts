@@ -90,7 +90,7 @@ The Lossless Operations Toolbox follows the principle that **not every video ope
 ### Interactive Mode
 
 1. **Right-click** on video files in Nautilus
-2. Select **Scripts** → **🔒 Lossless-Operations-Toolbox**
+2. Select **Scripts** → **Lossless-Operations-Toolbox**
 3. Choose from the enhanced menu:
    - **New Operation**: Select from available lossless operations
    - **⭐ Presets**: Use saved favorites
@@ -100,16 +100,16 @@ The Lossless Operations Toolbox follows the principle that **not every video ope
 
 ```bash
 # Basic usage
-./🔒\ Lossless-Operations-Toolbox.sh video.mp4
+./Lossless-Operations-Toolbox.sh video.mp4
 
 # Use presets for automation
-./🔒\ Lossless-Operations-Toolbox.sh --preset "Quick Trim" *.mp4
+./Lossless-Operations-Toolbox.sh --preset "Quick Trim" *.mp4
 
 # List available presets
-./🔒\ Lossless-Operations-Toolbox.sh --list-presets
+./Lossless-Operations-Toolbox.sh --list-presets
 
 # Show help
-./🔒\ Lossless-Operations-Toolbox.sh --help
+./Lossless-Operations-Toolbox.sh --help
 ```
 
 ### Time Format Support
@@ -296,10 +296,10 @@ bash testing/test_lossless_toolbox.sh
 
 | Goal | Command |
 |------|----------|
-| Trim first 30 seconds | `./🔒\ Lossless-Operations-Toolbox.sh --preset "Quick Trim" video.mp4` |
-| Convert to MKV | `./🔒\ Lossless-Operations-Toolbox.sh --preset "MP4 to MKV" *.mp4` |
-| Remove audio track | `./🔒\ Lossless-Operations-Toolbox.sh --preset "Remove Audio" video.mp4` |
-| Clean metadata | `./🔒\ Lossless-Operations-Toolbox.sh --preset "Clean Metadata" video.mp4` |
+| Trim first 30 seconds | `./Lossless-Operations-Toolbox.sh --preset "Quick Trim" video.mp4` |
+| Convert to MKV | `./Lossless-Operations-Toolbox.sh --preset "MP4 to MKV" *.mp4` |
+| Remove audio track | `./Lossless-Operations-Toolbox.sh --preset "Remove Audio" video.mp4` |
+| Clean metadata | `./Lossless-Operations-Toolbox.sh --preset "Clean Metadata" video.mp4` |
 
 ---
 

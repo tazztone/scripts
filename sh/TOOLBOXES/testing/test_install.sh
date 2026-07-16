@@ -33,9 +33,9 @@ EOF
 
 # Verify symlinks
 EXPECTED_LINKS=(
-    "$HOME/.local/share/nautilus/scripts/🧰 Universal-Toolbox.sh"
-    "$HOME/.local/share/nautilus/scripts/🖼️ Image-Magick-Toolbox.sh"
-    "$HOME/.local/share/nautilus/scripts/🔒 Lossless-Operations-Toolbox.sh"
+    "$HOME/.local/share/nautilus/scripts/Universal-Toolbox.sh"
+    "$HOME/.local/share/nautilus/scripts/Image-Magick-Toolbox.sh"
+    "$HOME/.local/share/nautilus/scripts/Lossless-Operations-Toolbox.sh"
 )
 
 for LINK in "${EXPECTED_LINKS[@]}"; do
@@ -44,6 +44,20 @@ for LINK in "${EXPECTED_LINKS[@]}"; do
     else
         log_fail "install.sh failed to create symlink at $LINK"
         FAILED=1
+    fi
+done
+
+# Verify unexpected files/symlinks are not created
+UNEXPECTED_LINKS=(
+    "$HOME/.local/share/nautilus/scripts/common.sh"
+)
+
+for LINK in "${UNEXPECTED_LINKS[@]}"; do
+    if [ -e "$LINK" ] || [ -L "$LINK" ]; then
+        log_fail "install.sh incorrectly created symlink/file: $(basename "$LINK")"
+        FAILED=1
+    else
+        log_pass "install.sh correctly ignored: $(basename "$LINK")"
     fi
 done
 

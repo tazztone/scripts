@@ -54,13 +54,13 @@ remove_video"
 }
 
 # 1. Universal Toolbox Test
-run_matrix_test "ffmpeg/🧰 Universal-Toolbox.sh" "vcodec=h264,width=1280" "$TEST_DATA/src.mp4"
+run_matrix_test "ffmpeg/Universal-Toolbox.sh" "vcodec=h264,width=1280" "$TEST_DATA/src.mp4"
 
 # 2. Image Magick Toolbox Test
-run_matrix_test "imagemagick/🖼️ Image-Magick-Toolbox.sh" "format=jpeg,width=1280" "$TEST_DATA/src.jpg"
+run_matrix_test "imagemagick/Image-Magick-Toolbox.sh" "format=jpeg,width=1280" "$TEST_DATA/src.jpg"
 
 # 3. Lossless Toolbox Test
-run_matrix_test "ffmpeg/🔒 Lossless-Operations-Toolbox.sh" "no_video,acodec=aac" "$TEST_DATA/src.mp4"
+run_matrix_test "ffmpeg/Lossless-Operations-Toolbox.sh" "no_video,acodec=aac" "$TEST_DATA/src.mp4"
 
 if [ $FAILED -eq 0 ]; then
     log_info "All toolboxes are cross-version compatible!"
