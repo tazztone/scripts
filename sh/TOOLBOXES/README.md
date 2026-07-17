@@ -89,9 +89,11 @@ The project has been streamlined into **two powerful master tools** that provide
     - **🏎️ Smart Hardware Auto-Probe**: Performs a silent 1-frame dummy encode at startup to detect and **automatically enable** NVENC (Nvidia), QSV (Intel), or VAAPI (AMD), hiding broken options.
     - **⚖️ Integrated Target Size**: Accurate 2-pass encoding to hit exact MB limits (e.g., 25MB for Discord) directly in the tool.
     - **🛡️ Auto-Rename Safety**: Never overwrites files. Automatically increments names (`_v1`, `_v2`) if the output target already exists.
-    - **🏷️ Descriptive Smart Tagging**: Files are named based on your edits (e.g. `video_2x_1080p_noaudio.mp4`) instead of generic tags.
+     - **🏷️ Descriptive Smart Tagging**: Files are named based on your edits (e.g. `video_2x_1080p_noaudio.mp4`) instead of generic tags.
     - **💾 Persistent Custom Presets**: Saved favorites now remember your manual entries (e.g. Custom Width, Target Size) and reload them instantly.
     - **📝 Smart Subtitles**: Auto-detects `.srt` files and offers styled **Burn-in** or **Mux** options.
+    - **⚡ Dynamic Pre-Flight Scan**: Single-pass cached profiling automatically hides audio tools and options if the input video lacks audio tracks.
+    - **💻 Headless CLI Execution**: Supports running recipe sequences headlessly using `--choices` parameter.
 
 - **0-01 Lossless-Operations-Toolbox**: Specialized tool for quality-preserving operations only. **[📖 Full Documentation](docs/LOSSLESS_TOOLBOX.md)**
     - **🚀 Zero Quality Loss**: All operations use FFmpeg stream copy - no re-encoding, no quality degradation.
@@ -103,6 +105,7 @@ The project has been streamlined into **two powerful master tools** that provide
     - **🔧 Enhanced Input**: Flexible time formats (30, 1:30, 01:30:45) with real-time validation.
     - **📦 Container Optimization**: Format-specific flags for better compatibility (faststart, index space).
     - **🏷️ Smart Auto-Rename**: Prevents file overwrites with intelligent incremental naming.
+    - **💻 Decoupled UI / Headless Runner**: Zenity UI dialogs are decoupled into helper scripts, enabling headless automation.
 
 ### 1. ImageMagick Toolbox (`1-*`)
 *High-performance batch image processing directly from Nautilus.*

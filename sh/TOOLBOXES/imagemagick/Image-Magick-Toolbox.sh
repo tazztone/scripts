@@ -26,11 +26,11 @@ if [[ ! -r "$1" ]]; then
 fi
 
 # --- CONFIG ---
-CONFIG_DIR="$HOME/.config/scripts-sh/imagemagick"
-PRESET_FILE="$CONFIG_DIR/presets.conf"
-HISTORY_FILE="$CONFIG_DIR/history.conf"
-mkdir -p "$CONFIG_DIR"
-touch "$PRESET_FILE" "$HISTORY_FILE"
+state_init "imagemagick"
+CONFIG_DIR="$STATE_CONFIG_DIR"
+PRESET_FILE="$STATE_PRESET_FILE"
+HISTORY_FILE="$STATE_HISTORY_FILE"
+
 
 # --- INIT STATE ---
 IM_ARGS=()
@@ -361,7 +361,7 @@ show_main_menu() {
             if [ "$DO_SAVE" = true ]; then
                  local dyn_name
                  dyn_name=$(get_recipe_summary "$final_choices")
-                 prompt_save_preset "$PRESET_FILE" "$final_choices" "$dyn_name" "true"
+                 state_save_preset "$final_choices" "$dyn_name" "true"
             fi
             
             echo "$final_choices"
@@ -381,7 +381,7 @@ CHOICES=$(show_main_menu "$1")
 [ -z "$CHOICES" ] && exit 0
 
 # Save to History
-save_to_history "$HISTORY_FILE" "$CHOICES"
+state_add_history "$CHOICES"
 
 # Build IM Arguments (Sorting by priority)
 # 1. Crop, 2. Scale, 3. Effects, 4. Format

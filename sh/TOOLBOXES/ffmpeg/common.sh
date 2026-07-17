@@ -4,6 +4,8 @@
 [ "${_FFMPEG_COMMON_SH_LOADED:-0}" -eq 1 ] && return
 readonly _FFMPEG_COMMON_SH_LOADED=1
 
+_COMMON_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+source "$_COMMON_DIR/media_profile.sh"
 
 # Ensure dependencies
 # Check zenity first to use it for errors
@@ -22,14 +24,14 @@ init_ffmpeg_script() {
 # Get Video Duration in Seconds (float)
 # Usage: get_duration "filename"
 get_duration() {
-    local d
-    d=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$1")
-    _wizard_log "ffprobe duration for $1: [$d]"
-    if [ -z "$d" ]; then 
+    if probe_media "$1"; then
+        local d="${PROBED_INFO[duration]:-0}"
+        _wizard_log "cached duration for $1: [$d]"
+        echo "$d"
+    else
+        _wizard_log "Failed to probe duration for $1"
         echo "0"
         echo "Warning: Could not detect duration for $1" >&2
-    else 
-        echo "$d"
     fi
 }
 

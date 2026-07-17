@@ -41,8 +41,8 @@ Before showing the menu, run `ffprobe` or `identify` to build a **Media Profile*
     - *Is Vertical (9:16)?* -> **Show** "Blur-Pad to Landscape".
 
 ### 🛠️ Tasks
-- [ ] **Analysis Engine**: Create `analyze_media_deep(file)` function returning a state object.
-- [ ] **UI Engine**: Update Zenity generator to read this state and filter list items.
+- [x] **Analysis Engine**: Create `analyze_media_deep(file)` function returning a state object.
+- [x] **UI Engine**: Update Zenity generator to read this state and filter list items.
 
 ---
 
