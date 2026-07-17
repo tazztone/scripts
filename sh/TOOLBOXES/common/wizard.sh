@@ -172,6 +172,68 @@ _wizard_parse_result() {
     echo "${deduplicated%|}"
 }
 
+# Consolidated State Management
+STATE_CONFIG_DIR=""
+STATE_PRESET_FILE=""
+STATE_HISTORY_FILE=""
+
+state_init() {
+    local name="$1"
+    [ -z "$name" ] && return 1
+    
+    local normalized
+    normalized=$(echo "$name" | tr '[:upper:]' '[:lower:]')
+    
+    # Handle mappings
+    if [ "$normalized" = "universal-toolbox" ] || [ "$normalized" = "universal" ] || [ "$normalized" = "ffmpeg" ]; then
+        normalized="ffmpeg"
+    elif [ "$normalized" = "lossless-operations-toolbox" ] || [ "$normalized" = "lossless-toolbox" ]; then
+        normalized="lossless"
+    elif [ "$normalized" = "image-magick-toolbox" ] || [ "$normalized" = "imagemagick-toolbox" ]; then
+        normalized="imagemagick"
+    fi
+
+    STATE_CONFIG_DIR="$HOME/.config/scripts-sh/$normalized"
+    STATE_PRESET_FILE="$STATE_CONFIG_DIR/presets.conf"
+    STATE_HISTORY_FILE="$STATE_CONFIG_DIR/history.conf"
+    
+    # Legacy migration
+    if [ "$normalized" = "lossless" ]; then
+        local legacy_dir="$HOME/.config/lossless-toolbox"
+        if [ -d "$legacy_dir" ] && [ ! -d "$STATE_CONFIG_DIR" ]; then
+            _wizard_log "Migrating legacy lossless config from $legacy_dir to $STATE_CONFIG_DIR"
+            mkdir -p "$(dirname "$STATE_CONFIG_DIR")"
+            cp -r "$legacy_dir" "$STATE_CONFIG_DIR"
+            mv "$legacy_dir" "${legacy_dir}.migrated" 2>/dev/null || true
+        fi
+    fi
+    
+    mkdir -p "$STATE_CONFIG_DIR"
+    touch "$STATE_HISTORY_FILE"
+    
+    if [ ! -s "$STATE_PRESET_FILE" ]; then
+        if [ "$normalized" = "ffmpeg" ]; then
+            echo "Social Speed Edit|Speed 2x (Fast)|Scale 720p|Normalize (R128)|Output as H.264" > "$STATE_PRESET_FILE"
+            echo "4K Archival (H.265)|Output as H.265|Clean Metadata" >> "$STATE_PRESET_FILE"
+            echo "YouTube 1080p (Fast)|Scale 1080p|Normalize (R128)|Output as H.264" >> "$STATE_PRESET_FILE"
+        elif [ "$normalized" = "lossless" ]; then
+            echo "Quick Trim|trim|2|8" > "$STATE_PRESET_FILE"
+            echo "MP4 to MKV|remux|mkv" >> "$STATE_PRESET_FILE"
+            echo "Remove Audio|stream_edit|remove_audio" >> "$STATE_PRESET_FILE"
+            echo "Clean Metadata|metadata|clean_metadata" >> "$STATE_PRESET_FILE"
+            echo "Merge Compatible|merge" >> "$STATE_PRESET_FILE"
+        fi
+    fi
+}
+
+state_save_preset() {
+    prompt_save_preset "$STATE_PRESET_FILE" "$1" "$2" "${3:-false}"
+}
+
+state_add_history() {
+    save_to_history "$STATE_HISTORY_FILE" "$1"
+}
+
 # save_to_history "HistoryFile" "ChoiceString"
 save_to_history() {
     local HISTORY_FILE="$1"
