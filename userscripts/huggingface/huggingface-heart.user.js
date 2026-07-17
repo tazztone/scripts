@@ -1,67 +1,344 @@
 // ==UserScript==
 // @name         Hugging Face Yellow Hearts
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.0.0
+// @version      1.1.0
 // @description  Make the heart icons on Hugging Face larger and pop out in yellow.
 // @author       tazztone
 // @match        https://huggingface.co/models*
 // @run-at       document-start
-// @grant        none
+// @grant        GM_getValue
+// @grant        GM_setValue
 // @noframes
 // ==/UserScript==
 
-// ─── CONFIG ────────────────────1──────────────────────────────────────────────
-const CONFIG = {
+// ─── CONFIG DEFAULT VALUES ───────────────────────────────────────────────────
+const DEFAULTS = {
   ENABLED: true,
-  COLOR_IDLE: '#fbbf24',    // Tailwind Amber 400
-  COLOR_HOVER: '#f59e0b',   // Tailwind Amber 500
-  SCALE_IDLE: '2',
-  SCALE_HOVER: '2',
+  COLOR_IDLE: '#fbbf24',
+  COLOR_HOVER: '#f59e0b',
+  SCALE_IDLE: 2,
+  SCALE_HOVER: 2
 };
 
-// ─── STYLES ──────────────────────────────────────────────────────────────────
-const STYLE = `
-  /* Target the heart SVG by its unique outline path */
-  svg:has(path[d^="M22.45"]) {
-    color: ${CONFIG.COLOR_IDLE} !important;
-    fill: currentColor !important;
-    transform: scale(${CONFIG.SCALE_IDLE}) !important;
-    transform-origin: center !important;
-    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.2s ease, filter 0.2s ease !important;
+const MODAL_STYLES = `
+  #hf-settings-fab {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 50px;
+    height: 50px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    background: rgba(30, 41, 59, 0.8);
+    color: #f1f5f9;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+    z-index: 99999;
+    font-size: 22px;
+    transition: all 0.3s ease;
   }
-
-  /* Hover state for a premium micro-animation pop out */
-  svg:has(path[d^="M22.45"]):hover {
-    transform: scale(${CONFIG.SCALE_HOVER}) !important;
-    color: ${CONFIG.COLOR_HOVER} !important;
-    filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.65)) !important;
+  #hf-settings-fab:hover {
+    background: rgba(245, 158, 11, 0.9);
+    box-shadow: 0 0 15px rgba(245, 158, 11, 0.5);
+    transform: scale(1.1);
+  }
+  #hf-settings-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 23, 42, 0.5);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 99998;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  #hf-settings-modal-backdrop.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  #hf-settings-modal {
+    width: 90%;
+    max-width: 480px;
+    max-height: 80vh;
+    overflow-y: auto;
+    padding: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    background: rgba(30, 41, 59, 0.92);
+    color: #f8fafc;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    transform: scale(0.95) translateY(10px);
+    transition: transform 0.3s ease;
+  }
+  #hf-settings-modal-backdrop.open #hf-settings-modal {
+    transform: scale(1) translateY(0);
+  }
+  #hf-settings-modal h3 {
+    margin: 0 0 20px;
+    color: #fbbf24;
+    font-size: 18px;
+  }
+  .hf-settings-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+  .hf-settings-group label {
+    color: #cbd5e1;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .hf-settings-group input[type="color"],
+  .hf-settings-group input[type="number"] {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 34px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    background: rgba(15, 23, 42, 0.6);
+    color: #fff;
+  }
+  .hf-settings-group input[type="color"] {
+    padding: 3px;
+  }
+  .hf-settings-group input[type="range"] {
+    accent-color: #f59e0b;
+  }
+  .hf-switch-container {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .hf-switch {
+    width: 44px;
+    height: 24px;
+    position: relative;
+  }
+  .hf-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+  .hf-slider {
+    position: absolute;
+    inset: 0;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 24px;
+    background: rgba(15, 23, 42, 0.6);
     cursor: pointer;
   }
-
-  /* Prevent parent container from clipping the scaled SVG */
-  div:has(> svg:has(path[d^="M22.45"])),
-  button:has(> svg:has(path[d^="M22.45"])) {
-    overflow: visible !important;
+  .hf-slider::before {
+    content: "";
+    position: absolute;
+    left: 3px;
+    bottom: 3px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #94a3b8;
+    transition: transform 0.3s ease;
+  }
+  .hf-switch input:checked + .hf-slider {
+    background: #f59e0b;
+  }
+  .hf-switch input:checked + .hf-slider::before {
+    transform: translateX(20px);
+    background: #fff;
+  }
+  .hf-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 24px;
+  }
+  .hf-btn {
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .hf-btn-secondary {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: transparent;
+    color: #94a3b8;
+  }
+  .hf-btn-primary {
+    border: 0;
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    color: #451a03;
   }
 `;
-// ─────────────────────────────────────────────────────────────────────────────
 
 (() => {
   'use strict';
 
-  if (!CONFIG.ENABLED) return;
+  const getValue = (key, fallback) => {
+    try {
+      if (typeof GM_getValue !== 'undefined') return GM_getValue(key, fallback);
+    } catch (e) {}
+    try {
+      const value = localStorage.getItem(`hf_heart_${key}`);
+      return value === null ? fallback : JSON.parse(value);
+    } catch (e) {}
+    return fallback;
+  };
 
-  // Inject styles immediately at document-start
-  const styleEl = document.createElement('style');
-  styleEl.textContent = STYLE;
+  const setValue = (key, value) => {
+    try {
+      if (typeof GM_setValue !== 'undefined') {
+        GM_setValue(key, value);
+        return;
+      }
+    } catch (e) {}
+    try {
+      localStorage.setItem(`hf_heart_${key}`, JSON.stringify(value));
+    } catch (e) {}
+  };
 
-  // Append to head or documentElement depending on DOM load state
-  const target = document.head || document.documentElement;
-  if (target) {
-    target.appendChild(styleEl);
-  } else {
-    document.addEventListener('DOMContentLoaded', () => {
-      document.head.appendChild(styleEl);
+  const CONFIG = {
+    get ENABLED() { return getValue('ENABLED', DEFAULTS.ENABLED); },
+    set ENABLED(value) { setValue('ENABLED', value); },
+    get COLOR_IDLE() { return getValue('COLOR_IDLE', DEFAULTS.COLOR_IDLE); },
+    set COLOR_IDLE(value) { setValue('COLOR_IDLE', value); },
+    get COLOR_HOVER() { return getValue('COLOR_HOVER', DEFAULTS.COLOR_HOVER); },
+    set COLOR_HOVER(value) { setValue('COLOR_HOVER', value); },
+    get SCALE_IDLE() { return parseFloat(getValue('SCALE_IDLE', DEFAULTS.SCALE_IDLE)); },
+    set SCALE_IDLE(value) { setValue('SCALE_IDLE', parseFloat(value)); },
+    get SCALE_HOVER() { return parseFloat(getValue('SCALE_HOVER', DEFAULTS.SCALE_HOVER)); },
+    set SCALE_HOVER(value) { setValue('SCALE_HOVER', parseFloat(value)); }
+  };
+
+  const buildHeartStyle = () => CONFIG.ENABLED ? `
+    svg:has(path[d^="M22.45"]) {
+      color: ${CONFIG.COLOR_IDLE} !important;
+      fill: currentColor !important;
+      transform: scale(${CONFIG.SCALE_IDLE}) !important;
+      transform-origin: center !important;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.2s ease, filter 0.2s ease !important;
+    }
+    svg:has(path[d^="M22.45"]):hover {
+      transform: scale(${CONFIG.SCALE_HOVER}) !important;
+      color: ${CONFIG.COLOR_HOVER} !important;
+      filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.65)) !important;
+      cursor: pointer;
+    }
+    div:has(> svg:has(path[d^="M22.45"])),
+    button:has(> svg:has(path[d^="M22.45"])) {
+      overflow: visible !important;
+    }
+  ` : '';
+
+  function injectStyles() {
+    let styleEl = document.getElementById('hf-heart-style');
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = 'hf-heart-style';
+      (document.head || document.documentElement).appendChild(styleEl);
+    }
+    styleEl.textContent = buildHeartStyle();
+
+    if (!document.getElementById('hf-settings-style')) {
+      const modalStyle = document.createElement('style');
+      modalStyle.id = 'hf-settings-style';
+      modalStyle.textContent = MODAL_STYLES;
+      (document.head || document.documentElement).appendChild(modalStyle);
+    }
+  }
+
+  function setupUI() {
+    if (document.getElementById('hf-settings-fab')) return;
+
+    const container = document.createElement('div');
+    container.innerHTML = `
+      <button id="hf-settings-fab" type="button" title="Configure Hugging Face hearts" aria-label="Configure Hugging Face hearts">
+        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      </button>
+      <div id="hf-settings-modal-backdrop">
+        <div id="hf-settings-modal" role="dialog" aria-modal="true" aria-labelledby="hf-settings-title">
+          <h3 id="hf-settings-title">Hugging Face Hearts</h3>
+          <div class="hf-settings-group hf-switch-container">
+            <label for="hf-enabled">Enable heart styling</label>
+            <label class="hf-switch">
+              <input id="hf-enabled" type="checkbox">
+              <span class="hf-slider"></span>
+            </label>
+          </div>
+          <div class="hf-settings-group">
+            <label for="hf-color-idle">Idle color</label>
+            <input id="hf-color-idle" type="color">
+          </div>
+          <div class="hf-settings-group">
+            <label for="hf-color-hover">Hover color</label>
+            <input id="hf-color-hover" type="color">
+          </div>
+          <div class="hf-settings-group">
+            <label for="hf-scale-idle">Idle scale</label>
+            <input id="hf-scale-idle" type="number" min="1" max="5" step="0.1">
+          </div>
+          <div class="hf-settings-group">
+            <label for="hf-scale-hover">Hover scale</label>
+            <input id="hf-scale-hover" type="number" min="1" max="5" step="0.1">
+          </div>
+          <div class="hf-modal-actions">
+            <button type="button" class="hf-btn hf-btn-secondary" id="hf-btn-close">Cancel</button>
+            <button type="button" class="hf-btn hf-btn-primary" id="hf-btn-save">Save Settings</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(container);
+
+    const fab = document.getElementById('hf-settings-fab');
+    const backdrop = document.getElementById('hf-settings-modal-backdrop');
+    const enabled = document.getElementById('hf-enabled');
+    const colorIdle = document.getElementById('hf-color-idle');
+    const colorHover = document.getElementById('hf-color-hover');
+    const scaleIdle = document.getElementById('hf-scale-idle');
+    const scaleHover = document.getElementById('hf-scale-hover');
+
+    const syncFields = () => {
+      enabled.checked = CONFIG.ENABLED;
+      colorIdle.value = CONFIG.COLOR_IDLE;
+      colorHover.value = CONFIG.COLOR_HOVER;
+      scaleIdle.value = CONFIG.SCALE_IDLE;
+      scaleHover.value = CONFIG.SCALE_HOVER;
+    };
+
+    const close = () => backdrop.classList.remove('open');
+    fab.addEventListener('click', () => {
+      syncFields();
+      backdrop.classList.add('open');
     });
+    document.getElementById('hf-btn-close').addEventListener('click', close);
+    backdrop.addEventListener('click', event => {
+      if (event.target === backdrop) close();
+    });
+    document.getElementById('hf-btn-save').addEventListener('click', () => {
+      CONFIG.ENABLED = enabled.checked;
+      CONFIG.COLOR_IDLE = colorIdle.value;
+      CONFIG.COLOR_HOVER = colorHover.value;
+      CONFIG.SCALE_IDLE = Math.max(1, Math.min(5, parseFloat(scaleIdle.value) || DEFAULTS.SCALE_IDLE));
+      CONFIG.SCALE_HOVER = Math.max(1, Math.min(5, parseFloat(scaleHover.value) || DEFAULTS.SCALE_HOVER));
+      injectStyles();
+      close();
+    });
+  }
+
+  injectStyles();
+  if (document.body) {
+    setupUI();
+  } else {
+    document.addEventListener('DOMContentLoaded', setupUI, { once: true });
   }
 })();
