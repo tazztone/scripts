@@ -1,52 +1,48 @@
-# Toppreise Store Best Price Highlight & Filter - Research Log
+# Toppreise Power Filter & Best Price Enhancer - Research & Architecture Log
 
-This document details the selectors and extraction logic for the store-based price comparison on Toppreise.ch search and listing pages.
+This document details the selectors, DOM extraction strategies, and filter logic for the Toppreise.ch Power Filter script.
 
-## 1. Trigger & Target Elements
+## 1. Core Target Elements
 
-- **Active Store Filter**:
-  - Selector: `.filters .f_remove_filter[data-target-type="df"]`
-  - Extraction: The element contains the store name (e.g., `Media Markt`). If multiple stores are filtered, the script will match against any active store filter.
-- **Product Card Container**:
-  - Selector: `.Plugin_Product.mixedBrowsingList`
-  - State Markers: We will apply class attributes to these product containers:
-    - `tp-is-cheapest`: The filtered store has the best price (within margin).
-    - `tp-not-cheapest`: The filtered store sells it, but is more expensive than the best price (beyond margin).
-    - `tp-no-store-offer`: The filtered store does not sell this product.
-
----
-
-## 2. Element Selectors
-
-Within each product card `.Plugin_Product.mixedBrowsingList`:
-
-### Filtered Store Price Data
-- **Store-specific price row container**: `.Plugin_DealerRelProdPriceInfo`
-  - Store Name: `.Plugin_DealerRelProdPriceInfo .title`
-  - Price (Excl. Shipping): `.Plugin_DealerRelProdPriceInfo .productPrice .Plugin_Price`
-  - Price (Incl. Shipping): `.Plugin_DealerRelProdPriceInfo .shippingPrice .Plugin_Price`
-
-### Overall Lowest Price Data
-- **Lowest price wrapper**: `.price_information_product`
-  - Price (Excl. Shipping): `.price_information_product .productPrice .Plugin_Price`
-  - Price (Incl. Shipping): `.price_information_product .shippingPrice .Plugin_Price`
+- **Active Store Filter**: `.filters .f_remove_filter[data-target-type="df"]`
+- **Product Card Container**: `.Plugin_Product.mixedBrowsingList, .Plugin_Product`
+- **State Marker Classes**:
+  - `tp-is-cheapest`: Filtered store has the best price (within margin).
+  - `tp-not-cheapest`: Filtered store sells item, but higher price than lowest.
+  - `tp-no-store-offer`: Filtered store does not sell item.
+  - `tp-negative-filtered`: Card hidden by negative keyword filter.
+  - `tp-category-filtered`: Card hidden by category exclusion blacklist.
+  - `tp-min-offers-filtered`: Card hidden due to fewer offers than `MIN_OFFERS` threshold.
+  - `tp-stock-filtered`: Card hidden due to failing delivery availability criteria.
 
 ---
 
-## 3. Price Parsing logic
-Toppreise price text formats:
-- Examples: `CHF 359.95`, `CHF 1'234.50`, `CHF 1,234.50`.
-- Processing:
-  1. Strip out non-numeric characters except digits, comma `,`, dot `.`, and single quote `'`.
-  2. Remove single quotes `'` (thousands separators).
-  3. Replace commas `,` with dots `.` if any.
-  4. Parse as Float.
+## 2. Element Selectors & Extraction Rules
+
+### Negative Text Filter
+- Card Title: `.titleLink, .title`
+- Specs / Description: `.specs, .description`
+- Logic: Case-insensitive substring match against comma/newline separated negative terms array.
+
+### Category Filter
+- Selector: `card.querySelector('a[href*="/katalog/"], .categoryLink, .breadcrumb a, .category')`
+- Logic: Dynamic scanner populates `pageCategories` Set. Cards matching `EXCLUDED_CATEGORIES` array are hidden via CSS `.tp-category-filtered`.
+
+### Offer Count Extraction
+- Regex Extraction: `card.textContent.match(/(\d+)\s*(?:Angebote|Angebot)/i)`
+- Fallback: `card.querySelectorAll('.Plugin_DealerRelProdPriceInfo').length`
+- Re-sorting: Parent DOM container node re-appends sorted card element array when `SORT_BY_OFFERS` is active (`'desc'` or `'asc'`).
+
+### Availability / Stock Filter
+- Selectors: `.availability`, `.stock`, `.delivery`, `.stockStatus`, `[title*="lager"]`, `[title*="lieferbar"]`, `[title*="Lieferzeit"]`
+- Modes:
+  - `'all'`: No stock restrictions.
+  - `'in-stock'`: Requires at least one dealer with a known delivery timeline (green/yellow indicator).
+  - `'immediate-only'`: Requires at least one dealer with immediate stock ("ab Lager", "sofort", "1-2 Werktage").
 
 ---
 
-## 4. Lifecycle & Dynamic Updates
-
-Toppreise.ch updates listings via AJAX when checkboxes are clicked or sorting is modified.
-- **MutationObserver**: Monitor the document tree (specifically `.pageContent` or `body`) for changes.
-- **Debounce**: Throttle execution by 150-250ms to prevent thrashing during rapid DOM updates.
-- **Reset**: If no store filter is active, strip all highlighting/hiding classes so the page renders normally.
+## 3. Filter Summary Status Bar
+- ID: `#tp-filter-summary-bar`
+- Behavior: Computes counts of hidden cards per filter reason (`counts.neg`, `counts.cat`, `counts.min`, `counts.stock`).
+- Feature: Quick toggle button adds/removes `.tp-reveal-filtered` on `document.body` to outline filtered products in dashed amber for previewing without clearing settings.

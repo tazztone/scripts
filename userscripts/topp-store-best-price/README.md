@@ -1,33 +1,32 @@
-# Toppreise.ch Store Best Price Highlighter & Filter
+# Toppreise.ch Power Filter & Best Price Enhancer
 
-Userscript that highlights or filters products on Toppreise.ch based on whether a filtered store currently offers the cheapest price (or within a customizable margin %).
+Userscript that highlights best prices, excludes unwanted keywords, filters categories, filters/sorts by offer count, and enforces delivery stock availability on Toppreise.ch.
 
 ![Toppreise Store Best Price Highlighter](Best%20Price%20Highlighter%20Filter.webp)
 
 ## 🚀 Installation
 
-### 👉 [**CLICK HERE TO INSTALL USERSCRIPT**](https://github.com/tazztone/scripts/raw/refs/heads/main/userscripts/topp-store-best-price/topp-store-best-price.user.js?v=0.3.0)
+### 👉 [**CLICK HERE TO INSTALL USERSCRIPT**](https://github.com/tazztone/scripts/raw/refs/heads/main/userscripts/topp-store-best-price/topp-store-best-price.user.js?v=0.4.0)
 *(Requires Violentmonkey / Tampermonkey)*
 
-## Logic
-When you filter a search page or product listing by a dealer/store (e.g. `Anbieter: Media Markt`):
-1. The script automatically detects the filtered store name from the active filters.
-2. It parses each product card to find the store-specific price.
-3. Compares the store's price with the best price of the item.
-4. Highlights the product with a beautiful emerald green border and a "Best Price" badge if the store is the cheapest.
-5. Dims (or completely hides) products where the store is not the cheapest.
+## Features
 
-If no store filter is active, the script stays inactive and the page renders normally.
+1. **Händler Bestpreis Highlights**: When filtering by a dealer/store (e.g. `Anbieter: Media Markt`), detects the store's price and highlights cheapest items with an emerald green border & "Best Price" badge, while dimming or hiding non-cheapest products.
+2. **Negativer Textfilter (Ausschluss)**: Exclude products containing unwanted keywords (e.g. `Hülle, Case, Refurbished, Gebraucht`) from title or spec text.
+3. **Kategorien-Filter (Neue Toppreise)**: Dynamically scans categories on the page and provides interactive pills to permanently hide unwanted categories (e.g. *Handyzubehör*, *Parfum*).
+4. **Angebote & Sortierung**: Filter out marketplace items with fewer than $N$ offers, plus optional client-side re-sorting by total offer count.
+5. **Verfügbarkeits- & Lieferbarkeitsfilter**: Enforce stock delivery requirements (`[Alle]`, `[Lieferbar]`, `[Sofort ab Lager]`).
+6. **Filter-Zähler Statusleiste**: Floating status summary bar displaying how many products were hidden and why, with a 1-click toggle to temporarily reveal filtered items.
 
 ## Configuration
 
-You can configure the script directly on Toppreise.ch! A small floating **gear button** appears in the bottom-right corner of the window. Clicking it opens a premium, glassmorphic settings panel where you can edit and apply configurations instantly:
+Click the floating **gear button** in the bottom corner of Toppreise.ch to open the glassmorphic settings panel:
 
-- **Filter Mode**: `'dim'` (reduce opacity of non-cheapest listings), `'hide'` (remove from view), or `'highlight-only'` (only show badges).
-- **Price Margin Tolerance (%)**: The percentage difference allowed for the store to still be considered "cheapest".
-- **Non-Cheapest Opacity**: Opacity level for dimmed listings (5% to 95%).
-- **Compare Shipping**: Compare prices including or excluding shipping costs.
+- **Filter Mode**: `'dim'` (reduce opacity of non-cheapest listings), `'hide'` (remove from view), or `'highlight-only'`.
+- **Preis-Toleranz (%)**: Percentage difference allowed for the store to still be considered "cheapest".
+- **Negativer Textfilter**: Comma-separated list of keywords to hide.
+- **Kategorien-Filter**: Clickable pills to blacklist specific categories.
+- **Mindestanzahl Angebote & Sortierung**: Set threshold for minimum dealer offers and sort order.
+- **Verfügbarkeits-Filter**: Filter products by immediate stock or known delivery status.
 
-These settings are saved persistently in your browser using the userscript manager's `GM_getValue` and `GM_setValue` APIs (with an automatic `localStorage` fallback).
-
-For manual default settings, you can also edit the `DEFAULTS` block at the top of the userscript.
+Settings are saved persistently via `GM_setValue` / `GM_getValue` APIs.
