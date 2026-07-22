@@ -58,9 +58,10 @@ This document details the DOM structure, selection strategies, and API endpoints
      transition: border 0.3s ease, box-shadow 0.3s ease !important;
    }
    ```
-5. **Inline Liking Event**:
-   Attach click listener to heart icon container on cards.
-   Intermittent click events (`e.preventDefault()`, `e.stopPropagation()`) prevent navigating to the model card while executing the REST like/unlike request in the background.
+5. **Inline Liking Event & Card Identification**:
+   - **Model ID Resolution**: Cards contain multiple `<a>` tags (e.g. org avatar `/google` before model link `/google/gemma-7b`). Using `querySelectorAll('a[href^="/"]')` and filtering for 2-segment non-system routes guarantees accurate `modelId` resolution across all list styles.
+   - **Click Interception**: Attach capture-phase listeners (`mousedown`, `mouseup`, `click`) to heart containers with `e.preventDefault()`, `e.stopPropagation()`, and `e.stopImmediatePropagation()`. This prevents the parent `<a>` anchor tag from triggering page navigation.
+   - **Session Independence**: Rest requests to `POST /api/models/${modelId}/like` and `DELETE /api/models/${modelId}/like` rely on standard HTTP session cookies and operate independently of username detection. 401/403 responses gracefully prompt for login if unauthenticated.
 
 ---
 

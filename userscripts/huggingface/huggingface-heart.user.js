@@ -237,6 +237,8 @@ const MODAL_STYLES = `
   let isFetchingLikes = false;
 
   const buildHeartStyle = () => CONFIG.ENABLED ? `
+    svg.hf-heart-icon,
+    svg[data-hf-heart="true"],
     svg:has(path[d^="M22.45"]),
     svg:has(path[d^="M22.5,4"]) {
       color: ${CONFIG.COLOR_IDLE} !important;
@@ -245,6 +247,8 @@ const MODAL_STYLES = `
       transform-origin: center !important;
       transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.2s ease, filter 0.2s ease !important;
     }
+    svg.hf-heart-icon:hover,
+    svg[data-hf-heart="true"]:hover,
     svg:has(path[d^="M22.45"]):hover,
     svg:has(path[d^="M22.5,4"]):hover {
       transform: scale(${CONFIG.SCALE_HOVER}) !important;
@@ -252,6 +256,9 @@ const MODAL_STYLES = `
       filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.65)) !important;
       cursor: pointer;
     }
+    .hf-inline-like-btn,
+    div:has(> svg.hf-heart-icon),
+    button:has(> svg.hf-heart-icon),
     div:has(> svg:has(path[d^="M22.45"])),
     div:has(> svg:has(path[d^="M22.5,4"])),
     button:has(> svg:has(path[d^="M22.45"])),
@@ -362,16 +369,44 @@ const MODAL_STYLES = `
     }
   }
 
+  const RESERVED_PREFIXES = new Set([
+    'models', 'datasets', 'spaces', 'docs', 'posts', 'papers', 'settings', 'login', 'logout', 'join', 'pricing', 'notifications', 'search'
+  ]);
+
+  function getModelIdFromCard(card) {
+    const anchors = card.querySelectorAll('a[href^="/"]');
+    for (const anchor of anchors) {
+      const href = anchor.getAttribute('href');
+      if (!href) continue;
+      const cleanPath = href.split('?')[0].split('#')[0].replace(/^\//, '');
+      const parts = cleanPath.split('/');
+      if (parts.length === 2 && parts[0] && parts[1] && !RESERVED_PREFIXES.has(parts[0])) {
+        return cleanPath;
+      }
+    }
+    return null;
+  }
+
+  function findHeartSvg(container) {
+    const svgs = container.querySelectorAll('svg');
+    for (const svg of svgs) {
+      const path = svg.querySelector('path');
+      if (!path) continue;
+      const d = path.getAttribute('d') || '';
+      if (d.includes('22.5') || d.includes('22.45') || (d.startsWith('M22.') && d.includes('29')) || (d.includes('M16') && d.includes('29'))) {
+        svg.dataset.hfHeart = 'true';
+        svg.classList.add('hf-heart-icon');
+        return svg;
+      }
+    }
+    return null;
+  }
+
   function processModelCards() {
     const cards = document.querySelectorAll('article.overview-card-wrapper');
     cards.forEach(card => {
-      const anchor = card.querySelector('a[href^="/"]');
-      if (!anchor) return;
-      const href = anchor.getAttribute('href');
-      if (!href) return;
-
-      const modelId = href.split('?')[0].split('#')[0].replace(/^\//, '');
-      if (modelId.split('/').length !== 2) return;
+      const modelId = getModelIdFromCard(card);
+      if (!modelId) return;
 
       const isLiked = likedModelIds.has(modelId);
 
@@ -392,72 +427,90 @@ const MODAL_STYLES = `
   }
 
   function setupHeartButton(card, modelId) {
-    const heartSvg = card.querySelector('svg:has(path[d^="M22.5,4"]), svg:has(path[d^="M22.45"])');
+    const heartSvg = findHeartSvg(card);
     if (!heartSvg) return;
 
     let heartContainer = heartSvg.closest('.hf-inline-like-btn');
     if (!heartContainer) {
-      const parent = heartSvg.parentElement;
-      if (parent && parent.classList.contains('flex') && parent.classList.contains('items-center')) {
-        heartContainer = parent;
-        heartContainer.classList.add('hf-inline-like-btn');
-        heartContainer.setAttribute('title', 'Click to like/unlike model inline');
-      }
+      heartContainer = heartSvg.parentElement || heartSvg;
+      heartContainer.classList.add('hf-inline-like-btn');
+      heartContainer.setAttribute('title', 'Click to like/unlike model inline');
+      heartContainer.style.cursor = 'pointer';
     }
 
-    if (heartContainer && !heartContainer.dataset.hfBound) {
-      heartContainer.dataset.hfBound = 'true';
-      heartContainer.addEventListener('click', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
+    if (heartContainer.dataset.hfBound === modelId) return;
+    heartContainer.dataset.hfBound = modelId;
 
-        if (!currentUser) {
+    const stopNav = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+    };
+
+    heartContainer.addEventListener('mousedown', stopNav, true);
+    heartContainer.addEventListener('mouseup', stopNav, true);
+
+    heartContainer.addEventListener('click', async (e) => {
+      stopNav(e);
+
+      const isCurrentlyLiked = likedModelIds.has(modelId);
+      const endpoint = `/api/models/${encodeURIComponent(modelId)}/like`;
+      const method = isCurrentlyLiked ? 'DELETE' : 'POST';
+
+      // Optimistic UI update
+      if (isCurrentlyLiked) {
+        likedModelIds.delete(modelId);
+        card.classList.remove('hf-is-liked');
+        if (CONFIG.ENABLED && CONFIG.BORDER_UNLIKED_ENABLED) card.classList.add('hf-is-unliked');
+      } else {
+        likedModelIds.add(modelId);
+        card.classList.remove('hf-is-unliked');
+        card.classList.add('hf-is-liked');
+      }
+
+      updateLikeCountText(heartContainer, !isCurrentlyLiked);
+
+      try {
+        const res = await fetch(endpoint, {
+          method,
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (res.status === 401 || res.status === 403) {
           alert('Please log in to Hugging Face to like models directly.');
+          revertLikeState(card, modelId, isCurrentlyLiked, heartContainer);
           return;
         }
 
-        const isCurrentlyLiked = likedModelIds.has(modelId);
-        const endpoint = `/api/models/${encodeURIComponent(modelId)}/like`;
-        const method = isCurrentlyLiked ? 'DELETE' : 'POST';
-
-        // Optimistic UI update
-        if (isCurrentlyLiked) {
-          likedModelIds.delete(modelId);
-          card.classList.remove('hf-is-liked');
-          if (CONFIG.ENABLED && CONFIG.BORDER_UNLIKED_ENABLED) card.classList.add('hf-is-unliked');
+        if (!res.ok) {
+          console.error('[HF Yellow Hearts] Failed to update like status, HTTP:', res.status);
+          revertLikeState(card, modelId, isCurrentlyLiked, heartContainer);
         } else {
-          likedModelIds.add(modelId);
-          card.classList.remove('hf-is-unliked');
-          card.classList.add('hf-is-liked');
-        }
-
-        updateLikeCountText(heartContainer, !isCurrentlyLiked);
-
-        try {
-          const res = await fetch(endpoint, { method });
-          if (!res.ok) {
-            // Revert on error
-            if (isCurrentlyLiked) {
-              likedModelIds.add(modelId);
-            } else {
-              likedModelIds.delete(modelId);
-            }
-            processModelCards();
-            updateLikeCountText(heartContainer, isCurrentlyLiked);
+          if (currentUser) {
+            refreshLikesList();
           }
-        } catch (err) {
-          console.error('[HF Yellow Hearts] Failed to update like status:', err);
-          if (isCurrentlyLiked) {
-            likedModelIds.add(modelId);
-          } else {
-            likedModelIds.delete(modelId);
-          }
-          processModelCards();
-          updateLikeCountText(heartContainer, isCurrentlyLiked);
         }
-      }, true);
+      } catch (err) {
+        console.error('[HF Yellow Hearts] Failed to update like status:', err);
+        revertLikeState(card, modelId, isCurrentlyLiked, heartContainer);
+      }
+    }, true);
+  }
+
+  function revertLikeState(card, modelId, wasLiked, container) {
+    if (wasLiked) {
+      likedModelIds.add(modelId);
+      card.classList.remove('hf-is-unliked');
+      card.classList.add('hf-is-liked');
+    } else {
+      likedModelIds.delete(modelId);
+      card.classList.remove('hf-is-liked');
+      if (CONFIG.ENABLED && CONFIG.BORDER_UNLIKED_ENABLED) card.classList.add('hf-is-unliked');
     }
+    updateLikeCountText(container, wasLiked);
   }
 
   function updateLikeCountText(container, isNowLiked) {
