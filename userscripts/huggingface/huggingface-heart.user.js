@@ -246,6 +246,26 @@ const MODAL_STYLES = `
     article.overview-card-wrapper.hf-is-liked {
       border: 1px solid rgba(255, 255, 255, 0.05) !important;
     }
+    article.overview-card-wrapper.hf-is-unliked svg.hf-heart-icon,
+    article.overview-card-wrapper.hf-is-unliked .hf-inline-like-btn svg {
+      color: ${CONFIG.COLOR_IDLE} !important;
+      fill: none !important;
+      transform: scale(${CONFIG.SCALE_IDLE}) !important;
+      transform-origin: center !important;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.2s ease, filter 0.2s ease !important;
+    }
+    article.overview-card-wrapper.hf-is-unliked svg.hf-heart-icon path,
+    article.overview-card-wrapper.hf-is-unliked .hf-inline-like-btn svg path {
+      fill: none !important;
+      stroke: currentColor !important;
+      stroke-width: 2 !important;
+    }
+    article.overview-card-wrapper.hf-is-unliked .hf-inline-like-btn:hover svg {
+      transform: scale(${CONFIG.SCALE_HOVER}) !important;
+      color: ${CONFIG.COLOR_HOVER} !important;
+      filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.65)) !important;
+      cursor: pointer;
+    }
     .hf-inline-like-btn {
       cursor: pointer !important;
       user-select: none !important;
@@ -390,24 +410,30 @@ const MODAL_STYLES = `
     const heartSvg = findHeartSvg(card);
     if (heartSvg) {
       const path = heartSvg.querySelector('path');
-      heartSvg.style.removeProperty('color');
-      heartSvg.style.removeProperty('fill');
-      heartSvg.style.removeProperty('filter');
-      heartSvg.style.removeProperty('transform');
-
-      if (path) {
-        path.style.removeProperty('fill');
-        path.style.removeProperty('color');
-      }
 
       if (isLiked) {
         heartSvg.classList.add('text-red-500');
-        heartSvg.classList.remove('text-gray-400');
-        if (path) path.setAttribute('fill', 'currentColor');
+        heartSvg.classList.remove('text-gray-400', 'hf-heart-icon');
+        heartSvg.style.setProperty('color', '#ef4444', 'important');
+        heartSvg.style.setProperty('fill', 'currentColor', 'important');
+        heartSvg.style.removeProperty('filter');
+        heartSvg.style.removeProperty('transform');
+
+        if (path) {
+          path.style.setProperty('fill', 'currentColor', 'important');
+          path.style.removeProperty('stroke');
+        }
       } else {
         heartSvg.classList.remove('text-red-500');
-        heartSvg.classList.add('text-gray-400');
-        if (path) path.setAttribute('fill', 'none');
+        heartSvg.classList.add('text-gray-400', 'hf-heart-icon');
+        heartSvg.style.setProperty('color', CONFIG.COLOR_IDLE || '#fbbf24', 'important');
+        heartSvg.style.setProperty('fill', 'none', 'important');
+
+        if (path) {
+          path.style.setProperty('fill', 'none', 'important');
+          path.style.setProperty('stroke', 'currentColor', 'important');
+          path.style.setProperty('stroke-width', '2', 'important');
+        }
       }
     }
   }
