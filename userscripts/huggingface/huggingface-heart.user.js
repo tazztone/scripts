@@ -402,26 +402,42 @@ const MODAL_STYLES = `
     return null;
   }
 
+  function updateCardVisual(card, modelId) {
+    const isLiked = likedModelIds.has(modelId);
+
+    if (CONFIG.ENABLED && CONFIG.BORDER_UNLIKED_ENABLED) {
+      if (isLiked) {
+        card.classList.remove('hf-is-unliked');
+        card.classList.add('hf-is-liked');
+      } else {
+        card.classList.remove('hf-is-liked');
+        card.classList.add('hf-is-unliked');
+      }
+    } else {
+      card.classList.remove('hf-is-unliked', 'hf-is-liked');
+    }
+
+    const heartSvg = findHeartSvg(card);
+    if (heartSvg) {
+      if (isLiked) {
+        heartSvg.dataset.hfHeart = 'true';
+        heartSvg.classList.add('hf-heart-icon');
+      } else {
+        delete heartSvg.dataset.hfHeart;
+        heartSvg.classList.remove('hf-heart-icon');
+        heartSvg.style.removeProperty('color');
+        heartSvg.style.removeProperty('fill');
+      }
+    }
+  }
+
   function processModelCards() {
     const cards = document.querySelectorAll('article.overview-card-wrapper');
     cards.forEach(card => {
       const modelId = getModelIdFromCard(card);
       if (!modelId) return;
 
-      const isLiked = likedModelIds.has(modelId);
-
-      if (CONFIG.ENABLED && CONFIG.BORDER_UNLIKED_ENABLED) {
-        if (isLiked) {
-          card.classList.remove('hf-is-unliked');
-          card.classList.add('hf-is-liked');
-        } else {
-          card.classList.remove('hf-is-liked');
-          card.classList.add('hf-is-unliked');
-        }
-      } else {
-        card.classList.remove('hf-is-unliked', 'hf-is-liked');
-      }
-
+      updateCardVisual(card, modelId);
       setupHeartButton(card, modelId);
     });
   }
@@ -441,34 +457,37 @@ const MODAL_STYLES = `
     if (heartContainer.dataset.hfBound === modelId) return;
     heartContainer.dataset.hfBound = modelId;
 
-    const stopNav = (e) => {
+    // Prevent parent <a> link drag/selection without calling preventDefault on mousedown
+    // (calling preventDefault on mousedown cancels browser click generation)
+    heartContainer.addEventListener('mousedown', (e) => {
+      e.stopPropagation();
+    }, true);
+
+    heartContainer.addEventListener('mouseup', (e) => {
+      e.stopPropagation();
+    }, true);
+
+    heartContainer.addEventListener('click', async (e) => {
       e.preventDefault();
       e.stopPropagation();
       if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-    };
-
-    heartContainer.addEventListener('mousedown', stopNav, true);
-    heartContainer.addEventListener('mouseup', stopNav, true);
-
-    heartContainer.addEventListener('click', async (e) => {
-      stopNav(e);
 
       const isCurrentlyLiked = likedModelIds.has(modelId);
-      const endpoint = `/api/models/${encodeURIComponent(modelId)}/like`;
-      const method = isCurrentlyLiked ? 'DELETE' : 'POST';
+      const nextLikedState = !isCurrentlyLiked;
+      const endpoint = `/api/models/${modelId}/like`;
+      const method = nextLikedState ? 'POST' : 'DELETE';
+
+      console.log(`[HF Yellow Hearts] Toggling like for ${modelId}: ${isCurrentlyLiked} -> ${nextLikedState}`);
 
       // Optimistic UI update
-      if (isCurrentlyLiked) {
-        likedModelIds.delete(modelId);
-        card.classList.remove('hf-is-liked');
-        if (CONFIG.ENABLED && CONFIG.BORDER_UNLIKED_ENABLED) card.classList.add('hf-is-unliked');
-      } else {
+      if (nextLikedState) {
         likedModelIds.add(modelId);
-        card.classList.remove('hf-is-unliked');
-        card.classList.add('hf-is-liked');
+      } else {
+        likedModelIds.delete(modelId);
       }
 
-      updateLikeCountText(heartContainer, !isCurrentlyLiked);
+      updateCardVisual(card, modelId);
+      updateLikeCountText(heartContainer, nextLikedState);
 
       try {
         const res = await fetch(endpoint, {
@@ -486,7 +505,7 @@ const MODAL_STYLES = `
         }
 
         if (!res.ok) {
-          console.error('[HF Yellow Hearts] Failed to update like status, HTTP:', res.status);
+          console.error('[HF Yellow Hearts] Like request failed, HTTP status:', res.status);
           revertLikeState(card, modelId, isCurrentlyLiked, heartContainer);
         } else {
           if (currentUser) {
@@ -503,13 +522,10 @@ const MODAL_STYLES = `
   function revertLikeState(card, modelId, wasLiked, container) {
     if (wasLiked) {
       likedModelIds.add(modelId);
-      card.classList.remove('hf-is-unliked');
-      card.classList.add('hf-is-liked');
     } else {
       likedModelIds.delete(modelId);
-      card.classList.remove('hf-is-liked');
-      if (CONFIG.ENABLED && CONFIG.BORDER_UNLIKED_ENABLED) card.classList.add('hf-is-unliked');
     }
+    updateCardVisual(card, modelId);
     updateLikeCountText(container, wasLiked);
   }
 
