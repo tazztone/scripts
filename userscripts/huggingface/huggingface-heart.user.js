@@ -237,38 +237,6 @@ const MODAL_STYLES = `
   let isFetchingLikes = false;
 
   const buildHeartStyle = () => CONFIG.ENABLED ? `
-    svg.hf-heart-icon,
-    svg[data-hf-heart="true"],
-    svg.hf-is-liked-heart {
-      color: ${CONFIG.COLOR_IDLE} !important;
-      fill: ${CONFIG.COLOR_IDLE} !important;
-      transform: scale(${CONFIG.SCALE_IDLE}) !important;
-      transform-origin: center !important;
-      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.2s ease, filter 0.2s ease !important;
-    }
-    svg.hf-heart-icon path,
-    svg[data-hf-heart="true"] path,
-    svg.hf-is-liked-heart path {
-      fill: currentColor !important;
-    }
-    svg.hf-heart-icon:hover,
-    svg[data-hf-heart="true"]:hover,
-    svg.hf-is-liked-heart:hover {
-      transform: scale(${CONFIG.SCALE_HOVER}) !important;
-      color: ${CONFIG.COLOR_HOVER} !important;
-      fill: ${CONFIG.COLOR_HOVER} !important;
-      filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.65)) !important;
-      cursor: pointer;
-    }
-    .hf-inline-like-btn,
-    div:has(> svg.hf-heart-icon),
-    button:has(> svg.hf-heart-icon),
-    div:has(> svg:has(path[d^="M22.45"])),
-    div:has(> svg:has(path[d^="M22.5,4"])),
-    button:has(> svg:has(path[d^="M22.45"])),
-    button:has(> svg:has(path[d^="M22.5,4"])) {
-      overflow: visible !important;
-    }
     article.overview-card-wrapper.hf-is-unliked {
       border: 2px solid ${CONFIG.BORDER_UNLIKED_COLOR} !important;
       border-radius: 12px !important;
@@ -346,7 +314,7 @@ const MODAL_STYLES = `
         await refreshLikesList();
       }
     } catch (e) {
-      console.warn('[HF Yellow Hearts] Could not detect user session:', e);
+      console.warn('[HF Hearts] Could not detect user session:', e);
     }
   }
 
@@ -367,7 +335,7 @@ const MODAL_STYLES = `
         processModelCards();
       }
     } catch (e) {
-      console.warn('[HF Yellow Hearts] Error fetching likes:', e);
+      console.warn('[HF Hearts] Error fetching likes:', e);
     } finally {
       isFetchingLikes = false;
     }
@@ -398,8 +366,6 @@ const MODAL_STYLES = `
       if (!path) continue;
       const d = path.getAttribute('d') || '';
       if (d.includes('22.5') || d.includes('22.45') || (d.startsWith('M22.') && d.includes('29')) || (d.includes('M16') && d.includes('29'))) {
-        svg.dataset.hfHeart = 'true';
-        svg.classList.add('hf-heart-icon');
         return svg;
       }
     }
@@ -424,30 +390,24 @@ const MODAL_STYLES = `
     const heartSvg = findHeartSvg(card);
     if (heartSvg) {
       const path = heartSvg.querySelector('path');
+      heartSvg.style.removeProperty('color');
+      heartSvg.style.removeProperty('fill');
+      heartSvg.style.removeProperty('filter');
+      heartSvg.style.removeProperty('transform');
+
+      if (path) {
+        path.style.removeProperty('fill');
+        path.style.removeProperty('color');
+      }
+
       if (isLiked) {
-        heartSvg.dataset.hfHeart = 'true';
-        heartSvg.classList.add('hf-heart-icon', 'hf-is-liked-heart');
-        heartSvg.classList.remove('hf-is-unliked-heart');
-
-        heartSvg.style.setProperty('color', CONFIG.COLOR_IDLE || '#fbbf24', 'important');
-        heartSvg.style.setProperty('fill', CONFIG.COLOR_IDLE || '#fbbf24', 'important');
-
-        if (path) {
-          path.style.setProperty('fill', 'currentColor', 'important');
-          path.style.setProperty('color', CONFIG.COLOR_IDLE || '#fbbf24', 'important');
-        }
+        heartSvg.classList.add('text-red-500');
+        heartSvg.classList.remove('text-gray-400');
+        if (path) path.setAttribute('fill', 'currentColor');
       } else {
-        delete heartSvg.dataset.hfHeart;
-        heartSvg.classList.remove('hf-heart-icon', 'hf-is-liked-heart');
-        heartSvg.classList.add('hf-is-unliked-heart');
-
-        heartSvg.style.removeProperty('color');
-        heartSvg.style.removeProperty('fill');
-
-        if (path) {
-          path.style.removeProperty('fill');
-          path.style.removeProperty('color');
-        }
+        heartSvg.classList.remove('text-red-500');
+        heartSvg.classList.add('text-gray-400');
+        if (path) path.setAttribute('fill', 'none');
       }
     }
   }
