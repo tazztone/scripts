@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Toppreise.ch Power Filter & Best Price Enhancer
+// @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      0.4.0
-// @description  Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and enforces delivery stock availability on Toppreise.ch.
+// @version      0.5.0
+// @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, enforces delivery stock availability, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
 // @run-at       document-idle
@@ -13,18 +13,29 @@
 
 // ─── CONFIG DEFAULT VALUES ───────────────────────────────────────────────────
 const DEFAULTS = {
+  // Best Price & Highlighting
   MODE: 'dim',
   MARGIN_PERCENT: 0.0,
   DIM_OPACITY: 0.25,
   USE_SHIPPING_PRICE: true,
-  OBSERVER_DEBOUNCE_MS: 200,
-  DEBUG: true,
+  
+  // Power Filters
   NEGATIVE_TERMS: '',
   EXCLUDED_CATEGORIES: [],
   MIN_OFFERS: 0,
   SORT_BY_OFFERS: 'none',
   STOCK_FILTER: 'all',
-  ENABLE_FILTER_COUNTER: true
+  ENABLE_FILTER_COUNTER: true,
+  
+  // Price Alarm Automation
+  ALARM_ENABLED: true,
+  ALARM_TARGET_PERCENT: 0.60, // 60% of present value
+  ALARM_DURATION_DAYS: "730",  // 2 years (730 days)
+  ALARM_AUTO_SUBMIT: true,
+
+  // System
+  OBSERVER_DEBOUNCE_MS: 200,
+  DEBUG: true
 };
 
 // ─── STYLES ──────────────────────────────────────────────────────────────────
@@ -239,6 +250,10 @@ const STYLES = `
     color: #fff;
     box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
   }
+  .tp-segmented-control-blue input[type="radio"]:checked + label {
+    background: #3b82f6 !important;
+    box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3) !important;
+  }
 
   /* Range and Inputs */
   .tp-range-container {
@@ -254,6 +269,9 @@ const STYLES = `
     border-radius: 3px;
     outline: none;
     -webkit-appearance: none;
+  }
+  .tp-range-container.tp-blue input[type="range"] {
+    accent-color: #3b82f6;
   }
   .tp-range-container input[type="number"] {
     width: 65px;
@@ -375,6 +393,10 @@ const STYLES = `
     background-color: #10b981;
     border-color: rgba(16, 185, 129, 0.2);
   }
+  .tp-switch.tp-blue input:checked + .tp-slider {
+    background-color: #3b82f6;
+    border-color: rgba(59, 130, 246, 0.2);
+  }
   .tp-switch input:checked + .tp-slider:before {
     transform: translateX(20px);
     background-color: #fff;
@@ -466,13 +488,13 @@ const STYLES = `
 (() => {
   'use strict';
 
-  // Defensive fallback helper to get/set settings persistently
+  // Persistent GM storage helpers with localStorage fallback
   const _getValue = (key, def) => {
     try {
       if (typeof GM_getValue !== 'undefined') return GM_getValue(key, def);
     } catch (e) {}
     try {
-      const local = localStorage.getItem(`tp_best_price_${key}`);
+      const local = localStorage.getItem(`tp_suite_${key}`);
       return local !== null ? JSON.parse(local) : def;
     } catch (e) {}
     return def;
@@ -486,7 +508,7 @@ const STYLES = `
       }
     } catch (e) {}
     try {
-      localStorage.setItem(`tp_best_price_${key}`, JSON.stringify(val));
+      localStorage.setItem(`tp_suite_${key}`, JSON.stringify(val));
     } catch (e) {}
   };
 
@@ -521,7 +543,21 @@ const STYLES = `
 
     get ENABLE_FILTER_COUNTER() { return _getValue('ENABLE_FILTER_COUNTER', DEFAULTS.ENABLE_FILTER_COUNTER); },
     set ENABLE_FILTER_COUNTER(v) { _setValue('ENABLE_FILTER_COUNTER', v); },
-    
+
+    // Price Alarm Config
+    get ALARM_ENABLED() { return _getValue('ALARM_ENABLED', DEFAULTS.ALARM_ENABLED); },
+    set ALARM_ENABLED(v) { _setValue('ALARM_ENABLED', v); },
+
+    get ALARM_TARGET_PERCENT() { return parseFloat(_getValue('ALARM_TARGET_PERCENT', DEFAULTS.ALARM_TARGET_PERCENT)); },
+    set ALARM_TARGET_PERCENT(v) { _setValue('ALARM_TARGET_PERCENT', parseFloat(v)); },
+
+    get ALARM_DURATION_DAYS() { return String(_getValue('ALARM_DURATION_DAYS', DEFAULTS.ALARM_DURATION_DAYS)); },
+    set ALARM_DURATION_DAYS(v) { _setValue('ALARM_DURATION_DAYS', String(v)); },
+
+    get ALARM_AUTO_SUBMIT() { return _getValue('ALARM_AUTO_SUBMIT', DEFAULTS.ALARM_AUTO_SUBMIT); },
+    set ALARM_AUTO_SUBMIT(v) { _setValue('ALARM_AUTO_SUBMIT', v); },
+
+    // System
     get OBSERVER_DEBOUNCE_MS() { return parseInt(_getValue('OBSERVER_DEBOUNCE_MS', DEFAULTS.OBSERVER_DEBOUNCE_MS)); },
     set OBSERVER_DEBOUNCE_MS(v) { _setValue('OBSERVER_DEBOUNCE_MS', parseInt(v)); },
     
@@ -529,7 +565,7 @@ const STYLES = `
     set DEBUG(v) { _setValue('DEBUG', v); }
   };
 
-  const log = (...args) => { if (CONFIG.DEBUG) console.log('[Topp-Power-Filter]', ...args); };
+  const log = (...args) => { if (CONFIG.DEBUG) console.log('[Toppreise-Suite]', ...args); };
 
   // Set of categories detected on page
   const pageCategories = new Set();
@@ -550,7 +586,7 @@ const STYLES = `
 
   updateBodyClasses();
 
-  // Helper: Normalize names for robust comparison
+  // Helper: Normalize names
   function normalizeName(name) {
     if (!name) return '';
     return name.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -670,7 +706,7 @@ const STYLES = `
     }
   }
 
-  // Core Processing Function
+  // ─── MODULE 1: PRODUCT LISTING PROCESSOR ─────────────────────────────────────
   function processListings() {
     log('Processing product listings...');
 
@@ -686,18 +722,13 @@ const STYLES = `
       return normalizeName(clone.textContent);
     }).filter(name => name.length > 0);
 
-    // Negative Terms Array
     const rawTerms = CONFIG.NEGATIVE_TERMS || '';
     const termsList = rawTerms.split(/[,;\n]/).map(t => t.trim().toLowerCase()).filter(t => t.length > 0);
-
-    // Excluded Categories Array
     const excludedCats = CONFIG.EXCLUDED_CATEGORIES || [];
-
-    // Filter Counters
     const counts = { neg: 0, cat: 0, min: 0, stock: 0 };
 
     cards.forEach(card => {
-      // 1. Category extraction & scanning
+      // 1. Category extraction
       const catName = extractCardCategory(card);
       if (catName) pageCategories.add(catName);
 
@@ -792,7 +823,7 @@ const STYLES = `
       }
     });
 
-    // 7. Client-Side Re-sorting by Offer Count
+    // 7. Re-sorting by Offer Count
     if (CONFIG.SORT_BY_OFFERS !== 'none' && cards.length > 1) {
       const parent = cards[0].parentElement;
       if (parent) {
@@ -806,17 +837,98 @@ const STYLES = `
       }
     }
 
-    // 8. Update Summary Counter Bar
+    // 8. Update Summary Bar
     updateSummaryBar(counts);
   }
 
-  // Ensure Skeleton Modal is loaded
+  // ─── MODULE 2: PRICE ALARM AUTOMATION ────────────────────────────────────────
+  function processPriceAlarmModal() {
+    if (!CONFIG.ALARM_ENABLED) return;
+
+    const modalContainer = document.querySelector('.Plugin_NewInfoMailForm');
+    if (!modalContainer || modalContainer.dataset.tpAlarmProcessed === 'true') return;
+
+    modalContainer.dataset.tpAlarmProcessed = 'true';
+    log('Price Alarm modal detected! Automating configuration...');
+
+    // 1. Locate Dialog & Close Button references before submission
+    const dialogContainer = modalContainer.closest('.AbstractDialog');
+    const closeButton = dialogContainer ? dialogContainer.querySelector('.AbstractDialog_CloseButton') : null;
+
+    // 2. Extract present price
+    const priceEl = modalContainer.querySelector('.shippingPrice .Plugin_Price') ||
+                    modalContainer.querySelector('.productPrice .Plugin_Price') ||
+                    document.querySelector('.pageContent .priceContainer .Plugin_Price');
+
+    if (!priceEl) {
+      log('Could not parse present price for price alarm.');
+      return;
+    }
+
+    const presentValue = parsePrice(priceEl.textContent);
+    if (presentValue <= 0) {
+      log('Parsed price <= 0, skipping alarm automation.');
+      return;
+    }
+
+    const targetPrice = (presentValue * CONFIG.ALARM_TARGET_PERCENT).toFixed(2);
+    log(`Present Price: CHF ${presentValue} -> Setting Target Price: CHF ${targetPrice}`);
+
+    // 3. Set Target Price Input
+    const priceInput = modalContainer.querySelector('input#f_NewInfoMailForm_priceFrom') ||
+                       modalContainer.querySelector('input[name="im_nimf_pvf"]');
+    if (priceInput) {
+      priceInput.value = targetPrice;
+      priceInput.dispatchEvent(new Event('input', { bubbles: true }));
+      priceInput.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    // 4. Set Duration (2 years / 730 days)
+    const durationHidden = modalContainer.querySelector('input[name="im_nimf_du"]');
+    if (durationHidden) {
+      durationHidden.value = CONFIG.ALARM_DURATION_DAYS;
+      durationHidden.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    const durationOption = modalContainer.querySelector(`li[data-value="${CONFIG.ALARM_DURATION_DAYS}"]`);
+    if (durationOption) durationOption.click();
+
+    // 5. Check GDPR Terms checkbox
+    const termsCheckbox = modalContainer.querySelector('input#im_nimf_prtrm');
+    if (termsCheckbox) {
+      termsCheckbox.checked = true;
+      termsCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    // 6. Submit & Auto-Close
+    if (CONFIG.ALARM_AUTO_SUBMIT) {
+      const submitBtn = modalContainer.querySelector('input.f_submitbtn');
+      if (submitBtn) {
+        log('Auto-submitting price alarm...');
+        submitBtn.click();
+
+        // Polling loop to close dialog once form is detached
+        let polls = 0;
+        const autoCloseInterval = setInterval(() => {
+          polls++;
+          const isDetached = !document.contains(modalContainer);
+          if (isDetached) {
+            clearInterval(autoCloseInterval);
+            if (closeButton) closeButton.click();
+          } else if (polls >= 15) {
+            clearInterval(autoCloseInterval);
+          }
+        }, 200);
+      }
+    }
+  }
+
+  // ─── MODULE 3: UNIFIED GLASSMORPHIC SETTINGS UI ─────────────────────────────
   function ensureSkeleton() {
     let fabButton = document.getElementById('tp-settings-fab');
     if (!fabButton) {
       const fabContainer = document.createElement('div');
       fabContainer.innerHTML = `
-        <button id="tp-settings-fab" title="Configure Toppreise Enhancements">
+        <button id="tp-settings-fab" title="Configure Toppreise Suite">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -833,7 +945,7 @@ const STYLES = `
       modalContainer.innerHTML = `
         <div id="tp-settings-modal-backdrop">
           <div id="tp-settings-modal">
-            <h3>Toppreise Enhancements</h3>
+            <h3>Toppreise Suite Settings</h3>
             <div id="tp-settings-sections" style="display: flex; flex-direction: column; gap: 8px; max-height: 72vh; overflow-y: auto; padding-right: 4px;">
               <!-- Dynamic settings sections -->
             </div>
@@ -869,16 +981,15 @@ const STYLES = `
     return { fabButton, backdrop };
   }
 
-  // Setup UI Controls
   function setupUI() {
     ensureSkeleton();
 
-    let section = document.getElementById('tp-section-unified-filters');
+    let section = document.getElementById('tp-section-unified-suite');
     if (!section) {
       const sectionsHolder = document.getElementById('tp-settings-sections');
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = `
-        <div id="tp-section-unified-filters">
+        <div id="tp-section-unified-suite">
           
           <!-- Section 1: Händler Bestpreis -->
           <div class="tp-section-header">1. Händler Bestpreis Highlights</div>
@@ -964,7 +1075,7 @@ const STYLES = `
           </div>
 
           <!-- Section 5: Lieferbarkeit & Statusleiste -->
-          <div class="tp-section-header">5. Lieferbarkeit & Filter-Leiste</div>
+          <div class="tp-section-header">5. Lieferbarkeit & Statusleiste</div>
           <div class="tp-settings-group">
             <label>Verfügbarkeits-Filter</label>
             <div class="tp-segmented-control">
@@ -985,6 +1096,56 @@ const STYLES = `
             </div>
             <label class="tp-switch">
               <input type="checkbox" id="tp-counter-toggle">
+              <span class="tp-slider"></span>
+            </label>
+          </div>
+
+          <!-- Section 6: Preisalarm Auto-Filler -->
+          <div class="tp-section-header" style="color: #3b82f6;">6. Preisalarm Auto-Filler</div>
+          
+          <div class="tp-settings-group tp-switch-container">
+            <div class="tp-switch-label">
+              <label>Preisalarm Auto-Fill aktivieren</label>
+              <span class="tp-switch-desc">Beim Klick auf die Glocke Formular automatisch ausfüllen</span>
+            </div>
+            <label class="tp-switch tp-blue">
+              <input type="checkbox" id="tp-alarm-enabled-toggle">
+              <span class="tp-slider"></span>
+            </label>
+          </div>
+
+          <div class="tp-settings-group">
+            <label>Zielpreis (% vom aktuellen Preis)</label>
+            <div class="tp-range-container tp-blue">
+              <input type="range" id="tp-alarm-target-range" min="10" max="95" step="5" value="60">
+              <input type="number" id="tp-alarm-target-val" min="1" max="99" step="1" value="60">
+            </div>
+          </div>
+
+          <div class="tp-settings-group">
+            <label>Laufzeit Dauer</label>
+            <div class="tp-segmented-control tp-segmented-control-blue">
+              <input type="radio" id="tp-dur-90" name="tp-alarm-duration" value="90">
+              <label for="tp-dur-90">3 Monate</label>
+
+              <input type="radio" id="tp-dur-180" name="tp-alarm-duration" value="180">
+              <label for="tp-dur-180">6 Monate</label>
+
+              <input type="radio" id="tp-dur-365" name="tp-alarm-duration" value="365">
+              <label for="tp-dur-365">1 Jahr</label>
+
+              <input type="radio" id="tp-dur-730" name="tp-alarm-duration" value="730">
+              <label for="tp-dur-730">2 Jahre</label>
+            </div>
+          </div>
+
+          <div class="tp-settings-group tp-switch-container">
+            <div class="tp-switch-label">
+              <label>Automatisch Absenden & Schließen</label>
+              <span class="tp-switch-desc">Formular direkt einreichen und Dialog schließen</span>
+            </div>
+            <label class="tp-switch tp-blue">
+              <input type="checkbox" id="tp-alarm-autosubmit-toggle">
               <span class="tp-slider"></span>
             </label>
           </div>
@@ -1021,9 +1182,18 @@ const STYLES = `
 
     const counterToggle = document.getElementById('tp-counter-toggle');
 
+    const alarmEnabledToggle = document.getElementById('tp-alarm-enabled-toggle');
+    const alarmTargetRange = document.getElementById('tp-alarm-target-range');
+    const alarmTargetVal = document.getElementById('tp-alarm-target-val');
+    const alarmAutoSubmitToggle = document.getElementById('tp-alarm-autosubmit-toggle');
+
+    const dur90 = document.getElementById('tp-dur-90');
+    const dur180 = document.getElementById('tp-dur-180');
+    const dur365 = document.getElementById('tp-dur-365');
+    const dur730 = document.getElementById('tp-dur-730');
+
     let currentExcludedCats = [...(CONFIG.EXCLUDED_CATEGORIES || [])];
 
-    // Render Category Pills
     function renderCategoryPills() {
       catPillsContainer.innerHTML = '';
       const allCats = new Set([...pageCategories, ...currentExcludedCats]);
@@ -1050,7 +1220,6 @@ const STYLES = `
       });
     }
 
-    // Sync UI from Config
     function syncFieldsFromConfig() {
       const mode = CONFIG.MODE;
       if (mode === 'highlight-only') modeHighlight.checked = true;
@@ -1085,6 +1254,19 @@ const STYLES = `
 
       counterToggle.checked = CONFIG.ENABLE_FILTER_COUNTER !== false;
 
+      alarmEnabledToggle.checked = CONFIG.ALARM_ENABLED !== false;
+      const targetPct = Math.round(CONFIG.ALARM_TARGET_PERCENT * 100);
+      alarmTargetRange.value = targetPct;
+      alarmTargetVal.value = targetPct;
+
+      const dur = String(CONFIG.ALARM_DURATION_DAYS);
+      if (dur === '90') dur90.checked = true;
+      else if (dur === '180') dur180.checked = true;
+      else if (dur === '365') dur365.checked = true;
+      else dur730.checked = true;
+
+      alarmAutoSubmitToggle.checked = CONFIG.ALARM_AUTO_SUBMIT !== false;
+
       updateOpacityState(mode);
     }
 
@@ -1110,6 +1292,9 @@ const STYLES = `
 
     minOffersRange.addEventListener('input', (e) => minOffersVal.value = e.target.value);
     minOffersVal.addEventListener('input', (e) => minOffersRange.value = parseInt(e.target.value) || 0);
+
+    alarmTargetRange.addEventListener('input', (e) => alarmTargetVal.value = e.target.value);
+    alarmTargetVal.addEventListener('input', (e) => alarmTargetRange.value = parseInt(e.target.value) || 60);
 
     [modeHighlight, modeDim, modeHide].forEach(radio => {
       radio.addEventListener('change', () => {
@@ -1143,17 +1328,28 @@ const STYLES = `
 
       CONFIG.ENABLE_FILTER_COUNTER = counterToggle.checked;
 
+      CONFIG.ALARM_ENABLED = alarmEnabledToggle.checked;
+      CONFIG.ALARM_TARGET_PERCENT = Math.max(0.05, Math.min(0.99, (parseInt(alarmTargetVal.value) || 60) / 100));
+      
+      const checkedDur = document.querySelector('input[name="tp-alarm-duration"]:checked');
+      if (checkedDur) CONFIG.ALARM_DURATION_DAYS = checkedDur.value;
+
+      CONFIG.ALARM_AUTO_SUBMIT = alarmAutoSubmitToggle.checked;
+
       updateBodyClasses();
       processListings();
     });
   }
 
-  // Debounced MutationObserver
+  // ─── OBSERVER & INITIALIZATION ───────────────────────────────────────────────
   let debounceTimer = null;
   const observer = new MutationObserver(() => {
     try {
       clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(processListings, CONFIG.OBSERVER_DEBOUNCE_MS);
+      debounceTimer = setTimeout(() => {
+        processListings();
+        processPriceAlarmModal();
+      }, CONFIG.OBSERVER_DEBOUNCE_MS);
     } catch (e) {
       log('Observer error:', e);
     }
@@ -1166,11 +1362,15 @@ const STYLES = `
     characterData: false
   });
 
-  // Initialize
+  // Initialize UI controls, filters, and alarm listener
   setupUI();
   processListings();
+  processPriceAlarmModal();
 
-  // Safety net fallback
-  setInterval(processListings, 5000);
+  // Periodic safety check
+  setInterval(() => {
+    processListings();
+    processPriceAlarmModal();
+  }, 5000);
 
 })();
