@@ -23,8 +23,8 @@ const DEFAULTS = {
 const MODAL_STYLES = `
   #hf-settings-fab {
     position: fixed;
-    bottom: 24px;
-    right: 24px;
+    bottom: 8px;
+    right: 8px;
     width: 50px;
     height: 50px;
     border: 1px solid rgba(255, 255, 255, 0.1);
