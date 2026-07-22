@@ -1,14 +1,15 @@
-# Hugging Face Yellow Hearts
+# Hugging Face Yellow Hearts & Unliked Model Highlighter
 
-A lightweight, zero-JS-observer userscript to make the heart/like icons on the Hugging Face models page larger, pop out in a warm golden yellow, and feature premium micro-animations.
+A feature-rich userscript for Hugging Face (`https://huggingface.co/models`) that makes heart icons pop out in golden yellow, highlights unliked models with a glowing green border (similar to Toppreise best price highlighter), and enables direct inline model liking from list cards.
 
 ## Features
 
--   **Golden Yellow Themes**: Replaces default grey unliked hearts with a vibrant golden yellow (`#fbbf24`).
--   **Enlarged SVGs**: Increases the heart size by 35% by default.
--   **Pop-Out Hover Effect**: Magnifies the heart to 1.6x on hover and adds a beautiful, warm glowing drop shadow.
--   **Zero Performance Impact**: Leverages pure CSS injection and modern CSS `:has()` selector matching against the SVG path. Does not use JavaScript `MutationObserver` loops, avoiding CPU thrashing.
--   **Single Page Application Resiliency**: Since styling is applied via browser CSS matching, it naturally handles dynamic page transitions and lazy loaded elements instantly.
+- **Golden Yellow Hearts**: Replaces default grey unliked hearts with a vibrant golden yellow (`#fbbf24`).
+- **Unliked Model Highlighter**: Adds a distinct emerald green border (`#10b981`) with soft glow around unliked models in search and listing cards.
+- **Direct Inline Liking**: Click the heart icon on any model card in the list to instantly like/unlike the model without opening its page.
+- **Enlarged SVGs & Micro-animations**: Magnifies heart icons on hover with drop shadow glow effects.
+- **Configurable Floating FAB**: Interactive settings modal allows customizing colors, scales, and toggling borders on/off.
+- **Single Page Application Resiliency**: Uses debounced MutationObservers and CSS rules to handle dynamic page transitions and infinite scroll.
 
 ## Installation
 
@@ -30,12 +31,15 @@ Violentmonkey will detect the `.user.js` file and show an install dialog automat
 
 ## Configuration
 
-You can customize the scaling, colors, and behaviors by editing the `CONFIG` object at the top of the script:
+You can customize the scaling, colors, and behaviors using the floating gear icon in the bottom right corner, or by editing the `CONFIG` object at the top of the script:
 
 | Key | Default Value | Description |
 | :--- | :--- | :--- |
-| `ENABLED` | `true` | Turn the script on or off. |
-| `COLOR_IDLE` | `'#fbbf24'` | Color of the heart SVG when idle (CSS color). |
+| `ENABLED` | `true` | Turn overall heart styling on or off. |
+| `COLOR_IDLE` | `'#fbbf24'` | Color of the heart SVG when idle. |
 | `COLOR_HOVER` | `'#f59e0b'` | Color of the heart SVG when hovered. |
-| `SCALE_IDLE` | `'1.35'` | Scale multiplier of the heart SVG when idle. |
-| `SCALE_HOVER` | `'1.6'` | Scale multiplier of the heart SVG when hovered. |
+| `SCALE_IDLE` | `2` | Scale multiplier of the heart SVG when idle. |
+| `SCALE_HOVER` | `2` | Scale multiplier of the heart SVG when hovered. |
+| `BORDER_UNLIKED_ENABLED` | `true` | Enable green border highlighting around unliked models. |
+| `BORDER_UNLIKED_COLOR` | `'#10b981'` | Border color for unliked model cards. |
+| `BORDER_UNLIKED_GLOW` | `true` | Enable soft box-shadow glow around unliked model cards. |

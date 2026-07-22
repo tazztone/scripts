@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Hugging Face Yellow Hearts
+// @name         Hugging Face Yellow Hearts & Unliked Model Highlighter
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.1.0
-// @description  Make the heart icons on Hugging Face larger and pop out in yellow.
+// @version      1.2.0
+// @description  Make heart icons larger/yellow, highlight unliked models with a green border, and like models directly from list cards.
 // @author       tazztone
 // @match        https://huggingface.co/models*
 // @run-at       document-start
@@ -17,7 +17,10 @@ const DEFAULTS = {
   COLOR_IDLE: '#fbbf24',
   COLOR_HOVER: '#f59e0b',
   SCALE_IDLE: 2,
-  SCALE_HOVER: 2
+  SCALE_HOVER: 2,
+  BORDER_UNLIKED_ENABLED: true,
+  BORDER_UNLIKED_COLOR: '#10b981',
+  BORDER_UNLIKED_GLOW: true
 };
 
 const MODAL_STYLES = `
@@ -220,26 +223,62 @@ const MODAL_STYLES = `
     get SCALE_IDLE() { return parseFloat(getValue('SCALE_IDLE', DEFAULTS.SCALE_IDLE)); },
     set SCALE_IDLE(value) { setValue('SCALE_IDLE', parseFloat(value)); },
     get SCALE_HOVER() { return parseFloat(getValue('SCALE_HOVER', DEFAULTS.SCALE_HOVER)); },
-    set SCALE_HOVER(value) { setValue('SCALE_HOVER', parseFloat(value)); }
+    set SCALE_HOVER(value) { setValue('SCALE_HOVER', parseFloat(value)); },
+    get BORDER_UNLIKED_ENABLED() { return getValue('BORDER_UNLIKED_ENABLED', DEFAULTS.BORDER_UNLIKED_ENABLED); },
+    set BORDER_UNLIKED_ENABLED(value) { setValue('BORDER_UNLIKED_ENABLED', value); },
+    get BORDER_UNLIKED_COLOR() { return getValue('BORDER_UNLIKED_COLOR', DEFAULTS.BORDER_UNLIKED_COLOR); },
+    set BORDER_UNLIKED_COLOR(value) { setValue('BORDER_UNLIKED_COLOR', value); },
+    get BORDER_UNLIKED_GLOW() { return getValue('BORDER_UNLIKED_GLOW', DEFAULTS.BORDER_UNLIKED_GLOW); },
+    set BORDER_UNLIKED_GLOW(value) { setValue('BORDER_UNLIKED_GLOW', value); }
   };
 
+  let currentUser = null;
+  const likedModelIds = new Set();
+  let isFetchingLikes = false;
+
   const buildHeartStyle = () => CONFIG.ENABLED ? `
-    svg:has(path[d^="M22.45"]) {
+    svg:has(path[d^="M22.45"]),
+    svg:has(path[d^="M22.5,4"]) {
       color: ${CONFIG.COLOR_IDLE} !important;
       fill: currentColor !important;
       transform: scale(${CONFIG.SCALE_IDLE}) !important;
       transform-origin: center !important;
       transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.2s ease, filter 0.2s ease !important;
     }
-    svg:has(path[d^="M22.45"]):hover {
+    svg:has(path[d^="M22.45"]):hover,
+    svg:has(path[d^="M22.5,4"]):hover {
       transform: scale(${CONFIG.SCALE_HOVER}) !important;
       color: ${CONFIG.COLOR_HOVER} !important;
       filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.65)) !important;
       cursor: pointer;
     }
     div:has(> svg:has(path[d^="M22.45"])),
-    button:has(> svg:has(path[d^="M22.45"])) {
+    div:has(> svg:has(path[d^="M22.5,4"])),
+    button:has(> svg:has(path[d^="M22.45"])),
+    button:has(> svg:has(path[d^="M22.5,4"])) {
       overflow: visible !important;
+    }
+    article.overview-card-wrapper.hf-is-unliked {
+      border: 2px solid ${CONFIG.BORDER_UNLIKED_COLOR} !important;
+      border-radius: 12px !important;
+      ${CONFIG.BORDER_UNLIKED_GLOW ? `box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15) !important;` : ''}
+      transition: border 0.3s ease, box-shadow 0.3s ease !important;
+    }
+    article.overview-card-wrapper.hf-is-liked {
+      border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    }
+    .hf-inline-like-btn {
+      cursor: pointer !important;
+      user-select: none !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      padding: 2px 4px !important;
+      margin: -2px -2px !important;
+      border-radius: 4px !important;
+      transition: background-color 0.2s ease !important;
+    }
+    .hf-inline-like-btn:hover {
+      background-color: rgba(255, 255, 255, 0.1) !important;
     }
   ` : '';
 
@@ -258,6 +297,192 @@ const MODAL_STYLES = `
       modalStyle.textContent = MODAL_STYLES;
       (document.head || document.documentElement).appendChild(modalStyle);
     }
+  }
+
+  async function initUserLikes() {
+    try {
+      let username = null;
+      const propsElements = document.querySelectorAll('[data-props]');
+      for (const el of propsElements) {
+        try {
+          const parsed = JSON.parse(el.getAttribute('data-props'));
+          if (parsed && (parsed.user || parsed.authLight?.u?.username)) {
+            username = parsed.user || parsed.authLight?.u?.username;
+            break;
+          }
+        } catch (e) {}
+      }
+
+      if (!username) {
+        const settingsLink = document.querySelector('a[href^="/settings/"]');
+        if (settingsLink) {
+          const href = settingsLink.getAttribute('href');
+          const parts = href.split('/').filter(Boolean);
+          if (parts.length >= 2) username = parts[1];
+        }
+      }
+
+      if (!username) {
+        const res = await fetch('/api/whoami');
+        if (res.ok) {
+          const data = await res.json();
+          username = data.name || data.username;
+        }
+      }
+
+      if (username) {
+        currentUser = username;
+        await refreshLikesList();
+      }
+    } catch (e) {
+      console.warn('[HF Yellow Hearts] Could not detect user session:', e);
+    }
+  }
+
+  async function refreshLikesList() {
+    if (!currentUser || isFetchingLikes) return;
+    isFetchingLikes = true;
+    try {
+      const res = await fetch(`/api/users/${encodeURIComponent(currentUser)}/likes`);
+      if (res.ok) {
+        const data = await res.json();
+        likedModelIds.clear();
+        if (Array.isArray(data)) {
+          data.forEach(item => {
+            const repo = item.repo?.name || item.repoName || item.name;
+            if (repo) likedModelIds.add(repo);
+          });
+        }
+        processModelCards();
+      }
+    } catch (e) {
+      console.warn('[HF Yellow Hearts] Error fetching likes:', e);
+    } finally {
+      isFetchingLikes = false;
+    }
+  }
+
+  function processModelCards() {
+    const cards = document.querySelectorAll('article.overview-card-wrapper');
+    cards.forEach(card => {
+      const anchor = card.querySelector('a[href^="/"]');
+      if (!anchor) return;
+      const href = anchor.getAttribute('href');
+      if (!href) return;
+
+      const modelId = href.split('?')[0].split('#')[0].replace(/^\//, '');
+      if (modelId.split('/').length !== 2) return;
+
+      const isLiked = likedModelIds.has(modelId);
+
+      if (CONFIG.ENABLED && CONFIG.BORDER_UNLIKED_ENABLED) {
+        if (isLiked) {
+          card.classList.remove('hf-is-unliked');
+          card.classList.add('hf-is-liked');
+        } else {
+          card.classList.remove('hf-is-liked');
+          card.classList.add('hf-is-unliked');
+        }
+      } else {
+        card.classList.remove('hf-is-unliked', 'hf-is-liked');
+      }
+
+      setupHeartButton(card, modelId);
+    });
+  }
+
+  function setupHeartButton(card, modelId) {
+    const heartSvg = card.querySelector('svg:has(path[d^="M22.5,4"]), svg:has(path[d^="M22.45"])');
+    if (!heartSvg) return;
+
+    let heartContainer = heartSvg.closest('.hf-inline-like-btn');
+    if (!heartContainer) {
+      const parent = heartSvg.parentElement;
+      if (parent && parent.classList.contains('flex') && parent.classList.contains('items-center')) {
+        heartContainer = parent;
+        heartContainer.classList.add('hf-inline-like-btn');
+        heartContainer.setAttribute('title', 'Click to like/unlike model inline');
+      }
+    }
+
+    if (heartContainer && !heartContainer.dataset.hfBound) {
+      heartContainer.dataset.hfBound = 'true';
+      heartContainer.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+
+        if (!currentUser) {
+          alert('Please log in to Hugging Face to like models directly.');
+          return;
+        }
+
+        const isCurrentlyLiked = likedModelIds.has(modelId);
+        const endpoint = `/api/models/${encodeURIComponent(modelId)}/like`;
+        const method = isCurrentlyLiked ? 'DELETE' : 'POST';
+
+        // Optimistic UI update
+        if (isCurrentlyLiked) {
+          likedModelIds.delete(modelId);
+          card.classList.remove('hf-is-liked');
+          if (CONFIG.ENABLED && CONFIG.BORDER_UNLIKED_ENABLED) card.classList.add('hf-is-unliked');
+        } else {
+          likedModelIds.add(modelId);
+          card.classList.remove('hf-is-unliked');
+          card.classList.add('hf-is-liked');
+        }
+
+        updateLikeCountText(heartContainer, !isCurrentlyLiked);
+
+        try {
+          const res = await fetch(endpoint, { method });
+          if (!res.ok) {
+            // Revert on error
+            if (isCurrentlyLiked) {
+              likedModelIds.add(modelId);
+            } else {
+              likedModelIds.delete(modelId);
+            }
+            processModelCards();
+            updateLikeCountText(heartContainer, isCurrentlyLiked);
+          }
+        } catch (err) {
+          console.error('[HF Yellow Hearts] Failed to update like status:', err);
+          if (isCurrentlyLiked) {
+            likedModelIds.add(modelId);
+          } else {
+            likedModelIds.delete(modelId);
+          }
+          processModelCards();
+          updateLikeCountText(heartContainer, isCurrentlyLiked);
+        }
+      }, true);
+    }
+  }
+
+  function updateLikeCountText(container, isNowLiked) {
+    const textNode = Array.from(container.childNodes).find(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim().length > 0) ||
+                     container.querySelector('span');
+
+    if (!textNode) return;
+    const currentText = textNode.textContent.trim();
+
+    if (/^\d+$/.test(currentText)) {
+      let val = parseInt(currentText, 10);
+      val = isNowLiked ? val + 1 : Math.max(0, val - 1);
+      textNode.textContent = ' ' + val;
+    }
+  }
+
+  let observerTimer = null;
+  function observeCards() {
+    const observer = new MutationObserver(() => {
+      if (observerTimer) clearTimeout(observerTimer);
+      observerTimer = setTimeout(() => {
+        processModelCards();
+      }, 200);
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
   }
 
   function setupUI() {
@@ -297,6 +522,25 @@ const MODAL_STYLES = `
             <label for="hf-scale-hover">Hover scale</label>
             <input id="hf-scale-hover" type="number" min="1" max="5" step="0.1">
           </div>
+          <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 16px 0;">
+          <div class="hf-settings-group hf-switch-container">
+            <label for="hf-border-unliked-enabled">Highlight unliked models</label>
+            <label class="hf-switch">
+              <input id="hf-border-unliked-enabled" type="checkbox">
+              <span class="hf-slider"></span>
+            </label>
+          </div>
+          <div class="hf-settings-group">
+            <label for="hf-border-unliked-color">Unliked border color</label>
+            <input id="hf-border-unliked-color" type="color">
+          </div>
+          <div class="hf-settings-group hf-switch-container">
+            <label for="hf-border-unliked-glow">Enable border glow</label>
+            <label class="hf-switch">
+              <input id="hf-border-unliked-glow" type="checkbox">
+              <span class="hf-slider"></span>
+            </label>
+          </div>
           <div class="hf-modal-actions">
             <button type="button" class="hf-btn hf-btn-secondary" id="hf-btn-close">Cancel</button>
             <button type="button" class="hf-btn hf-btn-primary" id="hf-btn-save">Save Settings</button>
@@ -314,6 +558,9 @@ const MODAL_STYLES = `
     const colorHover = document.getElementById('hf-color-hover');
     const scaleIdle = document.getElementById('hf-scale-idle');
     const scaleHover = document.getElementById('hf-scale-hover');
+    const borderUnlikedEnabled = document.getElementById('hf-border-unliked-enabled');
+    const borderUnlikedColor = document.getElementById('hf-border-unliked-color');
+    const borderUnlikedGlow = document.getElementById('hf-border-unliked-glow');
 
     const syncFields = () => {
       enabled.checked = CONFIG.ENABLED;
@@ -321,6 +568,9 @@ const MODAL_STYLES = `
       colorHover.value = CONFIG.COLOR_HOVER;
       scaleIdle.value = CONFIG.SCALE_IDLE;
       scaleHover.value = CONFIG.SCALE_HOVER;
+      borderUnlikedEnabled.checked = CONFIG.BORDER_UNLIKED_ENABLED;
+      borderUnlikedColor.value = CONFIG.BORDER_UNLIKED_COLOR;
+      borderUnlikedGlow.checked = CONFIG.BORDER_UNLIKED_GLOW;
     };
 
     const close = () => backdrop.classList.remove('open');
@@ -338,15 +588,27 @@ const MODAL_STYLES = `
       CONFIG.COLOR_HOVER = colorHover.value;
       CONFIG.SCALE_IDLE = Math.max(1, Math.min(5, parseFloat(scaleIdle.value) || DEFAULTS.SCALE_IDLE));
       CONFIG.SCALE_HOVER = Math.max(1, Math.min(5, parseFloat(scaleHover.value) || DEFAULTS.SCALE_HOVER));
+      CONFIG.BORDER_UNLIKED_ENABLED = borderUnlikedEnabled.checked;
+      CONFIG.BORDER_UNLIKED_COLOR = borderUnlikedColor.value;
+      CONFIG.BORDER_UNLIKED_GLOW = borderUnlikedGlow.checked;
       injectStyles();
+      processModelCards();
       close();
     });
   }
 
   injectStyles();
-  if (document.body) {
+
+  const init = async () => {
     setupUI();
+    observeCards();
+    await initUserLikes();
+    processModelCards();
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init, { once: true });
   } else {
-    document.addEventListener('DOMContentLoaded', setupUI, { once: true });
+    init();
   }
 })();
