@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      0.5.0
+// @version      0.6.0
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, enforces delivery stock availability, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -438,48 +438,122 @@ const STYLES = `
     transform: translateY(-1px);
   }
 
-  /* Filter Summary Counter Bar */
-  #tp-filter-summary-bar {
+  /* Floating Quick-Control Pill Toolbar */
+  #tp-quick-toolbar {
     position: fixed;
     bottom: 14px;
-    left: 14px;
-    background: rgba(30, 41, 59, 0.88);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(30, 41, 59, 0.92);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 24px;
     padding: 6px 14px;
-    font-size: 11px;
-    font-weight: 600;
-    color: #f8fafc;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
     z-index: 99990;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    transition: all 0.3s ease;
+    color: #f8fafc;
+    font-size: 12px;
+    font-weight: 600;
   }
-  .tp-summary-chip {
-    background: rgba(255, 255, 255, 0.1);
-    padding: 2px 7px;
-    border-radius: 10px;
-    font-size: 10px;
+
+  .tp-toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tp-toolbar-divider {
+    width: 1px;
+    height: 16px;
+    background: rgba(255, 255, 255, 0.15);
+  }
+
+  .tp-toolbar-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     color: #cbd5e1;
-  }
-  .tp-summary-toggle-btn {
-    background: rgba(16, 185, 129, 0.2);
-    border: 1px solid rgba(16, 185, 129, 0.4);
-    color: #34d399;
-    padding: 2px 8px;
-    border-radius: 10px;
+    padding: 4px 10px;
+    border-radius: 14px;
+    font-size: 11px;
+    font-weight: 600;
     cursor: pointer;
-    font-size: 10px;
-    font-weight: 700;
     transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    user-select: none;
   }
-  .tp-summary-toggle-btn:hover {
+  .tp-toolbar-btn:hover {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+  }
+  .tp-toolbar-btn.tp-active {
+    background: rgba(16, 185, 129, 0.25);
+    border-color: rgba(16, 185, 129, 0.5);
+    color: #34d399;
+  }
+  .tp-stepper-btn {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #fff;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+    font-size: 12px;
+  }
+  .tp-stepper-btn:hover {
     background: rgba(16, 185, 129, 0.4);
+  }
+
+  /* Inline Negative Filter Bar */
+  #tp-inline-negative-bar {
+    margin: 10px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(30, 41, 59, 0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    padding: 8px 12px;
+    color: #cbd5e1;
+    font-size: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  #tp-inline-negative-input {
+    flex: 1;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    color: #fff;
+    padding: 6px 10px;
+    font-size: 12px;
+    outline: none;
+  }
+  #tp-inline-negative-input:focus {
+    border-color: #10b981;
+  }
+
+  /* Inline Category Pills Bar */
+  #tp-inline-category-bar {
+    margin: 8px 0 14px 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   }
 `;
 
@@ -661,49 +735,155 @@ const STYLES = `
     return termsList.some(term => term.length > 0 && fullText.includes(term));
   }
 
-  // Update Summary Bar
-  function updateSummaryBar(counts) {
+  // Render Floating Quick-Control Pill Toolbar
+  function updateQuickToolbar(counts) {
     if (!CONFIG.ENABLE_FILTER_COUNTER) {
-      const bar = document.getElementById('tp-filter-summary-bar');
+      const bar = document.getElementById('tp-quick-toolbar');
       if (bar) bar.style.display = 'none';
       return;
     }
 
-    let bar = document.getElementById('tp-filter-summary-bar');
+    let bar = document.getElementById('tp-quick-toolbar');
     if (!bar) {
       bar = document.createElement('div');
-      bar.id = 'tp-filter-summary-bar';
+      bar.id = 'tp-quick-toolbar';
       document.body.appendChild(bar);
     }
 
     const totalHidden = counts.neg + counts.cat + counts.min + counts.stock;
-
-    if (totalHidden === 0) {
-      bar.style.display = 'none';
-      return;
-    }
-
     bar.style.display = 'flex';
     const isRevealed = document.body.classList.contains('tp-reveal-filtered');
+    const isStockImmediate = CONFIG.STOCK_FILTER === 'immediate-only';
 
     bar.innerHTML = `
-      <span>🚫 <strong>${totalHidden}</strong> ausgeblendet</span>
-      ${counts.neg > 0 ? `<span class="tp-summary-chip">${counts.neg} Text</span>` : ''}
-      ${counts.cat > 0 ? `<span class="tp-summary-chip">${counts.cat} Kat.</span>` : ''}
-      ${counts.min > 0 ? `<span class="tp-summary-chip">${counts.min} Angebote</span>` : ''}
-      ${counts.stock > 0 ? `<span class="tp-summary-chip">${counts.stock} Lieferzeit</span>` : ''}
-      <button class="tp-summary-toggle-btn" id="tp-btn-toggle-reveal">
-        ${isRevealed ? 'Verbergen' : 'Einblenden'}
+      <div class="tp-toolbar-group">
+        <span>🚫 <strong>${totalHidden}</strong></span>
+        <button class="tp-toolbar-btn ${isRevealed ? 'tp-active' : ''}" id="tp-tb-reveal" title="Ausgeblendete Produkte hervorheben">
+          👁️ ${isRevealed ? 'Verbergen' : 'Einblenden'}
+        </button>
+      </div>
+
+      <div class="tp-toolbar-divider"></div>
+
+      <div class="tp-toolbar-group">
+        <button class="tp-toolbar-btn ${isStockImmediate ? 'tp-active' : ''}" id="tp-tb-stock" title="Nur Produkte mit sofortiger Lieferbarkeit">
+          📦 Sofort-Lager
+        </button>
+      </div>
+
+      <div class="tp-toolbar-divider"></div>
+
+      <div class="tp-toolbar-group">
+        <span>Angebote:</span>
+        <button class="tp-stepper-btn" id="tp-tb-min-minus">-</button>
+        <span style="min-width: 14px; text-align: center;">${CONFIG.MIN_OFFERS}</span>
+        <button class="tp-stepper-btn" id="tp-tb-min-plus">+</button>
+      </div>
+
+      <div class="tp-toolbar-divider"></div>
+
+      <button class="tp-toolbar-btn" id="tp-tb-open-settings" title="Einstellungen öffnen">
+        ⚙️
       </button>
     `;
 
-    const toggleBtn = bar.querySelector('#tp-btn-toggle-reveal');
-    if (toggleBtn) {
-      toggleBtn.onclick = () => {
-        document.body.classList.toggle('tp-reveal-filtered');
-        updateSummaryBar(counts);
+    // Event Bindings
+    bar.querySelector('#tp-tb-reveal').onclick = () => {
+      document.body.classList.toggle('tp-reveal-filtered');
+      updateQuickToolbar(counts);
+    };
+
+    bar.querySelector('#tp-tb-stock').onclick = () => {
+      CONFIG.STOCK_FILTER = isStockImmediate ? 'all' : 'immediate-only';
+      processListings();
+    };
+
+    bar.querySelector('#tp-tb-min-minus').onclick = () => {
+      if (CONFIG.MIN_OFFERS > 0) {
+        CONFIG.MIN_OFFERS = CONFIG.MIN_OFFERS - 1;
+        processListings();
+      }
+    };
+
+    bar.querySelector('#tp-tb-min-plus').onclick = () => {
+      CONFIG.MIN_OFFERS = CONFIG.MIN_OFFERS + 1;
+      processListings();
+    };
+
+    bar.querySelector('#tp-tb-open-settings').onclick = () => {
+      const fab = document.getElementById('tp-settings-fab');
+      if (fab) fab.click();
+    };
+  }
+
+  // Render Inline Negative Filter Search Bar
+  function renderInlineNegativeBar() {
+    let bar = document.getElementById('tp-inline-negative-bar');
+    if (!bar) {
+      const targetHolder = document.querySelector('.pageContentHeader, .searchHeader, .pageTitle, .headSearch');
+      if (!targetHolder) return;
+
+      bar = document.createElement('div');
+      bar.id = 'tp-inline-negative-bar';
+      bar.innerHTML = `
+        <span style="font-weight: 700; color: #f43f5e; white-space: nowrap;">🚫 Negativ-Filter:</span>
+        <input type="text" id="tp-inline-negative-input" placeholder="Wörter ausschließen, z. B. Hülle, Case, Refurbished..." value="${CONFIG.NEGATIVE_TERMS || ''}">
+      `;
+
+      targetHolder.parentElement.insertBefore(bar, targetHolder.nextSibling);
+
+      const input = bar.querySelector('#tp-inline-negative-input');
+      input.oninput = (e) => {
+        CONFIG.NEGATIVE_TERMS = e.target.value;
+        const modalInput = document.getElementById('tp-negative-terms-input');
+        if (modalInput) modalInput.value = e.target.value;
+        processListings();
       };
+    } else {
+      const input = bar.querySelector('#tp-inline-negative-input');
+      if (input && document.activeElement !== input) {
+        input.value = CONFIG.NEGATIVE_TERMS || '';
+      }
     }
+  }
+
+  // Render Inline Category Pills Bar
+  function renderInlineCategoryBar() {
+    let bar = document.getElementById('tp-inline-category-bar');
+    const targetHolder = document.querySelector('.productList, .mixedBrowsingListContainer, .pageContent');
+
+    if (!targetHolder || pageCategories.size === 0) {
+      if (bar) bar.style.display = 'none';
+      return;
+    }
+
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'tp-inline-category-bar';
+      targetHolder.parentElement.insertBefore(bar, targetHolder);
+    }
+
+    bar.style.display = 'flex';
+    bar.innerHTML = '<span style="font-size: 11px; font-weight: 700; color: #94a3b8; margin-right: 4px;">🏷️ Kategorien:</span>';
+
+    const excluded = CONFIG.EXCLUDED_CATEGORIES || [];
+    pageCategories.forEach(cat => {
+      const isExcluded = excluded.includes(cat);
+      const pill = document.createElement('div');
+      pill.className = `tp-cat-pill ${isExcluded ? 'tp-excluded' : ''}`;
+      pill.textContent = cat;
+      pill.onclick = () => {
+        let updated = [...excluded];
+        if (isExcluded) {
+          updated = updated.filter(c => c !== cat);
+        } else {
+          updated.push(cat);
+        }
+        CONFIG.EXCLUDED_CATEGORIES = updated;
+        processListings();
+      };
+      bar.appendChild(pill);
+    });
   }
 
   // ─── MODULE 1: PRODUCT LISTING PROCESSOR ─────────────────────────────────────
@@ -837,8 +1017,10 @@ const STYLES = `
       }
     }
 
-    // 8. Update Summary Bar
-    updateSummaryBar(counts);
+    // 8. Render UI Modules
+    updateQuickToolbar(counts);
+    renderInlineNegativeBar();
+    renderInlineCategoryBar();
   }
 
   // ─── MODULE 2: PRICE ALARM AUTOMATION ────────────────────────────────────────
