@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
 Toppreise Full Category Hierarchy Generator Tool
-Extracts category mappings from both /produktsuche/ breadcrumbs AND /preisvergleich/ product links
-across all 23 root category trees to achieve complete coverage and auto-inject into toppreise.user.js.
+Extracts category mappings from Toppreise.ch with deterministic key sorting and seed protection.
 """
 
 import urllib.request
@@ -63,8 +62,13 @@ CANONICAL_GROUPS = {
     'videogames': 'Videogames'
 }
 
-# Standard Offline Seed Dictionary for 100% Instant Guarantee
+# Standard Offline Seed Dictionary with Protected Primary Root Mappings
 SEED_LOOKUP = {
+    # Bekleidung & Schuhe
+    "schuhe": "Bekleidung & Schuhe",
+    "bekleidung accessoires": "Bekleidung & Schuhe",
+    "bekleidung-accessoires": "Bekleidung & Schuhe",
+    
     # Filme
     "abenteuer": "Filme", "krimi": "Filme", "anime": "Filme", "mehr komoedie": "Filme",
     "tv serien": "Filme", "fantasy": "Filme", "mehr drama": "Filme", "thriller": "Filme",
@@ -100,7 +104,7 @@ SEED_LOOKUP = {
     # HiFi & Audio / TV & Video
     "kopfhoerer": "HiFi & Audio", "plattenspieler": "HiFi & Audio", "bluetooth lautsprecher": "HiFi & Audio",
     "lautsprecher": "HiFi & Audio",
-    "tv geraete": "TV & Video", "beamer": "TV & Video",
+    "tv geraete": "TV & Video", "beamer": "TV & Video", "actionkameras": "TV & Video",
     
     # Drogerie
     "eau de parfum": "Drogerie", "elektrozahnbuersten": "Drogerie", "hautpflege": "Drogerie",
@@ -119,13 +123,15 @@ SEED_LOOKUP = {
     "ski lawinenrucksaecke airbags": "Sport & Freizeit", "reise sporttaschen": "Sport & Freizeit",
     "zubehoer fuer sportgeraete": "Sport & Freizeit", "veloanhaengerzubehoer": "Sport & Freizeit",
     "pedale": "Sport & Freizeit", "taschenlampen": "Sport & Freizeit", "skibrillen": "Sport & Freizeit",
-    "protektoren": "Sport & Freizeit", "activity tracker smartwatches": "Sport & Freizeit",
+    "protektoren": "Sport & Freizeit", "activity tracker smartwatches": "Sport & Freizeit", "velofahren": "Sport & Freizeit",
+    "fitness krafttraining": "Sport & Freizeit", "fitness-krafttraining": "Sport & Freizeit",
     
     # Smartphones & Mobiltelefone / Auto / Uhren
     "huellen": "Smartphones & Mobiltelefone", "oberschalen cover": "Smartphones & Mobiltelefone",
     "taschen cover fuer iphone": "Smartphones & Mobiltelefone", "smartphones": "Smartphones & Mobiltelefone",
     "webcams": "Computer & Zubehör", "naehmaschinen": "Haushalt & Küche",
-    "reifen": "Auto & Motorrad", "autos": "Auto & Motorrad", "uhren": "Uhren"
+    "reifen": "Auto & Motorrad", "autos": "Auto & Motorrad", "uhren": "Uhren",
+    "pneus": "Auto & Motorrad", "pkw sommerreifen": "Auto & Motorrad", "pkw-sommerreifen": "Auto & Motorrad"
 }
 
 def format_title(slug):
@@ -143,7 +149,7 @@ def fetch_url(url):
         return url, ""
 
 def generate_deep_map(max_workers=32):
-    print("🚀 Starting Comprehensive Category & Product Link Crawl of Toppreise.ch...", flush=True)
+    print("🚀 Starting Deterministic Category Crawl of Toppreise.ch...", flush=True)
     
     lookup_map = dict(SEED_LOOKUP)
     detailed_map = {}
@@ -156,12 +162,12 @@ def generate_deep_map(max_workers=32):
     depth_round = 0
     while to_visit:
         depth_round += 1
-        current_urls = list(to_visit - visited_urls)
+        current_urls = sorted(list(to_visit - visited_urls))
         if not current_urls:
             break
         
         visited_urls.update(current_urls)
-        print(f"📡 Crawl Round {depth_round}: Processing {len(current_urls)} category pages (Visited total: {len(visited_urls)})...", flush=True)
+        print(f"📡 Crawl Round {depth_round}: Processing {len(current_urls)} category pages...", flush=True)
         
         next_urls = set()
         
@@ -172,12 +178,7 @@ def generate_deep_map(max_workers=32):
                 if not html:
                     continue
                 
-                # Determine root category from current URL path
-                url_path = url.split('toppreise.ch/produktsuche/')[-1]
-                root_slug = url_path.split('/')[0].split('-c')[0].lower()
-                root_title = root_slug_to_name.get(root_slug, CANONICAL_GROUPS.get(root_slug.replace('-', ' '), format_title(url_path.split('/')[0])))
-                
-                # 1. Parse produktsuche links
+                # Parseproduktsuche links
                 ps_matches = re.findall(r'href=["\'](/produktsuche/[^"\']+)["\']', html)
                 for m in ps_matches:
                     clean_path = m.split('?')[0]
@@ -190,7 +191,7 @@ def generate_deep_map(max_workers=32):
                         
                         segments = parts[1:]
                         cur_root_slug = segments[0].split('-c')[0].lower()
-                        cur_root_title = root_slug_to_name.get(cur_root_slug, CANONICAL_GROUPS.get(cur_root_slug.replace('-', ' '), root_title))
+                        cur_root_title = root_slug_to_name.get(cur_root_slug, CANONICAL_GROUPS.get(cur_root_slug.replace('-', ' '), format_title(segments[0])))
                         
                         for seg in segments[1:]:
                             leaf_title = format_title(seg)
@@ -198,39 +199,28 @@ def generate_deep_map(max_workers=32):
                             slug_key = seg.split('-c')[0].lower().replace('-', ' ')
                             raw_slug = seg.split('-c')[0].lower()
                             
-                            lookup_map[leaf_key] = cur_root_title
-                            lookup_map[slug_key] = cur_root_title
-                            lookup_map[raw_slug] = cur_root_title
+                            # Only set if not already present in protected seed
+                            if leaf_key not in SEED_LOOKUP:
+                                lookup_map[leaf_key] = cur_root_title
+                            if slug_key not in SEED_LOOKUP:
+                                lookup_map[slug_key] = cur_root_title
+                            if raw_slug not in SEED_LOOKUP:
+                                lookup_map[raw_slug] = cur_root_title
                             
                             detailed_map[slug_key] = {
                                 "root": cur_root_title,
                                 "title": leaf_title,
                                 "path": [format_title(s) for s in segments]
                             }
-
-                # 2. Parse preisvergleich product card links to extract leaf category slugs
-                pv_matches = re.findall(r'href=["\'](/preisvergleich/([^/]+)/[^"\']+\-p\d+)["\']', html)
-                for full_pv, cat_slug in pv_matches:
-                    raw_cat = cat_slug.split('-c')[0].lower()
-                    cat_title = format_title(raw_cat)
-                    cat_key = cat_title.lower()
-                    space_key = raw_cat.replace('-', ' ')
-                    
-                    lookup_map[raw_cat] = root_title
-                    lookup_map[cat_key] = root_title
-                    lookup_map[space_key] = root_title
-                    
-                    if space_key not in detailed_map:
-                        detailed_map[space_key] = {
-                            "root": root_title,
-                            "title": cat_title,
-                            "path": [root_title, cat_title]
-                        }
         
         to_visit = next_urls
 
-    print(f"✅ Comprehensive Crawl Complete! Visited {len(visited_urls)} pages and generated {len(lookup_map)} category mappings.", flush=True)
-    return lookup_map, detailed_map
+    # Sort lookup map alphabetically for 100% deterministic git diff stability
+    sorted_lookup_map = dict(sorted(lookup_map.items()))
+    sorted_detailed_map = dict(sorted(detailed_map.items()))
+
+    print(f"✅ Deterministic Crawl Complete! Visited {len(visited_urls)} pages and generated {len(sorted_lookup_map)} sorted mappings.", flush=True)
+    return sorted_lookup_map, sorted_detailed_map
 
 def main():
     tools_dir = os.path.dirname(os.path.abspath(__file__))
