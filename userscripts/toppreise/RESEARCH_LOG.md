@@ -77,3 +77,11 @@ When a price alarm bell icon is clicked:
 4. **Flat Pill Overflow at Scale**:
    - *Gotcha*: Rendering 55+ raw subcategory pills creates visual clutter and high cognitive load.
    - *Rule*: Map subcategories into high-level root groups (`Filme`, `Spielwaren`, `Computer & Zubehör`) with collapsible accordion pills.
+
+5. **Transparent Overlays Blocking Page Clicks**:
+   - *Gotcha*: Full-screen wrapper containers (`position: fixed; inset: 0`) without `pointer-events: none` capture pointer events across the viewport, preventing users from clicking underlying page elements.
+   - *Rule*: Always set `pointer-events: none;` on fixed root wrappers/overlays, and explicitly set `pointer-events: auto;` only on interactive child elements (modals, toolbars, buttons).
+
+6. **MutationObserver Infinite Re-render Pulsing Loop**:
+   - *Gotcha*: Un-guarded DOM mutations inside a `MutationObserver` callback trigger the observer again, causing infinite re-render loops where UI elements flicker and pulse continuously.
+   - *Rule*: Always guard DOM manipulations with element ID checks (`if (document.getElementById('tp-suite-filter-bar')) return;`) or `dataset.processed` flags to ensure idempotency and prevent self-observation loops.
