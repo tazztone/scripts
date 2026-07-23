@@ -1267,10 +1267,10 @@
     ]
   },
   "bekleidung accessoires": {
-    "root": "Bekleidung Accessoires",
+    "root": "Bekleidung & Schuhe",
     "title": "Bekleidung Accessoires",
     "path": [
-      "Bekleidung Accessoires",
+      "Bekleidung Schuhe",
       "Bekleidung Accessoires"
     ]
   },
@@ -1440,8 +1440,8 @@
     "title": "Science Fiction",
     "path": [
       "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Science Fiction Fantasy",
+      "Dvd Filme",
+      "Dvd Science Fiction Fantasy",
       "Science Fiction"
     ]
   },
@@ -1460,8 +1460,8 @@
     "title": "Abenteuer",
     "path": [
       "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Kinder Familie",
+      "Dvd Filme",
+      "Dvd Kinder Familie",
       "Abenteuer"
     ]
   },
@@ -1480,8 +1480,8 @@
     "title": "Natur",
     "path": [
       "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Tv Dokumentationen",
+      "Dvd Filme",
+      "Dvd Tv Dokumentationen",
       "Natur"
     ]
   },
@@ -1500,8 +1500,8 @@
     "title": "Thriller",
     "path": [
       "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Action Thriller Horror",
+      "Dvd Filme",
+      "Dvd Action Thriller Horror",
       "Thriller"
     ]
   },
@@ -1512,7 +1512,7 @@
       "Filme",
       "Dvd Filme",
       "Dvd Komoedie Drama",
-      "Klassisches Drama"
+      "Romantische Komoedie"
     ]
   },
   "mehr komoedie": {
@@ -1520,8 +1520,8 @@
     "title": "Mehr Komoedie",
     "path": [
       "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Komoedie Drama",
+      "Dvd Filme",
+      "Dvd Komoedie Drama",
       "Mehr Komoedie"
     ]
   },
@@ -1530,8 +1530,8 @@
     "title": "Mehr Drama",
     "path": [
       "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Komoedie Drama",
+      "Dvd Filme",
+      "Dvd Komoedie Drama",
       "Mehr Drama"
     ]
   },
@@ -1540,8 +1540,8 @@
     "title": "Fantasy",
     "path": [
       "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Science Fiction Fantasy",
+      "Dvd Filme",
+      "Dvd Science Fiction Fantasy",
       "Fantasy"
     ]
   },
@@ -1550,8 +1550,8 @@
     "title": "Horror",
     "path": [
       "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Action Thriller Horror",
+      "Dvd Filme",
+      "Dvd Action Thriller Horror",
       "Horror"
     ]
   },
@@ -1560,8 +1560,8 @@
     "title": "Romantische Komoedie",
     "path": [
       "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Komoedie Drama",
+      "Dvd Filme",
+      "Dvd Komoedie Drama",
       "Romantische Komoedie"
     ]
   },
@@ -1570,8 +1570,8 @@
     "title": "Horrorkomoedie",
     "path": [
       "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Komoedie Drama",
+      "Dvd Filme",
+      "Dvd Komoedie Drama",
       "Horrorkomoedie"
     ]
   },
@@ -1580,8 +1580,8 @@
     "title": "Klassisches Drama",
     "path": [
       "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Komoedie Drama",
+      "Dvd Filme",
+      "Dvd Komoedie Drama",
       "Klassisches Drama"
     ]
   },
@@ -1590,8 +1590,8 @@
     "title": "Biografie",
     "path": [
       "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Tv Dokumentationen",
+      "Dvd Filme",
+      "Dvd Tv Dokumentationen",
       "Biografie"
     ]
   },
@@ -1600,8 +1600,8 @@
     "title": "Action",
     "path": [
       "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Action Thriller Horror",
+      "Dvd Filme",
+      "Dvd Action Thriller Horror",
       "Action"
     ]
   },
@@ -1610,8 +1610,8 @@
     "title": "Komoedie",
     "path": [
       "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Kinder Familie",
+      "Dvd Filme",
+      "Dvd Kinder Familie",
       "Komoedie"
     ]
   },
@@ -1620,8 +1620,8 @@
     "title": "Jump N Run Geschicklichkeit",
     "path": [
       "Videogames",
-      "Nintendo Switch",
-      "Nintendo Switch Games",
+      "Nintendo Switch 2",
+      "Nintendo Switch 2 Games",
       "Jump N Run Geschicklichkeit"
     ]
   },
@@ -1630,8 +1630,8 @@
     "title": "Simulationen",
     "path": [
       "Videogames",
-      "Nintendo Switch",
-      "Nintendo Switch Games",
+      "Nintendo Switch 2",
+      "Nintendo Switch 2 Games",
       "Simulationen"
     ]
   },
@@ -1640,8 +1640,8 @@
     "title": "Sportspiele",
     "path": [
       "Videogames",
-      "Nintendo Switch",
-      "Nintendo Switch Games",
+      "Nintendo Switch 2",
+      "Nintendo Switch 2 Games",
       "Sportspiele"
     ]
   },
@@ -1650,8 +1650,8 @@
     "title": "Rennspiele",
     "path": [
       "Videogames",
-      "Nintendo Switch",
-      "Nintendo Switch Games",
+      "Nintendo Switch 2",
+      "Nintendo Switch 2 Games",
       "Rennspiele"
     ]
   },
@@ -1660,18 +1660,9 @@
     "title": "Rollenspiele Adventures",
     "path": [
       "Videogames",
-      "Nintendo Switch",
-      "Nintendo Switch Games",
+      "Nintendo Switch 2",
+      "Nintendo Switch 2 Games",
       "Rollenspiele Adventures"
-    ]
-  },
-  "strategiespiele": {
-    "root": "Videogames",
-    "title": "Strategiespiele",
-    "path": [
-      "Videogames",
-      "Computerspiele Fuer Windows",
-      "Strategiespiele"
     ]
   },
   "fitness krafttraining": {
@@ -1688,79 +1679,19 @@
     "title": "Actionspiele",
     "path": [
       "Videogames",
-      "Playstation 4",
-      "Ps4 Games",
+      "Nintendo Switch 2",
+      "Nintendo Switch 2 Games",
       "Actionspiele"
     ]
   },
-  "4k uhd science fiction fantasy": {
-    "root": "Filme",
-    "title": "4k Uhd Science Fiction Fantasy",
+  "3d shooter fps": {
+    "root": "Videogames",
+    "title": "3d Shooter Fps",
     "path": [
-      "Filme",
-      "Blu Ray 4k Ultra Hd Filme",
-      "4k Uhd Science Fiction Fantasy",
-      "Fantasy"
-    ]
-  },
-  "4k uhd kinder familie": {
-    "root": "Filme",
-    "title": "4k Uhd Kinder Familie",
-    "path": [
-      "Filme",
-      "Blu Ray 4k Ultra Hd Filme",
-      "4k Uhd Kinder Familie",
-      "Abenteuer"
-    ]
-  },
-  "blu ray tv dokumentationen": {
-    "root": "Filme",
-    "title": "Blu Ray Tv Dokumentationen",
-    "path": [
-      "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Tv Dokumentationen",
-      "Biografie"
-    ]
-  },
-  "4k uhd action thriller horror": {
-    "root": "Filme",
-    "title": "4k Uhd Action Thriller Horror",
-    "path": [
-      "Filme",
-      "Blu Ray 4k Ultra Hd Filme",
-      "4k Uhd Action Thriller Horror",
-      "Action"
-    ]
-  },
-  "blu ray komoedie drama": {
-    "root": "Filme",
-    "title": "Blu Ray Komoedie Drama",
-    "path": [
-      "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Komoedie Drama",
-      "Klassisches Drama"
-    ]
-  },
-  "blu ray kinder familie": {
-    "root": "Filme",
-    "title": "Blu Ray Kinder Familie",
-    "path": [
-      "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Kinder Familie",
-      "Abenteuer"
-    ]
-  },
-  "blu ray action thriller horror": {
-    "root": "Filme",
-    "title": "Blu Ray Action Thriller Horror",
-    "path": [
-      "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Action Thriller Horror",
-      "Action"
+      "Videogames",
+      "Xbox Series X S",
+      "Xbox Series X S Games",
+      "3d Shooter Fps"
     ]
   },
   "actionkameras": {
@@ -1772,12 +1703,13 @@
       "Actionkameras"
     ]
   },
-  "velofahren": {
-    "root": "Sport & Freizeit",
-    "title": "Velofahren",
+  "strategiespiele": {
+    "root": "Videogames",
+    "title": "Strategiespiele",
     "path": [
-      "Sport Freizeit",
-      "Velofahren"
+      "Videogames",
+      "Computerspiele Fuer Windows",
+      "Strategiespiele"
     ]
   },
   "xbox series x s": {
@@ -1806,16 +1738,6 @@
       "Xbox Series X S",
       "Xbox Series X S Games",
       "Beat Em Up"
-    ]
-  },
-  "3d shooter fps": {
-    "root": "Videogames",
-    "title": "3d Shooter Fps",
-    "path": [
-      "Videogames",
-      "Playstation 4",
-      "Ps4 Games",
-      "3d Shooter Fps"
     ]
   },
   "xbox one": {
@@ -1858,6 +1780,76 @@
       "Fantasy"
     ]
   },
+  "blu ray kinder familie": {
+    "root": "Filme",
+    "title": "Blu Ray Kinder Familie",
+    "path": [
+      "Filme",
+      "Blu Ray Filme",
+      "Blu Ray Kinder Familie",
+      "Abenteuer"
+    ]
+  },
+  "blu ray tv dokumentationen": {
+    "root": "Filme",
+    "title": "Blu Ray Tv Dokumentationen",
+    "path": [
+      "Filme",
+      "Blu Ray Filme",
+      "Blu Ray Tv Dokumentationen",
+      "Biografie"
+    ]
+  },
+  "blu ray action thriller horror": {
+    "root": "Filme",
+    "title": "Blu Ray Action Thriller Horror",
+    "path": [
+      "Filme",
+      "Blu Ray Filme",
+      "Blu Ray Action Thriller Horror",
+      "Thriller"
+    ]
+  },
+  "blu ray komoedie drama": {
+    "root": "Filme",
+    "title": "Blu Ray Komoedie Drama",
+    "path": [
+      "Filme",
+      "Blu Ray Filme",
+      "Blu Ray Komoedie Drama",
+      "Klassisches Drama"
+    ]
+  },
+  "4k uhd science fiction fantasy": {
+    "root": "Filme",
+    "title": "4k Uhd Science Fiction Fantasy",
+    "path": [
+      "Filme",
+      "Blu Ray 4k Ultra Hd Filme",
+      "4k Uhd Science Fiction Fantasy",
+      "Fantasy"
+    ]
+  },
+  "4k uhd kinder familie": {
+    "root": "Filme",
+    "title": "4k Uhd Kinder Familie",
+    "path": [
+      "Filme",
+      "Blu Ray 4k Ultra Hd Filme",
+      "4k Uhd Kinder Familie",
+      "Abenteuer"
+    ]
+  },
+  "4k uhd action thriller horror": {
+    "root": "Filme",
+    "title": "4k Uhd Action Thriller Horror",
+    "path": [
+      "Filme",
+      "Blu Ray 4k Ultra Hd Filme",
+      "4k Uhd Action Thriller Horror",
+      "Action"
+    ]
+  },
   "pneus": {
     "root": "Auto & Motorrad",
     "title": "Pneus",
@@ -1873,6 +1865,14 @@
       "Auto Motorrad",
       "Pneus",
       "Pkw Sommerreifen"
+    ]
+  },
+  "velofahren": {
+    "root": "Sport & Freizeit",
+    "title": "Velofahren",
+    "path": [
+      "Sport Freizeit",
+      "Velofahren"
     ]
   }
 }

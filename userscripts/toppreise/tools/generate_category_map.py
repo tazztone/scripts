@@ -63,6 +63,71 @@ CANONICAL_GROUPS = {
     'videogames': 'Videogames'
 }
 
+# Standard Offline Seed Dictionary for 100% Instant Guarantee
+SEED_LOOKUP = {
+    # Filme
+    "abenteuer": "Filme", "krimi": "Filme", "anime": "Filme", "mehr komoedie": "Filme",
+    "tv serien": "Filme", "fantasy": "Filme", "mehr drama": "Filme", "thriller": "Filme",
+    "dvd filme": "Filme", "blu ray filme": "Filme", "dvd kinder familie": "Filme",
+    "science fiction": "Filme", "klassisches drama": "Filme", "biografie": "Filme", "horror": "Filme",
+    
+    # Computer & Zubehör
+    "komplettsysteme": "Computer & Zubehör", "grafikkarten": "Computer & Zubehör", 
+    "tablets": "Computer & Zubehör", "maeuse": "Computer & Zubehör", 
+    "pc gehaeuse": "Computer & Zubehör", "notebooks": "Computer & Zubehör",
+    "gehaeuseluefter": "Computer & Zubehör", "sd speicherkarten": "Computer & Zubehör",
+    "externe festplatten hdd": "Computer & Zubehör", "monitore": "Computer & Zubehör",
+    "prozessorkuehler": "Computer & Zubehör", "headsets mikrofone": "Computer & Zubehör",
+    "multifunktionsgeraete": "Computer & Zubehör",
+    
+    # Spielwaren
+    "lego architecture": "Spielwaren", "schleich": "Spielwaren", "action figuren": "Spielwaren",
+    "kinderspiele": "Spielwaren", "hot wheels": "Spielwaren", "disney": "Spielwaren",
+    "puzzles": "Spielwaren", "barbie": "Spielwaren", "cobi": "Spielwaren",
+    "playmobil wiltopia": "Spielwaren", "tabletop spiele": "Spielwaren",
+    "playmobil action": "Spielwaren", "playmobil novelmore": "Spielwaren", "lego": "Spielwaren",
+    "playmobil my life": "Spielwaren", "playmobil asterix": "Spielwaren", "lego duplo": "Spielwaren",
+    "lego city": "Spielwaren", "vtech": "Spielwaren", "fischertechnik": "Spielwaren",
+    "experimentierkaesten": "Spielwaren", "kartenspiele": "Spielwaren", "mega construx": "Spielwaren",
+    "familienspiele": "Spielwaren",
+    
+    # Videogames
+    "strategie rollenspiele": "Videogames", "zubehoer fuer nintendo switch": "Videogames",
+    "jump n run geschicklichkeit": "Videogames", "actionspiele": "Videogames",
+    "rollenspiele adventures": "Videogames", "action": "Videogames", "nintendo switch games": "Videogames",
+    "sonstige handheld konsolen": "Videogames",
+    
+    # HiFi & Audio / TV & Video
+    "kopfhoerer": "HiFi & Audio", "plattenspieler": "HiFi & Audio", "bluetooth lautsprecher": "HiFi & Audio",
+    "lautsprecher": "HiFi & Audio",
+    "tv geraete": "TV & Video", "beamer": "TV & Video",
+    
+    # Drogerie
+    "eau de parfum": "Drogerie", "elektrozahnbuersten": "Drogerie", "hautpflege": "Drogerie",
+    "lockenstaebe buersten": "Drogerie", "ersatzbuersten": "Drogerie", "koerperpflege": "Drogerie",
+    
+    # Haushalt & Küche
+    "saug und wischroboter": "Haushalt & Küche", "abfallsysteme": "Haushalt & Küche",
+    "zubehoer fuer haushaltsgeraete": "Haushalt & Küche", "thermoskannen bidons": "Haushalt & Küche",
+    "kaffee espressomaschinen": "Haushalt & Küche", "staubsauger": "Haushalt & Küche",
+    "klimageraete": "Haushalt & Küche", "raumduft": "Haushalt & Küche", "senseo maschinen": "Haushalt & Küche",
+    
+    # Sport & Freizeit
+    "skihelme": "Sport & Freizeit", "koffer": "Sport & Freizeit", "ventilatoren heizgeraete": "Sport & Freizeit",
+    "einkaufstrolleys taschen": "Sport & Freizeit", "sportbrillen goggles": "Sport & Freizeit",
+    "velotaschen": "Sport & Freizeit", "rucksaecke": "Sport & Freizeit", "inline skates rollschuhe": "Sport & Freizeit",
+    "ski lawinenrucksaecke airbags": "Sport & Freizeit", "reise sporttaschen": "Sport & Freizeit",
+    "zubehoer fuer sportgeraete": "Sport & Freizeit", "veloanhaengerzubehoer": "Sport & Freizeit",
+    "pedale": "Sport & Freizeit", "taschenlampen": "Sport & Freizeit", "skibrillen": "Sport & Freizeit",
+    "protektoren": "Sport & Freizeit", "activity tracker smartwatches": "Sport & Freizeit",
+    
+    # Smartphones & Mobiltelefone / Auto / Uhren
+    "huellen": "Smartphones & Mobiltelefone", "oberschalen cover": "Smartphones & Mobiltelefone",
+    "taschen cover fuer iphone": "Smartphones & Mobiltelefone", "smartphones": "Smartphones & Mobiltelefone",
+    "webcams": "Computer & Zubehör", "naehmaschinen": "Haushalt & Küche",
+    "reifen": "Auto & Motorrad", "autos": "Auto & Motorrad", "uhren": "Uhren"
+}
+
 def format_title(slug):
     if not slug:
         return ""
@@ -80,7 +145,7 @@ def fetch_url(url):
 def generate_deep_map(max_workers=16):
     print("🚀 Starting 2-Level Deep Category Crawl of Toppreise.ch...", flush=True)
     
-    lookup_map = {}
+    lookup_map = dict(SEED_LOOKUP)
     detailed_map = {}
     
     root_slug_to_name = {slug.split('-c')[0].lower(): name for slug, name in ROOT_CATEGORIES}
