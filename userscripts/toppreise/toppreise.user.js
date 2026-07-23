@@ -1908,28 +1908,89 @@ const STYLES = `
 
     function renderCategoryPills() {
       catPillsContainer.innerHTML = '';
-      const allCats = new Set([...pageCategories, ...currentExcludedCats]);
+      const allCats = new Set([...pageCategories, ...currentExcludedCats.filter(c => !c.startsWith('GROUP:'))]);
 
       if (allCats.size === 0) {
         catPillsContainer.innerHTML = '<span style="font-size:11px; color:#64748b; padding:4px;">Keine Kategorien auf Seite erkannt</span>';
         return;
       }
 
+      const groups = new Map();
       allCats.forEach(cat => {
-        const isExcluded = currentExcludedCats.includes(cat);
-        const pill = document.createElement('div');
-        pill.className = `tp-cat-pill ${isExcluded ? 'tp-excluded' : ''}`;
-        pill.title = isExcluded ? `Kategorie "${cat}" wieder einblenden` : `Kategorie "${cat}" dauerhaft ausblenden`;
-        pill.textContent = cat;
-        pill.onclick = () => {
-          if (isExcluded) {
-            currentExcludedCats = currentExcludedCats.filter(c => c !== cat);
+        const root = resolveCategoryGroup(cat);
+        if (!groups.has(root)) groups.set(root, []);
+        groups.get(root).push(cat);
+      });
+
+      if (!window._tpModalExpandedGroups) window._tpModalExpandedGroups = new Set();
+
+      groups.forEach((subcats, rootGroup) => {
+        const allSubcatsExcluded = subcats.every(sc => currentExcludedCats.includes(sc) || currentExcludedCats.includes(`GROUP:${rootGroup}`));
+        const someSubcatsExcluded = subcats.some(sc => currentExcludedCats.includes(sc) || currentExcludedCats.includes(`GROUP:${rootGroup}`));
+        const isGroupExpanded = window._tpModalExpandedGroups.has(rootGroup);
+
+        const groupWrapper = document.createElement('div');
+        groupWrapper.className = 'tp-group-wrapper';
+
+        const groupPill = document.createElement('div');
+        groupPill.className = `tp-group-pill ${allSubcatsExcluded ? 'tp-excluded' : someSubcatsExcluded ? 'tp-partial' : ''}`;
+
+        const titleSpan = document.createElement('span');
+        titleSpan.textContent = `📁 ${rootGroup} (${subcats.length})`;
+        titleSpan.title = allSubcatsExcluded ? `Gruppe "${rootGroup}" wieder einblenden` : `Alle Kategorien unter "${rootGroup}" ausblenden`;
+        titleSpan.onclick = () => {
+          if (allSubcatsExcluded) {
+            currentExcludedCats = currentExcludedCats.filter(c => !subcats.includes(c) && c !== `GROUP:${rootGroup}`);
           } else {
-            currentExcludedCats.push(cat);
+            const toAdd = subcats.filter(sc => !currentExcludedCats.includes(sc));
+            currentExcludedCats = [...currentExcludedCats, ...toAdd];
           }
           renderCategoryPills();
         };
-        catPillsContainer.appendChild(pill);
+
+        const chevronBtn = document.createElement('span');
+        chevronBtn.className = 'tp-group-chevron';
+        chevronBtn.textContent = isGroupExpanded ? '▲' : '▼';
+        chevronBtn.title = isGroupExpanded ? 'Unterkategorien einklappen' : 'Unterkategorien ausklappen';
+        chevronBtn.onclick = (e) => {
+          e.stopPropagation();
+          if (window._tpModalExpandedGroups.has(rootGroup)) {
+            window._tpModalExpandedGroups.delete(rootGroup);
+          } else {
+            window._tpModalExpandedGroups.add(rootGroup);
+          }
+          renderCategoryPills();
+        };
+
+        groupPill.appendChild(titleSpan);
+        groupPill.appendChild(chevronBtn);
+        groupWrapper.appendChild(groupPill);
+
+        if (isGroupExpanded) {
+          const childContainer = document.createElement('div');
+          childContainer.className = 'tp-group-children';
+
+          subcats.forEach(cat => {
+            const isCatExcluded = currentExcludedCats.includes(cat) || currentExcludedCats.includes(`GROUP:${rootGroup}`);
+            const childPill = document.createElement('div');
+            childPill.className = `tp-cat-pill ${isCatExcluded ? 'tp-excluded' : ''}`;
+            childPill.textContent = cat;
+            childPill.title = isCatExcluded ? `Kategorie "${cat}" wieder einblenden` : `Kategorie "${cat}" ausblenden`;
+            childPill.onclick = () => {
+              if (currentExcludedCats.includes(cat)) {
+                currentExcludedCats = currentExcludedCats.filter(c => c !== cat && c !== `GROUP:${rootGroup}`);
+              } else {
+                currentExcludedCats.push(cat);
+              }
+              renderCategoryPills();
+            };
+            childContainer.appendChild(childPill);
+          });
+
+          groupWrapper.appendChild(childContainer);
+        }
+
+        catPillsContainer.appendChild(groupWrapper);
       });
     }
 
