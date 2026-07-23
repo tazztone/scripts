@@ -8,7 +8,7 @@ Requires Violentmonkey (or a compatible userscript manager):
 - [Firefox](https://addons.mozilla.org/en-US/firefox/addon/violentmonkey/)
 - [Chrome / Brave](https://chromewebstore.google.com/detail/violentmonkey/jinjaccalgkegednnccohejagnlnfdag)
 
-### 👉 [**CLICK HERE TO INSTALL USERSCRIPT (v2.4.0)**](https://raw.githubusercontent.com/tazztone/scripts/fb066526e70859bd7dac6d4b703dd29c9c6adbd8/userscripts/toppreise/toppreise.user.js)
+### 👉 [**CLICK HERE TO INSTALL USERSCRIPT (v2.4.1)**](https://raw.githubusercontent.com/tazztone/scripts/131a9c25d400791a7df622e8b05a860a8dc3d902/userscripts/toppreise/toppreise.user.js)
 
 ---
 
