@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Toppreise Deep Category Hierarchy Generator Tool
-Crawls Toppreise.ch 2 levels deep using multi-threading to extract all category paths
-and build tools/category_map.json, tools/category_lookup_generated.js, and update toppreise.user.js.
+Toppreise Full BFS Category Hierarchy Generator Tool
+Recursively crawls Toppreise.ch until all category pages across all depth levels are discovered,
+mapping 100% of subcategories to root groups and updating toppreise.user.js.
 """
 
 import urllib.request
@@ -142,89 +142,67 @@ def fetch_url(url):
     except Exception:
         return url, ""
 
-def generate_deep_map(max_workers=16):
-    print("🚀 Starting 2-Level Deep Category Crawl of Toppreise.ch...", flush=True)
+def generate_deep_map(max_workers=24):
+    print("🚀 Starting Complete BFS Category Crawl of Toppreise.ch...", flush=True)
     
     lookup_map = dict(SEED_LOOKUP)
     detailed_map = {}
     
     root_slug_to_name = {slug.split('-c')[0].lower(): name for slug, name in ROOT_CATEGORIES}
-    level1_urls = [f"https://www.toppreise.ch/produktsuche/{slug}" for slug, name in ROOT_CATEGORIES]
     
-    level2_url_set = set()
+    visited_urls = set()
+    to_visit = set(f"https://www.toppreise.ch/produktsuche/{slug}" for slug, name in ROOT_CATEGORIES)
     
-    print(f"📡 Level 1: Crawling {len(level1_urls)} root category pages...", flush=True)
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(fetch_url, url): url for url in level1_urls}
-        for future in as_completed(futures):
-            url, html = future.result()
-            if not html:
-                continue
-            matches = re.findall(r'href=["\'](/produktsuche/[^"\']+-c\d+[^"\']*)["\']', html)
-            for m in matches:
-                clean_path = m.split('?')[0]
-                parts = clean_path.strip('/').split('/')
-                if len(parts) >= 2 and parts[0] == 'produktsuche':
-                    full_url = f"https://www.toppreise.ch{clean_path}"
-                    level2_url_set.add(full_url)
-                    
-                    segments = parts[1:]
-                    root_slug = segments[0].split('-c')[0].lower()
-                    root_title = root_slug_to_name.get(root_slug, CANONICAL_GROUPS.get(root_slug.replace('-', ' '), format_title(segments[0])))
-                    
-                    for seg in segments[1:]:
-                        leaf_title = format_title(seg)
-                        leaf_key = leaf_title.lower()
-                        slug_key = seg.split('-c')[0].lower().replace('-', ' ')
-                        raw_slug = seg.split('-c')[0].lower()
+    depth_round = 0
+    while to_visit:
+        depth_round += 1
+        current_urls = list(to_visit - visited_urls)
+        if not current_urls:
+            break
+        
+        visited_urls.update(current_urls)
+        print(f"📡 Crawl Round {depth_round}: Processing {len(current_urls)} category pages (Visited total: {len(visited_urls)})...", flush=True)
+        
+        next_urls = set()
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(fetch_url, url): url for url in current_urls}
+            for future in as_completed(futures):
+                url, html = future.result()
+                if not html:
+                    continue
+                matches = re.findall(r'href=["\'](/produktsuche/[^"\']+-c\d+[^"\']*)["\']', html)
+                for m in matches:
+                    clean_path = m.split('?')[0]
+                    parts = clean_path.strip('/').split('/')
+                    if len(parts) >= 2 and parts[0] == 'produktsuche':
+                        full_url = f"https://www.toppreise.ch{clean_path}"
+                        if full_url not in visited_urls:
+                            next_urls.add(full_url)
                         
-                        lookup_map[leaf_key] = root_title
-                        lookup_map[slug_key] = root_title
-                        lookup_map[raw_slug] = root_title
+                        segments = parts[1:]
+                        root_slug = segments[0].split('-c')[0].lower()
+                        root_title = root_slug_to_name.get(root_slug, CANONICAL_GROUPS.get(root_slug.replace('-', ' '), format_title(segments[0])))
                         
-                        detailed_map[slug_key] = {
-                            "root": root_title,
-                            "title": leaf_title,
-                            "path": [format_title(s) for s in segments]
-                        }
+                        for seg in segments[1:]:
+                            leaf_title = format_title(seg)
+                            leaf_key = leaf_title.lower()
+                            slug_key = seg.split('-c')[0].lower().replace('-', ' ')
+                            raw_slug = seg.split('-c')[0].lower()
+                            
+                            lookup_map[leaf_key] = root_title
+                            lookup_map[slug_key] = root_title
+                            lookup_map[raw_slug] = root_title
+                            
+                            detailed_map[slug_key] = {
+                                "root": root_title,
+                                "title": leaf_title,
+                                "path": [format_title(s) for s in segments]
+                            }
+        
+        to_visit = next_urls
 
-    print(f"📡 Level 2: Discovered {len(level2_url_set)} subcategory pages. Crawling level 2 in parallel...", flush=True)
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(fetch_url, url): url for url in level2_url_set}
-        count = 0
-        for future in as_completed(futures):
-            count += 1
-            if count % 20 == 0 or count == len(level2_url_set):
-                print(f"   Progress: {count}/{len(level2_url_set)} level 2 pages processed...", flush=True)
-            url, html = future.result()
-            if not html:
-                continue
-            matches = re.findall(r'href=["\'](/produktsuche/[^"\']+-c\d+[^"\']*)["\']', html)
-            for m in matches:
-                clean_path = m.split('?')[0]
-                parts = clean_path.strip('/').split('/')
-                if len(parts) >= 2 and parts[0] == 'produktsuche':
-                    segments = parts[1:]
-                    root_slug = segments[0].split('-c')[0].lower()
-                    root_title = root_slug_to_name.get(root_slug, CANONICAL_GROUPS.get(root_slug.replace('-', ' '), format_title(segments[0])))
-                    
-                    for seg in segments[1:]:
-                        leaf_title = format_title(seg)
-                        leaf_key = leaf_title.lower()
-                        slug_key = seg.split('-c')[0].lower().replace('-', ' ')
-                        raw_slug = seg.split('-c')[0].lower()
-                        
-                        lookup_map[leaf_key] = root_title
-                        lookup_map[slug_key] = root_title
-                        lookup_map[raw_slug] = root_title
-                        
-                        detailed_map[slug_key] = {
-                            "root": root_title,
-                            "title": leaf_title,
-                            "path": [format_title(s) for s in segments]
-                        }
-
-    print(f"✅ Deep Crawl Complete! Generated {len(lookup_map)} category mappings.", flush=True)
+    print(f"✅ Full BFS Crawl Complete! Visited {len(visited_urls)} pages and generated {len(lookup_map)} category mappings.", flush=True)
     return lookup_map, detailed_map
 
 def main():

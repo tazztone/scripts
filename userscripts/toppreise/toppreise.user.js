@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.7.1
+// @version      2.8.0
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -377,9 +377,9 @@ const STYLES = `
     text-decoration: line-through !important;
   }
   .tp-group-pill.tp-excluded-individual {
-    background: #7f1d1d !important;
-    color: #fca5a5 !important;
-    border-color: #ef4444 !important;
+    background: #9a3412 !important;
+    color: #ffedd5 !important;
+    border-color: #f97316 !important;
     text-decoration: none !important;
   }
   .tp-group-pill.tp-partial {
@@ -1237,8 +1237,8 @@ const STYLES = `
     "bohrmaschinen-schrauber": "Garten & Baumarkt",
     "saegen fraesen": "Garten & Baumarkt",
     "saegen-fraesen": "Garten & Baumarkt",
-    "bekleidung accessoires": "Bekleidung & Schuhe",
-    "bekleidung-accessoires": "Bekleidung & Schuhe",
+    "bekleidung accessoires": "Bekleidung Accessoires",
+    "bekleidung-accessoires": "Bekleidung Accessoires",
     "schuhe": "Bekleidung Accessoires",
     "parfuemerie": "Drogerie",
     "rasur haarpflege": "Drogerie",
@@ -1277,17 +1277,31 @@ const STYLES = `
     "horrorkomoedie": "Filme",
     "klassisches-drama": "Filme",
     "komoedie": "Filme",
-    "jump-n-run-geschicklichkeit": "Videogames",
     "simulationen": "Videogames",
-    "sportspiele": "Videogames",
+    "jump-n-run-geschicklichkeit": "Videogames",
     "rennspiele": "Videogames",
+    "sportspiele": "Videogames",
     "rollenspiele-adventures": "Videogames",
-    "fitness krafttraining": "Sport & Freizeit",
-    "fitness-krafttraining": "Sport & Freizeit",
     "3d shooter fps": "Videogames",
     "3d-shooter-fps": "Videogames",
     "actionkameras": "TV & Video",
     "strategiespiele": "Videogames",
+    "fitness krafttraining": "Sport & Freizeit",
+    "fitness-krafttraining": "Sport & Freizeit",
+    "pneus": "Auto & Motorrad",
+    "pkw sommerreifen": "Auto & Motorrad",
+    "pkw-sommerreifen": "Auto & Motorrad",
+    "velofahren": "Sport & Freizeit",
+    "blu ray science fiction fantasy": "Filme",
+    "blu-ray-science-fiction-fantasy": "Filme",
+    "blu ray kinder familie": "Filme",
+    "blu-ray-kinder-familie": "Filme",
+    "blu ray tv dokumentationen": "Filme",
+    "blu-ray-tv-dokumentationen": "Filme",
+    "blu ray action thriller horror": "Filme",
+    "blu-ray-action-thriller-horror": "Filme",
+    "blu ray komoedie drama": "Filme",
+    "blu-ray-komoedie-drama": "Filme",
     "xbox series x s": "Videogames",
     "xbox-series-x-s": "Videogames",
     "xbox series x s games": "Videogames",
@@ -1299,26 +1313,12 @@ const STYLES = `
     "xbox one games": "Videogames",
     "xbox-one-games": "Videogames",
     "spielesammlungen": "Videogames",
-    "blu ray science fiction fantasy": "Filme",
-    "blu-ray-science-fiction-fantasy": "Filme",
-    "blu ray kinder familie": "Filme",
-    "blu-ray-kinder-familie": "Filme",
-    "blu ray tv dokumentationen": "Filme",
-    "blu-ray-tv-dokumentationen": "Filme",
-    "blu ray action thriller horror": "Filme",
-    "blu-ray-action-thriller-horror": "Filme",
-    "blu ray komoedie drama": "Filme",
-    "blu-ray-komoedie-drama": "Filme",
     "4k uhd science fiction fantasy": "Filme",
     "4k-uhd-science-fiction-fantasy": "Filme",
     "4k uhd kinder familie": "Filme",
     "4k-uhd-kinder-familie": "Filme",
     "4k uhd action thriller horror": "Filme",
-    "4k-uhd-action-thriller-horror": "Filme",
-    "pneus": "Auto & Motorrad",
-    "pkw sommerreifen": "Auto & Motorrad",
-    "pkw-sommerreifen": "Auto & Motorrad",
-    "velofahren": "Sport & Freizeit"
+    "4k-uhd-action-thriller-horror": "Filme"
 };
 
   const GROUP_EMOJIS = {

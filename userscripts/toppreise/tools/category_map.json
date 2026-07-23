@@ -1267,10 +1267,10 @@
     ]
   },
   "bekleidung accessoires": {
-    "root": "Bekleidung & Schuhe",
+    "root": "Bekleidung Accessoires",
     "title": "Bekleidung Accessoires",
     "path": [
-      "Bekleidung Schuhe",
+      "Bekleidung Accessoires",
       "Bekleidung Accessoires"
     ]
   },
@@ -1431,8 +1431,7 @@
     "path": [
       "Filme",
       "Dvd Filme",
-      "Dvd Science Fiction Fantasy",
-      "Fantasy"
+      "Dvd Science Fiction Fantasy"
     ]
   },
   "science fiction": {
@@ -1440,8 +1439,8 @@
     "title": "Science Fiction",
     "path": [
       "Filme",
-      "Dvd Filme",
-      "Dvd Science Fiction Fantasy",
+      "Blu Ray 4k Ultra Hd Filme",
+      "4k Uhd Science Fiction Fantasy",
       "Science Fiction"
     ]
   },
@@ -1451,8 +1450,7 @@
     "path": [
       "Filme",
       "Dvd Filme",
-      "Dvd Kinder Familie",
-      "Abenteuer"
+      "Dvd Kinder Familie"
     ]
   },
   "abenteuer": {
@@ -1460,8 +1458,8 @@
     "title": "Abenteuer",
     "path": [
       "Filme",
-      "Dvd Filme",
-      "Dvd Kinder Familie",
+      "Blu Ray Filme",
+      "Blu Ray Kinder Familie",
       "Abenteuer"
     ]
   },
@@ -1471,8 +1469,7 @@
     "path": [
       "Filme",
       "Dvd Filme",
-      "Dvd Tv Dokumentationen",
-      "Biografie"
+      "Dvd Tv Dokumentationen"
     ]
   },
   "natur": {
@@ -1480,8 +1477,8 @@
     "title": "Natur",
     "path": [
       "Filme",
-      "Dvd Filme",
-      "Dvd Tv Dokumentationen",
+      "Blu Ray Filme",
+      "Blu Ray Tv Dokumentationen",
       "Natur"
     ]
   },
@@ -1491,8 +1488,7 @@
     "path": [
       "Filme",
       "Dvd Filme",
-      "Dvd Action Thriller Horror",
-      "Action"
+      "Dvd Action Thriller Horror"
     ]
   },
   "thriller": {
@@ -1500,8 +1496,8 @@
     "title": "Thriller",
     "path": [
       "Filme",
-      "Dvd Filme",
-      "Dvd Action Thriller Horror",
+      "Blu Ray 4k Ultra Hd Filme",
+      "4k Uhd Action Thriller Horror",
       "Thriller"
     ]
   },
@@ -1511,8 +1507,7 @@
     "path": [
       "Filme",
       "Dvd Filme",
-      "Dvd Komoedie Drama",
-      "Romantische Komoedie"
+      "Dvd Komoedie Drama"
     ]
   },
   "mehr komoedie": {
@@ -1520,8 +1515,8 @@
     "title": "Mehr Komoedie",
     "path": [
       "Filme",
-      "Dvd Filme",
-      "Dvd Komoedie Drama",
+      "Blu Ray Filme",
+      "Blu Ray Komoedie Drama",
       "Mehr Komoedie"
     ]
   },
@@ -1530,8 +1525,8 @@
     "title": "Mehr Drama",
     "path": [
       "Filme",
-      "Dvd Filme",
-      "Dvd Komoedie Drama",
+      "Blu Ray Filme",
+      "Blu Ray Komoedie Drama",
       "Mehr Drama"
     ]
   },
@@ -1540,8 +1535,8 @@
     "title": "Fantasy",
     "path": [
       "Filme",
-      "Dvd Filme",
-      "Dvd Science Fiction Fantasy",
+      "Blu Ray Filme",
+      "Blu Ray Science Fiction Fantasy",
       "Fantasy"
     ]
   },
@@ -1550,8 +1545,8 @@
     "title": "Horror",
     "path": [
       "Filme",
-      "Dvd Filme",
-      "Dvd Action Thriller Horror",
+      "Blu Ray Filme",
+      "Blu Ray Action Thriller Horror",
       "Horror"
     ]
   },
@@ -1560,8 +1555,8 @@
     "title": "Romantische Komoedie",
     "path": [
       "Filme",
-      "Dvd Filme",
-      "Dvd Komoedie Drama",
+      "Blu Ray Filme",
+      "Blu Ray Komoedie Drama",
       "Romantische Komoedie"
     ]
   },
@@ -1570,8 +1565,8 @@
     "title": "Horrorkomoedie",
     "path": [
       "Filme",
-      "Dvd Filme",
-      "Dvd Komoedie Drama",
+      "Blu Ray Filme",
+      "Blu Ray Komoedie Drama",
       "Horrorkomoedie"
     ]
   },
@@ -1580,8 +1575,8 @@
     "title": "Klassisches Drama",
     "path": [
       "Filme",
-      "Dvd Filme",
-      "Dvd Komoedie Drama",
+      "Blu Ray Filme",
+      "Blu Ray Komoedie Drama",
       "Klassisches Drama"
     ]
   },
@@ -1590,8 +1585,8 @@
     "title": "Biografie",
     "path": [
       "Filme",
-      "Dvd Filme",
-      "Dvd Tv Dokumentationen",
+      "Blu Ray Filme",
+      "Blu Ray Tv Dokumentationen",
       "Biografie"
     ]
   },
@@ -1600,8 +1595,8 @@
     "title": "Action",
     "path": [
       "Filme",
-      "Dvd Filme",
-      "Dvd Action Thriller Horror",
+      "Blu Ray 4k Ultra Hd Filme",
+      "4k Uhd Action Thriller Horror",
       "Action"
     ]
   },
@@ -1610,19 +1605,19 @@
     "title": "Komoedie",
     "path": [
       "Filme",
-      "Dvd Filme",
-      "Dvd Kinder Familie",
+      "Blu Ray Filme",
+      "Blu Ray Kinder Familie",
       "Komoedie"
     ]
   },
-  "jump n run geschicklichkeit": {
+  "actionspiele": {
     "root": "Videogames",
-    "title": "Jump N Run Geschicklichkeit",
+    "title": "Actionspiele",
     "path": [
       "Videogames",
-      "Nintendo Switch 2",
-      "Nintendo Switch 2 Games",
-      "Jump N Run Geschicklichkeit"
+      "Xbox One",
+      "Xbox One Games",
+      "Actionspiele"
     ]
   },
   "simulationen": {
@@ -1630,9 +1625,29 @@
     "title": "Simulationen",
     "path": [
       "Videogames",
-      "Nintendo Switch 2",
-      "Nintendo Switch 2 Games",
+      "Nintendo Switch",
+      "Nintendo Switch Games",
       "Simulationen"
+    ]
+  },
+  "jump n run geschicklichkeit": {
+    "root": "Videogames",
+    "title": "Jump N Run Geschicklichkeit",
+    "path": [
+      "Videogames",
+      "Xbox One",
+      "Xbox One Games",
+      "Jump N Run Geschicklichkeit"
+    ]
+  },
+  "rennspiele": {
+    "root": "Videogames",
+    "title": "Rennspiele",
+    "path": [
+      "Videogames",
+      "Playstation 4",
+      "Ps4 Games",
+      "Rennspiele"
     ]
   },
   "sportspiele": {
@@ -1645,43 +1660,14 @@
       "Sportspiele"
     ]
   },
-  "rennspiele": {
-    "root": "Videogames",
-    "title": "Rennspiele",
-    "path": [
-      "Videogames",
-      "Nintendo Switch 2",
-      "Nintendo Switch 2 Games",
-      "Rennspiele"
-    ]
-  },
   "rollenspiele adventures": {
     "root": "Videogames",
     "title": "Rollenspiele Adventures",
     "path": [
       "Videogames",
-      "Nintendo Switch 2",
-      "Nintendo Switch 2 Games",
+      "Playstation 4",
+      "Ps4 Games",
       "Rollenspiele Adventures"
-    ]
-  },
-  "fitness krafttraining": {
-    "root": "Sport & Freizeit",
-    "title": "Fitness Krafttraining",
-    "path": [
-      "Sport Freizeit",
-      "Fitness Krafttraining",
-      "Activity Tracker Smartwatches"
-    ]
-  },
-  "actionspiele": {
-    "root": "Videogames",
-    "title": "Actionspiele",
-    "path": [
-      "Videogames",
-      "Nintendo Switch 2",
-      "Nintendo Switch 2 Games",
-      "Actionspiele"
     ]
   },
   "3d shooter fps": {
@@ -1712,142 +1698,13 @@
       "Strategiespiele"
     ]
   },
-  "xbox series x s": {
-    "root": "Videogames",
-    "title": "Xbox Series X S",
+  "fitness krafttraining": {
+    "root": "Sport & Freizeit",
+    "title": "Fitness Krafttraining",
     "path": [
-      "Videogames",
-      "Xbox Series X S",
-      "Xbox Series X S Games"
-    ]
-  },
-  "xbox series x s games": {
-    "root": "Videogames",
-    "title": "Xbox Series X S Games",
-    "path": [
-      "Videogames",
-      "Xbox Series X S",
-      "Xbox Series X S Games"
-    ]
-  },
-  "beat em up": {
-    "root": "Videogames",
-    "title": "Beat Em Up",
-    "path": [
-      "Videogames",
-      "Xbox Series X S",
-      "Xbox Series X S Games",
-      "Beat Em Up"
-    ]
-  },
-  "xbox one": {
-    "root": "Videogames",
-    "title": "Xbox One",
-    "path": [
-      "Videogames",
-      "Xbox One",
-      "Xbox One Games",
-      "Spielesammlungen"
-    ]
-  },
-  "xbox one games": {
-    "root": "Videogames",
-    "title": "Xbox One Games",
-    "path": [
-      "Videogames",
-      "Xbox One",
-      "Xbox One Games",
-      "Spielesammlungen"
-    ]
-  },
-  "spielesammlungen": {
-    "root": "Videogames",
-    "title": "Spielesammlungen",
-    "path": [
-      "Videogames",
-      "Xbox One",
-      "Xbox One Games",
-      "Spielesammlungen"
-    ]
-  },
-  "blu ray science fiction fantasy": {
-    "root": "Filme",
-    "title": "Blu Ray Science Fiction Fantasy",
-    "path": [
-      "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Science Fiction Fantasy",
-      "Fantasy"
-    ]
-  },
-  "blu ray kinder familie": {
-    "root": "Filme",
-    "title": "Blu Ray Kinder Familie",
-    "path": [
-      "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Kinder Familie",
-      "Abenteuer"
-    ]
-  },
-  "blu ray tv dokumentationen": {
-    "root": "Filme",
-    "title": "Blu Ray Tv Dokumentationen",
-    "path": [
-      "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Tv Dokumentationen",
-      "Biografie"
-    ]
-  },
-  "blu ray action thriller horror": {
-    "root": "Filme",
-    "title": "Blu Ray Action Thriller Horror",
-    "path": [
-      "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Action Thriller Horror",
-      "Thriller"
-    ]
-  },
-  "blu ray komoedie drama": {
-    "root": "Filme",
-    "title": "Blu Ray Komoedie Drama",
-    "path": [
-      "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Komoedie Drama",
-      "Klassisches Drama"
-    ]
-  },
-  "4k uhd science fiction fantasy": {
-    "root": "Filme",
-    "title": "4k Uhd Science Fiction Fantasy",
-    "path": [
-      "Filme",
-      "Blu Ray 4k Ultra Hd Filme",
-      "4k Uhd Science Fiction Fantasy",
-      "Fantasy"
-    ]
-  },
-  "4k uhd kinder familie": {
-    "root": "Filme",
-    "title": "4k Uhd Kinder Familie",
-    "path": [
-      "Filme",
-      "Blu Ray 4k Ultra Hd Filme",
-      "4k Uhd Kinder Familie",
-      "Abenteuer"
-    ]
-  },
-  "4k uhd action thriller horror": {
-    "root": "Filme",
-    "title": "4k Uhd Action Thriller Horror",
-    "path": [
-      "Filme",
-      "Blu Ray 4k Ultra Hd Filme",
-      "4k Uhd Action Thriller Horror",
-      "Action"
+      "Sport Freizeit",
+      "Fitness Krafttraining",
+      "Activity Tracker Smartwatches"
     ]
   },
   "pneus": {
@@ -1855,7 +1712,8 @@
     "title": "Pneus",
     "path": [
       "Auto Motorrad",
-      "Pneus"
+      "Pneus",
+      "Pkw Sommerreifen"
     ]
   },
   "pkw sommerreifen": {
@@ -1873,6 +1731,136 @@
     "path": [
       "Sport Freizeit",
       "Velofahren"
+    ]
+  },
+  "blu ray science fiction fantasy": {
+    "root": "Filme",
+    "title": "Blu Ray Science Fiction Fantasy",
+    "path": [
+      "Filme",
+      "Blu Ray Filme",
+      "Blu Ray Science Fiction Fantasy"
+    ]
+  },
+  "blu ray kinder familie": {
+    "root": "Filme",
+    "title": "Blu Ray Kinder Familie",
+    "path": [
+      "Filme",
+      "Blu Ray Filme",
+      "Blu Ray Kinder Familie"
+    ]
+  },
+  "blu ray tv dokumentationen": {
+    "root": "Filme",
+    "title": "Blu Ray Tv Dokumentationen",
+    "path": [
+      "Filme",
+      "Blu Ray Filme",
+      "Blu Ray Tv Dokumentationen"
+    ]
+  },
+  "blu ray action thriller horror": {
+    "root": "Filme",
+    "title": "Blu Ray Action Thriller Horror",
+    "path": [
+      "Filme",
+      "Blu Ray Filme",
+      "Blu Ray Action Thriller Horror"
+    ]
+  },
+  "blu ray komoedie drama": {
+    "root": "Filme",
+    "title": "Blu Ray Komoedie Drama",
+    "path": [
+      "Filme",
+      "Blu Ray Filme",
+      "Blu Ray Komoedie Drama"
+    ]
+  },
+  "xbox series x s": {
+    "root": "Videogames",
+    "title": "Xbox Series X S",
+    "path": [
+      "Videogames",
+      "Xbox Series X S",
+      "Xbox Series X S Games",
+      "3d Shooter Fps"
+    ]
+  },
+  "xbox series x s games": {
+    "root": "Videogames",
+    "title": "Xbox Series X S Games",
+    "path": [
+      "Videogames",
+      "Xbox Series X S",
+      "Xbox Series X S Games",
+      "3d Shooter Fps"
+    ]
+  },
+  "beat em up": {
+    "root": "Videogames",
+    "title": "Beat Em Up",
+    "path": [
+      "Videogames",
+      "Xbox Series X S",
+      "Xbox Series X S Games",
+      "Beat Em Up"
+    ]
+  },
+  "xbox one": {
+    "root": "Videogames",
+    "title": "Xbox One",
+    "path": [
+      "Videogames",
+      "Xbox One"
+    ]
+  },
+  "xbox one games": {
+    "root": "Videogames",
+    "title": "Xbox One Games",
+    "path": [
+      "Videogames",
+      "Xbox One",
+      "Xbox One Games",
+      "Actionspiele"
+    ]
+  },
+  "spielesammlungen": {
+    "root": "Videogames",
+    "title": "Spielesammlungen",
+    "path": [
+      "Videogames",
+      "Xbox One",
+      "Xbox One Games",
+      "Spielesammlungen"
+    ]
+  },
+  "4k uhd science fiction fantasy": {
+    "root": "Filme",
+    "title": "4k Uhd Science Fiction Fantasy",
+    "path": [
+      "Filme",
+      "Blu Ray 4k Ultra Hd Filme",
+      "4k Uhd Science Fiction Fantasy"
+    ]
+  },
+  "4k uhd kinder familie": {
+    "root": "Filme",
+    "title": "4k Uhd Kinder Familie",
+    "path": [
+      "Filme",
+      "Blu Ray 4k Ultra Hd Filme",
+      "4k Uhd Kinder Familie"
+    ]
+  },
+  "4k uhd action thriller horror": {
+    "root": "Filme",
+    "title": "4k Uhd Action Thriller Horror",
+    "path": [
+      "Filme",
+      "Blu Ray 4k Ultra Hd Filme",
+      "4k Uhd Action Thriller Horror"
     ]
   }
 }
