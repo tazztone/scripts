@@ -4,6 +4,12 @@ A production-grade, highly resilient Violentmonkey/Tampermonkey userscript for P
 
 Perplexity frequently resets the active model back to a platform default (like "Best") during page transitions, new threads, or session updates. This script detects those changes reactively and silently restores your exact configuration.
 
+## Requirements
+
+Requires Violentmonkey (or a compatible userscript manager):
+- [Firefox](https://addons.mozilla.org/en-US/firefox/addon/violentmonkey/)
+- [Chrome / Brave](https://chromewebstore.google.com/detail/violentmonkey/jinjaccalgkegednnccohejagnlnfdag)
+
 ---
 
 ## Direct Installation

@@ -17,7 +17,7 @@ A [Violentmonkey](https://violentmonkey.github.io/) userscript that automaticall
 
 - Violentmonkey installed in your browser:
   - [Firefox](https://addons.mozilla.org/en-US/firefox/addon/violentmonkey/)
-  - [Chrome / Brave](https://chrome.google.com/webstore/detail/violent-monkey/jinjaccalgkegednnccohejagnlnfdag)
+  - [Chrome / Brave](https://chromewebstore.google.com/detail/violentmonkey/jinjaccalgkegednnccohejagnlnfdag)
 - A Perplexity account with agent/tool features enabled
 
 ## Installation

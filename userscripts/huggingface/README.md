@@ -14,6 +14,12 @@ A feature-rich userscript for Hugging Face (`https://huggingface.co/models`) tha
 - **Configurable Floating FAB**: Interactive settings modal (FAB at bottom-right) allows customizing colors, scales, and toggling borders on/off.
 - **Single Page Application Resiliency**: Uses debounced MutationObservers and CSS rules to handle dynamic page transitions and infinite scroll seamlessly.
 
+## Requirements
+
+Requires Violentmonkey (or a compatible userscript manager):
+- [Firefox](https://addons.mozilla.org/en-US/firefox/addon/violentmonkey/)
+- [Chrome / Brave](https://chromewebstore.google.com/detail/violentmonkey/jinjaccalgkegednnccohejagnlnfdag)
+
 ## Installation
 
 **One-click install** — open the raw script URL in your browser while Violentmonkey is active:

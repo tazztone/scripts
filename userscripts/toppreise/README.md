@@ -4,8 +4,11 @@ All-in-one userscript for Toppreise.ch that highlights best prices, excludes unw
 
 ## 🚀 Installation
 
+Requires Violentmonkey (or a compatible userscript manager):
+- [Firefox](https://addons.mozilla.org/en-US/firefox/addon/violentmonkey/)
+- [Chrome / Brave](https://chromewebstore.google.com/detail/violentmonkey/jinjaccalgkegednnccohejagnlnfdag)
+
 ### 👉 [**CLICK HERE TO INSTALL USERSCRIPT**](https://github.com/tazztone/scripts/raw/refs/heads/main/userscripts/toppreise/toppreise.user.js?v=2.3.0)
-*(Requires Violentmonkey / Tampermonkey)*
 
 ---
 

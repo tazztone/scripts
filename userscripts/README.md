@@ -2,6 +2,12 @@
 
 A collection of production-grade browser userscripts (compatible with Violentmonkey/Tampermonkey) designed for high reliability and maintainability across modern SPAs.
 
+## Prerequisites
+
+Requires Violentmonkey (or a compatible userscript manager):
+- [Violentmonkey for Firefox](https://addons.mozilla.org/en-US/firefox/addon/violentmonkey/)
+- [Violentmonkey for Chrome](https://chromewebstore.google.com/detail/violentmonkey/jinjaccalgkegednnccohejagnlnfdag)
+
 ## Standard Project Structure
 
 Every userscript resides in its own subdirectory and adheres to the standard workflow defined in [userscript-development](./userscript-development/SKILL.md):
