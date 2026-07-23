@@ -4,14 +4,14 @@ All-in-one userscript for Toppreise.ch that highlights best prices, excludes unw
 
 ## 🚀 Installation
 
-### 👉 [**CLICK HERE TO INSTALL USERSCRIPT**](https://github.com/tazztone/scripts/raw/refs/heads/main/userscripts/toppreise/toppreise.user.js?v=1.7.0)
+### 👉 [**CLICK HERE TO INSTALL USERSCRIPT**](https://github.com/tazztone/scripts/raw/refs/heads/main/userscripts/toppreise/toppreise.user.js?v=1.8.0)
 *(Requires Violentmonkey / Tampermonkey)*
 
 ---
 
 ## ⚡ Features
 
-1. **⚡ Toppreise Power Filter Bar**: Dedicated top-of-page glassmorphic control box prepended directly to `#FrameContent` containing both the Negativer Textfilter input and interactive Category Pills for guaranteed visibility across all Toppreise views.
+1. **⚡ Compact Power Filter Bar**: Ultra-sleek, single-row (~38px height) top control bar prepended directly to `#FrameContent`. The Negative Keyword Filter input is always front and center, while category pills collapse into an on-demand drawer (`🏷️ Kategorien (N) ▼`).
 2. **Händler Bestpreis Highlights**: Highlights products with an emerald green border & "Best Price" badge when a filtered store is the cheapest (or within custom margin %), while dimming/hiding non-cheapest products.
 3. **Negativer Textfilter (Ausschluss)**: Exclude products containing specific unwanted keywords (e.g. `SAMSUNG, Hülle, Case, Refurbished, Gebraucht`) with word-boundary precision via the inline search bar or modal.
 4. **Kategorien-Filter (Neue Toppreise & Suche)**: Multi-tier category extraction engine combining DOM elements, URL path slugs, and active breadcrumb fallbacks with live pill toggles.

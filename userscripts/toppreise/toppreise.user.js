@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.7.0
+// @version      1.8.0
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -25,6 +25,7 @@ const DEFAULTS = {
   MIN_OFFERS: 0,
   SORT_BY_OFFERS: 'none',
   ENABLE_FILTER_COUNTER: true,
+  CATS_EXPANDED: false,
   
   // Price Alarm Automation
   ALARM_ENABLED: true,
@@ -516,73 +517,134 @@ const STYLES = `
     background: rgba(16, 185, 129, 0.4);
   }
 
-  /* Unified Power Filter Bar at Top of Page Content */
+  /* Compact Single-Row Power Filter Bar with Collapsible Category Drawer */
   #tp-suite-filter-bar {
-    margin: 14px auto 18px auto !important;
+    margin: 8px auto 12px auto !important;
     width: 100% !important;
     box-sizing: border-box !important;
     background: #1e293b !important;
     border: 1px solid #334155 !important;
-    border-radius: 12px !important;
-    padding: 12px 16px !important;
+    border-radius: 10px !important;
+    padding: 8px 12px !important;
     color: #f8fafc !important;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25) !important;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2) !important;
     display: flex !important;
     flex-direction: column !important;
-    gap: 10px !important;
+    gap: 8px !important;
     z-index: 9990 !important;
     position: relative !important;
   }
 
-  .tp-filter-bar-header {
+  .tp-filter-main-row {
     display: flex !important;
     align-items: center !important;
-    justify-content: space-between !important;
-    padding-bottom: 6px !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    gap: 10px !important;
+    width: 100% !important;
   }
 
-  .tp-filter-bar-title {
+  .tp-filter-badge {
     font-size: 13px !important;
     font-weight: 700 !important;
     color: #10b981 !important;
-    letter-spacing: 0.3px !important;
-    text-transform: uppercase !important;
     display: flex !important;
     align-items: center !important;
-    gap: 6px !important;
+    user-select: none !important;
+  }
+
+  .tp-input-wrapper {
+    flex: 1 !important;
+    display: flex !important;
+    align-items: center !important;
+    position: relative !important;
+    min-width: 200px !important;
+  }
+
+  .tp-input-icon {
+    position: absolute !important;
+    left: 10px !important;
+    font-size: 12px !important;
+    pointer-events: none !important;
+    user-select: none !important;
+  }
+
+  #tp-inline-negative-input {
+    width: 100% !important;
+    background: rgba(15, 23, 42, 0.8) !important;
+    border: 1px solid #334155 !important;
+    border-radius: 8px !important;
+    color: #fff !important;
+    padding: 6px 28px 6px 28px !important;
+    font-size: 12px !important;
+    outline: none !important;
+    transition: border-color 0.2s ease !important;
+    box-sizing: border-box !important;
+  }
+  #tp-inline-negative-input:focus {
+    border-color: #10b981 !important;
+  }
+
+  #tp-clear-neg-btn {
+    position: absolute !important;
+    right: 8px !important;
+    background: transparent !important;
+    border: none !important;
+    color: #64748b !important;
+    font-size: 12px !important;
+    cursor: pointer !important;
+    padding: 2px 6px !important;
+    border-radius: 50% !important;
+  }
+  #tp-clear-neg-btn:hover {
+    color: #f43f5e !important;
+  }
+
+  .tp-btn-toggle {
+    background: rgba(51, 65, 85, 0.6) !important;
+    border: 1px solid #334155 !important;
+    color: #cbd5e1 !important;
+    padding: 5px 10px !important;
+    border-radius: 8px !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    transition: all 0.2s ease !important;
+    user-select: none !important;
+    white-space: nowrap !important;
+  }
+  .tp-btn-toggle:hover {
+    background: #334155 !important;
+    color: #fff !important;
+  }
+  .tp-btn-toggle.tp-active {
+    background: rgba(16, 185, 129, 0.2) !important;
+    border-color: rgba(16, 185, 129, 0.4) !important;
+    color: #34d399 !important;
   }
 
   .tp-filter-bar-reset {
     background: rgba(244, 63, 94, 0.15) !important;
     border: 1px solid rgba(244, 63, 94, 0.3) !important;
     color: #fda4af !important;
-    padding: 3px 10px !important;
-    border-radius: 12px !important;
+    padding: 5px 10px !important;
+    border-radius: 8px !important;
     font-size: 11px !important;
     font-weight: 600 !important;
     cursor: pointer !important;
     transition: all 0.2s ease !important;
+    white-space: nowrap !important;
   }
   .tp-filter-bar-reset:hover {
     background: rgba(244, 63, 94, 0.3) !important;
     color: #fff !important;
   }
 
-  .tp-filter-row {
-    display: flex !important;
-    align-items: center !important;
-    gap: 10px !important;
-    flex-wrap: wrap !important;
-  }
-
-  .tp-filter-label {
-    font-size: 12px !important;
-    font-weight: 700 !important;
-    color: #94a3b8 !important;
-    white-space: nowrap !important;
-    min-width: 110px !important;
+  .tp-cat-collapsible-body {
+    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+    padding-top: 8px !important;
   }
 
   .tp-input-wrapper {
@@ -663,6 +725,7 @@ const STYLES = `
     MIN_OFFERS: parseInt(_getValue('MIN_OFFERS', DEFAULTS.MIN_OFFERS)),
     SORT_BY_OFFERS: _getValue('SORT_BY_OFFERS', DEFAULTS.SORT_BY_OFFERS),
     ENABLE_FILTER_COUNTER: _getValue('ENABLE_FILTER_COUNTER', DEFAULTS.ENABLE_FILTER_COUNTER),
+    CATS_EXPANDED: _getValue('CATS_EXPANDED', DEFAULTS.CATS_EXPANDED),
     ALARM_ENABLED: _getValue('ALARM_ENABLED', DEFAULTS.ALARM_ENABLED),
     ALARM_TARGET_PERCENT: parseFloat(_getValue('ALARM_TARGET_PERCENT', DEFAULTS.ALARM_TARGET_PERCENT)),
     ALARM_DURATION_DAYS: String(_getValue('ALARM_DURATION_DAYS', DEFAULTS.ALARM_DURATION_DAYS)),
@@ -914,7 +977,7 @@ const STYLES = `
            document.body;
   }
 
-  // Unified Glassmorphic Power Filter Bar prepended to top of page content
+  // Unified Glassmorphic Power Filter Bar prepended to top of page content (Single-row collapsed by default)
   function renderSuiteFilterBar() {
     const target = getSuiteBarTarget();
     if (!target) return;
@@ -922,26 +985,29 @@ const STYLES = `
     let bar = document.getElementById('tp-suite-filter-bar');
     const excluded = CONFIG.EXCLUDED_CATEGORIES || [];
     const allCats = new Set([...pageCategories, ...excluded]);
+    const isExpanded = CONFIG.CATS_EXPANDED === true;
 
     if (!bar) {
       bar = document.createElement('div');
       bar.id = 'tp-suite-filter-bar';
       bar.innerHTML = `
-        <div class="tp-filter-bar-header">
-          <div class="tp-filter-bar-title">⚡ Toppreise Power Filter</div>
-          <button class="tp-filter-bar-reset" id="tp-bar-reset-btn" title="Alle Filter (Text &amp; Kategorien) zurücksetzen">🔄 Filter Reset</button>
-        </div>
-
-        <div class="tp-filter-row">
-          <span class="tp-filter-label" title="Begriffe in Produktbezeichnungen ausschließen">🚫 Negativ-Filter:</span>
-          <div class="tp-input-wrapper">
-            <input type="text" id="tp-inline-negative-input" placeholder="Wörter ausschließen (z. B. Hülle, Case, Refurbished...)" value="${CONFIG.NEGATIVE_TERMS || ''}">
+        <div class="tp-filter-main-row">
+          <span class="tp-filter-badge" title="Toppreise Power Filter">⚡</span>
+          
+          <div class="tp-input-wrapper" title="Kommagetrennte Begriffe eingeben (z.B. Hülle, Refurbished, Gebraucht), um passende Produkte auszublenden">
+            <span class="tp-input-icon">🚫</span>
+            <input type="text" id="tp-inline-negative-input" placeholder="Negativ-Filter (z. B. Hülle, Case, Refurbished...)" value="${CONFIG.NEGATIVE_TERMS || ''}">
             <button id="tp-clear-neg-btn" title="Text leeren" style="display: ${CONFIG.NEGATIVE_TERMS ? 'block' : 'none'};">✕</button>
           </div>
+
+          <button class="tp-btn-toggle ${isExpanded ? 'tp-active' : ''}" id="tp-toggle-cats-btn" title="Kategorien-Filter aus-/einblenden">
+            🏷️ <span id="tp-cat-btn-label">Kategorien (${allCats.size})</span> <span id="tp-cat-arrow">${isExpanded ? '▲' : '▼'}</span>
+          </button>
+
+          <button class="tp-filter-bar-reset" id="tp-bar-reset-btn" title="Alle Filter (Text &amp; Kategorien) zurücksetzen">🔄 Reset</button>
         </div>
 
-        <div class="tp-filter-row" id="tp-cat-filter-row">
-          <span class="tp-filter-label" title="Klicken, um komplette Kategorien aus- oder einzublenden">🏷️ Kategorien:</span>
+        <div id="tp-collapsible-cat-row" class="tp-cat-collapsible-body" style="display: ${isExpanded ? 'block' : 'none'};">
           <div id="tp-inline-category-pills" class="tp-cat-pills-row"></div>
         </div>
       `;
@@ -969,6 +1035,17 @@ const STYLES = `
           processListings();
         };
       }
+
+      const toggleBtn = bar.querySelector('#tp-toggle-cats-btn');
+      const catRow = bar.querySelector('#tp-collapsible-cat-row');
+      toggleBtn.onclick = () => {
+        const nextState = !CONFIG.CATS_EXPANDED;
+        saveConfigKey('CATS_EXPANDED', nextState);
+        catRow.style.display = nextState ? 'block' : 'none';
+        toggleBtn.classList.toggle('tp-active', nextState);
+        const arrow = bar.querySelector('#tp-cat-arrow');
+        if (arrow) arrow.textContent = nextState ? '▲' : '▼';
+      };
 
       bar.querySelector('#tp-bar-reset-btn').onclick = () => {
         saveConfigKey('NEGATIVE_TERMS', '');
@@ -999,9 +1076,19 @@ const STYLES = `
       if (clearBtn) clearBtn.style.display = CONFIG.NEGATIVE_TERMS ? 'block' : 'none';
     }
 
+    const toggleBtn = bar.querySelector('#tp-toggle-cats-btn');
+    const catLabel = bar.querySelector('#tp-cat-btn-label');
+    const catArrow = bar.querySelector('#tp-cat-arrow');
+    const catRow = bar.querySelector('#tp-collapsible-cat-row');
+
+    if (catLabel) catLabel.textContent = `Kategorien (${allCats.size})`;
+    if (catArrow) catArrow.textContent = isExpanded ? '▲' : '▼';
+    if (toggleBtn) toggleBtn.classList.toggle('tp-active', isExpanded);
+    if (catRow) catRow.style.display = isExpanded ? 'block' : 'none';
+
     // Reconcile category pills
     const pillsHolder = bar.querySelector('#tp-inline-category-pills');
-    if (pillsHolder) {
+    if (pillsHolder && isExpanded) {
       if (allCats.size === 0) {
         pillsHolder.innerHTML = '<span style="font-size:11px; color:#64748b;">(Keine Kategorien auf aktueller Ansicht)</span>';
       } else {
