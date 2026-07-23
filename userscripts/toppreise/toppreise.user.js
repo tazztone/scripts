@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.1.1
+// @version      2.2.0
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -556,17 +556,26 @@ const STYLES = `
     flex: 1 !important;
     display: flex !important;
     align-items: center !important;
-    position: relative !important;
-    min-width: 200px !important;
+    gap: 8px !important;
+    min-width: 260px !important;
   }
 
-  .tp-input-icon {
-    position: absolute !important;
-    left: 10px !important;
-    font-size: 13px !important;
-    pointer-events: none !important;
+  .tp-input-label-inline {
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    color: #94a3b8 !important;
+    white-space: nowrap !important;
     user-select: none !important;
-    z-index: 2 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+  }
+
+  .tp-input-field-box {
+    flex: 1 !important;
+    position: relative !important;
+    display: flex !important;
+    align-items: center !important;
   }
 
   #tp-inline-negative-input {
@@ -575,7 +584,7 @@ const STYLES = `
     border: 1px solid #334155 !important;
     border-radius: 8px !important;
     color: #fff !important;
-    padding: 6px 28px 6px 34px !important;
+    padding: 6px 26px 6px 10px !important;
     font-size: 12px !important;
     outline: none !important;
     transition: border-color 0.2s ease !important;
@@ -1051,9 +1060,11 @@ const STYLES = `
           <span class="tp-filter-badge" title="Toppreise Power Filter">⚡</span>
           
           <div class="tp-input-wrapper" title="Kommagetrennte Begriffe eingeben (z.B. Hülle, Refurbished, Gebraucht), um passende Produkte auszublenden">
-            <span class="tp-input-icon">🚫</span>
-            <input type="text" id="tp-inline-negative-input" placeholder="Negativ-Filter (z. B. Hülle, Case, Refurbished...)" value="${CONFIG.NEGATIVE_TERMS || ''}">
-            <button id="tp-clear-neg-btn" title="Text leeren" style="display: ${CONFIG.NEGATIVE_TERMS ? 'block' : 'none'};">✕</button>
+            <span class="tp-input-label-inline">🚫 Negativ-Filter:</span>
+            <div class="tp-input-field-box">
+              <input type="text" id="tp-inline-negative-input" placeholder="Wörter ausschließen (z. B. Hülle, Case, Refurbished...)" value="${CONFIG.NEGATIVE_TERMS || ''}">
+              <button id="tp-clear-neg-btn" title="Text leeren" style="display: ${CONFIG.NEGATIVE_TERMS ? 'block' : 'none'};">✕</button>
+            </div>
           </div>
 
           <button class="tp-btn-toggle ${isExpanded ? 'tp-active' : ''}" id="tp-toggle-cats-btn" title="Kategorien-Filter aus-/einblenden">

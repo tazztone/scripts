@@ -4,14 +4,14 @@ All-in-one userscript for Toppreise.ch that highlights best prices, excludes unw
 
 ## 🚀 Installation
 
-### 👉 [**CLICK HERE TO INSTALL USERSCRIPT**](https://github.com/tazztone/scripts/raw/refs/heads/main/userscripts/toppreise/toppreise.user.js?v=2.1.1)
+### 👉 [**CLICK HERE TO INSTALL USERSCRIPT**](https://github.com/tazztone/scripts/raw/refs/heads/main/userscripts/toppreise/toppreise.user.js?v=2.2.0)
 *(Requires Violentmonkey / Tampermonkey)*
 
 ---
 
 ## ⚡ Features
 
-1. **⚡ Compact Power Filter Bar**: Ultra-sleek, single-row (~38px height) top control bar prepended directly to `#FrameContent`. The Negative Keyword Filter input is always front and center with clean icon spacing, while category pills collapse into an on-demand drawer (`🏷️ Kategorien (N) ▼`).
+1. **⚡ Compact Power Filter Bar**: Ultra-sleek, single-row (~38px height) top control bar prepended directly to `#FrameContent`. The Negativ-Filter (`🚫 Negativ-Filter:`) is styled cleanly with inline label text outside the input box, while category pills collapse into an on-demand drawer (`🏷️ Kategorien (N) ▼`).
 2. **Händler Bestpreis Highlights**: Highlights products with an emerald green border & "Best Price" badge when a filtered store is the cheapest (or within custom margin %), while dimming/hiding non-cheapest products.
 3. **Negativer Textfilter (Ausschluss)**: Exclude products containing specific unwanted keywords (e.g. `SAMSUNG, Hülle, Case, Refurbished, Gebraucht`) with word-boundary precision via the inline search bar or modal.
 4. **Kategorien-Filter (Neue Toppreise & Suche)**: Product URL-First Category Extraction Engine parsing `/preisvergleich/CategorySlug/ProductTitle-p123` path segments from card anchor elements (`<a class="Plugin_Product">`), parent tags, and child elements for guaranteed 56+ category detection on `https://www.toppreise.ch/neue-toppreise/`.
