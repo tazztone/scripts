@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.0.0
+// @version      1.1.0
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -672,13 +672,11 @@ const STYLES = `
 
   // Helper: Universal Card Grabber (Matches search, neue-toppreise, top-100, etc.)
   function getProductCards() {
-    // Standard Toppreise list cards
     const standardCards = Array.from(document.querySelectorAll('.Plugin_Product, [class*="Plugin_Product"], .mixedBrowsingList, [class*="mixedBrowsingList"]'));
     if (standardCards.length > 0) {
       return standardCards.filter(c => !c.parentElement.closest('.Plugin_Product, [class*="Plugin_Product"]'));
     }
 
-    // Fallback for Neue Toppreise / special layout grid lists
     const productLinks = document.querySelectorAll('a[href*="/preisvergleich/"]');
     const gridCards = new Set();
 
@@ -747,7 +745,7 @@ const STYLES = `
     return termsList.some(term => term.length > 0 && fullText.includes(term));
   }
 
-  // Stable Quick-Control Pill Toolbar (Hides "Min. Angebote" if page has no offer counts)
+  // Stable Quick-Control Pill Toolbar
   function updateQuickToolbar(counts, pageHasOffers) {
     if (!CONFIG.ENABLE_FILTER_COUNTER) {
       const bar = document.getElementById('tp-quick-toolbar');
@@ -781,7 +779,6 @@ const STYLES = `
       `;
       document.body.appendChild(bar);
 
-      // Attach event bindings ONCE on element creation!
       bar.querySelector('#tp-tb-reveal').onclick = () => {
         document.body.classList.toggle('tp-reveal-filtered');
         processListings();
@@ -808,7 +805,6 @@ const STYLES = `
       };
     }
 
-    // Dynamic state updates in-place without destroying DOM elements!
     bar.style.display = 'flex';
     const countEl = bar.querySelector('#tp-tb-hidden-count');
     const revealBtn = bar.querySelector('#tp-tb-reveal');
@@ -818,7 +814,6 @@ const STYLES = `
     const dividerOffers = bar.querySelector('#tp-tb-divider-offers');
     const minOffersGroup = bar.querySelector('#tp-tb-min-group');
 
-    // Hide offer stepper if page cards don't support offer counts (e.g. Neue Toppreise)
     if (dividerOffers) dividerOffers.style.display = pageHasOffers ? 'block' : 'none';
     if (minOffersGroup) minOffersGroup.style.display = pageHasOffers ? 'flex' : 'none';
 
@@ -861,7 +856,7 @@ const STYLES = `
     }
   }
 
-  // Render Inline Category Pills Bar
+  // Render Inline Category Pills Bar (STABLE DOM RECONCILIATION - ZERO INNERHTML THRASHING!)
   function renderInlineCategoryBar(targetContainer) {
     let bar = document.getElementById('tp-inline-category-bar');
     const targetList = targetContainer || document.querySelector('.productList, .mixedBrowsingListContainer, [class*="productList"]');
@@ -874,31 +869,64 @@ const STYLES = `
     if (!bar) {
       bar = document.createElement('div');
       bar.id = 'tp-inline-category-bar';
+      bar.style.display = 'flex';
+      
+      const label = document.createElement('span');
+      label.style.cssText = 'font-size: 11px; font-weight: 700; color: #475569; margin-right: 6px;';
+      label.title = 'Klicken, um komplette Kategorien aus- oder einzublenden';
+      label.textContent = '🏷️ Kategorien auf dieser Seite:';
+      bar.appendChild(label);
+
       targetList.parentElement.insertBefore(bar, targetList);
+    } else {
+      bar.style.display = 'flex';
     }
 
-    bar.style.display = 'flex';
-    bar.innerHTML = '<span style="font-size: 11px; font-weight: 700; color: #475569; margin-right: 6px;" title="Klicken, um komplette Kategorien aus- oder einzublenden">🏷️ Kategorien auf dieser Seite:</span>';
-
     const excluded = CONFIG.EXCLUDED_CATEGORIES || [];
-    pageCategories.forEach(cat => {
+    
+    // Track existing pill elements by category name for in-place DOM reconciliation
+    const existingPills = new Map();
+    bar.querySelectorAll('.tp-cat-pill').forEach(pill => {
+      existingPills.set(pill.dataset.catName, pill);
+    });
+
+    const currentCats = Array.from(pageCategories);
+
+    currentCats.forEach(cat => {
       const isExcluded = excluded.includes(cat);
-      const pill = document.createElement('div');
+      let pill = existingPills.get(cat);
+
+      if (!pill) {
+        pill = document.createElement('div');
+        pill.className = 'tp-cat-pill';
+        pill.dataset.catName = cat;
+        pill.textContent = cat;
+        
+        // Permanent click listener attached ONCE on pill creation!
+        pill.onclick = () => {
+          const currentExcluded = CONFIG.EXCLUDED_CATEGORIES || [];
+          let updated;
+          if (currentExcluded.includes(cat)) {
+            updated = currentExcluded.filter(c => c !== cat);
+          } else {
+            updated = [...currentExcluded, cat];
+          }
+          CONFIG.EXCLUDED_CATEGORIES = updated;
+          processListings();
+        };
+
+        bar.appendChild(pill);
+      } else {
+        existingPills.delete(cat); // Retain pill element
+      }
+
+      // Update state in-place without destroying DOM nodes
       pill.className = `tp-cat-pill ${isExcluded ? 'tp-excluded' : ''}`;
       pill.title = isExcluded ? `Kategorie "${cat}" wieder einblenden` : `Kategorie "${cat}" dauerhaft ausblenden`;
-      pill.textContent = cat;
-      pill.onclick = () => {
-        let updated = [...excluded];
-        if (isExcluded) {
-          updated = updated.filter(c => c !== cat);
-        } else {
-          updated.push(cat);
-        }
-        CONFIG.EXCLUDED_CATEGORIES = updated;
-        processListings();
-      };
-      bar.appendChild(pill);
     });
+
+    // Remove pills for categories no longer present on page
+    existingPills.forEach(obsoletePill => obsoletePill.remove());
   }
 
   // ─── MODULE 1: PRODUCT LISTING PROCESSOR ─────────────────────────────────────
