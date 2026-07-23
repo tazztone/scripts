@@ -1,7 +1,8 @@
 // ==UserScript==
+// ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.6.0
+// @version      1.7.0
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -516,43 +517,120 @@ const STYLES = `
     background: rgba(16, 185, 129, 0.4);
   }
 
-  /* Inline Negative Filter Bar */
-  #tp-inline-negative-bar {
-    margin: 12px 0;
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  /* Unified Power Filter Bar at Top of Page Content */
+  #tp-suite-filter-bar {
+    margin: 14px auto 18px auto !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
     background: #1e293b !important;
     border: 1px solid #334155 !important;
-    border-radius: 10px;
-    padding: 8px 14px;
+    border-radius: 12px !important;
+    padding: 12px 16px !important;
     color: #f8fafc !important;
-    font-size: 12px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  }
-  #tp-inline-negative-input {
-    flex: 1;
-    background: rgba(15, 23, 42, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 6px;
-    color: #fff;
-    padding: 6px 10px;
-    font-size: 12px;
-    outline: none;
-  }
-  #tp-inline-negative-input:focus {
-    border-color: #10b981;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    z-index: 9990 !important;
+    position: relative !important;
   }
 
-  /* Inline Category Pills Bar */
-  #tp-inline-category-bar {
-    margin: 8px 0 14px 0;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    align-items: center;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  .tp-filter-bar-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding-bottom: 6px !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  }
+
+  .tp-filter-bar-title {
+    font-size: 13px !important;
+    font-weight: 700 !important;
+    color: #10b981 !important;
+    letter-spacing: 0.3px !important;
+    text-transform: uppercase !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+  }
+
+  .tp-filter-bar-reset {
+    background: rgba(244, 63, 94, 0.15) !important;
+    border: 1px solid rgba(244, 63, 94, 0.3) !important;
+    color: #fda4af !important;
+    padding: 3px 10px !important;
+    border-radius: 12px !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+  }
+  .tp-filter-bar-reset:hover {
+    background: rgba(244, 63, 94, 0.3) !important;
+    color: #fff !important;
+  }
+
+  .tp-filter-row {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    flex-wrap: wrap !important;
+  }
+
+  .tp-filter-label {
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    color: #94a3b8 !important;
+    white-space: nowrap !important;
+    min-width: 110px !important;
+  }
+
+  .tp-input-wrapper {
+    flex: 1 !important;
+    display: flex !important;
+    align-items: center !important;
+    position: relative !important;
+    min-width: 240px !important;
+  }
+
+  #tp-inline-negative-input {
+    width: 100% !important;
+    background: rgba(15, 23, 42, 0.8) !important;
+    border: 1px solid #334155 !important;
+    border-radius: 8px !important;
+    color: #fff !important;
+    padding: 7px 30px 7px 12px !important;
+    font-size: 12px !important;
+    outline: none !important;
+    transition: border-color 0.2s ease !important;
+    box-sizing: border-box !important;
+  }
+  #tp-inline-negative-input:focus {
+    border-color: #10b981 !important;
+  }
+
+  #tp-clear-neg-btn {
+    position: absolute !important;
+    right: 8px !important;
+    background: transparent !important;
+    border: none !important;
+    color: #64748b !important;
+    font-size: 12px !important;
+    cursor: pointer !important;
+    padding: 2px 6px !important;
+    border-radius: 50% !important;
+  }
+  #tp-clear-neg-btn:hover {
+    color: #f43f5e !important;
+  }
+
+  .tp-cat-pills-row {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+    align-items: center !important;
+    flex: 1 !important;
   }
 `;
 
@@ -732,232 +810,148 @@ const STYLES = `
     });
   }
 
-  // Find optimal insertion target for inline bars
-  function findBarInsertionTarget() {
-    const listContainer = document.querySelector(
-      '.productList, .mixedBrowsingListContainer, [class*="productList"], .Plugin_ProductList, #productList'
-    );
-    if (listContainer) return listContainer;
-
-    const cards = getProductCards();
-    if (cards.length > 0 && cards[0].parentElement) {
-      return cards[0].parentElement;
-    }
-
-    return document.querySelector('#FrameContent, main, #content, .pageContent:not(.header .pageContent)');
+  // Dedicated Power Filter Bar Target Selector (Targets main page frame on Toppreise.ch)
+  function getSuiteBarTarget() {
+    return document.getElementById('FrameContent') ||
+           document.querySelector('#tpContent .pageContent') ||
+           document.querySelector('main') ||
+           document.querySelector('#content') ||
+           document.body;
   }
 
-  // Ensure bar is positioned immediately before target, accounting for bar ordering
-  function ensureBarPosition(bar, target, isFirstBar) {
-    if (!target || !target.parentElement) return;
+  // Unified Glassmorphic Power Filter Bar prepended to top of page content
+  function renderSuiteFilterBar() {
+    const target = getSuiteBarTarget();
+    if (!target) return;
 
-    const parent = target.parentElement;
-
-    if (isFirstBar) {
-      const catBar = document.getElementById('tp-inline-category-bar');
-      const refNode = (catBar && catBar.parentElement === parent && catBar.style.display !== 'none') ? catBar : target;
-      if (bar.parentElement !== parent || bar.nextElementSibling !== refNode) {
-        parent.insertBefore(bar, refNode);
-      }
-    } else {
-      if (bar.parentElement !== parent || bar.nextElementSibling !== target) {
-        parent.insertBefore(bar, target);
-      }
-    }
-  }
-
-  // Stable Quick-Control Pill Toolbar
-  function updateQuickToolbar(counts, pageHasOffers) {
-    if (!CONFIG.ENABLE_FILTER_COUNTER) {
-      const bar = document.getElementById('tp-quick-toolbar');
-      if (bar) bar.style.display = 'none';
-      return;
-    }
-
-    let bar = document.getElementById('tp-quick-toolbar');
-    const totalHidden = counts.neg + counts.cat + counts.min;
-    const isRevealed = document.body.classList.contains('tp-reveal-filtered');
+    let bar = document.getElementById('tp-suite-filter-bar');
+    const excluded = CONFIG.EXCLUDED_CATEGORIES || [];
+    const allCats = new Set([...pageCategories, ...excluded]);
 
     if (!bar) {
       bar = document.createElement('div');
-      bar.id = 'tp-quick-toolbar';
+      bar.id = 'tp-suite-filter-bar';
       bar.innerHTML = `
-        <div class="tp-toolbar-group" title="Anzahl durch aktivierte Filter ausgeblendeter Produkte">
-          <span>🚫 <strong id="tp-tb-hidden-count">0</strong></span>
-          <button class="tp-toolbar-btn" id="tp-tb-reveal" title="Filter-Vorschau: Ausgeblendete Produkte gelb umrandet einblenden">
-            👁️ <span id="tp-tb-reveal-label">Einblenden</span>
-          </button>
-          <button class="tp-toolbar-btn" id="tp-tb-reset" title="Alle Filter (Ausschlüsse &amp; Kategorien) zurücksetzen">
-            🔄 Reset
-          </button>
+        <div class="tp-filter-bar-header">
+          <div class="tp-filter-bar-title">⚡ Toppreise Power Filter</div>
+          <button class="tp-filter-bar-reset" id="tp-bar-reset-btn" title="Alle Filter (Text &amp; Kategorien) zurücksetzen">🔄 Filter Reset</button>
         </div>
 
-        <div class="tp-toolbar-divider" id="tp-tb-divider-offers"></div>
+        <div class="tp-filter-row">
+          <span class="tp-filter-label" title="Begriffe in Produktbezeichnungen ausschließen">🚫 Negativ-Filter:</span>
+          <div class="tp-input-wrapper">
+            <input type="text" id="tp-inline-negative-input" placeholder="Wörter ausschließen (z. B. Hülle, Case, Refurbished...)" value="${CONFIG.NEGATIVE_TERMS || ''}">
+            <button id="tp-clear-neg-btn" title="Text leeren" style="display: ${CONFIG.NEGATIVE_TERMS ? 'block' : 'none'};">✕</button>
+          </div>
+        </div>
 
-        <div class="tp-toolbar-group" id="tp-tb-min-group" title="Mindestanzahl benötigter Händler-Angebote pro Produkt (Produkte mit weniger Angeboten werden ausgeblendet)">
-          <span title="Filter für Mindestanzahl Angebote">Min. Angebote:</span>
-          <button class="tp-stepper-btn" id="tp-tb-min-minus" title="Mindestanzahl Angebote verringern">-</button>
-          <span id="tp-tb-min-val" title="Aktuelle Mindestanzahl Angebote" style="min-width: 16px; text-align: center;">0</span>
-          <button class="tp-stepper-btn" id="tp-tb-min-plus" title="Mindestanzahl Angebote erhöhen">+</button>
+        <div class="tp-filter-row" id="tp-cat-filter-row">
+          <span class="tp-filter-label" title="Klicken, um komplette Kategorien aus- oder einzublenden">🏷️ Kategorien:</span>
+          <div id="tp-inline-category-pills" class="tp-cat-pills-row"></div>
         </div>
       `;
-      document.body.appendChild(bar);
 
-      bar.querySelector('#tp-tb-reveal').onclick = () => {
-        document.body.classList.toggle('tp-reveal-filtered');
+      target.insertBefore(bar, target.firstChild);
+
+      const input = bar.querySelector('#tp-inline-negative-input');
+      const clearBtn = bar.querySelector('#tp-clear-neg-btn');
+
+      input.oninput = (e) => {
+        saveConfigKey('NEGATIVE_TERMS', e.target.value);
+        if (clearBtn) clearBtn.style.display = e.target.value ? 'block' : 'none';
+        const modalInput = document.getElementById('tp-negative-terms-input');
+        if (modalInput) modalInput.value = e.target.value;
         processListings();
       };
 
-      bar.querySelector('#tp-tb-reset').onclick = () => {
+      if (clearBtn) {
+        clearBtn.onclick = () => {
+          input.value = '';
+          saveConfigKey('NEGATIVE_TERMS', '');
+          clearBtn.style.display = 'none';
+          const modalInput = document.getElementById('tp-negative-terms-input');
+          if (modalInput) modalInput.value = '';
+          processListings();
+        };
+      }
+
+      bar.querySelector('#tp-bar-reset-btn').onclick = () => {
         saveConfigKey('NEGATIVE_TERMS', '');
         saveConfigKey('EXCLUDED_CATEGORIES', []);
         saveConfigKey('MIN_OFFERS', 0);
+        input.value = '';
+        if (clearBtn) clearBtn.style.display = 'none';
         const modalInput = document.getElementById('tp-negative-terms-input');
         if (modalInput) modalInput.value = '';
-        const inlineInput = document.getElementById('tp-inline-negative-input');
-        if (inlineInput) inlineInput.value = '';
         const modalMinOffersVal = document.getElementById('tp-min-offers-val');
         const modalMinOffersRange = document.getElementById('tp-min-offers-range');
         if (modalMinOffersVal) modalMinOffersVal.value = 0;
         if (modalMinOffersRange) modalMinOffersRange.value = 0;
         processListings();
       };
-
-      bar.querySelector('#tp-tb-min-minus').onclick = () => {
-        if (CONFIG.MIN_OFFERS > 0) {
-          saveConfigKey('MIN_OFFERS', CONFIG.MIN_OFFERS - 1);
-          const modalVal = document.getElementById('tp-min-offers-val');
-          const modalRange = document.getElementById('tp-min-offers-range');
-          if (modalVal) modalVal.value = CONFIG.MIN_OFFERS;
-          if (modalRange) modalRange.value = CONFIG.MIN_OFFERS;
-          processListings();
-        }
-      };
-
-      bar.querySelector('#tp-tb-min-plus').onclick = () => {
-        saveConfigKey('MIN_OFFERS', CONFIG.MIN_OFFERS + 1);
-        const modalVal = document.getElementById('tp-min-offers-val');
-        const modalRange = document.getElementById('tp-min-offers-range');
-        if (modalVal) modalVal.value = CONFIG.MIN_OFFERS;
-        if (modalRange) modalRange.value = CONFIG.MIN_OFFERS;
-        processListings();
-      };
-    }
-
-    bar.style.display = 'flex';
-    const countEl = bar.querySelector('#tp-tb-hidden-count');
-    const revealBtn = bar.querySelector('#tp-tb-reveal');
-    const revealLabel = bar.querySelector('#tp-tb-reveal-label');
-    const minValEl = bar.querySelector('#tp-tb-min-val');
-
-    const dividerOffers = bar.querySelector('#tp-tb-divider-offers');
-    const minOffersGroup = bar.querySelector('#tp-tb-min-group');
-
-    if (dividerOffers) dividerOffers.style.display = pageHasOffers ? 'block' : 'none';
-    if (minOffersGroup) minOffersGroup.style.display = pageHasOffers ? 'flex' : 'none';
-
-    if (countEl) countEl.textContent = totalHidden;
-    if (minValEl) minValEl.textContent = CONFIG.MIN_OFFERS;
-    if (revealBtn) revealBtn.classList.toggle('tp-active', isRevealed);
-    if (revealLabel) revealLabel.textContent = isRevealed ? 'Verbergen' : 'Einblenden';
-  }
-
-  // Render Inline Negative Filter Search Bar
-  function renderInlineNegativeBar() {
-    let bar = document.getElementById('tp-inline-negative-bar');
-    const target = findBarInsertionTarget();
-    if (!target) return;
-
-    if (!bar) {
-      bar = document.createElement('div');
-      bar.id = 'tp-inline-negative-bar';
-      bar.innerHTML = `
-        <span style="font-weight: 700; color: #f43f5e; white-space: nowrap;" title="Begriffe in Produktbezeichnungen ausschließen">🚫 Negativ-Filter:</span>
-        <input type="text" id="tp-inline-negative-input" title="Kommagetrennte Begriffe eingeben (z.B. Hülle, Refurbished, Gebraucht), um passende Produkte auszublenden" placeholder="Wörter ausschließen, z. B. Hülle, Case, Refurbished..." value="${CONFIG.NEGATIVE_TERMS || ''}">
-      `;
-
-      const input = bar.querySelector('#tp-inline-negative-input');
-      input.oninput = (e) => {
-        saveConfigKey('NEGATIVE_TERMS', e.target.value);
-        const modalInput = document.getElementById('tp-negative-terms-input');
-        if (modalInput) modalInput.value = e.target.value;
-        processListings();
-      };
+    } else {
+      // Re-anchor to top of target if detached or moved
+      if (bar.parentElement !== target || bar !== target.firstChild) {
+        target.insertBefore(bar, target.firstChild);
+      }
     }
 
     bar.style.display = 'flex';
     const input = bar.querySelector('#tp-inline-negative-input');
+    const clearBtn = bar.querySelector('#tp-clear-neg-btn');
     if (input && document.activeElement !== input) {
       input.value = CONFIG.NEGATIVE_TERMS || '';
+      if (clearBtn) clearBtn.style.display = CONFIG.NEGATIVE_TERMS ? 'block' : 'none';
     }
 
-    ensureBarPosition(bar, target, true);
-  }
-
-  // Render Inline Category Pills Bar (STABLE DOM RECONCILIATION)
-  function renderInlineCategoryBar() {
-    let bar = document.getElementById('tp-inline-category-bar');
-    const target = findBarInsertionTarget();
-
-    const excluded = CONFIG.EXCLUDED_CATEGORIES || [];
-    const allCats = new Set([...pageCategories, ...excluded]);
-
-    if (!target || allCats.size === 0) {
-      if (bar) bar.style.display = 'none';
-      return;
-    }
-
-    if (!bar) {
-      bar = document.createElement('div');
-      bar.id = 'tp-inline-category-bar';
-      
-      const label = document.createElement('span');
-      label.style.cssText = 'font-size: 11px; font-weight: 700; color: #475569; margin-right: 6px;';
-      label.title = 'Klicken, um komplette Kategorien aus- oder einzublenden';
-      label.textContent = '🏷️ Kategorien auf dieser Seite:';
-      bar.appendChild(label);
-    }
-
-    bar.style.display = 'flex';
-    ensureBarPosition(bar, target, false);
-
-    const existingPills = new Map();
-    bar.querySelectorAll('.tp-cat-pill').forEach(pill => {
-      existingPills.set(pill.dataset.catName, pill);
-    });
-
-    allCats.forEach(cat => {
-      const isExcluded = excluded.includes(cat);
-      let pill = existingPills.get(cat);
-
-      if (!pill) {
-        pill = document.createElement('div');
-        pill.className = 'tp-cat-pill';
-        pill.dataset.catName = cat;
-        pill.textContent = cat;
-        
-        pill.onclick = () => {
-          const currentExcluded = CONFIG.EXCLUDED_CATEGORIES || [];
-          let updated;
-          if (currentExcluded.includes(cat)) {
-            updated = currentExcluded.filter(c => c !== cat);
-          } else {
-            updated = [...currentExcluded, cat];
-          }
-          saveConfigKey('EXCLUDED_CATEGORIES', updated);
-          processListings();
-        };
-
-        bar.appendChild(pill);
+    // Reconcile category pills
+    const pillsHolder = bar.querySelector('#tp-inline-category-pills');
+    if (pillsHolder) {
+      if (allCats.size === 0) {
+        pillsHolder.innerHTML = '<span style="font-size:11px; color:#64748b;">(Keine Kategorien auf aktueller Ansicht)</span>';
       } else {
-        existingPills.delete(cat);
+        const existingPills = new Map();
+        pillsHolder.querySelectorAll('.tp-cat-pill').forEach(pill => {
+          existingPills.set(pill.dataset.catName, pill);
+        });
+
+        const placeholder = pillsHolder.querySelector('span');
+        if (placeholder) placeholder.remove();
+
+        allCats.forEach(cat => {
+          const isExcluded = excluded.includes(cat);
+          let pill = existingPills.get(cat);
+
+          if (!pill) {
+            pill = document.createElement('div');
+            pill.className = 'tp-cat-pill';
+            pill.dataset.catName = cat;
+            pill.textContent = cat;
+
+            pill.onclick = () => {
+              const currentExcluded = CONFIG.EXCLUDED_CATEGORIES || [];
+              let updated;
+              if (currentExcluded.includes(cat)) {
+                updated = currentExcluded.filter(c => c !== cat);
+              } else {
+                updated = [...currentExcluded, cat];
+              }
+              saveConfigKey('EXCLUDED_CATEGORIES', updated);
+              processListings();
+            };
+
+            pillsHolder.appendChild(pill);
+          } else {
+            existingPills.delete(cat);
+          }
+
+          pill.className = `tp-cat-pill ${isExcluded ? 'tp-excluded' : ''}`;
+          pill.title = isExcluded ? `Kategorie "${cat}" wieder einblenden` : `Kategorie "${cat}" dauerhaft ausblenden`;
+        });
+
+        existingPills.forEach(obsoletePill => obsoletePill.remove());
       }
-
-      pill.className = `tp-cat-pill ${isExcluded ? 'tp-excluded' : ''}`;
-      pill.title = isExcluded ? `Kategorie "${cat}" wieder einblenden` : `Kategorie "${cat}" dauerhaft ausblenden`;
-    });
-
-    existingPills.forEach(obsoletePill => obsoletePill.remove());
+    }
   }
 
   // ─── MODULE 1: PRODUCT LISTING PROCESSOR ─────────────────────────────────────
@@ -969,8 +963,7 @@ const STYLES = `
     const cards = getProductCards();
 
     if (cards.length === 0) {
-      renderInlineNegativeBar();
-      renderInlineCategoryBar();
+      renderSuiteFilterBar();
       return;
     }
 
@@ -1095,8 +1088,7 @@ const STYLES = `
 
     // 7. Render UI Modules
     updateQuickToolbar(counts, pageHasOffers);
-    renderInlineNegativeBar();
-    renderInlineCategoryBar();
+    renderSuiteFilterBar();
   }
 
   // ─── MODULE 2: PRICE ALARM AUTOMATION ────────────────────────────────────────
