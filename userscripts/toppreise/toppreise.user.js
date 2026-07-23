@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.3.0
+// @version      1.4.0
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -672,16 +672,16 @@ const STYLES = `
 
   // Helper: Universal Card Grabber (Matches search, neue-toppreise, top-100, etc.)
   function getProductCards() {
-    const standardCards = Array.from(document.querySelectorAll('.Plugin_Product, [class*="Plugin_Product"], .mixedBrowsingList, [class*="mixedBrowsingList"]'));
+    const standardCards = Array.from(document.querySelectorAll('.Plugin_Product, .mixedBrowsingListProduct'));
     if (standardCards.length > 0) {
-      return standardCards.filter(c => !c.parentElement.closest('.Plugin_Product, [class*="Plugin_Product"]'));
+      return standardCards.filter(c => !c.parentElement.closest('.Plugin_Product'));
     }
 
     const productLinks = document.querySelectorAll('a[href*="/preisvergleich/"]');
     const gridCards = new Set();
 
     productLinks.forEach(link => {
-      if (link.closest('header, nav, .breadcrumb, #tp-quick-toolbar, #tp-inline-category-bar, #tp-inline-negative-bar')) return;
+      if (link.closest('header, nav, footer, .breadcrumb, #tp-quick-toolbar, #tp-inline-category-bar, #tp-inline-negative-bar')) return;
       
       let container = link.parentElement;
       while (container && container !== document.body && container.parentElement !== document.body) {
@@ -697,31 +697,30 @@ const STYLES = `
     return Array.from(gridCards);
   }
 
-  // Helper: Robust Category Extractor (DOM Text + Product Link URL Path Slug Parser)
+  // Helper: Robust Category Extractor (Directly inspects product title link URL path)
   function extractCardCategory(card) {
-    // 1. Check explicit DOM category links inside card
-    const catEl = card.querySelector(
-      'a[href*="/produktsuche/"], a[href*="/katalog/"], a[href*="/preisvergleich/"], ' +
-      '.categoryLink, .productCategory, .subCategory, .category, .catName'
-    );
-    if (catEl) {
-      const text = catEl.textContent.trim().replace(/\(\d+\)/g, '').trim();
-      if (text && text.length > 1 && !text.includes('CHF') && !text.includes('Angebot') && !text.includes('%')) {
-        return text;
+    // Inspect the product's main title/product link (/preisvergleich/CategorySlug/ProductTitle...)
+    const productLinks = card.querySelectorAll('a[href*="/preisvergleich/"], a.titleLink');
+    for (const productLink of productLinks) {
+      // Exclude header navigation or breadcrumb links
+      if (productLink.closest('header, nav, footer, .breadcrumb, #tp-quick-toolbar')) continue;
+
+      const href = productLink.getAttribute('href') || '';
+      const match = href.match(/\/preisvergleich\/([^/]+)\//i);
+      if (match && match[1]) {
+        let catSlug = decodeURIComponent(match[1]).replace(/-/g, ' ').trim();
+        if (catSlug && catSlug.length > 1 && !catSlug.startsWith('p') && isNaN(catSlug)) {
+          return catSlug.charAt(0).toUpperCase() + catSlug.slice(1);
+        }
       }
     }
 
-    // 2. Extract category slug directly from product link URL path (/preisvergleich/CategoryName/...)
-    const mainLinks = card.querySelectorAll('a[href*="/preisvergleich/"], a[href*="/produktsuche/"], a[href*="/katalog/"], a.titleLink');
-    for (const mainLink of mainLinks) {
-      const href = mainLink.getAttribute('href') || '';
-      const match = href.match(/\/(?:preisvergleich|produktsuche|katalog)\/([^/]+)\//i);
-      if (match && match[1]) {
-        let catSlug = decodeURIComponent(match[1]).replace(/-/g, ' ').trim();
-        catSlug = catSlug.charAt(0).toUpperCase() + catSlug.slice(1);
-        if (catSlug && catSlug.length > 1 && !catSlug.startsWith('p') && isNaN(catSlug)) {
-          return catSlug;
-        }
+    // Secondary fallback: explicit subCategory element if present directly inside card
+    const subCatEl = card.querySelector('.subCategory, .productCategory, .categoryLink');
+    if (subCatEl) {
+      const text = subCatEl.textContent.trim().replace(/\(\d+\)/g, '').trim();
+      if (text && text.length > 1 && !text.includes('CHF') && !text.includes('Angebot')) {
+        return text;
       }
     }
 
