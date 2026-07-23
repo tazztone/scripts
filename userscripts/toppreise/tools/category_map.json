@@ -1267,7 +1267,7 @@
     ]
   },
   "bekleidung accessoires": {
-    "root": "Bekleidung Accessoires",
+    "root": "Videogames",
     "title": "Bekleidung Accessoires",
     "path": [
       "Bekleidung Accessoires",
@@ -1275,7 +1275,7 @@
     ]
   },
   "schuhe": {
-    "root": "Bekleidung Accessoires",
+    "root": "Videogames",
     "title": "Schuhe",
     "path": [
       "Bekleidung Accessoires",
@@ -1535,8 +1535,8 @@
     "title": "Fantasy",
     "path": [
       "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Science Fiction Fantasy",
+      "Blu Ray 4k Ultra Hd Filme",
+      "4k Uhd Science Fiction Fantasy",
       "Fantasy"
     ]
   },
@@ -1545,8 +1545,8 @@
     "title": "Horror",
     "path": [
       "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Action Thriller Horror",
+      "Blu Ray 4k Ultra Hd Filme",
+      "4k Uhd Action Thriller Horror",
       "Horror"
     ]
   },
@@ -1610,26 +1610,6 @@
       "Komoedie"
     ]
   },
-  "actionspiele": {
-    "root": "Videogames",
-    "title": "Actionspiele",
-    "path": [
-      "Videogames",
-      "Xbox One",
-      "Xbox One Games",
-      "Actionspiele"
-    ]
-  },
-  "simulationen": {
-    "root": "Videogames",
-    "title": "Simulationen",
-    "path": [
-      "Videogames",
-      "Nintendo Switch",
-      "Nintendo Switch Games",
-      "Simulationen"
-    ]
-  },
   "jump n run geschicklichkeit": {
     "root": "Videogames",
     "title": "Jump N Run Geschicklichkeit",
@@ -1640,14 +1620,13 @@
       "Jump N Run Geschicklichkeit"
     ]
   },
-  "rennspiele": {
+  "simulationen": {
     "root": "Videogames",
-    "title": "Rennspiele",
+    "title": "Simulationen",
     "path": [
       "Videogames",
-      "Playstation 4",
-      "Ps4 Games",
-      "Rennspiele"
+      "Computerspiele Fuer Windows",
+      "Simulationen"
     ]
   },
   "sportspiele": {
@@ -1660,77 +1639,24 @@
       "Sportspiele"
     ]
   },
+  "rennspiele": {
+    "root": "Videogames",
+    "title": "Rennspiele",
+    "path": [
+      "Videogames",
+      "Xbox Series X S",
+      "Xbox Series X S Games",
+      "Rennspiele"
+    ]
+  },
   "rollenspiele adventures": {
     "root": "Videogames",
     "title": "Rollenspiele Adventures",
     "path": [
       "Videogames",
-      "Playstation 4",
-      "Ps4 Games",
+      "Playstation 5",
+      "Ps5 Games",
       "Rollenspiele Adventures"
-    ]
-  },
-  "3d shooter fps": {
-    "root": "Videogames",
-    "title": "3d Shooter Fps",
-    "path": [
-      "Videogames",
-      "Xbox Series X S",
-      "Xbox Series X S Games",
-      "3d Shooter Fps"
-    ]
-  },
-  "actionkameras": {
-    "root": "TV & Video",
-    "title": "Actionkameras",
-    "path": [
-      "Tv Video",
-      "Camcorder",
-      "Actionkameras"
-    ]
-  },
-  "strategiespiele": {
-    "root": "Videogames",
-    "title": "Strategiespiele",
-    "path": [
-      "Videogames",
-      "Computerspiele Fuer Windows",
-      "Strategiespiele"
-    ]
-  },
-  "fitness krafttraining": {
-    "root": "Sport & Freizeit",
-    "title": "Fitness Krafttraining",
-    "path": [
-      "Sport Freizeit",
-      "Fitness Krafttraining",
-      "Activity Tracker Smartwatches"
-    ]
-  },
-  "pneus": {
-    "root": "Auto & Motorrad",
-    "title": "Pneus",
-    "path": [
-      "Auto Motorrad",
-      "Pneus",
-      "Pkw Sommerreifen"
-    ]
-  },
-  "pkw sommerreifen": {
-    "root": "Auto & Motorrad",
-    "title": "Pkw Sommerreifen",
-    "path": [
-      "Auto Motorrad",
-      "Pneus",
-      "Pkw Sommerreifen"
-    ]
-  },
-  "velofahren": {
-    "root": "Sport & Freizeit",
-    "title": "Velofahren",
-    "path": [
-      "Sport Freizeit",
-      "Velofahren"
     ]
   },
   "blu ray science fiction fantasy": {
@@ -1778,6 +1704,15 @@
       "Blu Ray Komoedie Drama"
     ]
   },
+  "strategiespiele": {
+    "root": "Videogames",
+    "title": "Strategiespiele",
+    "path": [
+      "Videogames",
+      "Computerspiele Fuer Windows",
+      "Strategiespiele"
+    ]
+  },
   "xbox series x s": {
     "root": "Videogames",
     "title": "Xbox Series X S",
@@ -1798,6 +1733,16 @@
       "3d Shooter Fps"
     ]
   },
+  "actionspiele": {
+    "root": "Videogames",
+    "title": "Actionspiele",
+    "path": [
+      "Videogames",
+      "Xbox One",
+      "Xbox One Games",
+      "Actionspiele"
+    ]
+  },
   "beat em up": {
     "root": "Videogames",
     "title": "Beat Em Up",
@@ -1808,12 +1753,24 @@
       "Beat Em Up"
     ]
   },
+  "3d shooter fps": {
+    "root": "Videogames",
+    "title": "3d Shooter Fps",
+    "path": [
+      "Videogames",
+      "Xbox Series X S",
+      "Xbox Series X S Games",
+      "3d Shooter Fps"
+    ]
+  },
   "xbox one": {
     "root": "Videogames",
     "title": "Xbox One",
     "path": [
       "Videogames",
-      "Xbox One"
+      "Xbox One",
+      "Xbox One Games",
+      "Actionspiele"
     ]
   },
   "xbox one games": {
@@ -1861,6 +1818,48 @@
       "Filme",
       "Blu Ray 4k Ultra Hd Filme",
       "4k Uhd Action Thriller Horror"
+    ]
+  },
+  "fitness krafttraining": {
+    "root": "Sport & Freizeit",
+    "title": "Fitness Krafttraining",
+    "path": [
+      "Sport Freizeit",
+      "Fitness Krafttraining"
+    ]
+  },
+  "actionkameras": {
+    "root": "TV & Video",
+    "title": "Actionkameras",
+    "path": [
+      "Tv Video",
+      "Camcorder",
+      "Actionkameras"
+    ]
+  },
+  "velofahren": {
+    "root": "Sport & Freizeit",
+    "title": "Velofahren",
+    "path": [
+      "Sport Freizeit",
+      "Velofahren"
+    ]
+  },
+  "pneus": {
+    "root": "Auto & Motorrad",
+    "title": "Pneus",
+    "path": [
+      "Auto Motorrad",
+      "Pneus"
+    ]
+  },
+  "pkw sommerreifen": {
+    "root": "Auto & Motorrad",
+    "title": "Pkw Sommerreifen",
+    "path": [
+      "Auto Motorrad",
+      "Pneus",
+      "Pkw Sommerreifen"
     ]
   }
 }

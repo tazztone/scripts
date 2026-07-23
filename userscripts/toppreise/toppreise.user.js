@@ -1237,9 +1237,9 @@ const STYLES = `
     "bohrmaschinen-schrauber": "Garten & Baumarkt",
     "saegen fraesen": "Garten & Baumarkt",
     "saegen-fraesen": "Garten & Baumarkt",
-    "bekleidung accessoires": "Bekleidung Accessoires",
-    "bekleidung-accessoires": "Bekleidung Accessoires",
-    "schuhe": "Bekleidung Accessoires",
+    "bekleidung accessoires": "Videogames",
+    "bekleidung-accessoires": "Videogames",
+    "schuhe": "Videogames",
     "parfuemerie": "Drogerie",
     "rasur haarpflege": "Drogerie",
     "rasur-haarpflege": "Drogerie",
@@ -1277,21 +1277,11 @@ const STYLES = `
     "horrorkomoedie": "Filme",
     "klassisches-drama": "Filme",
     "komoedie": "Filme",
-    "simulationen": "Videogames",
     "jump-n-run-geschicklichkeit": "Videogames",
-    "rennspiele": "Videogames",
+    "simulationen": "Videogames",
     "sportspiele": "Videogames",
+    "rennspiele": "Videogames",
     "rollenspiele-adventures": "Videogames",
-    "3d shooter fps": "Videogames",
-    "3d-shooter-fps": "Videogames",
-    "actionkameras": "TV & Video",
-    "strategiespiele": "Videogames",
-    "fitness krafttraining": "Sport & Freizeit",
-    "fitness-krafttraining": "Sport & Freizeit",
-    "pneus": "Auto & Motorrad",
-    "pkw sommerreifen": "Auto & Motorrad",
-    "pkw-sommerreifen": "Auto & Motorrad",
-    "velofahren": "Sport & Freizeit",
     "blu ray science fiction fantasy": "Filme",
     "blu-ray-science-fiction-fantasy": "Filme",
     "blu ray kinder familie": "Filme",
@@ -1302,12 +1292,15 @@ const STYLES = `
     "blu-ray-action-thriller-horror": "Filme",
     "blu ray komoedie drama": "Filme",
     "blu-ray-komoedie-drama": "Filme",
+    "strategiespiele": "Videogames",
     "xbox series x s": "Videogames",
     "xbox-series-x-s": "Videogames",
     "xbox series x s games": "Videogames",
     "xbox-series-x-s-games": "Videogames",
     "beat em up": "Videogames",
     "beat-em-up": "Videogames",
+    "3d shooter fps": "Videogames",
+    "3d-shooter-fps": "Videogames",
     "xbox one": "Videogames",
     "xbox-one": "Videogames",
     "xbox one games": "Videogames",
@@ -1318,7 +1311,14 @@ const STYLES = `
     "4k uhd kinder familie": "Filme",
     "4k-uhd-kinder-familie": "Filme",
     "4k uhd action thriller horror": "Filme",
-    "4k-uhd-action-thriller-horror": "Filme"
+    "4k-uhd-action-thriller-horror": "Filme",
+    "fitness krafttraining": "Sport & Freizeit",
+    "fitness-krafttraining": "Sport & Freizeit",
+    "actionkameras": "TV & Video",
+    "velofahren": "Sport & Freizeit",
+    "pneus": "Auto & Motorrad",
+    "pkw sommerreifen": "Auto & Motorrad",
+    "pkw-sommerreifen": "Auto & Motorrad"
 };
 
   const GROUP_EMOJIS = {
@@ -1361,15 +1361,37 @@ const STYLES = `
     if (dynamicMap[slug]) return dynamicMap[slug];
 
     if (card && card.querySelectorAll) {
-      const links = card.querySelectorAll('a[href*="/produktsuche/"]');
+      const links = card.querySelectorAll('a[href*="/produktsuche/"], a[href*="/preisvergleich/"]');
       for (const a of links) {
         const href = a.getAttribute('href') || '';
-        const match = href.match(/\/produktsuche\/([^\/]+)\//i);
+        const match = href.match(/\/(?:produktsuche|preisvergleich)\/([^\/]+)\//i);
         if (match && match[1]) {
           const rootSlug = match[1].split('-c')[0];
           const formattedRoot = formatCategorySlug(rootSlug);
           if (formattedRoot) {
             dynamicMap[norm] = formattedRoot;
+            dynamicMap[slug] = formattedRoot;
+            dynamicMap[spaceSlug] = formattedRoot;
+            saveConfigKey('DYNAMIC_CAT_MAP', dynamicMap);
+            return formattedRoot;
+          }
+        }
+      }
+    }
+
+    // Page-level breadcrumb fallback matching
+    const pageBreadcrumb = document.querySelector('.breadcrumb, #Breadcrumb, [class*="breadcrumb"]');
+    if (pageBreadcrumb) {
+      const bcLink = pageBreadcrumb.querySelector('a[href*="/produktsuche/"]');
+      if (bcLink) {
+        const href = bcLink.getAttribute('href') || '';
+        const match = href.match(/\/produktsuche\/([^\/]+)\//i);
+        if (match && match[1]) {
+          const formattedRoot = formatCategorySlug(match[1].split('-c')[0]);
+          if (formattedRoot) {
+            dynamicMap[norm] = formattedRoot;
+            dynamicMap[slug] = formattedRoot;
+            dynamicMap[spaceSlug] = formattedRoot;
             saveConfigKey('DYNAMIC_CAT_MAP', dynamicMap);
             return formattedRoot;
           }

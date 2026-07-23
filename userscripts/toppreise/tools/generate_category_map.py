@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Toppreise Full BFS Category Hierarchy Generator Tool
-Recursively crawls Toppreise.ch until all category pages across all depth levels are discovered,
-mapping 100% of subcategories to root groups and updating toppreise.user.js.
+Toppreise Full Category Hierarchy Generator Tool
+Extracts category mappings from both /produktsuche/ breadcrumbs AND /preisvergleich/ product links
+across all 23 root category trees to achieve complete coverage and auto-inject into toppreise.user.js.
 """
 
 import urllib.request
@@ -142,8 +142,8 @@ def fetch_url(url):
     except Exception:
         return url, ""
 
-def generate_deep_map(max_workers=24):
-    print("🚀 Starting Complete BFS Category Crawl of Toppreise.ch...", flush=True)
+def generate_deep_map(max_workers=32):
+    print("🚀 Starting Comprehensive Category & Product Link Crawl of Toppreise.ch...", flush=True)
     
     lookup_map = dict(SEED_LOOKUP)
     detailed_map = {}
@@ -171,18 +171,26 @@ def generate_deep_map(max_workers=24):
                 url, html = future.result()
                 if not html:
                     continue
-                matches = re.findall(r'href=["\'](/produktsuche/[^"\']+-c\d+[^"\']*)["\']', html)
-                for m in matches:
+                
+                # Determine root category from current URL path
+                url_path = url.split('toppreise.ch/produktsuche/')[-1]
+                root_slug = url_path.split('/')[0].split('-c')[0].lower()
+                root_title = root_slug_to_name.get(root_slug, CANONICAL_GROUPS.get(root_slug.replace('-', ' '), format_title(url_path.split('/')[0])))
+                
+                # 1. Parse produktsuche links
+                ps_matches = re.findall(r'href=["\'](/produktsuche/[^"\']+)["\']', html)
+                for m in ps_matches:
                     clean_path = m.split('?')[0]
                     parts = clean_path.strip('/').split('/')
                     if len(parts) >= 2 and parts[0] == 'produktsuche':
-                        full_url = f"https://www.toppreise.ch{clean_path}"
-                        if full_url not in visited_urls:
-                            next_urls.add(full_url)
+                        if '-c' in parts[-1]:
+                            full_url = f"https://www.toppreise.ch{clean_path}"
+                            if full_url not in visited_urls:
+                                next_urls.add(full_url)
                         
                         segments = parts[1:]
-                        root_slug = segments[0].split('-c')[0].lower()
-                        root_title = root_slug_to_name.get(root_slug, CANONICAL_GROUPS.get(root_slug.replace('-', ' '), format_title(segments[0])))
+                        cur_root_slug = segments[0].split('-c')[0].lower()
+                        cur_root_title = root_slug_to_name.get(cur_root_slug, CANONICAL_GROUPS.get(cur_root_slug.replace('-', ' '), root_title))
                         
                         for seg in segments[1:]:
                             leaf_title = format_title(seg)
@@ -190,19 +198,38 @@ def generate_deep_map(max_workers=24):
                             slug_key = seg.split('-c')[0].lower().replace('-', ' ')
                             raw_slug = seg.split('-c')[0].lower()
                             
-                            lookup_map[leaf_key] = root_title
-                            lookup_map[slug_key] = root_title
-                            lookup_map[raw_slug] = root_title
+                            lookup_map[leaf_key] = cur_root_title
+                            lookup_map[slug_key] = cur_root_title
+                            lookup_map[raw_slug] = cur_root_title
                             
                             detailed_map[slug_key] = {
-                                "root": root_title,
+                                "root": cur_root_title,
                                 "title": leaf_title,
                                 "path": [format_title(s) for s in segments]
                             }
+
+                # 2. Parse preisvergleich product card links to extract leaf category slugs
+                pv_matches = re.findall(r'href=["\'](/preisvergleich/([^/]+)/[^"\']+\-p\d+)["\']', html)
+                for full_pv, cat_slug in pv_matches:
+                    raw_cat = cat_slug.split('-c')[0].lower()
+                    cat_title = format_title(raw_cat)
+                    cat_key = cat_title.lower()
+                    space_key = raw_cat.replace('-', ' ')
+                    
+                    lookup_map[raw_cat] = root_title
+                    lookup_map[cat_key] = root_title
+                    lookup_map[space_key] = root_title
+                    
+                    if space_key not in detailed_map:
+                        detailed_map[space_key] = {
+                            "root": root_title,
+                            "title": cat_title,
+                            "path": [root_title, cat_title]
+                        }
         
         to_visit = next_urls
 
-    print(f"✅ Full BFS Crawl Complete! Visited {len(visited_urls)} pages and generated {len(lookup_map)} category mappings.", flush=True)
+    print(f"✅ Comprehensive Crawl Complete! Visited {len(visited_urls)} pages and generated {len(lookup_map)} category mappings.", flush=True)
     return lookup_map, detailed_map
 
 def main():
