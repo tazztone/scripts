@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      0.8.0
+// @version      0.9.0
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -670,8 +670,9 @@ const STYLES = `
     return isNaN(val) ? 0 : val;
   }
 
-  // Helper: Extract Card Category (strictly from active product cards)
+  // Helper: Robust Category Extractor (combines DOM elements & URL path slugs)
   function extractCardCategory(card) {
+    // 1. Check explicit category link elements inside card DOM
     const catEl = card.querySelector(
       'a[href*="/produktsuche/"], a[href*="/katalog/"], a[href*="/preisvergleich/"], ' +
       '.categoryLink, .productCategory, .subCategory, .category, .catName'
@@ -682,6 +683,20 @@ const STYLES = `
         return text;
       }
     }
+
+    // 2. Extract category slug directly from product link URL path (/preisvergleich/CategoryName/...)
+    const mainLink = card.querySelector('a[href*="/preisvergleich/"], a[href*="/produktsuche/"], a.titleLink');
+    if (mainLink) {
+      const href = mainLink.getAttribute('href') || '';
+      const match = href.match(/\/(?:preisvergleich|produktsuche|katalog)\/([^/]+)\//i);
+      if (match && match[1]) {
+        const catSlug = decodeURIComponent(match[1]).replace(/-/g, ' ').trim();
+        if (catSlug && catSlug.length > 1) {
+          return catSlug;
+        }
+      }
+    }
+
     return '';
   }
 
@@ -877,7 +892,7 @@ const STYLES = `
     const counts = { neg: 0, cat: 0, min: 0 };
 
     cards.forEach(card => {
-      // 1. Category extraction (strictly from active product cards)
+      // 1. Category extraction (DOM text + URL path slug parser)
       const catName = extractCardCategory(card);
       if (catName) pageCategories.add(catName);
 
@@ -1203,7 +1218,7 @@ const STYLES = `
               <label for="tp-sort-none" title="Standard-Reihenfolge der Seite beibehalten">Standard</label>
               
               <input type="radio" id="tp-sort-desc" name="tp-sort-offers" value="desc">
-              <label for="tp-sort-desc" title="Produkte mit den meichten Angeboten zuerst">Meiste ⬇</label>
+              <label for="tp-sort-desc" title="Produkte mit den meisten Angeboten zuerst">Meiste ⬇</label>
               
               <input type="radio" id="tp-sort-asc" name="tp-sort-offers" value="asc">
               <label for="tp-sort-asc" title="Produkte mit den wenigsten Angeboten zuerst">Wenigste ⬆</label>
