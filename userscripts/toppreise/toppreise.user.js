@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      0.6.0
-// @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, enforces delivery stock availability, and automates price alarm creation.
+// @version      0.7.0
+// @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
 // @run-at       document-idle
@@ -24,7 +24,6 @@ const DEFAULTS = {
   EXCLUDED_CATEGORIES: [],
   MIN_OFFERS: 0,
   SORT_BY_OFFERS: 'none',
-  STOCK_FILTER: 'all',
   ENABLE_FILTER_COUNTER: true,
   
   // Price Alarm Automation
@@ -90,16 +89,14 @@ const STYLES = `
   /* Additional Filter Hide Rules */
   .tp-negative-filtered,
   .tp-category-filtered,
-  .tp-min-offers-filtered,
-  .tp-stock-filtered {
+  .tp-min-offers-filtered {
     display: none !important;
   }
 
   /* Temporary reveal mode for filtered elements */
   body.tp-reveal-filtered .tp-negative-filtered,
   body.tp-reveal-filtered .tp-category-filtered,
-  body.tp-reveal-filtered .tp-min-offers-filtered,
-  body.tp-reveal-filtered .tp-stock-filtered {
+  body.tp-reveal-filtered .tp-min-offers-filtered {
     display: block !important;
     opacity: 0.35 !important;
     outline: 2px dashed #f59e0b !important;
@@ -108,8 +105,8 @@ const STYLES = `
   /* Floating Settings Button */
   #tp-settings-fab {
     position: fixed;
-    bottom: 12px;
-    right: 12px;
+    bottom: 14px;
+    right: 14px;
     width: 50px;
     height: 50px;
     border-radius: 50%;
@@ -449,12 +446,12 @@ const STYLES = `
     -webkit-backdrop-filter: blur(14px);
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 24px;
-    padding: 6px 14px;
+    padding: 6px 16px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
     z-index: 99990;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     color: #f8fafc;
     font-size: 12px;
@@ -510,6 +507,7 @@ const STYLES = `
     cursor: pointer;
     user-select: none;
     font-size: 12px;
+    transition: background 0.2s ease;
   }
   .tp-stepper-btn:hover {
     background: rgba(16, 185, 129, 0.4);
@@ -517,16 +515,16 @@ const STYLES = `
 
   /* Inline Negative Filter Bar */
   #tp-inline-negative-bar {
-    margin: 10px 0;
+    margin: 12px 0;
     display: flex;
     align-items: center;
     gap: 8px;
-    background: rgba(30, 41, 59, 0.85);
+    background: rgba(30, 41, 59, 0.88);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 10px;
-    padding: 8px 12px;
+    padding: 8px 14px;
     color: #cbd5e1;
     font-size: 12px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
@@ -612,9 +610,6 @@ const STYLES = `
     get SORT_BY_OFFERS() { return _getValue('SORT_BY_OFFERS', DEFAULTS.SORT_BY_OFFERS); },
     set SORT_BY_OFFERS(v) { _setValue('SORT_BY_OFFERS', v); },
 
-    get STOCK_FILTER() { return _getValue('STOCK_FILTER', DEFAULTS.STOCK_FILTER); },
-    set STOCK_FILTER(v) { _setValue('STOCK_FILTER', v); },
-
     get ENABLE_FILTER_COUNTER() { return _getValue('ENABLE_FILTER_COUNTER', DEFAULTS.ENABLE_FILTER_COUNTER); },
     set ENABLE_FILTER_COUNTER(v) { _setValue('ENABLE_FILTER_COUNTER', v); },
 
@@ -676,9 +671,39 @@ const STYLES = `
 
   // Helper: Extract Card Category
   function extractCardCategory(card) {
-    const catEl = card.querySelector('a[href*="/katalog/"], .categoryLink, .breadcrumb a, .category');
-    if (catEl) return catEl.textContent.trim();
+    const catEl = card.querySelector(
+      'a[href*="/produktsuche/"], a[href*="/katalog/"], a[href*="/preisvergleich/"], ' +
+      '.categoryLink, .productCategory, .subCategory, .category, .catName, [class*="category"]'
+    );
+    if (catEl) {
+      const text = catEl.textContent.trim().replace(/\(\d+\)/g, '').trim();
+      if (text && text.length > 1 && !text.includes('CHF') && !text.includes('Angebot')) {
+        return text;
+      }
+    }
     return '';
+  }
+
+  // Helper: Scan page-level categories from breadcrumbs & sidebar tree
+  function scanPageCategories() {
+    // 1. Breadcrumbs
+    const breadcrumbs = document.querySelectorAll('.breadcrumb a, [class*="breadcrumb"] a, nav a, .navigation_breadcrumb a');
+    breadcrumbs.forEach(link => {
+      const text = link.textContent.trim().replace(/\(\d+\)/g, '').trim();
+      const lower = text.toLowerCase();
+      if (text && text.length > 1 && !['home', 'toppreise', 'neue toppreise', 'startseite', 'preisvergleich'].includes(lower)) {
+        pageCategories.add(text);
+      }
+    });
+
+    // 2. Sidebar category links & filter groups
+    const sidebarLinks = document.querySelectorAll('.filterGroup a, [class*="category"] a, .sideMenu a, a[href*="/produktsuche/"]');
+    sidebarLinks.forEach(link => {
+      const text = link.textContent.trim().replace(/\(\d+\)/g, '').trim();
+      if (text && text.length > 1 && !text.includes('CHF') && !text.includes('Angebote') && text.length < 50) {
+        pageCategories.add(text);
+      }
+    });
   }
 
   // Helper: Extract Offer Count
@@ -687,43 +712,6 @@ const STYLES = `
     const match = text.match(/(\d+)\s*(?:Angebote|Angebot)/i);
     if (match) return parseInt(match[1], 10);
     return card.querySelectorAll('.Plugin_DealerRelProdPriceInfo').length;
-  }
-
-  // Helper: Check Card Stock Status
-  function checkCardStock(card) {
-    const availabilityEls = card.querySelectorAll('.availability, .stock, .delivery, .stockStatus, [title*="lager"], [title*="lieferbar"], [title*="Lieferzeit"]');
-    let hasImmediate = false;
-    let hasKnown = false;
-
-    if (availabilityEls.length === 0) {
-      const dealerRows = card.querySelectorAll('.Plugin_DealerRelProdPriceInfo');
-      dealerRows.forEach(row => {
-        const rowText = row.textContent.toLowerCase();
-        if (rowText.includes('sofort') || rowText.includes('ab lager') || rowText.includes('1-2') || rowText.includes('auf lager')) {
-          hasImmediate = true;
-          hasKnown = true;
-        } else if (rowText.includes('tage') || rowText.includes('werktage') || rowText.includes('lieferant')) {
-          hasKnown = true;
-        }
-      });
-      if (!hasImmediate && !hasKnown && dealerRows.length > 0) {
-        hasKnown = true;
-        hasImmediate = true;
-      }
-      return { hasImmediate, hasKnown };
-    }
-
-    availabilityEls.forEach(el => {
-      const text = (el.textContent + ' ' + (el.getAttribute('title') || '') + ' ' + (el.className || '')).toLowerCase();
-      if (text.includes('sofort') || text.includes('ab lager') || text.includes('1-2') || text.includes('green') || text.includes('auf lager')) {
-        hasImmediate = true;
-        hasKnown = true;
-      } else if (text.includes('tage') || text.includes('werktage') || text.includes('yellow') || text.includes('lieferant')) {
-        hasKnown = true;
-      }
-    });
-
-    return { hasImmediate, hasKnown };
   }
 
   // Helper: Check Negative Term Match
@@ -735,7 +723,7 @@ const STYLES = `
     return termsList.some(term => term.length > 0 && fullText.includes(term));
   }
 
-  // Render Floating Quick-Control Pill Toolbar
+  // Stable Quick-Control Pill Toolbar (No InnerHTML Thrashing!)
   function updateQuickToolbar(counts) {
     if (!CONFIG.ENABLE_FILTER_COUNTER) {
       const bar = document.getElementById('tp-quick-toolbar');
@@ -744,93 +732,93 @@ const STYLES = `
     }
 
     let bar = document.getElementById('tp-quick-toolbar');
+    const totalHidden = counts.neg + counts.cat + counts.min;
+    const isRevealed = document.body.classList.contains('tp-reveal-filtered');
+
     if (!bar) {
       bar = document.createElement('div');
       bar.id = 'tp-quick-toolbar';
+      bar.innerHTML = `
+        <div class="tp-toolbar-group" title="Anzahl durch aktivierte Filter ausgeblendeter Produkte">
+          <span>🚫 <strong id="tp-tb-hidden-count">0</strong></span>
+          <button class="tp-toolbar-btn" id="tp-tb-reveal" title="Filter-Vorschau: Ausgeblendete Produkte gelb umrandet einblenden">
+            👁️ <span id="tp-tb-reveal-label">Einblenden</span>
+          </button>
+        </div>
+
+        <div class="tp-toolbar-divider"></div>
+
+        <div class="tp-toolbar-group" title="Mindestanzahl benötigter Händler-Angebote pro Produkt (Produkte mit weniger Angeboten werden ausgeblendet)">
+          <span title="Filter für Mindestanzahl Angebote">Min. Angebote:</span>
+          <button class="tp-stepper-btn" id="tp-tb-min-minus" title="Mindestanzahl Angebote verringern">-</button>
+          <span id="tp-tb-min-val" title="Aktuelle Mindestanzahl Angebote" style="min-width: 16px; text-align: center;">0</span>
+          <button class="tp-stepper-btn" id="tp-tb-min-plus" title="Mindestanzahl Angebote erhöhen">+</button>
+        </div>
+      `;
       document.body.appendChild(bar);
+
+      // Attach event bindings ONCE on element creation!
+      bar.querySelector('#tp-tb-reveal').onclick = () => {
+        document.body.classList.toggle('tp-reveal-filtered');
+        processListings();
+      };
+
+      bar.querySelector('#tp-tb-min-minus').onclick = () => {
+        if (CONFIG.MIN_OFFERS > 0) {
+          CONFIG.MIN_OFFERS = CONFIG.MIN_OFFERS - 1;
+          const modalVal = document.getElementById('tp-min-offers-val');
+          const modalRange = document.getElementById('tp-min-offers-range');
+          if (modalVal) modalVal.value = CONFIG.MIN_OFFERS;
+          if (modalRange) modalRange.value = CONFIG.MIN_OFFERS;
+          processListings();
+        }
+      };
+
+      bar.querySelector('#tp-tb-min-plus').onclick = () => {
+        CONFIG.MIN_OFFERS = CONFIG.MIN_OFFERS + 1;
+        const modalVal = document.getElementById('tp-min-offers-val');
+        const modalRange = document.getElementById('tp-min-offers-range');
+        if (modalVal) modalVal.value = CONFIG.MIN_OFFERS;
+        if (modalRange) modalRange.value = CONFIG.MIN_OFFERS;
+        processListings();
+      };
     }
 
-    const totalHidden = counts.neg + counts.cat + counts.min + counts.stock;
+    // Dynamic state updates in-place without destroying DOM elements!
     bar.style.display = 'flex';
-    const isRevealed = document.body.classList.contains('tp-reveal-filtered');
-    const isStockImmediate = CONFIG.STOCK_FILTER === 'immediate-only';
+    const countEl = bar.querySelector('#tp-tb-hidden-count');
+    const revealBtn = bar.querySelector('#tp-tb-reveal');
+    const revealLabel = bar.querySelector('#tp-tb-reveal-label');
+    const minValEl = bar.querySelector('#tp-tb-min-val');
 
-    bar.innerHTML = `
-      <div class="tp-toolbar-group">
-        <span>🚫 <strong>${totalHidden}</strong></span>
-        <button class="tp-toolbar-btn ${isRevealed ? 'tp-active' : ''}" id="tp-tb-reveal" title="Ausgeblendete Produkte hervorheben">
-          👁️ ${isRevealed ? 'Verbergen' : 'Einblenden'}
-        </button>
-      </div>
-
-      <div class="tp-toolbar-divider"></div>
-
-      <div class="tp-toolbar-group">
-        <button class="tp-toolbar-btn ${isStockImmediate ? 'tp-active' : ''}" id="tp-tb-stock" title="Nur Produkte mit sofortiger Lieferbarkeit">
-          📦 Sofort-Lager
-        </button>
-      </div>
-
-      <div class="tp-toolbar-divider"></div>
-
-      <div class="tp-toolbar-group">
-        <span>Angebote:</span>
-        <button class="tp-stepper-btn" id="tp-tb-min-minus">-</button>
-        <span style="min-width: 14px; text-align: center;">${CONFIG.MIN_OFFERS}</span>
-        <button class="tp-stepper-btn" id="tp-tb-min-plus">+</button>
-      </div>
-
-      <div class="tp-toolbar-divider"></div>
-
-      <button class="tp-toolbar-btn" id="tp-tb-open-settings" title="Einstellungen öffnen">
-        ⚙️
-      </button>
-    `;
-
-    // Event Bindings
-    bar.querySelector('#tp-tb-reveal').onclick = () => {
-      document.body.classList.toggle('tp-reveal-filtered');
-      updateQuickToolbar(counts);
-    };
-
-    bar.querySelector('#tp-tb-stock').onclick = () => {
-      CONFIG.STOCK_FILTER = isStockImmediate ? 'all' : 'immediate-only';
-      processListings();
-    };
-
-    bar.querySelector('#tp-tb-min-minus').onclick = () => {
-      if (CONFIG.MIN_OFFERS > 0) {
-        CONFIG.MIN_OFFERS = CONFIG.MIN_OFFERS - 1;
-        processListings();
-      }
-    };
-
-    bar.querySelector('#tp-tb-min-plus').onclick = () => {
-      CONFIG.MIN_OFFERS = CONFIG.MIN_OFFERS + 1;
-      processListings();
-    };
-
-    bar.querySelector('#tp-tb-open-settings').onclick = () => {
-      const fab = document.getElementById('tp-settings-fab');
-      if (fab) fab.click();
-    };
+    if (countEl) countEl.textContent = totalHidden;
+    if (minValEl) minValEl.textContent = CONFIG.MIN_OFFERS;
+    if (revealBtn) revealBtn.classList.toggle('tp-active', isRevealed);
+    if (revealLabel) revealLabel.textContent = isRevealed ? 'Verbergen' : 'Einblenden';
   }
 
   // Render Inline Negative Filter Search Bar
   function renderInlineNegativeBar() {
     let bar = document.getElementById('tp-inline-negative-bar');
     if (!bar) {
-      const targetHolder = document.querySelector('.pageContentHeader, .searchHeader, .pageTitle, .headSearch');
+      const targetList = document.querySelector(
+        '.productList, .mixedBrowsingListContainer, [class*="productList"], .Plugin_Product'
+      );
+      const targetHolder = targetList ? targetList.parentElement : document.querySelector('.pageContent, main, #content, body');
       if (!targetHolder) return;
 
       bar = document.createElement('div');
       bar.id = 'tp-inline-negative-bar';
       bar.innerHTML = `
-        <span style="font-weight: 700; color: #f43f5e; white-space: nowrap;">🚫 Negativ-Filter:</span>
-        <input type="text" id="tp-inline-negative-input" placeholder="Wörter ausschließen, z. B. Hülle, Case, Refurbished..." value="${CONFIG.NEGATIVE_TERMS || ''}">
+        <span style="font-weight: 700; color: #f43f5e; white-space: nowrap;" title="Begriffe in Produktbezeichnungen ausschließen">🚫 Negativ-Filter:</span>
+        <input type="text" id="tp-inline-negative-input" title="Kommagetrennte Begriffe eingeben (z.B. Hülle, Refurbished, Gebraucht), um passende Produkte auszublenden" placeholder="Wörter ausschließen, z. B. Hülle, Case, Refurbished..." value="${CONFIG.NEGATIVE_TERMS || ''}">
       `;
 
-      targetHolder.parentElement.insertBefore(bar, targetHolder.nextSibling);
+      if (targetList) {
+        targetList.parentElement.insertBefore(bar, targetList);
+      } else {
+        targetHolder.prepend(bar);
+      }
 
       const input = bar.querySelector('#tp-inline-negative-input');
       input.oninput = (e) => {
@@ -864,13 +852,14 @@ const STYLES = `
     }
 
     bar.style.display = 'flex';
-    bar.innerHTML = '<span style="font-size: 11px; font-weight: 700; color: #94a3b8; margin-right: 4px;">🏷️ Kategorien:</span>';
+    bar.innerHTML = '<span style="font-size: 11px; font-weight: 700; color: #94a3b8; margin-right: 4px;" title="Klicken, um komplette Kategorien aus- oder einzublenden">🏷️ Kategorien:</span>';
 
     const excluded = CONFIG.EXCLUDED_CATEGORIES || [];
     pageCategories.forEach(cat => {
       const isExcluded = excluded.includes(cat);
       const pill = document.createElement('div');
       pill.className = `tp-cat-pill ${isExcluded ? 'tp-excluded' : ''}`;
+      pill.title = isExcluded ? `Kategorie "${cat}" wieder einblenden` : `Kategorie "${cat}" dauerhaft ausblenden`;
       pill.textContent = cat;
       pill.onclick = () => {
         let updated = [...excluded];
@@ -890,8 +879,16 @@ const STYLES = `
   function processListings() {
     log('Processing product listings...');
 
+    // Scan page-level categories (breadcrumbs & sidebar trees)
+    scanPageCategories();
+
     const cards = document.querySelectorAll('.Plugin_Product.mixedBrowsingList, .Plugin_Product');
-    if (cards.length === 0) return;
+    if (cards.length === 0) {
+      // Even if cards are empty, render page-level UI bars
+      renderInlineNegativeBar();
+      renderInlineCategoryBar();
+      return;
+    }
 
     // Parse Store Best Price Filters
     const filterElements = document.querySelectorAll('.filters .f_remove_filter[data-target-type="df"]');
@@ -905,7 +902,7 @@ const STYLES = `
     const rawTerms = CONFIG.NEGATIVE_TERMS || '';
     const termsList = rawTerms.split(/[,;\n]/).map(t => t.trim().toLowerCase()).filter(t => t.length > 0);
     const excludedCats = CONFIG.EXCLUDED_CATEGORIES || [];
-    const counts = { neg: 0, cat: 0, min: 0, stock: 0 };
+    const counts = { neg: 0, cat: 0, min: 0 };
 
     cards.forEach(card => {
       // 1. Category extraction
@@ -928,15 +925,7 @@ const STYLES = `
       card.classList.toggle('tp-min-offers-filtered', isLowOffers);
       if (isLowOffers) counts.min++;
 
-      // 5. Stock Filter
-      const { hasImmediate, hasKnown } = checkCardStock(card);
-      let isStockFiltered = false;
-      if (CONFIG.STOCK_FILTER === 'immediate-only' && !hasImmediate) isStockFiltered = true;
-      else if (CONFIG.STOCK_FILTER === 'in-stock' && !hasKnown) isStockFiltered = true;
-      card.classList.toggle('tp-stock-filtered', isStockFiltered);
-      if (isStockFiltered) counts.stock++;
-
-      // 6. Best Price Highlighting / Dimming
+      // 5. Best Price Highlighting / Dimming
       if (activeStores.length === 0) {
         card.classList.remove('tp-is-cheapest', 'tp-not-cheapest', 'tp-no-store-offer');
         const badge = card.querySelector('.tp-best-price-badge');
@@ -1003,7 +992,7 @@ const STYLES = `
       }
     });
 
-    // 7. Re-sorting by Offer Count
+    // 6. Re-sorting by Offer Count
     if (CONFIG.SORT_BY_OFFERS !== 'none' && cards.length > 1) {
       const parent = cards[0].parentElement;
       if (parent) {
@@ -1017,7 +1006,7 @@ const STYLES = `
       }
     }
 
-    // 8. Render UI Modules
+    // 7. Render UI Modules
     updateQuickToolbar(counts);
     renderInlineNegativeBar();
     renderInlineCategoryBar();
@@ -1110,7 +1099,7 @@ const STYLES = `
     if (!fabButton) {
       const fabContainer = document.createElement('div');
       fabContainer.innerHTML = `
-        <button id="tp-settings-fab" title="Configure Toppreise Suite">
+        <button id="tp-settings-fab" title="Toppreise Suite Einstellungen öffnen">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -1127,13 +1116,13 @@ const STYLES = `
       modalContainer.innerHTML = `
         <div id="tp-settings-modal-backdrop">
           <div id="tp-settings-modal">
-            <h3>Toppreise Suite Settings</h3>
+            <h3>Toppreise Suite Einstellungen</h3>
             <div id="tp-settings-sections" style="display: flex; flex-direction: column; gap: 8px; max-height: 72vh; overflow-y: auto; padding-right: 4px;">
               <!-- Dynamic settings sections -->
             </div>
             <div class="tp-modal-actions">
-              <button type="button" class="tp-btn tp-btn-secondary" id="tp-btn-close">Abbrechen</button>
-              <button type="button" class="tp-btn tp-btn-primary" id="tp-btn-save">Speichern</button>
+              <button type="button" class="tp-btn tp-btn-secondary" id="tp-btn-close" title="Einstellungen abbrechen ohne Speichern">Abbrechen</button>
+              <button type="button" class="tp-btn tp-btn-primary" id="tp-btn-save" title="Einstellungen dauerhaft speichern">Speichern</button>
             </div>
           </div>
         </div>
@@ -1177,21 +1166,21 @@ const STYLES = `
           <div class="tp-section-header">1. Händler Bestpreis Highlights</div>
           
           <div class="tp-settings-group">
-            <label>Filter Modus</label>
+            <label title="Auswählen, wie nicht-günstigste Angebote behandelt werden">Filter Modus</label>
             <div class="tp-segmented-control">
               <input type="radio" id="tp-mode-highlight-only" name="tp-mode" value="highlight-only">
-              <label for="tp-mode-highlight-only">Highlight</label>
+              <label for="tp-mode-highlight-only" title="Nur Bestpreis-Badge anzeigen">Highlight</label>
               
               <input type="radio" id="tp-mode-dim" name="tp-mode" value="dim">
-              <label for="tp-mode-dim">Dimmen</label>
+              <label for="tp-mode-dim" title="Nicht-günstigste Angebote ausgrauen/transparent machen">Dimmen</label>
               
               <input type="radio" id="tp-mode-hide" name="tp-mode" value="hide">
-              <label for="tp-mode-hide">Verbergen</label>
+              <label for="tp-mode-hide" title="Nicht-günstigste Angebote komplett ausblenden">Verbergen</label>
             </div>
           </div>
           
           <div class="tp-settings-group">
-            <label>Preis-Toleranz (%)</label>
+            <label title="Prozentuale Abweichung vom Bestpreis, die noch als 'Bestpreis' gilt">Preis-Toleranz (%)</label>
             <div class="tp-range-container">
               <input type="range" id="tp-margin-range" min="0" max="15" step="0.5" value="0">
               <input type="number" id="tp-margin-val" min="0" max="100" step="0.1" value="0">
@@ -1199,7 +1188,7 @@ const STYLES = `
           </div>
           
           <div class="tp-settings-group" id="tp-dim-opacity-group">
-            <label>Transparenz Nicht-Günstigste</label>
+            <label title="Deckkraft für gedimmte Produkte im Dimmen-Modus">Transparenz Nicht-Günstigste</label>
             <div class="tp-range-container">
               <input type="range" id="tp-opacity-range" min="0.05" max="0.95" step="0.05" value="0.25">
               <input type="number" id="tp-opacity-val" min="5" max="95" step="5" value="25">
@@ -1208,7 +1197,7 @@ const STYLES = `
 
           <div class="tp-settings-group tp-switch-container">
             <div class="tp-switch-label">
-              <label>inkl. Versandkosten vergleichen</label>
+              <label title="Preise inklusive Lieferkosten vergleichen">inkl. Versandkosten vergleichen</label>
             </div>
             <label class="tp-switch">
               <input type="checkbox" id="tp-shipping-toggle">
@@ -1219,14 +1208,14 @@ const STYLES = `
           <!-- Section 2: Negativer Textfilter -->
           <div class="tp-section-header">2. Negativer Textfilter (Ausschluss)</div>
           <div class="tp-settings-group">
-            <label>Auszuschließende Begriffe (Kommagetrennt)</label>
+            <label title="Kommagetrennte Wörter eingeben, um passende Produkte auszublenden">Auszuschließende Begriffe (Kommagetrennt)</label>
             <textarea id="tp-negative-terms-input" class="tp-textarea" placeholder="z. B. Hülle, Case, Refurbished, Gebraucht"></textarea>
           </div>
 
           <!-- Section 3: Kategorien Filter -->
           <div class="tp-section-header">3. Kategorien-Filter (Neue Toppreise)</div>
           <div class="tp-settings-group">
-            <label>Erkannte Kategorien (Klicken zum Ausblenden):</label>
+            <label title="Erkannte Kategorien anklicken, um sie dauerhaft auszublenden">Erkannte Kategorien (Klicken zum Ausblenden):</label>
             <div id="tp-category-pills" class="tp-cat-pills-container">
               <!-- Rendered dynamically -->
             </div>
@@ -1235,7 +1224,7 @@ const STYLES = `
           <!-- Section 4: Angebote & Sortierung -->
           <div class="tp-section-header">4. Angebote & Sortierung</div>
           <div class="tp-settings-group">
-            <label>Mindestanzahl Angebote (0 = Aus)</label>
+            <label title="Produkte mit weniger als N Angeboten ausblenden">Mindestanzahl Angebote (0 = Aus)</label>
             <div class="tp-range-container">
               <input type="range" id="tp-min-offers-range" min="0" max="15" step="1" value="0">
               <input type="number" id="tp-min-offers-val" min="0" max="50" step="1" value="0">
@@ -1243,38 +1232,22 @@ const STYLES = `
           </div>
 
           <div class="tp-settings-group">
-            <label>Sortierung nach Anzahl Angebote</label>
+            <label title="Produkte nach Anzahl verfügbarer Händler-Angebote sortieren">Sortierung nach Anzahl Angebote</label>
             <div class="tp-segmented-control">
               <input type="radio" id="tp-sort-none" name="tp-sort-offers" value="none">
-              <label for="tp-sort-none">Standard</label>
+              <label for="tp-sort-none" title="Standard-Reihenfolge der Seite beibehalten">Standard</label>
               
               <input type="radio" id="tp-sort-desc" name="tp-sort-offers" value="desc">
-              <label for="tp-sort-desc">Meiste ⬇</label>
+              <label for="tp-sort-desc" title="Produkte mit den meisten Angeboten zuerst">Meiste ⬇</label>
               
               <input type="radio" id="tp-sort-asc" name="tp-sort-offers" value="asc">
-              <label for="tp-sort-asc">Wenigste ⬆</label>
-            </div>
-          </div>
-
-          <!-- Section 5: Lieferbarkeit & Statusleiste -->
-          <div class="tp-section-header">5. Lieferbarkeit & Statusleiste</div>
-          <div class="tp-settings-group">
-            <label>Verfügbarkeits-Filter</label>
-            <div class="tp-segmented-control">
-              <input type="radio" id="tp-stock-all" name="tp-stock" value="all">
-              <label for="tp-stock-all">Alle</label>
-              
-              <input type="radio" id="tp-stock-instock" name="tp-stock" value="in-stock">
-              <label for="tp-stock-instock">Lieferbar</label>
-              
-              <input type="radio" id="tp-stock-immediate" name="tp-stock" value="immediate-only">
-              <label for="tp-stock-immediate">Sofort ab Lager</label>
+              <label for="tp-sort-asc" title="Produkte mit den wenigsten Angeboten zuerst">Wenigste ⬆</label>
             </div>
           </div>
 
           <div class="tp-settings-group tp-switch-container">
             <div class="tp-switch-label">
-              <label>Filter-Zähler Statusleiste anzeigen</label>
+              <label title="Statusleiste am unteren Bildschirmrand anzeigen">Filter-Zähler Statusleiste anzeigen</label>
             </div>
             <label class="tp-switch">
               <input type="checkbox" id="tp-counter-toggle">
@@ -1282,12 +1255,12 @@ const STYLES = `
             </label>
           </div>
 
-          <!-- Section 6: Preisalarm Auto-Filler -->
-          <div class="tp-section-header" style="color: #3b82f6;">6. Preisalarm Auto-Filler</div>
+          <!-- Section 5: Preisalarm Auto-Filler -->
+          <div class="tp-section-header" style="color: #3b82f6;">5. Preisalarm Auto-Filler</div>
           
           <div class="tp-settings-group tp-switch-container">
             <div class="tp-switch-label">
-              <label>Preisalarm Auto-Fill aktivieren</label>
+              <label title="Automatisches Ausfüllen des Preisalarm-Dialogs beim Klick auf die Glocke">Preisalarm Auto-Fill aktivieren</label>
               <span class="tp-switch-desc">Beim Klick auf die Glocke Formular automatisch ausfüllen</span>
             </div>
             <label class="tp-switch tp-blue">
@@ -1297,7 +1270,7 @@ const STYLES = `
           </div>
 
           <div class="tp-settings-group">
-            <label>Zielpreis (% vom aktuellen Preis)</label>
+            <label title="Zielpreis in Prozent vom aktuellen Tiefstpreis berechnen">Zielpreis (% vom aktuellen Preis)</label>
             <div class="tp-range-container tp-blue">
               <input type="range" id="tp-alarm-target-range" min="10" max="95" step="5" value="60">
               <input type="number" id="tp-alarm-target-val" min="1" max="99" step="1" value="60">
@@ -1305,7 +1278,7 @@ const STYLES = `
           </div>
 
           <div class="tp-settings-group">
-            <label>Laufzeit Dauer</label>
+            <label title="Laufzeit für den Preisalarm auswählen">Laufzeit Dauer</label>
             <div class="tp-segmented-control tp-segmented-control-blue">
               <input type="radio" id="tp-dur-90" name="tp-alarm-duration" value="90">
               <label for="tp-dur-90">3 Monate</label>
@@ -1323,7 +1296,7 @@ const STYLES = `
 
           <div class="tp-settings-group tp-switch-container">
             <div class="tp-switch-label">
-              <label>Automatisch Absenden & Schließen</label>
+              <label title="Nach dem Ausfüllen das Formular direkt absenden und Fenster schließen">Automatisch Absenden & Schließen</label>
               <span class="tp-switch-desc">Formular direkt einreichen und Dialog schließen</span>
             </div>
             <label class="tp-switch tp-blue">
@@ -1358,10 +1331,6 @@ const STYLES = `
     const sortDesc = document.getElementById('tp-sort-desc');
     const sortAsc = document.getElementById('tp-sort-asc');
 
-    const stockAll = document.getElementById('tp-stock-all');
-    const stockInStock = document.getElementById('tp-stock-instock');
-    const stockImmediate = document.getElementById('tp-stock-immediate');
-
     const counterToggle = document.getElementById('tp-counter-toggle');
 
     const alarmEnabledToggle = document.getElementById('tp-alarm-enabled-toggle');
@@ -1389,6 +1358,7 @@ const STYLES = `
         const isExcluded = currentExcludedCats.includes(cat);
         const pill = document.createElement('div');
         pill.className = `tp-cat-pill ${isExcluded ? 'tp-excluded' : ''}`;
+        pill.title = isExcluded ? `Kategorie "${cat}" wieder einblenden` : `Kategorie "${cat}" dauerhaft ausblenden`;
         pill.textContent = cat;
         pill.onclick = () => {
           if (isExcluded) {
@@ -1428,11 +1398,6 @@ const STYLES = `
       if (sort === 'desc') sortDesc.checked = true;
       else if (sort === 'asc') sortAsc.checked = true;
       else sortNone.checked = true;
-
-      const stock = CONFIG.STOCK_FILTER;
-      if (stock === 'immediate-only') stockImmediate.checked = true;
-      else if (stock === 'in-stock') stockInStock.checked = true;
-      else stockAll.checked = true;
 
       counterToggle.checked = CONFIG.ENABLE_FILTER_COUNTER !== false;
 
@@ -1504,9 +1469,6 @@ const STYLES = `
 
       const checkedSort = document.querySelector('input[name="tp-sort-offers"]:checked');
       if (checkedSort) CONFIG.SORT_BY_OFFERS = checkedSort.value;
-
-      const checkedStock = document.querySelector('input[name="tp-stock"]:checked');
-      if (checkedStock) CONFIG.STOCK_FILTER = checkedStock.value;
 
       CONFIG.ENABLE_FILTER_COUNTER = counterToggle.checked;
 
