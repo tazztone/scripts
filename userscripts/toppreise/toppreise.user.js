@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.5.0
+// @version      2.5.1
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -996,6 +996,30 @@ const STYLES = `
     "uhren": "Uhren"
   };
 
+  const GROUP_EMOJIS = {
+    'Filme': '🎬',
+    'Spielwaren': '🧸',
+    'Computer & Zubehör': '💻',
+    'Videogames': '🎮',
+    'HiFi & Audio': '🎧',
+    'TV & Video': '📺',
+    'Smartphones & Mobiltelefone': '📱',
+    'Drogerie': '🧴',
+    'Sport & Freizeit': '⚽',
+    'Haushalt & Küche': '☕',
+    'Auto & Motorrad': '🚗',
+    'Uhren': '⌚',
+    'Foto & Video': '📷',
+    'Bücher & Medien': '📚',
+    'Kleidung & Mode': '👕',
+    'Garten & Baumarkt': '🪴',
+    'Sonstiges': '📦'
+  };
+
+  function getGroupEmoji(groupName) {
+    return GROUP_EMOJIS[groupName] || '📦';
+  }
+
   // Helper: Resolve Top-Level Root Group for any Category (with DOM Fallback Auto-Learning)
   function resolveCategoryGroup(categoryName, card = null) {
     if (!categoryName) return 'Sonstiges';
@@ -1080,7 +1104,7 @@ const STYLES = `
 
     const title = document.createElement('div');
     title.className = 'tp-popover-title';
-    title.textContent = `📁 ${rootGroup} (${subcats.length})`;
+    title.textContent = `${getGroupEmoji(rootGroup)} ${rootGroup} (${subcats.length})`;
 
     const actions = document.createElement('div');
     actions.className = 'tp-popover-actions';
@@ -1095,10 +1119,11 @@ const STYLES = `
       renderPopoverBody();
     };
 
-    const btnShowAll = document.createElement('button');
-    btnShowAll.className = 'tp-popover-btn';
-    btnShowAll.textContent = 'Alle einblenden';
-    btnShowAll.onclick = () => {
+    const btnReset = document.createElement('button');
+    btnReset.className = 'tp-popover-btn';
+    btnReset.textContent = 'Reset';
+    btnReset.title = `Alle Unterkategorien von "${rootGroup}" wieder einblenden`;
+    btnReset.onclick = () => {
       const excluded = getExcludedCats();
       const updated = excluded.filter(c => !subcats.includes(c) && c !== `GROUP:${rootGroup}`);
       updateExcludedCats(updated);
@@ -1106,7 +1131,7 @@ const STYLES = `
     };
 
     actions.appendChild(btnHideAll);
-    actions.appendChild(btnShowAll);
+    actions.appendChild(btnReset);
     header.appendChild(title);
     header.appendChild(actions);
     popover.appendChild(header);
@@ -1587,26 +1612,27 @@ const STYLES = `
           const newPillClass = `tp-group-pill ${allSubcatsExcluded ? 'tp-excluded' : someSubcatsExcluded ? 'tp-partial' : ''}`;
           if (groupPill.className !== newPillClass) groupPill.className = newPillClass;
 
-          const newTitleText = `📁 ${rootGroup} (${subcats.length})`;
+          const newTitleText = `${getGroupEmoji(rootGroup)} ${rootGroup} (${subcats.length})`;
           if (titleSpan.textContent !== newTitleText) titleSpan.textContent = newTitleText;
 
-          titleSpan.title = allSubcatsExcluded ? `Gruppe "${rootGroup}" wieder einblenden` : `Alle Kategorien unter "${rootGroup}" ausblenden`;
-          titleSpan.onclick = () => {
-            const currentExcluded = CONFIG.EXCLUDED_CATEGORIES || [];
-            let updated;
-            if (allSubcatsExcluded) {
-              updated = currentExcluded.filter(c => !subcats.includes(c) && c !== `GROUP:${rootGroup}`);
-            } else {
-              const toAdd = subcats.filter(sc => !currentExcluded.includes(sc));
-              updated = [...currentExcluded, ...toAdd];
-            }
-            saveConfigKey('EXCLUDED_CATEGORIES', updated);
-            processListings();
+          groupPill.title = `Unterkategorien von "${rootGroup}" anzeigen & verwalten`;
+          groupPill.onclick = (e) => {
+            e.stopPropagation();
+            toggleGroupPopover(
+              groupPill,
+              rootGroup,
+              subcats,
+              () => CONFIG.EXCLUDED_CATEGORIES || [],
+              (updated) => {
+                saveConfigKey('EXCLUDED_CATEGORIES', updated);
+                processListings();
+              }
+            );
           };
 
           const newChevronText = '▼';
           if (chevronBtn.textContent !== newChevronText) chevronBtn.textContent = newChevronText;
-          chevronBtn.title = `Unterkategorien von "${rootGroup}" anzeigen`;
+          chevronBtn.title = `Unterkategorien von "${rootGroup}" anzeigen & verwalten`;
           chevronBtn.onclick = (e) => {
             e.stopPropagation();
             toggleGroupPopover(
@@ -2157,23 +2183,27 @@ const STYLES = `
         const newPillClass = `tp-group-pill ${allSubcatsExcluded ? 'tp-excluded' : someSubcatsExcluded ? 'tp-partial' : ''}`;
         if (groupPill.className !== newPillClass) groupPill.className = newPillClass;
 
-        const newTitleText = `📁 ${rootGroup} (${subcats.length})`;
+        const newTitleText = `${getGroupEmoji(rootGroup)} ${rootGroup} (${subcats.length})`;
         if (titleSpan.textContent !== newTitleText) titleSpan.textContent = newTitleText;
 
-        titleSpan.title = allSubcatsExcluded ? `Gruppe "${rootGroup}" wieder einblenden` : `Alle Kategorien unter "${rootGroup}" ausblenden`;
-        titleSpan.onclick = () => {
-          if (allSubcatsExcluded) {
-            currentExcludedCats = currentExcludedCats.filter(c => !subcats.includes(c) && c !== `GROUP:${rootGroup}`);
-          } else {
-            const toAdd = subcats.filter(sc => !currentExcludedCats.includes(sc));
-            currentExcludedCats = [...currentExcludedCats, ...toAdd];
-          }
-          renderCategoryPills();
+        groupPill.title = `Unterkategorien von "${rootGroup}" anzeigen & verwalten`;
+        groupPill.onclick = (e) => {
+          e.stopPropagation();
+          toggleGroupPopover(
+            groupPill,
+            rootGroup,
+            subcats,
+            () => currentExcludedCats,
+            (updated) => {
+              currentExcludedCats = updated;
+              renderCategoryPills();
+            }
+          );
         };
 
         const newChevronText = '▼';
         if (chevronBtn.textContent !== newChevronText) chevronBtn.textContent = newChevronText;
-        chevronBtn.title = `Unterkategorien von "${rootGroup}" anzeigen`;
+        chevronBtn.title = `Unterkategorien von "${rootGroup}" anzeigen & verwalten`;
         chevronBtn.onclick = (e) => {
           e.stopPropagation();
           toggleGroupPopover(
