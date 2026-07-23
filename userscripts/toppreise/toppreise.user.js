@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.2.0
+// @version      2.3.0
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -710,17 +710,42 @@ const STYLES = `
 (() => {
   'use strict';
 
-  // Fast GM storage helpers with in-memory caching
+  // Fast 2-Layer Storage Helpers with GM_setValue + domain localStorage Failover (Reinstall-Proof)
+  const LOCAL_STORAGE_PREFIX = 'tp_suite_v2_';
+
   const _getValue = (key, def) => {
     try {
-      if (typeof GM_getValue !== 'undefined') return GM_getValue(key, def);
+      if (typeof GM_getValue !== 'undefined') {
+        const val = GM_getValue(key);
+        if (val !== undefined && val !== null) return val;
+      }
     } catch (e) {}
+
+    // Failover: Try domain localStorage backup if GM_getValue was wiped on script reinstall
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const raw = window.localStorage.getItem(LOCAL_STORAGE_PREFIX + key);
+        if (raw !== null) {
+          const parsed = JSON.parse(raw);
+          // Re-seed extension storage for future fast access
+          if (typeof GM_setValue !== 'undefined') GM_setValue(key, parsed);
+          return parsed;
+        }
+      }
+    } catch (e) {}
+
     return def;
   };
 
   const _setValue = (key, val) => {
     try {
       if (typeof GM_setValue !== 'undefined') GM_setValue(key, val);
+    } catch (e) {}
+
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(LOCAL_STORAGE_PREFIX + key, JSON.stringify(val));
+      }
     } catch (e) {}
   };
 

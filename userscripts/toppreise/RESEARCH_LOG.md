@@ -49,3 +49,11 @@ When a price alarm bell icon is clicked:
   - Pattern: `/preisvergleich/Category/Subcategory/ProductTitle-p123456`
   - Product URL extraction regex: `/\/preisvergleich\/(.+)\/[^\/]+-p\d+/i`
 - **Breadcrumb Fallback**: `.breadcrumb a:last-of-type, [class*="breadcrumb"] a:last-of-type`
+
+---
+
+## 4. Reinstall-Proof 2-Layer Storage Architecture (v2.3.0)
+
+- **Layer 1 (Extension Sandbox)**: `GM_setValue` / `GM_getValue` stores user settings inside Violentmonkey / Tampermonkey storage partition.
+- **Layer 2 (Domain Storage Backup)**: `window.localStorage.setItem('tp_suite_v2_' + key, JSON.stringify(val))` stores a mirrored backup directly inside `toppreise.ch` domain storage.
+- **Auto-Healing Recovery**: If `GM_getValue` returns `undefined` (e.g. after a clean script uninstall/reinstall), `_getValue` reads `tp_suite_v2_[key]` from `localStorage` and automatically re-seeds `GM_setValue` so settings are preserved indefinitely across script re-installations.

@@ -4,7 +4,7 @@ All-in-one userscript for Toppreise.ch that highlights best prices, excludes unw
 
 ## 🚀 Installation
 
-### 👉 [**CLICK HERE TO INSTALL USERSCRIPT**](https://github.com/tazztone/scripts/raw/refs/heads/main/userscripts/toppreise/toppreise.user.js?v=2.2.0)
+### 👉 [**CLICK HERE TO INSTALL USERSCRIPT**](https://github.com/tazztone/scripts/raw/refs/heads/main/userscripts/toppreise/toppreise.user.js?v=2.3.0)
 *(Requires Violentmonkey / Tampermonkey)*
 
 ---
