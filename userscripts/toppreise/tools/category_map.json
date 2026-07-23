@@ -1,163 +1,11 @@
 {
-  "bekleidung schuhe": {
-    "root": "Bekleidung & Schuhe",
-    "title": "Bekleidung Schuhe",
-    "path": [
-      "Bekleidung Schuhe"
-    ]
-  },
-  "auto motorrad": {
-    "root": "Auto & Motorrad",
-    "title": "Auto Motorrad",
-    "path": [
-      "Auto Motorrad"
-    ]
-  },
-  "buerobedarf schreibwaren": {
-    "root": "Bürobedarf & Schreibwaren",
-    "title": "Buerobedarf Schreibwaren",
-    "path": [
-      "Buerobedarf Schreibwaren"
-    ]
-  },
-  "computer zubehoer": {
+  "notebooks tablets ereader": {
     "root": "Computer & Zubehör",
-    "title": "Computer Zubehoer",
+    "title": "Notebooks Tablets Ereader",
     "path": [
-      "Computer Zubehoer"
-    ]
-  },
-  "drogerie": {
-    "root": "Drogerie",
-    "title": "Drogerie",
-    "path": [
-      "Drogerie"
-    ]
-  },
-  "filme": {
-    "root": "Filme",
-    "title": "Filme",
-    "path": [
-      "Filme"
-    ]
-  },
-  "foto": {
-    "root": "Foto",
-    "title": "Foto",
-    "path": [
-      "Foto"
-    ]
-  },
-  "haus garten": {
-    "root": "Haus & Garten",
-    "title": "Haus Garten",
-    "path": [
-      "Haus Garten"
-    ]
-  },
-  "haushalt kueche": {
-    "root": "Haushalt & Küche",
-    "title": "Haushalt Kueche",
-    "path": [
-      "Haushalt Kueche"
-    ]
-  },
-  "hifi audio": {
-    "root": "HiFi & Audio",
-    "title": "Hifi Audio",
-    "path": [
-      "Hifi Audio"
-    ]
-  },
-  "lust liebe": {
-    "root": "Lust & Liebe",
-    "title": "Lust Liebe",
-    "path": [
-      "Lust Liebe"
-    ]
-  },
-  "musikinstrumente pro audio": {
-    "root": "Musikinstrumente & Pro Audio",
-    "title": "Musikinstrumente Pro Audio",
-    "path": [
-      "Musikinstrumente Pro Audio"
-    ]
-  },
-  "navigation": {
-    "root": "Navigation",
-    "title": "Navigation",
-    "path": [
-      "Navigation"
-    ]
-  },
-  "schmuck": {
-    "root": "Schmuck",
-    "title": "Schmuck",
-    "path": [
-      "Schmuck"
-    ]
-  },
-  "smartphones mobiltelefone": {
-    "root": "Smartphones & Mobiltelefone",
-    "title": "Smartphones Mobiltelefone",
-    "path": [
-      "Smartphones Mobiltelefone"
-    ]
-  },
-  "spielwaren": {
-    "root": "Spielwaren",
-    "title": "Spielwaren",
-    "path": [
-      "Spielwaren"
-    ]
-  },
-  "sport freizeit": {
-    "root": "Sport & Freizeit",
-    "title": "Sport Freizeit",
-    "path": [
-      "Sport Freizeit"
-    ]
-  },
-  "telefon voip": {
-    "root": "Telefon & VoIP",
-    "title": "Telefon Voip",
-    "path": [
-      "Telefon Voip"
-    ]
-  },
-  "tv video": {
-    "root": "TV & Video",
-    "title": "Tv Video",
-    "path": [
-      "Tv Video"
-    ]
-  },
-  "uhren": {
-    "root": "Uhren",
-    "title": "Uhren",
-    "path": [
-      "Uhren"
-    ]
-  },
-  "videogames": {
-    "root": "Videogames",
-    "title": "Videogames",
-    "path": [
-      "Videogames"
-    ]
-  },
-  "wein spirituosen": {
-    "root": "Wein & Spirituosen",
-    "title": "Wein Spirituosen",
-    "path": [
-      "Wein Spirituosen"
-    ]
-  },
-  "werkzeuge werkstatt": {
-    "root": "Werkzeuge & Werkstatt",
-    "title": "Werkzeuge Werkstatt",
-    "path": [
-      "Werkzeuge Werkstatt"
+      "Computer Zubehoer",
+      "Notebooks Tablets Ereader",
+      "Ebook Reader"
     ]
   },
   "notebooks": {
@@ -178,6 +26,24 @@
       "Tablets"
     ]
   },
+  "pc komponenten": {
+    "root": "Computer & Zubehör",
+    "title": "Pc Komponenten",
+    "path": [
+      "Computer Zubehoer",
+      "Pc Komponenten",
+      "Festplatten Ssd"
+    ]
+  },
+  "festplatten ssd": {
+    "root": "Computer & Zubehör",
+    "title": "Festplatten Ssd",
+    "path": [
+      "Computer Zubehoer",
+      "Pc Komponenten",
+      "Festplatten Ssd"
+    ]
+  },
   "solid state drives ssd": {
     "root": "Computer & Zubehör",
     "title": "Solid State Drives Ssd",
@@ -188,6 +54,16 @@
       "Solid State Drives Ssd"
     ]
   },
+  "peripheriegeraete": {
+    "root": "Computer & Zubehör",
+    "title": "Peripheriegeraete",
+    "path": [
+      "Computer Zubehoer",
+      "Peripheriegeraete",
+      "Drucker Scanner",
+      "Verbrauchsmaterial Fuer Drucker"
+    ]
+  },
   "monitore": {
     "root": "Computer & Zubehör",
     "title": "Monitore",
@@ -196,6 +72,16 @@
       "Peripheriegeraete",
       "Monitore",
       "Monitore"
+    ]
+  },
+  "drucker scanner": {
+    "root": "Computer & Zubehör",
+    "title": "Drucker Scanner",
+    "path": [
+      "Computer Zubehoer",
+      "Peripheriegeraete",
+      "Drucker Scanner",
+      "Verbrauchsmaterial Fuer Drucker"
     ]
   },
   "drucker": {
@@ -227,13 +113,14 @@
       "Ebook Reader"
     ]
   },
-  "drucker scanner": {
+  "grafikkarten zubehoer": {
     "root": "Computer & Zubehör",
-    "title": "Drucker Scanner",
+    "title": "Grafikkarten Zubehoer",
     "path": [
       "Computer Zubehoer",
-      "Peripheriegeraete",
-      "Drucker Scanner"
+      "Pc Komponenten",
+      "Grafikkarten Zubehoer",
+      "Grafikkarten"
     ]
   },
   "grafikkarten": {
@@ -263,15 +150,6 @@
       "Computer Zubehoer",
       "Pc Komponenten",
       "Prozessoren"
-    ]
-  },
-  "festplatten ssd": {
-    "root": "Computer & Zubehör",
-    "title": "Festplatten Ssd",
-    "path": [
-      "Computer Zubehoer",
-      "Pc Komponenten",
-      "Festplatten Ssd"
     ]
   },
   "nas systeme": {
@@ -404,7 +282,7 @@
     ]
   },
   "digitalkameras": {
-    "root": "Foto",
+    "root": "Foto & Video",
     "title": "Digitalkameras",
     "path": [
       "Foto",
@@ -419,6 +297,15 @@
       "Audio Streaming"
     ]
   },
+  "lautsprecher": {
+    "root": "HiFi & Audio",
+    "title": "Lautsprecher",
+    "path": [
+      "Hifi Audio",
+      "Lautsprecher",
+      "Bluetooth Lautsprecher"
+    ]
+  },
   "bluetooth lautsprecher": {
     "root": "HiFi & Audio",
     "title": "Bluetooth Lautsprecher",
@@ -426,6 +313,15 @@
       "Hifi Audio",
       "Lautsprecher",
       "Bluetooth Lautsprecher"
+    ]
+  },
+  "home cinema video": {
+    "root": "TV & Video",
+    "title": "Home Cinema Video",
+    "path": [
+      "Tv Video",
+      "Home Cinema Video",
+      "Multimedia Player"
     ]
   },
   "blu ray player": {
@@ -446,6 +342,15 @@
       "Multimedia Player"
     ]
   },
+  "camcorder": {
+    "root": "TV & Video",
+    "title": "Camcorder",
+    "path": [
+      "Tv Video",
+      "Camcorder",
+      "Action Cameras"
+    ]
+  },
   "action cameras": {
     "root": "TV & Video",
     "title": "Action Cameras",
@@ -464,7 +369,7 @@
     ]
   },
   "objektive": {
-    "root": "Foto",
+    "root": "Foto & Video",
     "title": "Objektive",
     "path": [
       "Foto",
@@ -479,8 +384,17 @@
       "Speicherkarten"
     ]
   },
+  "stative studiozubehoer": {
+    "root": "Foto & Video",
+    "title": "Stative Studiozubehoer",
+    "path": [
+      "Foto",
+      "Stative Studiozubehoer",
+      "Stative"
+    ]
+  },
   "stative": {
-    "root": "Foto",
+    "root": "Foto & Video",
     "title": "Stative",
     "path": [
       "Foto",
@@ -489,7 +403,7 @@
     ]
   },
   "sofortbildkameras": {
-    "root": "Foto",
+    "root": "Foto & Video",
     "title": "Sofortbildkameras",
     "path": [
       "Foto",
@@ -504,6 +418,15 @@
       "Kopfhoerer"
     ]
   },
+  "portables": {
+    "root": "HiFi & Audio",
+    "title": "Portables",
+    "path": [
+      "Hifi Audio",
+      "Portables",
+      "Portable Lautsprecher"
+    ]
+  },
   "radios radio recorder": {
     "root": "HiFi & Audio",
     "title": "Radios Radio Recorder",
@@ -511,6 +434,14 @@
       "Hifi Audio",
       "Portables",
       "Radios Radio Recorder"
+    ]
+  },
+  "hifi einzelkomponenten": {
+    "root": "HiFi & Audio",
+    "title": "Hifi Einzelkomponenten",
+    "path": [
+      "Hifi Audio",
+      "Hifi Einzelkomponenten"
     ]
   },
   "receiver": {
@@ -558,22 +489,6 @@
       "Tuner"
     ]
   },
-  "lautsprecher": {
-    "root": "HiFi & Audio",
-    "title": "Lautsprecher",
-    "path": [
-      "Hifi Audio",
-      "Lautsprecher"
-    ]
-  },
-  "hifi einzelkomponenten": {
-    "root": "HiFi & Audio",
-    "title": "Hifi Einzelkomponenten",
-    "path": [
-      "Hifi Audio",
-      "Hifi Einzelkomponenten"
-    ]
-  },
   "portable lautsprecher": {
     "root": "HiFi & Audio",
     "title": "Portable Lautsprecher",
@@ -581,6 +496,14 @@
       "Hifi Audio",
       "Portables",
       "Portable Lautsprecher"
+    ]
+  },
+  "smartphones": {
+    "root": "Smartphones & Mobiltelefone",
+    "title": "Smartphones",
+    "path": [
+      "Smartphones Mobiltelefone",
+      "Smartphones"
     ]
   },
   "apple h10": {
@@ -592,24 +515,17 @@
       "Apple H10"
     ]
   },
-  "smartphones": {
-    "root": "Smartphones & Mobiltelefone",
-    "title": "Smartphones",
-    "path": [
-      "Smartphones Mobiltelefone",
-      "Smartphones"
-    ]
-  },
   "smartwatches": {
     "root": "Smartphones & Mobiltelefone",
     "title": "Smartwatches",
     "path": [
       "Smartphones Mobiltelefone",
-      "Smartwatches"
+      "Smartwatches",
+      "Apple H10"
     ]
   },
   "funkgeraete": {
-    "root": "Telefon & VoIP",
+    "root": "Smartphones & Mobiltelefone",
     "title": "Funkgeraete",
     "path": [
       "Telefon Voip",
@@ -617,19 +533,30 @@
     ]
   },
   "festnetz telefone": {
-    "root": "Telefon & VoIP",
+    "root": "Smartphones & Mobiltelefone",
     "title": "Festnetz Telefone",
     "path": [
       "Telefon Voip",
-      "Festnetz Telefone"
+      "Festnetz Telefone",
+      "Analoge Funktelefone"
     ]
   },
   "voice over ip voip": {
-    "root": "Telefon & VoIP",
+    "root": "Smartphones & Mobiltelefone",
     "title": "Voice Over Ip Voip",
     "path": [
       "Telefon Voip",
-      "Voice Over Ip Voip"
+      "Voice Over Ip Voip",
+      "Voip Telefone"
+    ]
+  },
+  "zubehoer fuer mobiltelefone": {
+    "root": "Smartphones & Mobiltelefone",
+    "title": "Zubehoer Fuer Mobiltelefone",
+    "path": [
+      "Smartphones Mobiltelefone",
+      "Zubehoer Fuer Mobiltelefone",
+      "Taschen Cover Fuer Iphone"
     ]
   },
   "taschen cover fuer iphone": {
@@ -704,14 +631,6 @@
       "Fairphone H3048"
     ]
   },
-  "zubehoer fuer mobiltelefone": {
-    "root": "Smartphones & Mobiltelefone",
-    "title": "Zubehoer Fuer Mobiltelefone",
-    "path": [
-      "Smartphones Mobiltelefone",
-      "Zubehoer Fuer Mobiltelefone"
-    ]
-  },
   "akkus": {
     "root": "Smartphones & Mobiltelefone",
     "title": "Akkus",
@@ -721,8 +640,26 @@
       "Akkus"
     ]
   },
+  "batterien akkus ladegeraete": {
+    "root": "Garten & Baumarkt",
+    "title": "Batterien Akkus Ladegeraete",
+    "path": [
+      "Haus Garten",
+      "Batterien Akkus Ladegeraete"
+    ]
+  },
+  "akkus ladegeraete": {
+    "root": "Garten & Baumarkt",
+    "title": "Akkus Ladegeraete",
+    "path": [
+      "Haus Garten",
+      "Batterien Akkus Ladegeraete",
+      "Akkus Ladegeraete",
+      "Mobile Akku Ladegeraete Powerbanks"
+    ]
+  },
   "mobile akku ladegeraete powerbanks": {
-    "root": "Haus & Garten",
+    "root": "Garten & Baumarkt",
     "title": "Mobile Akku Ladegeraete Powerbanks",
     "path": [
       "Haus Garten",
@@ -750,7 +687,7 @@
     ]
   },
   "analoge telefone": {
-    "root": "Telefon & VoIP",
+    "root": "Smartphones & Mobiltelefone",
     "title": "Analoge Telefone",
     "path": [
       "Telefon Voip",
@@ -759,7 +696,7 @@
     ]
   },
   "analoge funktelefone": {
-    "root": "Telefon & VoIP",
+    "root": "Smartphones & Mobiltelefone",
     "title": "Analoge Funktelefone",
     "path": [
       "Telefon Voip",
@@ -768,7 +705,7 @@
     ]
   },
   "voip router": {
-    "root": "Telefon & VoIP",
+    "root": "Smartphones & Mobiltelefone",
     "title": "Voip Router",
     "path": [
       "Telefon Voip",
@@ -777,12 +714,21 @@
     ]
   },
   "voip telefone": {
-    "root": "Telefon & VoIP",
+    "root": "Smartphones & Mobiltelefone",
     "title": "Voip Telefone",
     "path": [
       "Telefon Voip",
       "Voice Over Ip Voip",
       "Voip Telefone"
+    ]
+  },
+  "sportgeraete": {
+    "root": "Sport & Freizeit",
+    "title": "Sportgeraete",
+    "path": [
+      "Sport Freizeit",
+      "Sportgeraete",
+      "Activity Tracker Smartwatches"
     ]
   },
   "activity tracker smartwatches": {
@@ -794,6 +740,14 @@
       "Activity Tracker Smartwatches"
     ]
   },
+  "rc modelle": {
+    "root": "Spielwaren",
+    "title": "Rc Modelle",
+    "path": [
+      "Spielwaren",
+      "Rc Modelle"
+    ]
+  },
   "multicopter": {
     "root": "Spielwaren",
     "title": "Multicopter",
@@ -801,14 +755,6 @@
       "Spielwaren",
       "Rc Modelle",
       "Multicopter"
-    ]
-  },
-  "rc modelle": {
-    "root": "Spielwaren",
-    "title": "Rc Modelle",
-    "path": [
-      "Spielwaren",
-      "Rc Modelle"
     ]
   },
   "gesellschaftsspiele": {
@@ -827,14 +773,41 @@
       "Lego"
     ]
   },
+  "musikinstrumente": {
+    "root": "HiFi & Audio",
+    "title": "Musikinstrumente",
+    "path": [
+      "Musikinstrumente Pro Audio",
+      "Musikinstrumente"
+    ]
+  },
+  "tasteninstrumente": {
+    "root": "HiFi & Audio",
+    "title": "Tasteninstrumente",
+    "path": [
+      "Musikinstrumente Pro Audio",
+      "Musikinstrumente",
+      "Tasteninstrumente",
+      "E Pianos"
+    ]
+  },
   "e pianos": {
-    "root": "Musikinstrumente & Pro Audio",
+    "root": "HiFi & Audio",
     "title": "E Pianos",
     "path": [
       "Musikinstrumente Pro Audio",
       "Musikinstrumente",
       "Tasteninstrumente",
       "E Pianos"
+    ]
+  },
+  "spielzeugfiguren roboter": {
+    "root": "Spielwaren",
+    "title": "Spielzeugfiguren Roboter",
+    "path": [
+      "Spielwaren",
+      "Spielzeugfiguren Roboter",
+      "Spielzeugroboter"
     ]
   },
   "spielzeugroboter": {
@@ -922,6 +895,15 @@
       "Velos"
     ]
   },
+  "optik": {
+    "root": "Sport & Freizeit",
+    "title": "Optik",
+    "path": [
+      "Sport Freizeit",
+      "Optik",
+      "Fernglaeser"
+    ]
+  },
   "fernglaeser": {
     "root": "Sport & Freizeit",
     "title": "Fernglaeser",
@@ -929,6 +911,15 @@
       "Sport Freizeit",
       "Optik",
       "Fernglaeser"
+    ]
+  },
+  "camping outdoor": {
+    "root": "Sport & Freizeit",
+    "title": "Camping Outdoor",
+    "path": [
+      "Sport Freizeit",
+      "Camping Outdoor",
+      "Taschenmesser Tools"
     ]
   },
   "taschenmesser tools": {
@@ -940,16 +931,8 @@
       "Taschenmesser Tools"
     ]
   },
-  "musikinstrumente": {
-    "root": "Musikinstrumente & Pro Audio",
-    "title": "Musikinstrumente",
-    "path": [
-      "Musikinstrumente Pro Audio",
-      "Musikinstrumente"
-    ]
-  },
   "professional audio djing": {
-    "root": "Musikinstrumente & Pro Audio",
+    "root": "HiFi & Audio",
     "title": "Professional Audio Djing",
     "path": [
       "Musikinstrumente Pro Audio",
@@ -985,7 +968,8 @@
     "title": "Playstation 5",
     "path": [
       "Videogames",
-      "Playstation 5"
+      "Playstation 5",
+      "Ps5 Games"
     ]
   },
   "ps5 games": {
@@ -1002,7 +986,8 @@
     "title": "Nintendo Switch 2",
     "path": [
       "Videogames",
-      "Nintendo Switch 2"
+      "Nintendo Switch 2",
+      "Nintendo Switch 2 Games"
     ]
   },
   "nintendo switch 2 games": {
@@ -1019,7 +1004,8 @@
     "title": "Playstation 4",
     "path": [
       "Videogames",
-      "Playstation 4"
+      "Playstation 4",
+      "Ps4 Games"
     ]
   },
   "ps4 games": {
@@ -1036,7 +1022,8 @@
     "title": "Nintendo Switch",
     "path": [
       "Videogames",
-      "Nintendo Switch"
+      "Nintendo Switch",
+      "Nintendo Switch Games"
     ]
   },
   "nintendo switch games": {
@@ -1053,7 +1040,8 @@
     "title": "Xbox Series X",
     "path": [
       "Videogames",
-      "Xbox Series X"
+      "Xbox Series X",
+      "Xbox Series X Games"
     ]
   },
   "xbox series x games": {
@@ -1097,6 +1085,14 @@
       "Kaffee Espressomaschinen"
     ]
   },
+  "haushaltsgeraete": {
+    "root": "Haushalt & Küche",
+    "title": "Haushaltsgeraete",
+    "path": [
+      "Haushalt Kueche",
+      "Haushaltsgeraete"
+    ]
+  },
   "staubsauger": {
     "root": "Haushalt & Küche",
     "title": "Staubsauger",
@@ -1107,15 +1103,16 @@
     ]
   },
   "grillieren": {
-    "root": "Haus & Garten",
+    "root": "Garten & Baumarkt",
     "title": "Grillieren",
     "path": [
       "Haus Garten",
-      "Grillieren"
+      "Grillieren",
+      "Elektrogrills"
     ]
   },
   "smart home": {
-    "root": "Haus & Garten",
+    "root": "Garten & Baumarkt",
     "title": "Smart Home",
     "path": [
       "Haus Garten",
@@ -1128,14 +1125,6 @@
     "path": [
       "Auto Motorrad",
       "Reifen"
-    ]
-  },
-  "haushaltsgeraete": {
-    "root": "Haushalt & Küche",
-    "title": "Haushaltsgeraete",
-    "path": [
-      "Haushalt Kueche",
-      "Haushaltsgeraete"
     ]
   },
   "kuechengeraete": {
@@ -1171,7 +1160,7 @@
     ]
   },
   "wohnen": {
-    "root": "Haus & Garten",
+    "root": "Garten & Baumarkt",
     "title": "Wohnen",
     "path": [
       "Haus Garten",
@@ -1179,7 +1168,7 @@
     ]
   },
   "lampen leuchtmittel": {
-    "root": "Haus & Garten",
+    "root": "Garten & Baumarkt",
     "title": "Lampen Leuchtmittel",
     "path": [
       "Haus Garten",
@@ -1187,23 +1176,15 @@
     ]
   },
   "haus sicherheitstechnik": {
-    "root": "Haus & Garten",
+    "root": "Garten & Baumarkt",
     "title": "Haus Sicherheitstechnik",
     "path": [
       "Haus Garten",
       "Haus Sicherheitstechnik"
     ]
   },
-  "batterien akkus ladegeraete": {
-    "root": "Haus & Garten",
-    "title": "Batterien Akkus Ladegeraete",
-    "path": [
-      "Haus Garten",
-      "Batterien Akkus Ladegeraete"
-    ]
-  },
   "gasgrills": {
-    "root": "Haus & Garten",
+    "root": "Garten & Baumarkt",
     "title": "Gasgrills",
     "path": [
       "Haus Garten",
@@ -1212,7 +1193,7 @@
     ]
   },
   "holzkohlegrills": {
-    "root": "Haus & Garten",
+    "root": "Garten & Baumarkt",
     "title": "Holzkohlegrills",
     "path": [
       "Haus Garten",
@@ -1221,7 +1202,7 @@
     ]
   },
   "elektrogrills": {
-    "root": "Haus & Garten",
+    "root": "Garten & Baumarkt",
     "title": "Elektrogrills",
     "path": [
       "Haus Garten",
@@ -1230,7 +1211,7 @@
     ]
   },
   "gartenmoebel": {
-    "root": "Haus & Garten",
+    "root": "Garten & Baumarkt",
     "title": "Gartenmoebel",
     "path": [
       "Haus Garten",
@@ -1238,7 +1219,7 @@
     ]
   },
   "gartengeraete": {
-    "root": "Haus & Garten",
+    "root": "Garten & Baumarkt",
     "title": "Gartengeraete",
     "path": [
       "Haus Garten",
@@ -1262,7 +1243,7 @@
     ]
   },
   "handwerkzeuge": {
-    "root": "Werkzeuge & Werkstatt",
+    "root": "Garten & Baumarkt",
     "title": "Handwerkzeuge",
     "path": [
       "Werkzeuge Werkstatt",
@@ -1270,7 +1251,7 @@
     ]
   },
   "bohrmaschinen schrauber": {
-    "root": "Werkzeuge & Werkstatt",
+    "root": "Garten & Baumarkt",
     "title": "Bohrmaschinen Schrauber",
     "path": [
       "Werkzeuge Werkstatt",
@@ -1278,7 +1259,7 @@
     ]
   },
   "saegen fraesen": {
-    "root": "Werkzeuge & Werkstatt",
+    "root": "Garten & Baumarkt",
     "title": "Saegen Fraesen",
     "path": [
       "Werkzeuge Werkstatt",
@@ -1306,7 +1287,26 @@
     "title": "Parfuemerie",
     "path": [
       "Drogerie",
-      "Parfuemerie"
+      "Parfuemerie",
+      "Unisexduefte"
+    ]
+  },
+  "rasur haarpflege": {
+    "root": "Drogerie",
+    "title": "Rasur Haarpflege",
+    "path": [
+      "Drogerie",
+      "Rasur Haarpflege"
+    ]
+  },
+  "rasur enthaarung": {
+    "root": "Drogerie",
+    "title": "Rasur Enthaarung",
+    "path": [
+      "Drogerie",
+      "Rasur Haarpflege",
+      "Rasur Enthaarung",
+      "Elektrorasierer"
     ]
   },
   "elektrorasierer": {
@@ -1317,6 +1317,14 @@
       "Rasur Haarpflege",
       "Rasur Enthaarung",
       "Elektrorasierer"
+    ]
+  },
+  "mund zahnpflege": {
+    "root": "Drogerie",
+    "title": "Mund Zahnpflege",
+    "path": [
+      "Drogerie",
+      "Mund Zahnpflege"
     ]
   },
   "elektrozahnbuersten": {
@@ -1337,7 +1345,7 @@
     ]
   },
   "wein": {
-    "root": "Wein & Spirituosen",
+    "root": "Haushalt & Küche",
     "title": "Wein",
     "path": [
       "Wein Spirituosen",
@@ -1350,7 +1358,8 @@
     "path": [
       "Drogerie",
       "Parfuemerie",
-      "Damenduefte"
+      "Damenduefte",
+      "Deodorant"
     ]
   },
   "deodorant": {
@@ -1369,7 +1378,8 @@
     "path": [
       "Drogerie",
       "Parfuemerie",
-      "Herrenduefte"
+      "Herrenduefte",
+      "After Shave"
     ]
   },
   "after shave": {
@@ -1407,35 +1417,22 @@
       "Koerperpflege"
     ]
   },
-  "mund zahnpflege": {
-    "root": "Drogerie",
-    "title": "Mund Zahnpflege",
-    "path": [
-      "Drogerie",
-      "Mund Zahnpflege"
-    ]
-  },
-  "rasur haarpflege": {
-    "root": "Drogerie",
-    "title": "Rasur Haarpflege",
-    "path": [
-      "Drogerie",
-      "Rasur Haarpflege"
-    ]
-  },
-  "erotik": {
-    "root": "Erotik",
-    "title": "Erotik",
-    "path": [
-      "Erotik"
-    ]
-  },
   "spirituosen": {
-    "root": "Wein & Spirituosen",
+    "root": "Haushalt & Küche",
     "title": "Spirituosen",
     "path": [
       "Wein Spirituosen",
       "Spirituosen"
+    ]
+  },
+  "dvd science fiction fantasy": {
+    "root": "Filme",
+    "title": "Dvd Science Fiction Fantasy",
+    "path": [
+      "Filme",
+      "Dvd Filme",
+      "Dvd Science Fiction Fantasy",
+      "Fantasy"
     ]
   },
   "science fiction": {
@@ -1443,14 +1440,14 @@
     "title": "Science Fiction",
     "path": [
       "Filme",
-      "Dvd Filme",
-      "Dvd Science Fiction Fantasy",
+      "Blu Ray Filme",
+      "Blu Ray Science Fiction Fantasy",
       "Science Fiction"
     ]
   },
-  "abenteuer": {
+  "dvd kinder familie": {
     "root": "Filme",
-    "title": "Abenteuer",
+    "title": "Dvd Kinder Familie",
     "path": [
       "Filme",
       "Dvd Filme",
@@ -1458,14 +1455,44 @@
       "Abenteuer"
     ]
   },
+  "abenteuer": {
+    "root": "Filme",
+    "title": "Abenteuer",
+    "path": [
+      "Filme",
+      "Blu Ray Filme",
+      "Blu Ray Kinder Familie",
+      "Abenteuer"
+    ]
+  },
+  "dvd tv dokumentationen": {
+    "root": "Filme",
+    "title": "Dvd Tv Dokumentationen",
+    "path": [
+      "Filme",
+      "Dvd Filme",
+      "Dvd Tv Dokumentationen",
+      "Biografie"
+    ]
+  },
   "natur": {
     "root": "Filme",
     "title": "Natur",
     "path": [
       "Filme",
-      "Dvd Filme",
-      "Dvd Tv Dokumentationen",
+      "Blu Ray Filme",
+      "Blu Ray Tv Dokumentationen",
       "Natur"
+    ]
+  },
+  "dvd action thriller horror": {
+    "root": "Filme",
+    "title": "Dvd Action Thriller Horror",
+    "path": [
+      "Filme",
+      "Dvd Filme",
+      "Dvd Action Thriller Horror",
+      "Action"
     ]
   },
   "thriller": {
@@ -1473,9 +1500,19 @@
     "title": "Thriller",
     "path": [
       "Filme",
-      "Dvd Filme",
-      "Dvd Action Thriller Horror",
+      "Blu Ray Filme",
+      "Blu Ray Action Thriller Horror",
       "Thriller"
+    ]
+  },
+  "dvd komoedie drama": {
+    "root": "Filme",
+    "title": "Dvd Komoedie Drama",
+    "path": [
+      "Filme",
+      "Dvd Filme",
+      "Dvd Komoedie Drama",
+      "Klassisches Drama"
     ]
   },
   "mehr komoedie": {
@@ -1483,8 +1520,8 @@
     "title": "Mehr Komoedie",
     "path": [
       "Filme",
-      "Dvd Filme",
-      "Dvd Komoedie Drama",
+      "Blu Ray Filme",
+      "Blu Ray Komoedie Drama",
       "Mehr Komoedie"
     ]
   },
@@ -1493,8 +1530,8 @@
     "title": "Mehr Drama",
     "path": [
       "Filme",
-      "Dvd Filme",
-      "Dvd Komoedie Drama",
+      "Blu Ray Filme",
+      "Blu Ray Komoedie Drama",
       "Mehr Drama"
     ]
   },
@@ -1503,8 +1540,8 @@
     "title": "Fantasy",
     "path": [
       "Filme",
-      "Dvd Filme",
-      "Dvd Science Fiction Fantasy",
+      "Blu Ray Filme",
+      "Blu Ray Science Fiction Fantasy",
       "Fantasy"
     ]
   },
@@ -1513,8 +1550,8 @@
     "title": "Horror",
     "path": [
       "Filme",
-      "Dvd Filme",
-      "Dvd Action Thriller Horror",
+      "Blu Ray Filme",
+      "Blu Ray Action Thriller Horror",
       "Horror"
     ]
   },
@@ -1523,8 +1560,8 @@
     "title": "Romantische Komoedie",
     "path": [
       "Filme",
-      "Dvd Filme",
-      "Dvd Komoedie Drama",
+      "Blu Ray Filme",
+      "Blu Ray Komoedie Drama",
       "Romantische Komoedie"
     ]
   },
@@ -1533,8 +1570,8 @@
     "title": "Horrorkomoedie",
     "path": [
       "Filme",
-      "Dvd Filme",
-      "Dvd Komoedie Drama",
+      "Blu Ray Filme",
+      "Blu Ray Komoedie Drama",
       "Horrorkomoedie"
     ]
   },
@@ -1543,8 +1580,8 @@
     "title": "Klassisches Drama",
     "path": [
       "Filme",
-      "Dvd Filme",
-      "Dvd Komoedie Drama",
+      "Blu Ray Filme",
+      "Blu Ray Komoedie Drama",
       "Klassisches Drama"
     ]
   },
@@ -1553,8 +1590,8 @@
     "title": "Biografie",
     "path": [
       "Filme",
-      "Dvd Filme",
-      "Dvd Tv Dokumentationen",
+      "Blu Ray Filme",
+      "Blu Ray Tv Dokumentationen",
       "Biografie"
     ]
   },
@@ -1563,8 +1600,8 @@
     "title": "Action",
     "path": [
       "Filme",
-      "Dvd Filme",
-      "Dvd Action Thriller Horror",
+      "Blu Ray Filme",
+      "Blu Ray Action Thriller Horror",
       "Action"
     ]
   },
@@ -1573,9 +1610,269 @@
     "title": "Komoedie",
     "path": [
       "Filme",
-      "Dvd Filme",
-      "Dvd Kinder Familie",
+      "Blu Ray Filme",
+      "Blu Ray Kinder Familie",
       "Komoedie"
+    ]
+  },
+  "jump n run geschicklichkeit": {
+    "root": "Videogames",
+    "title": "Jump N Run Geschicklichkeit",
+    "path": [
+      "Videogames",
+      "Nintendo Switch",
+      "Nintendo Switch Games",
+      "Jump N Run Geschicklichkeit"
+    ]
+  },
+  "simulationen": {
+    "root": "Videogames",
+    "title": "Simulationen",
+    "path": [
+      "Videogames",
+      "Nintendo Switch",
+      "Nintendo Switch Games",
+      "Simulationen"
+    ]
+  },
+  "sportspiele": {
+    "root": "Videogames",
+    "title": "Sportspiele",
+    "path": [
+      "Videogames",
+      "Nintendo Switch",
+      "Nintendo Switch Games",
+      "Sportspiele"
+    ]
+  },
+  "rennspiele": {
+    "root": "Videogames",
+    "title": "Rennspiele",
+    "path": [
+      "Videogames",
+      "Nintendo Switch",
+      "Nintendo Switch Games",
+      "Rennspiele"
+    ]
+  },
+  "rollenspiele adventures": {
+    "root": "Videogames",
+    "title": "Rollenspiele Adventures",
+    "path": [
+      "Videogames",
+      "Nintendo Switch",
+      "Nintendo Switch Games",
+      "Rollenspiele Adventures"
+    ]
+  },
+  "strategiespiele": {
+    "root": "Videogames",
+    "title": "Strategiespiele",
+    "path": [
+      "Videogames",
+      "Computerspiele Fuer Windows",
+      "Strategiespiele"
+    ]
+  },
+  "fitness krafttraining": {
+    "root": "Sport & Freizeit",
+    "title": "Fitness Krafttraining",
+    "path": [
+      "Sport Freizeit",
+      "Fitness Krafttraining",
+      "Activity Tracker Smartwatches"
+    ]
+  },
+  "actionspiele": {
+    "root": "Videogames",
+    "title": "Actionspiele",
+    "path": [
+      "Videogames",
+      "Playstation 4",
+      "Ps4 Games",
+      "Actionspiele"
+    ]
+  },
+  "4k uhd science fiction fantasy": {
+    "root": "Filme",
+    "title": "4k Uhd Science Fiction Fantasy",
+    "path": [
+      "Filme",
+      "Blu Ray 4k Ultra Hd Filme",
+      "4k Uhd Science Fiction Fantasy",
+      "Fantasy"
+    ]
+  },
+  "4k uhd kinder familie": {
+    "root": "Filme",
+    "title": "4k Uhd Kinder Familie",
+    "path": [
+      "Filme",
+      "Blu Ray 4k Ultra Hd Filme",
+      "4k Uhd Kinder Familie",
+      "Abenteuer"
+    ]
+  },
+  "blu ray tv dokumentationen": {
+    "root": "Filme",
+    "title": "Blu Ray Tv Dokumentationen",
+    "path": [
+      "Filme",
+      "Blu Ray Filme",
+      "Blu Ray Tv Dokumentationen",
+      "Biografie"
+    ]
+  },
+  "4k uhd action thriller horror": {
+    "root": "Filme",
+    "title": "4k Uhd Action Thriller Horror",
+    "path": [
+      "Filme",
+      "Blu Ray 4k Ultra Hd Filme",
+      "4k Uhd Action Thriller Horror",
+      "Action"
+    ]
+  },
+  "blu ray komoedie drama": {
+    "root": "Filme",
+    "title": "Blu Ray Komoedie Drama",
+    "path": [
+      "Filme",
+      "Blu Ray Filme",
+      "Blu Ray Komoedie Drama",
+      "Klassisches Drama"
+    ]
+  },
+  "blu ray kinder familie": {
+    "root": "Filme",
+    "title": "Blu Ray Kinder Familie",
+    "path": [
+      "Filme",
+      "Blu Ray Filme",
+      "Blu Ray Kinder Familie",
+      "Abenteuer"
+    ]
+  },
+  "blu ray action thriller horror": {
+    "root": "Filme",
+    "title": "Blu Ray Action Thriller Horror",
+    "path": [
+      "Filme",
+      "Blu Ray Filme",
+      "Blu Ray Action Thriller Horror",
+      "Action"
+    ]
+  },
+  "actionkameras": {
+    "root": "TV & Video",
+    "title": "Actionkameras",
+    "path": [
+      "Tv Video",
+      "Camcorder",
+      "Actionkameras"
+    ]
+  },
+  "velofahren": {
+    "root": "Sport & Freizeit",
+    "title": "Velofahren",
+    "path": [
+      "Sport Freizeit",
+      "Velofahren"
+    ]
+  },
+  "xbox series x s": {
+    "root": "Videogames",
+    "title": "Xbox Series X S",
+    "path": [
+      "Videogames",
+      "Xbox Series X S",
+      "Xbox Series X S Games"
+    ]
+  },
+  "xbox series x s games": {
+    "root": "Videogames",
+    "title": "Xbox Series X S Games",
+    "path": [
+      "Videogames",
+      "Xbox Series X S",
+      "Xbox Series X S Games"
+    ]
+  },
+  "beat em up": {
+    "root": "Videogames",
+    "title": "Beat Em Up",
+    "path": [
+      "Videogames",
+      "Xbox Series X S",
+      "Xbox Series X S Games",
+      "Beat Em Up"
+    ]
+  },
+  "3d shooter fps": {
+    "root": "Videogames",
+    "title": "3d Shooter Fps",
+    "path": [
+      "Videogames",
+      "Playstation 4",
+      "Ps4 Games",
+      "3d Shooter Fps"
+    ]
+  },
+  "xbox one": {
+    "root": "Videogames",
+    "title": "Xbox One",
+    "path": [
+      "Videogames",
+      "Xbox One",
+      "Xbox One Games",
+      "Spielesammlungen"
+    ]
+  },
+  "xbox one games": {
+    "root": "Videogames",
+    "title": "Xbox One Games",
+    "path": [
+      "Videogames",
+      "Xbox One",
+      "Xbox One Games",
+      "Spielesammlungen"
+    ]
+  },
+  "spielesammlungen": {
+    "root": "Videogames",
+    "title": "Spielesammlungen",
+    "path": [
+      "Videogames",
+      "Xbox One",
+      "Xbox One Games",
+      "Spielesammlungen"
+    ]
+  },
+  "blu ray science fiction fantasy": {
+    "root": "Filme",
+    "title": "Blu Ray Science Fiction Fantasy",
+    "path": [
+      "Filme",
+      "Blu Ray Filme",
+      "Blu Ray Science Fiction Fantasy",
+      "Fantasy"
+    ]
+  },
+  "pneus": {
+    "root": "Auto & Motorrad",
+    "title": "Pneus",
+    "path": [
+      "Auto Motorrad",
+      "Pneus"
+    ]
+  },
+  "pkw sommerreifen": {
+    "root": "Auto & Motorrad",
+    "title": "Pkw Sommerreifen",
+    "path": [
+      "Auto Motorrad",
+      "Pneus",
+      "Pkw Sommerreifen"
     ]
   }
 }

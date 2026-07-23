@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Toppreise Category Hierarchy Generator Tool
-Crawls and extracts category hierarchies from Toppreise.ch using megamenu parsing
-and fast parallel crawling to build category_map.json and category_lookup_generated.js.
+Toppreise Deep Category Hierarchy Generator Tool
+Crawls Toppreise.ch 2 levels deep using multi-threading to extract all category paths
+and build tools/category_map.json, tools/category_lookup_generated.js, and update toppreise.user.js.
 """
 
 import urllib.request
@@ -25,65 +25,42 @@ ROOT_CATEGORIES = [
     ("Computer-Zubehoer-c200", "Computer & Zubehör"),
     ("Drogerie-c643", "Drogerie"),
     ("Filme-c1388", "Filme"),
-    ("Foto-c1316", "Foto"),
-    ("Haus-Garten-c650", "Haus & Garten"),
+    ("Foto-c1316", "Foto & Video"),
+    ("Haus-Garten-c650", "Garten & Baumarkt"),
     ("Haushalt-Kueche-c644", "Haushalt & Küche"),
     ("HiFi-Audio-c653", "HiFi & Audio"),
-    ("Lust-Liebe-c3009", "Lust & Liebe"),
-    ("Musikinstrumente-Pro-Audio-c2490", "Musikinstrumente & Pro Audio"),
-    ("Navigation-c2057", "Navigation"),
-    ("Schmuck-c1788", "Schmuck"),
+    ("Lust-Liebe-c3009", "Drogerie"),
+    ("Musikinstrumente-Pro-Audio-c2490", "HiFi & Audio"),
+    ("Navigation-c2057", "Computer & Zubehör"),
+    ("Schmuck-c1788", "Uhren"),
     ("Smartphones-Mobiltelefone-c1346", "Smartphones & Mobiltelefone"),
     ("Spielwaren-c901", "Spielwaren"),
     ("Sport-Freizeit-c563", "Sport & Freizeit"),
-    ("Telefon-VoIP-c652", "Telefon & VoIP"),
+    ("Telefon-VoIP-c652", "Smartphones & Mobiltelefone"),
     ("TV-Video-c654", "TV & Video"),
     ("Uhren-c1783", "Uhren"),
     ("Videogames-c900", "Videogames"),
-    ("Wein-Spirituosen-c2458", "Wein & Spirituosen"),
-    ("Werkzeuge-Werkstatt-c772", "Werkzeuge & Werkstatt")
+    ("Wein-Spirituosen-c2458", "Haushalt & Küche"),
+    ("Werkzeuge-Werkstatt-c772", "Garten & Baumarkt")
 ]
 
-# Standard Offline Seed Dictionary for Instant Guarantee
-SEED_LOOKUP = {
-    "abenteuer": "Filme", "krimi": "Filme", "anime": "Filme", "mehr komoedie": "Filme",
-    "tv serien": "Filme", "fantasy": "Filme", "mehr drama": "Filme", "thriller": "Filme",
-    "dvd filme": "Filme", "blu ray filme": "Filme", "dvd kinder familie": "Filme",
-    
-    "komplettsysteme": "Computer & Zubehör", "grafikkarten": "Computer & Zubehör", 
-    "tablets": "Computer & Zubehör", "maeuse": "Computer & Zubehör", 
-    "pc gehaeuse": "Computer & Zubehör", "notebooks": "Computer & Zubehör",
-    "gehaeuseluefter": "Computer & Zubehör", "sd speicherkarten": "Computer & Zubehör",
-    "externe festplatten hdd": "Computer & Zubehör", "monitore": "Computer & Zubehör",
-    
-    "lego architecture": "Spielwaren", "schleich": "Spielwaren", "action figuren": "Spielwaren",
-    "kinderspiele": "Spielwaren", "hot wheels": "Spielwaren", "disney": "Spielwaren",
-    "puzzles": "Spielwaren", "barbie": "Spielwaren", "cobi": "Spielwaren",
-    "playmobil wiltopia": "Spielwaren", "tabletop spiele": "Spielwaren",
-    "playmobil action": "Spielwaren", "playmobil novelmore": "Spielwaren", "lego": "Spielwaren",
-    
-    "strategie rollenspiele": "Videogames", "zubehoer fuer nintendo switch": "Videogames",
-    "jump n run geschicklichkeit": "Videogames", "actionspiele": "Videogames",
-    "rollenspiele adventures": "Videogames", "action": "Videogames", "nintendo switch games": "Videogames",
-    
-    "kopfhoerer": "HiFi & Audio", "plattenspieler": "HiFi & Audio", "bluetooth lautsprecher": "HiFi & Audio",
-    "tv geraete": "TV & Video", "beamer": "TV & Video",
-    
-    "eau de parfum": "Drogerie", "elektrozahnbuersten": "Drogerie", "hautpflege": "Drogerie",
-    "lockenstaebe buersten": "Drogerie", "ersatzbuersten": "Drogerie",
-    
-    "saug und wischroboter": "Haushalt & Küche", "abfallsysteme": "Haushalt & Küche",
-    "zubehoer fuer haushaltsgeraete": "Haushalt & Küche", "thermoskannen bidons": "Haushalt & Küche",
-    "kaffee espressomaschinen": "Haushalt & Küche",
-    
-    "skihelme": "Sport & Freizeit", "koffer": "Sport & Freizeit", "ventilatoren heizgeraete": "Sport & Freizeit",
-    "einkaufstrolleys taschen": "Sport & Freizeit", "sportbrillen goggles": "Sport & Freizeit",
-    "velotaschen": "Sport & Freizeit", "rucksaecke": "Sport & Freizeit", "inline skates rollschuhe": "Sport & Freizeit",
-    
-    "huellen": "Smartphones & Mobiltelefone", "oberschalen cover": "Smartphones & Mobiltelefone",
-    "taschen cover fuer iphone": "Smartphones & Mobiltelefone", "smartphones": "Smartphones & Mobiltelefone",
-    
-    "reifen": "Auto & Motorrad", "autos": "Auto & Motorrad", "uhren": "Uhren"
+CANONICAL_GROUPS = {
+    'auto motorrad': 'Auto & Motorrad',
+    'bekleidung schuhe': 'Bekleidung & Schuhe',
+    'buerobedarf schreibwaren': 'Bürobedarf & Schreibwaren',
+    'computer zubehoer': 'Computer & Zubehör',
+    'drogerie': 'Drogerie',
+    'filme': 'Filme',
+    'foto': 'Foto & Video',
+    'haus garten': 'Garten & Baumarkt',
+    'haushalt kueche': 'Haushalt & Küche',
+    'hifi audio': 'HiFi & Audio',
+    'smartphones mobiltelefone': 'Smartphones & Mobiltelefone',
+    'spielwaren': 'Spielwaren',
+    'sport freizeit': 'Sport & Freizeit',
+    'tv video': 'TV & Video',
+    'uhren': 'Uhren',
+    'videogames': 'Videogames'
 }
 
 def format_title(slug):
@@ -95,27 +72,68 @@ def format_title(slug):
 def fetch_url(url):
     try:
         req = urllib.request.Request(url, headers=HEADERS)
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        with urllib.request.urlopen(req, timeout=8) as resp:
             return url, resp.read().decode('utf-8', errors='ignore')
-    except Exception as e:
+    except Exception:
         return url, ""
 
-def generate_map(max_workers=8):
-    print("Extracting category hierarchy from Toppreise...", flush=True)
+def generate_deep_map(max_workers=16):
+    print("🚀 Starting 2-Level Deep Category Crawl of Toppreise.ch...", flush=True)
     
-    lookup_map = dict(SEED_LOOKUP)
+    lookup_map = {}
     detailed_map = {}
     
-    root_title_by_slug = {slug.split('-c')[0].lower(): name for slug, name in ROOT_CATEGORIES}
-    urls = [f"https://www.toppreise.ch/produktsuche/{slug}" for slug, name in ROOT_CATEGORIES]
+    root_slug_to_name = {slug.split('-c')[0].lower(): name for slug, name in ROOT_CATEGORIES}
+    level1_urls = [f"https://www.toppreise.ch/produktsuche/{slug}" for slug, name in ROOT_CATEGORIES]
     
+    level2_url_set = set()
+    
+    print(f"📡 Level 1: Crawling {len(level1_urls)} root category pages...", flush=True)
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(fetch_url, url): url for url in urls}
+        futures = {executor.submit(fetch_url, url): url for url in level1_urls}
         for future in as_completed(futures):
             url, html = future.result()
             if not html:
                 continue
-                
+            matches = re.findall(r'href=["\'](/produktsuche/[^"\']+-c\d+[^"\']*)["\']', html)
+            for m in matches:
+                clean_path = m.split('?')[0]
+                parts = clean_path.strip('/').split('/')
+                if len(parts) >= 2 and parts[0] == 'produktsuche':
+                    full_url = f"https://www.toppreise.ch{clean_path}"
+                    level2_url_set.add(full_url)
+                    
+                    segments = parts[1:]
+                    root_slug = segments[0].split('-c')[0].lower()
+                    root_title = root_slug_to_name.get(root_slug, CANONICAL_GROUPS.get(root_slug.replace('-', ' '), format_title(segments[0])))
+                    
+                    for seg in segments[1:]:
+                        leaf_title = format_title(seg)
+                        leaf_key = leaf_title.lower()
+                        slug_key = seg.split('-c')[0].lower().replace('-', ' ')
+                        raw_slug = seg.split('-c')[0].lower()
+                        
+                        lookup_map[leaf_key] = root_title
+                        lookup_map[slug_key] = root_title
+                        lookup_map[raw_slug] = root_title
+                        
+                        detailed_map[slug_key] = {
+                            "root": root_title,
+                            "title": leaf_title,
+                            "path": [format_title(s) for s in segments]
+                        }
+
+    print(f"📡 Level 2: Discovered {len(level2_url_set)} subcategory pages. Crawling level 2 in parallel...", flush=True)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(fetch_url, url): url for url in level2_url_set}
+        count = 0
+        for future in as_completed(futures):
+            count += 1
+            if count % 20 == 0 or count == len(level2_url_set):
+                print(f"   Progress: {count}/{len(level2_url_set)} level 2 pages processed...", flush=True)
+            url, html = future.result()
+            if not html:
+                continue
             matches = re.findall(r'href=["\'](/produktsuche/[^"\']+-c\d+[^"\']*)["\']', html)
             for m in matches:
                 clean_path = m.split('?')[0]
@@ -123,45 +141,65 @@ def generate_map(max_workers=8):
                 if len(parts) >= 2 and parts[0] == 'produktsuche':
                     segments = parts[1:]
                     root_slug = segments[0].split('-c')[0].lower()
-                    leaf_segment = segments[-1].split('-c')[0]
+                    root_title = root_slug_to_name.get(root_slug, CANONICAL_GROUPS.get(root_slug.replace('-', ' '), format_title(segments[0])))
                     
-                    root_title = root_title_by_slug.get(root_slug, format_title(segments[0]))
-                    leaf_title = format_title(leaf_segment)
-                    leaf_key = leaf_title.lower()
-                    slug_key = leaf_segment.lower().replace('-', ' ')
-                    
-                    breadcrumb = [format_title(s) for s in segments]
-                    
-                    lookup_map[leaf_key] = root_title
-                    lookup_map[slug_key] = root_title
-                    lookup_map[leaf_segment.lower()] = root_title
-                    
-                    detailed_map[slug_key] = {
-                        "root": root_title,
-                        "title": leaf_title,
-                        "path": breadcrumb
-                    }
+                    for seg in segments[1:]:
+                        leaf_title = format_title(seg)
+                        leaf_key = leaf_title.lower()
+                        slug_key = seg.split('-c')[0].lower().replace('-', ' ')
+                        raw_slug = seg.split('-c')[0].lower()
+                        
+                        lookup_map[leaf_key] = root_title
+                        lookup_map[slug_key] = root_title
+                        lookup_map[raw_slug] = root_title
+                        
+                        detailed_map[slug_key] = {
+                            "root": root_title,
+                            "title": leaf_title,
+                            "path": [format_title(s) for s in segments]
+                        }
 
-    print(f"Extraction complete! Generated {len(lookup_map)} category mappings.", flush=True)
+    print(f"✅ Deep Crawl Complete! Generated {len(lookup_map)} category mappings.", flush=True)
     return lookup_map, detailed_map
 
 def main():
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    json_out_path = os.path.join(script_dir, "category_map.json")
-    js_out_path = os.path.join(script_dir, "category_lookup_generated.js")
+    tools_dir = os.path.dirname(os.path.abspath(__file__))
+    json_out_path = os.path.join(tools_dir, "category_map.json")
+    js_out_path = os.path.join(tools_dir, "category_lookup_generated.js")
+    user_js_path = os.path.abspath(os.path.join(tools_dir, "..", "toppreise.user.js"))
     
-    lookup_map, detailed_map = generate_map()
+    lookup_map, detailed_map = generate_deep_map()
     
     with open(json_out_path, "w", encoding="utf-8") as f:
         json.dump(detailed_map, f, ensure_ascii=False, indent=2)
-    print(f"Saved category JSON map to: {json_out_path}", flush=True)
+    print(f"💾 Saved category JSON map to: {json_out_path}", flush=True)
     
     with open(js_out_path, "w", encoding="utf-8") as f:
         f.write("// Auto-generated Toppreise Category Lookup Table\n")
         f.write("const GENERATED_CATEGORY_LOOKUP = ")
         json.dump(lookup_map, f, ensure_ascii=False, indent=2)
         f.write(";\n")
-    print(f"Saved JS lookup code to: {js_out_path}", flush=True)
+    print(f"💾 Saved JS lookup code to: {js_out_path}", flush=True)
+    
+    # Auto-inject into toppreise.user.js if present
+    if os.path.exists(user_js_path):
+        print(f"💉 Injecting updated CATEGORY_LOOKUP into {user_js_path}...", flush=True)
+        with open(user_js_path, "r", encoding="utf-8") as f:
+            content = f.read()
+            
+        json_str = json.dumps(lookup_map, ensure_ascii=False, indent=4)
+        replacement = f"const CATEGORY_LOOKUP = {json_str};"
+        
+        updated_content = re.sub(
+            r'const CATEGORY_LOOKUP = \{[\s\S]*?\};',
+            replacement,
+            content,
+            count=1
+        )
+        
+        with open(user_js_path, "w", encoding="utf-8") as f:
+            f.write(updated_content)
+        print("🎉 Successfully injected CATEGORY_LOOKUP into toppreise.user.js!", flush=True)
 
 if __name__ == "__main__":
     main()
