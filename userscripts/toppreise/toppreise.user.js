@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.4.0
+// @version      1.5.0
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -670,7 +670,7 @@ const STYLES = `
     return isNaN(val) ? 0 : val;
   }
 
-  // Helper: Universal Card Grabber (Matches search, neue-toppreise, top-100, etc.)
+  // Helper: Universal Card Grabber
   function getProductCards() {
     const standardCards = Array.from(document.querySelectorAll('.Plugin_Product, .mixedBrowsingListProduct'));
     if (standardCards.length > 0) {
@@ -697,29 +697,48 @@ const STYLES = `
     return Array.from(gridCards);
   }
 
-  // Helper: Robust Category Extractor (Directly inspects product title link URL path)
+  // Helper: Multi-Tier Category Extractor
   function extractCardCategory(card) {
-    // Inspect the product's main title/product link (/preisvergleich/CategorySlug/ProductTitle...)
-    const productLinks = card.querySelectorAll('a[href*="/preisvergleich/"], a.titleLink');
-    for (const productLink of productLinks) {
-      // Exclude header navigation or breadcrumb links
-      if (productLink.closest('header, nav, footer, .breadcrumb, #tp-quick-toolbar')) continue;
+    // 1. Explicit subcategory text/link inside card DOM
+    const catEl = card.querySelector('.subCategory, .productCategory, .categoryLink, [class*="Category"]');
+    if (catEl) {
+      const text = catEl.textContent.trim().replace(/\(\d+\)/g, '').trim();
+      if (text && text.length > 1 && !text.includes('CHF') && !text.includes('Angebot') && !text.includes('%')) {
+        return text;
+      }
+    }
 
-      const href = productLink.getAttribute('href') || '';
-      const match = href.match(/\/preisvergleich\/([^/]+)\//i);
-      if (match && match[1]) {
-        let catSlug = decodeURIComponent(match[1]).replace(/-/g, ' ').trim();
+    // 2. Product link URL path (/preisvergleich/CategorySlug/ProductTitle-p123 or /produktsuche/CategorySlug-c123)
+    const links = card.querySelectorAll('a[href*="/preisvergleich/"], a[href*="/produktsuche/"], a.titleLink');
+    for (const link of links) {
+      if (link.closest('header, nav, footer, .breadcrumb, #tp-quick-toolbar')) continue;
+
+      const href = link.getAttribute('href') || '';
+      
+      // Match /preisvergleich/CategorySlug/ProductTitle-p123
+      const pvMatch = href.match(/\/preisvergleich\/([^/]+)\/([^/]+)/i);
+      if (pvMatch && pvMatch[1]) {
+        let catSlug = decodeURIComponent(pvMatch[1]).replace(/-/g, ' ').trim();
         if (catSlug && catSlug.length > 1 && !catSlug.startsWith('p') && isNaN(catSlug)) {
+          return catSlug.charAt(0).toUpperCase() + catSlug.slice(1);
+        }
+      }
+
+      // Match /produktsuche/CategorySlug-c123
+      const psMatch = href.match(/\/produktsuche\/([^/]+)-c\d+/i);
+      if (psMatch && psMatch[1]) {
+        let catSlug = decodeURIComponent(psMatch[1]).replace(/-/g, ' ').trim();
+        if (catSlug && catSlug.length > 1) {
           return catSlug.charAt(0).toUpperCase() + catSlug.slice(1);
         }
       }
     }
 
-    // Secondary fallback: explicit subCategory element if present directly inside card
-    const subCatEl = card.querySelector('.subCategory, .productCategory, .categoryLink');
-    if (subCatEl) {
-      const text = subCatEl.textContent.trim().replace(/\(\d+\)/g, '').trim();
-      if (text && text.length > 1 && !text.includes('CHF') && !text.includes('Angebot')) {
+    // 3. Fallback: Active Breadcrumb section category (for subcategory search pages)
+    const activeBreadcrumb = document.querySelector('.breadcrumb a:last-of-type, [class*="breadcrumb"] a:last-of-type');
+    if (activeBreadcrumb) {
+      const text = activeBreadcrumb.textContent.trim().replace(/\(\d+\)/g, '').trim();
+      if (text && text.length > 1 && !['home', 'toppreise', 'neue toppreise', 'startseite'].includes(text.toLowerCase())) {
         return text;
       }
     }
@@ -740,6 +759,21 @@ const STYLES = `
     if (!termsList || termsList.length === 0) return false;
     const cardText = (card.textContent || '').toLowerCase();
     return termsList.some(term => term.length > 0 && cardText.includes(term));
+  }
+
+  // Find optimal insertion target for inline bars
+  function findBarInsertionTarget() {
+    const listContainer = document.querySelector(
+      '.productList, .mixedBrowsingListContainer, [class*="productList"], .Plugin_ProductList, #productList'
+    );
+    if (listContainer) return listContainer;
+
+    const cards = getProductCards();
+    if (cards.length > 0 && cards[0].parentElement) {
+      return cards[0].parentElement;
+    }
+
+    return document.querySelector('.pageContent, main, #content');
   }
 
   // Stable Quick-Control Pill Toolbar
@@ -821,14 +855,12 @@ const STYLES = `
   }
 
   // Render Inline Negative Filter Search Bar
-  function renderInlineNegativeBar(targetContainer) {
+  function renderInlineNegativeBar() {
     let bar = document.getElementById('tp-inline-negative-bar');
-    if (!bar) {
-      const targetList = targetContainer || document.querySelector(
-        '.productList, .mixedBrowsingListContainer, [class*="productList"], .Plugin_Product'
-      );
-      if (!targetList) return;
+    const target = findBarInsertionTarget();
+    if (!target) return;
 
+    if (!bar) {
       bar = document.createElement('div');
       bar.id = 'tp-inline-negative-bar';
       bar.innerHTML = `
@@ -836,7 +868,7 @@ const STYLES = `
         <input type="text" id="tp-inline-negative-input" title="Kommagetrennte Begriffe eingeben (z.B. Hülle, Refurbished, Gebraucht), um passende Produkte auszublenden" placeholder="Wörter ausschließen, z. B. Hülle, Case, Refurbished..." value="${CONFIG.NEGATIVE_TERMS || ''}">
       `;
 
-      targetList.parentElement.insertBefore(bar, targetList);
+      target.parentElement.insertBefore(bar, target);
 
       const input = bar.querySelector('#tp-inline-negative-input');
       input.oninput = (e) => {
@@ -846,6 +878,7 @@ const STYLES = `
         processListings();
       };
     } else {
+      bar.style.display = 'flex';
       const input = bar.querySelector('#tp-inline-negative-input');
       if (input && document.activeElement !== input) {
         input.value = CONFIG.NEGATIVE_TERMS || '';
@@ -854,11 +887,14 @@ const STYLES = `
   }
 
   // Render Inline Category Pills Bar (STABLE DOM RECONCILIATION)
-  function renderInlineCategoryBar(targetContainer) {
+  function renderInlineCategoryBar() {
     let bar = document.getElementById('tp-inline-category-bar');
-    const targetList = targetContainer || document.querySelector('.productList, .mixedBrowsingListContainer, [class*="productList"]');
+    const target = findBarInsertionTarget();
 
-    if (!targetList || pageCategories.size === 0) {
+    const excluded = CONFIG.EXCLUDED_CATEGORIES || [];
+    const allCats = new Set([...pageCategories, ...excluded]);
+
+    if (!target || allCats.size === 0) {
       if (bar) bar.style.display = 'none';
       return;
     }
@@ -874,20 +910,17 @@ const STYLES = `
       label.textContent = '🏷️ Kategorien auf dieser Seite:';
       bar.appendChild(label);
 
-      targetList.parentElement.insertBefore(bar, targetList);
+      target.parentElement.insertBefore(bar, target);
     } else {
       bar.style.display = 'flex';
     }
 
-    const excluded = CONFIG.EXCLUDED_CATEGORIES || [];
     const existingPills = new Map();
     bar.querySelectorAll('.tp-cat-pill').forEach(pill => {
       existingPills.set(pill.dataset.catName, pill);
     });
 
-    const currentCats = Array.from(pageCategories);
-
-    currentCats.forEach(cat => {
+    allCats.forEach(cat => {
       const isExcluded = excluded.includes(cat);
       let pill = existingPills.get(cat);
 
@@ -928,7 +961,6 @@ const STYLES = `
     pageCategories.clear();
 
     const cards = getProductCards();
-    const firstCard = cards.length > 0 ? cards[0] : null;
 
     if (cards.length === 0) {
       renderInlineNegativeBar();
@@ -952,7 +984,7 @@ const STYLES = `
     let pageHasOffers = false;
 
     cards.forEach(card => {
-      // 1. Category extraction (DOM text + URL path slug parser)
+      // 1. Category extraction (DOM text + URL path slug parser + active breadcrumbs)
       const catName = extractCardCategory(card);
       if (catName) pageCategories.add(catName);
 
@@ -1057,8 +1089,8 @@ const STYLES = `
 
     // 7. Render UI Modules
     updateQuickToolbar(counts, pageHasOffers);
-    renderInlineNegativeBar(firstCard ? firstCard.parentElement : null);
-    renderInlineCategoryBar(firstCard ? firstCard.parentElement : null);
+    renderInlineNegativeBar();
+    renderInlineCategoryBar();
   }
 
   // ─── MODULE 2: PRICE ALARM AUTOMATION ────────────────────────────────────────
