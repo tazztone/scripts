@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.5.1
+// @version      2.6.0
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -370,15 +370,22 @@ const STYLES = `
     color: #7dd3fc !important;
     border-color: #38bdf8 !important;
   }
-  .tp-group-pill.tp-excluded {
+  .tp-group-pill.tp-excluded-all {
     background: #7f1d1d !important;
     color: #fca5a5 !important;
     border-color: #ef4444 !important;
     text-decoration: line-through !important;
   }
+  .tp-group-pill.tp-excluded-individual {
+    background: #7f1d1d !important;
+    color: #fca5a5 !important;
+    border-color: #ef4444 !important;
+    text-decoration: none !important;
+  }
   .tp-group-pill.tp-partial {
     border-color: #f59e0b !important;
     color: #fef08a !important;
+    text-decoration: none !important;
   }
   .tp-group-chevron {
     font-size: 9px !important;
@@ -1112,10 +1119,14 @@ const STYLES = `
     const btnHideAll = document.createElement('button');
     btnHideAll.className = 'tp-popover-btn';
     btnHideAll.textContent = 'Alle ausblenden';
-    btnHideAll.onclick = () => {
+    btnHideAll.title = `Alle aktuellen & zukünftigen Unterkategorien von "${rootGroup}" ausblenden`;
+    btnHideAll.onclick = (e) => {
+      e.stopPropagation();
       const excluded = getExcludedCats();
+      const groupKey = `GROUP:${rootGroup}`;
       const toAdd = subcats.filter(sc => !excluded.includes(sc));
-      updateExcludedCats([...excluded, ...toAdd]);
+      const updated = Array.from(new Set([...excluded, ...toAdd, groupKey]));
+      updateExcludedCats(updated);
       renderPopoverBody();
     };
 
@@ -1123,7 +1134,8 @@ const STYLES = `
     btnReset.className = 'tp-popover-btn';
     btnReset.textContent = 'Reset';
     btnReset.title = `Alle Unterkategorien von "${rootGroup}" wieder einblenden`;
-    btnReset.onclick = () => {
+    btnReset.onclick = (e) => {
+      e.stopPropagation();
       const excluded = getExcludedCats();
       const updated = excluded.filter(c => !subcats.includes(c) && c !== `GROUP:${rootGroup}`);
       updateExcludedCats(updated);
@@ -1142,17 +1154,25 @@ const STYLES = `
     function renderPopoverBody() {
       body.innerHTML = '';
       const excluded = getExcludedCats();
+      const isGroupExplicitlyBlocked = excluded.includes(`GROUP:${rootGroup}`);
+
       subcats.forEach(cat => {
-        const isCatExcluded = excluded.includes(cat) || excluded.includes(`GROUP:${rootGroup}`);
+        const isCatExcluded = excluded.includes(cat) || isGroupExplicitlyBlocked;
         const pill = document.createElement('div');
         pill.className = `tp-cat-pill ${isCatExcluded ? 'tp-excluded' : ''}`;
         pill.textContent = cat;
         pill.title = isCatExcluded ? `Kategorie "${cat}" wieder einblenden` : `Kategorie "${cat}" ausblenden`;
-        pill.onclick = () => {
+        pill.onclick = (e) => {
+          e.stopPropagation();
           const curr = getExcludedCats();
           let updated;
-          if (curr.includes(cat)) {
+          if (curr.includes(cat) || isGroupExplicitlyBlocked) {
+            // Remove individual subcat AND clear explicit GROUP block if present
+            const otherSubcatsToKeep = subcats.filter(sc => sc !== cat && (curr.includes(sc) || isGroupExplicitlyBlocked));
             updated = curr.filter(c => c !== cat && c !== `GROUP:${rootGroup}`);
+            if (otherSubcatsToKeep.length > 0) {
+              updated = Array.from(new Set([...updated, ...otherSubcatsToKeep]));
+            }
           } else {
             updated = [...curr, cat];
           }
@@ -1576,12 +1596,12 @@ const STYLES = `
         });
 
         groups.forEach((subcats, rootGroup) => {
-          const allSubcatsExcluded = subcats.every(sc => excluded.includes(sc) || excluded.includes(`GROUP:${rootGroup}`));
-          const someSubcatsExcluded = subcats.some(sc => excluded.includes(sc) || excluded.includes(`GROUP:${rootGroup}`));
-          const isGroupExpanded = window._tpExpandedGroups.has(rootGroup);
+          const isGroupExplicitlyBlocked = excluded.includes(`GROUP:${rootGroup}`);
+          const allSubcatsExcluded = subcats.every(sc => excluded.includes(sc) || isGroupExplicitlyBlocked);
+          const someSubcatsExcluded = subcats.some(sc => excluded.includes(sc) || isGroupExplicitlyBlocked);
 
           let groupWrapper = existingGroupWrappers.get(rootGroup);
-          let groupPill, titleSpan, chevronBtn, childContainer;
+          let groupPill, titleSpan, chevronBtn;
 
           if (!groupWrapper) {
             groupWrapper = document.createElement('div');
@@ -1608,8 +1628,17 @@ const STYLES = `
             chevronBtn = groupWrapper.querySelector('.tp-group-chevron');
           }
 
-          // Update Group Pill in-place
-          const newPillClass = `tp-group-pill ${allSubcatsExcluded ? 'tp-excluded' : someSubcatsExcluded ? 'tp-partial' : ''}`;
+          // Update Group Pill in-place with semantic distinction
+          let stateClass = '';
+          if (isGroupExplicitlyBlocked) {
+            stateClass = 'tp-excluded-all';
+          } else if (allSubcatsExcluded) {
+            stateClass = 'tp-excluded-individual';
+          } else if (someSubcatsExcluded) {
+            stateClass = 'tp-partial';
+          }
+
+          const newPillClass = `tp-group-pill ${stateClass}`.trim();
           if (groupPill.className !== newPillClass) groupPill.className = newPillClass;
 
           const newTitleText = `${getGroupEmoji(rootGroup)} ${rootGroup} (${subcats.length})`;
@@ -2148,12 +2177,12 @@ const STYLES = `
       });
 
       groups.forEach((subcats, rootGroup) => {
-        const allSubcatsExcluded = subcats.every(sc => currentExcludedCats.includes(sc) || currentExcludedCats.includes(`GROUP:${rootGroup}`));
-        const someSubcatsExcluded = subcats.some(sc => currentExcludedCats.includes(sc) || currentExcludedCats.includes(`GROUP:${rootGroup}`));
-        const isGroupExpanded = window._tpModalExpandedGroups.has(rootGroup);
+        const isGroupExplicitlyBlocked = currentExcludedCats.includes(`GROUP:${rootGroup}`);
+        const allSubcatsExcluded = subcats.every(sc => currentExcludedCats.includes(sc) || isGroupExplicitlyBlocked);
+        const someSubcatsExcluded = subcats.some(sc => currentExcludedCats.includes(sc) || isGroupExplicitlyBlocked);
 
         let groupWrapper = existingGroupWrappers.get(rootGroup);
-        let groupPill, titleSpan, chevronBtn, childContainer;
+        let groupPill, titleSpan, chevronBtn;
 
         if (!groupWrapper) {
           groupWrapper = document.createElement('div');
@@ -2180,7 +2209,16 @@ const STYLES = `
           chevronBtn = groupWrapper.querySelector('.tp-group-chevron');
         }
 
-        const newPillClass = `tp-group-pill ${allSubcatsExcluded ? 'tp-excluded' : someSubcatsExcluded ? 'tp-partial' : ''}`;
+        let stateClass = '';
+        if (isGroupExplicitlyBlocked) {
+          stateClass = 'tp-excluded-all';
+        } else if (allSubcatsExcluded) {
+          stateClass = 'tp-excluded-individual';
+        } else if (someSubcatsExcluded) {
+          stateClass = 'tp-partial';
+        }
+
+        const newPillClass = `tp-group-pill ${stateClass}`.trim();
         if (groupPill.className !== newPillClass) groupPill.className = newPillClass;
 
         const newTitleText = `${getGroupEmoji(rootGroup)} ${rootGroup} (${subcats.length})`;
