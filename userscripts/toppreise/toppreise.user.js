@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.4.0
+// @version      2.4.1
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -1346,14 +1346,17 @@ const STYLES = `
     if (toggleBtn) toggleBtn.classList.toggle('tp-active', isExpanded);
     if (catRow) catRow.style.display = isExpanded ? 'block' : 'none';
 
-    // Reconcile category pills & Group Pills
+    // Reconcile category pills & Group Pills (In-place DOM Reconciliation to prevent pulsing)
     const pillsHolder = bar.querySelector('#tp-inline-category-pills');
     if (pillsHolder && isExpanded) {
       if (allCats.size === 0) {
-        pillsHolder.innerHTML = '<span style="font-size:11px; color:#64748b;">(Keine Kategorien auf aktueller Ansicht)</span>';
+        if (!pillsHolder.querySelector('.tp-empty-msg')) {
+          pillsHolder.innerHTML = '<span class="tp-empty-msg" style="font-size:11px; color:#64748b;">(Keine Kategorien auf aktueller Ansicht)</span>';
+        }
       } else {
-        pillsHolder.innerHTML = '';
-        
+        const emptyMsg = pillsHolder.querySelector('.tp-empty-msg');
+        if (emptyMsg) emptyMsg.remove();
+
         // Group detected pageCategories by Root Category Group
         const groups = new Map();
         allCats.forEach(cat => {
@@ -1364,19 +1367,54 @@ const STYLES = `
 
         if (!window._tpExpandedGroups) window._tpExpandedGroups = new Set();
 
+        // Track existing group wrappers in DOM for in-place reconciliation
+        const existingGroupWrappers = new Map();
+        pillsHolder.querySelectorAll('.tp-group-wrapper').forEach(wrapper => {
+          if (wrapper.dataset.rootGroup) {
+            existingGroupWrappers.set(wrapper.dataset.rootGroup, wrapper);
+          }
+        });
+
         groups.forEach((subcats, rootGroup) => {
           const allSubcatsExcluded = subcats.every(sc => excluded.includes(sc) || excluded.includes(`GROUP:${rootGroup}`));
           const someSubcatsExcluded = subcats.some(sc => excluded.includes(sc) || excluded.includes(`GROUP:${rootGroup}`));
           const isGroupExpanded = window._tpExpandedGroups.has(rootGroup);
 
-          const groupWrapper = document.createElement('div');
-          groupWrapper.className = 'tp-group-wrapper';
+          let groupWrapper = existingGroupWrappers.get(rootGroup);
+          let groupPill, titleSpan, chevronBtn, childContainer;
 
-          const groupPill = document.createElement('div');
-          groupPill.className = `tp-group-pill ${allSubcatsExcluded ? 'tp-excluded' : someSubcatsExcluded ? 'tp-partial' : ''}`;
+          if (!groupWrapper) {
+            groupWrapper = document.createElement('div');
+            groupWrapper.className = 'tp-group-wrapper';
+            groupWrapper.dataset.rootGroup = rootGroup;
 
-          const titleSpan = document.createElement('span');
-          titleSpan.textContent = `📁 ${rootGroup} (${subcats.length})`;
+            groupPill = document.createElement('div');
+            groupPill.className = 'tp-group-pill';
+
+            titleSpan = document.createElement('span');
+            titleSpan.className = 'tp-group-title';
+
+            chevronBtn = document.createElement('span');
+            chevronBtn.className = 'tp-group-chevron';
+
+            groupPill.appendChild(titleSpan);
+            groupPill.appendChild(chevronBtn);
+            groupWrapper.appendChild(groupPill);
+            pillsHolder.appendChild(groupWrapper);
+          } else {
+            existingGroupWrappers.delete(rootGroup);
+            groupPill = groupWrapper.querySelector('.tp-group-pill');
+            titleSpan = groupWrapper.querySelector('.tp-group-title');
+            chevronBtn = groupWrapper.querySelector('.tp-group-chevron');
+          }
+
+          // Update Group Pill in-place
+          const newPillClass = `tp-group-pill ${allSubcatsExcluded ? 'tp-excluded' : someSubcatsExcluded ? 'tp-partial' : ''}`;
+          if (groupPill.className !== newPillClass) groupPill.className = newPillClass;
+
+          const newTitleText = `📁 ${rootGroup} (${subcats.length})`;
+          if (titleSpan.textContent !== newTitleText) titleSpan.textContent = newTitleText;
+
           titleSpan.title = allSubcatsExcluded ? `Gruppe "${rootGroup}" wieder einblenden` : `Alle Kategorien unter "${rootGroup}" ausblenden`;
           titleSpan.onclick = () => {
             const currentExcluded = CONFIG.EXCLUDED_CATEGORIES || [];
@@ -1391,9 +1429,8 @@ const STYLES = `
             processListings();
           };
 
-          const chevronBtn = document.createElement('span');
-          chevronBtn.className = 'tp-group-chevron';
-          chevronBtn.textContent = isGroupExpanded ? '▲' : '▼';
+          const newChevronText = isGroupExpanded ? '▲' : '▼';
+          if (chevronBtn.textContent !== newChevronText) chevronBtn.textContent = newChevronText;
           chevronBtn.title = isGroupExpanded ? 'Unterkategorien einklappen' : 'Unterkategorien ausklappen';
           chevronBtn.onclick = (e) => {
             e.stopPropagation();
@@ -1405,39 +1442,57 @@ const STYLES = `
             renderSuiteFilterBar();
           };
 
-          groupPill.appendChild(titleSpan);
-          groupPill.appendChild(chevronBtn);
-          groupWrapper.appendChild(groupPill);
-
+          // Child Subcategories Accordion Reconciliation
+          childContainer = groupWrapper.querySelector('.tp-group-children');
           if (isGroupExpanded) {
-            const childContainer = document.createElement('div');
-            childContainer.className = 'tp-group-children';
+            if (!childContainer) {
+              childContainer = document.createElement('div');
+              childContainer.className = 'tp-group-children';
+              groupWrapper.appendChild(childContainer);
+            }
+
+            const existingChildPills = new Map();
+            childContainer.querySelectorAll('.tp-cat-pill').forEach(pill => {
+              if (pill.dataset.catName) existingChildPills.set(pill.dataset.catName, pill);
+            });
 
             subcats.forEach(cat => {
               const isCatExcluded = excluded.includes(cat) || excluded.includes(`GROUP:${rootGroup}`);
-              const childPill = document.createElement('div');
-              childPill.className = `tp-cat-pill ${isCatExcluded ? 'tp-excluded' : ''}`;
-              childPill.textContent = cat;
+              let childPill = existingChildPills.get(cat);
+
+              if (!childPill) {
+                childPill = document.createElement('div');
+                childPill.dataset.catName = cat;
+                childPill.textContent = cat;
+                childPill.onclick = () => {
+                  const currentExcluded = CONFIG.EXCLUDED_CATEGORIES || [];
+                  let updated;
+                  if (currentExcluded.includes(cat)) {
+                    updated = currentExcluded.filter(c => c !== cat && c !== `GROUP:${rootGroup}`);
+                  } else {
+                    updated = [...currentExcluded, cat];
+                  }
+                  saveConfigKey('EXCLUDED_CATEGORIES', updated);
+                  processListings();
+                };
+                childContainer.appendChild(childPill);
+              } else {
+                existingChildPills.delete(cat);
+              }
+
+              const newChildClass = `tp-cat-pill ${isCatExcluded ? 'tp-excluded' : ''}`;
+              if (childPill.className !== newChildClass) childPill.className = newChildClass;
               childPill.title = isCatExcluded ? `Kategorie "${cat}" wieder einblenden` : `Kategorie "${cat}" ausblenden`;
-              childPill.onclick = () => {
-                const currentExcluded = CONFIG.EXCLUDED_CATEGORIES || [];
-                let updated;
-                if (currentExcluded.includes(cat)) {
-                  updated = currentExcluded.filter(c => c !== cat && c !== `GROUP:${rootGroup}`);
-                } else {
-                  updated = [...currentExcluded, cat];
-                }
-                saveConfigKey('EXCLUDED_CATEGORIES', updated);
-                processListings();
-              };
-              childContainer.appendChild(childPill);
             });
 
-            groupWrapper.appendChild(childContainer);
+            existingChildPills.forEach(obsoletePill => obsoletePill.remove());
+          } else if (childContainer) {
+            childContainer.remove();
           }
-
-          pillsHolder.appendChild(groupWrapper);
         });
+
+        // Remove obsolete groups no longer present on page
+        existingGroupWrappers.forEach(obsoleteWrapper => obsoleteWrapper.remove());
       }
     }
   }
@@ -1907,13 +1962,17 @@ const STYLES = `
     let currentExcludedCats = [...(CONFIG.EXCLUDED_CATEGORIES || [])];
 
     function renderCategoryPills() {
-      catPillsContainer.innerHTML = '';
       const allCats = new Set([...pageCategories, ...currentExcludedCats.filter(c => !c.startsWith('GROUP:'))]);
 
       if (allCats.size === 0) {
-        catPillsContainer.innerHTML = '<span style="font-size:11px; color:#64748b; padding:4px;">Keine Kategorien auf Seite erkannt</span>';
+        if (!catPillsContainer.querySelector('.tp-empty-msg')) {
+          catPillsContainer.innerHTML = '<span class="tp-empty-msg" style="font-size:11px; color:#64748b; padding:4px;">Keine Kategorien auf Seite erkannt</span>';
+        }
         return;
       }
+
+      const emptyMsg = catPillsContainer.querySelector('.tp-empty-msg');
+      if (emptyMsg) emptyMsg.remove();
 
       const groups = new Map();
       allCats.forEach(cat => {
@@ -1924,19 +1983,52 @@ const STYLES = `
 
       if (!window._tpModalExpandedGroups) window._tpModalExpandedGroups = new Set();
 
+      const existingGroupWrappers = new Map();
+      catPillsContainer.querySelectorAll('.tp-group-wrapper').forEach(wrapper => {
+        if (wrapper.dataset.rootGroup) {
+          existingGroupWrappers.set(wrapper.dataset.rootGroup, wrapper);
+        }
+      });
+
       groups.forEach((subcats, rootGroup) => {
         const allSubcatsExcluded = subcats.every(sc => currentExcludedCats.includes(sc) || currentExcludedCats.includes(`GROUP:${rootGroup}`));
         const someSubcatsExcluded = subcats.some(sc => currentExcludedCats.includes(sc) || currentExcludedCats.includes(`GROUP:${rootGroup}`));
         const isGroupExpanded = window._tpModalExpandedGroups.has(rootGroup);
 
-        const groupWrapper = document.createElement('div');
-        groupWrapper.className = 'tp-group-wrapper';
+        let groupWrapper = existingGroupWrappers.get(rootGroup);
+        let groupPill, titleSpan, chevronBtn, childContainer;
 
-        const groupPill = document.createElement('div');
-        groupPill.className = `tp-group-pill ${allSubcatsExcluded ? 'tp-excluded' : someSubcatsExcluded ? 'tp-partial' : ''}`;
+        if (!groupWrapper) {
+          groupWrapper = document.createElement('div');
+          groupWrapper.className = 'tp-group-wrapper';
+          groupWrapper.dataset.rootGroup = rootGroup;
 
-        const titleSpan = document.createElement('span');
-        titleSpan.textContent = `📁 ${rootGroup} (${subcats.length})`;
+          groupPill = document.createElement('div');
+          groupPill.className = 'tp-group-pill';
+
+          titleSpan = document.createElement('span');
+          titleSpan.className = 'tp-group-title';
+
+          chevronBtn = document.createElement('span');
+          chevronBtn.className = 'tp-group-chevron';
+
+          groupPill.appendChild(titleSpan);
+          groupPill.appendChild(chevronBtn);
+          groupWrapper.appendChild(groupPill);
+          catPillsContainer.appendChild(groupWrapper);
+        } else {
+          existingGroupWrappers.delete(rootGroup);
+          groupPill = groupWrapper.querySelector('.tp-group-pill');
+          titleSpan = groupWrapper.querySelector('.tp-group-title');
+          chevronBtn = groupWrapper.querySelector('.tp-group-chevron');
+        }
+
+        const newPillClass = `tp-group-pill ${allSubcatsExcluded ? 'tp-excluded' : someSubcatsExcluded ? 'tp-partial' : ''}`;
+        if (groupPill.className !== newPillClass) groupPill.className = newPillClass;
+
+        const newTitleText = `📁 ${rootGroup} (${subcats.length})`;
+        if (titleSpan.textContent !== newTitleText) titleSpan.textContent = newTitleText;
+
         titleSpan.title = allSubcatsExcluded ? `Gruppe "${rootGroup}" wieder einblenden` : `Alle Kategorien unter "${rootGroup}" ausblenden`;
         titleSpan.onclick = () => {
           if (allSubcatsExcluded) {
@@ -1948,9 +2040,8 @@ const STYLES = `
           renderCategoryPills();
         };
 
-        const chevronBtn = document.createElement('span');
-        chevronBtn.className = 'tp-group-chevron';
-        chevronBtn.textContent = isGroupExpanded ? '▲' : '▼';
+        const newChevronText = isGroupExpanded ? '▲' : '▼';
+        if (chevronBtn.textContent !== newChevronText) chevronBtn.textContent = newChevronText;
         chevronBtn.title = isGroupExpanded ? 'Unterkategorien einklappen' : 'Unterkategorien ausklappen';
         chevronBtn.onclick = (e) => {
           e.stopPropagation();
@@ -1962,36 +2053,52 @@ const STYLES = `
           renderCategoryPills();
         };
 
-        groupPill.appendChild(titleSpan);
-        groupPill.appendChild(chevronBtn);
-        groupWrapper.appendChild(groupPill);
-
+        childContainer = groupWrapper.querySelector('.tp-group-children');
         if (isGroupExpanded) {
-          const childContainer = document.createElement('div');
-          childContainer.className = 'tp-group-children';
+          if (!childContainer) {
+            childContainer = document.createElement('div');
+            childContainer.className = 'tp-group-children';
+            groupWrapper.appendChild(childContainer);
+          }
+
+          const existingChildPills = new Map();
+          childContainer.querySelectorAll('.tp-cat-pill').forEach(pill => {
+            if (pill.dataset.catName) existingChildPills.set(pill.dataset.catName, pill);
+          });
 
           subcats.forEach(cat => {
             const isCatExcluded = currentExcludedCats.includes(cat) || currentExcludedCats.includes(`GROUP:${rootGroup}`);
-            const childPill = document.createElement('div');
-            childPill.className = `tp-cat-pill ${isCatExcluded ? 'tp-excluded' : ''}`;
-            childPill.textContent = cat;
+            let childPill = existingChildPills.get(cat);
+
+            if (!childPill) {
+              childPill = document.createElement('div');
+              childPill.dataset.catName = cat;
+              childPill.textContent = cat;
+              childPill.onclick = () => {
+                if (currentExcludedCats.includes(cat)) {
+                  currentExcludedCats = currentExcludedCats.filter(c => c !== cat && c !== `GROUP:${rootGroup}`);
+                } else {
+                  currentExcludedCats.push(cat);
+                }
+                renderCategoryPills();
+              };
+              childContainer.appendChild(childPill);
+            } else {
+              existingChildPills.delete(cat);
+            }
+
+            const newChildClass = `tp-cat-pill ${isCatExcluded ? 'tp-excluded' : ''}`;
+            if (childPill.className !== newChildClass) childPill.className = newChildClass;
             childPill.title = isCatExcluded ? `Kategorie "${cat}" wieder einblenden` : `Kategorie "${cat}" ausblenden`;
-            childPill.onclick = () => {
-              if (currentExcludedCats.includes(cat)) {
-                currentExcludedCats = currentExcludedCats.filter(c => c !== cat && c !== `GROUP:${rootGroup}`);
-              } else {
-                currentExcludedCats.push(cat);
-              }
-              renderCategoryPills();
-            };
-            childContainer.appendChild(childPill);
           });
 
-          groupWrapper.appendChild(childContainer);
+          existingChildPills.forEach(obsoletePill => obsoletePill.remove());
+        } else if (childContainer) {
+          childContainer.remove();
         }
-
-        catPillsContainer.appendChild(groupWrapper);
       });
+
+      existingGroupWrappers.forEach(obsoleteWrapper => obsoleteWrapper.remove());
     }
 
     function syncFieldsFromConfig() {
