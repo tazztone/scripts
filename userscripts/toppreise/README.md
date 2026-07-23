@@ -40,6 +40,21 @@ python3 userscripts/toppreise/tools/generate_category_map.py
 ```
 The generator uses multi-threaded parallel requests and built-in offline seeds to extract Toppreise category hierarchies in under 5 seconds.
 
+
+---
+
+## 🚀 Instant Auto-Installer Tool & Auto-Updates
+
+### 1. Instant 1-Click Update Script
+Run the helper tool from your terminal to launch the latest commit-pinned version directly in your browser:
+```bash
+python3 userscripts/toppreise/tools/install_latest.py
+```
+This automatically fetches the latest Git commit hash and triggers your browser's Violentmonkey / Tampermonkey installer tab with 0 caching delay.
+
+### 2. Automatic Background Updates (`@updateURL`)
+The script includes embedded `@updateURL` and `@downloadURL` metadata headers. Violentmonkey and Tampermonkey will check GitHub automatically in the background and keep your installed userscript updated without requiring manual reinstalls.
+
 ---
 
 ## ⚙️ Configuration & Persistence
