@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.5.0
+// @version      1.5.1
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -773,7 +773,26 @@ const STYLES = `
       return cards[0].parentElement;
     }
 
-    return document.querySelector('.pageContent, main, #content');
+    return document.querySelector('#FrameContent, main, #content, .pageContent:not(.header .pageContent)');
+  }
+
+  // Ensure bar is positioned immediately before target, accounting for bar ordering
+  function ensureBarPosition(bar, target, isFirstBar) {
+    if (!target || !target.parentElement) return;
+
+    const parent = target.parentElement;
+
+    if (isFirstBar) {
+      const catBar = document.getElementById('tp-inline-category-bar');
+      const refNode = (catBar && catBar.parentElement === parent && catBar.style.display !== 'none') ? catBar : target;
+      if (bar.parentElement !== parent || bar.nextElementSibling !== refNode) {
+        parent.insertBefore(bar, refNode);
+      }
+    } else {
+      if (bar.parentElement !== parent || bar.nextElementSibling !== target) {
+        parent.insertBefore(bar, target);
+      }
+    }
   }
 
   // Stable Quick-Control Pill Toolbar
@@ -868,8 +887,6 @@ const STYLES = `
         <input type="text" id="tp-inline-negative-input" title="Kommagetrennte Begriffe eingeben (z.B. Hülle, Refurbished, Gebraucht), um passende Produkte auszublenden" placeholder="Wörter ausschließen, z. B. Hülle, Case, Refurbished..." value="${CONFIG.NEGATIVE_TERMS || ''}">
       `;
 
-      target.parentElement.insertBefore(bar, target);
-
       const input = bar.querySelector('#tp-inline-negative-input');
       input.oninput = (e) => {
         CONFIG.NEGATIVE_TERMS = e.target.value;
@@ -877,13 +894,15 @@ const STYLES = `
         if (modalInput) modalInput.value = e.target.value;
         processListings();
       };
-    } else {
-      bar.style.display = 'flex';
-      const input = bar.querySelector('#tp-inline-negative-input');
-      if (input && document.activeElement !== input) {
-        input.value = CONFIG.NEGATIVE_TERMS || '';
-      }
     }
+
+    bar.style.display = 'flex';
+    const input = bar.querySelector('#tp-inline-negative-input');
+    if (input && document.activeElement !== input) {
+      input.value = CONFIG.NEGATIVE_TERMS || '';
+    }
+
+    ensureBarPosition(bar, target, true);
   }
 
   // Render Inline Category Pills Bar (STABLE DOM RECONCILIATION)
@@ -902,18 +921,16 @@ const STYLES = `
     if (!bar) {
       bar = document.createElement('div');
       bar.id = 'tp-inline-category-bar';
-      bar.style.display = 'flex';
       
       const label = document.createElement('span');
       label.style.cssText = 'font-size: 11px; font-weight: 700; color: #475569; margin-right: 6px;';
       label.title = 'Klicken, um komplette Kategorien aus- oder einzublenden';
       label.textContent = '🏷️ Kategorien auf dieser Seite:';
       bar.appendChild(label);
-
-      target.parentElement.insertBefore(bar, target);
-    } else {
-      bar.style.display = 'flex';
     }
+
+    bar.style.display = 'flex';
+    ensureBarPosition(bar, target, false);
 
     const existingPills = new Map();
     bar.querySelectorAll('.tp-cat-pill').forEach(pill => {
