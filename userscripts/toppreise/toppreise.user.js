@@ -1,5 +1,4 @@
 // ==UserScript==
-// ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
 // @version      1.7.0
@@ -808,6 +807,102 @@ const STYLES = `
       }
       return visibleText.includes(term);
     });
+  }
+
+  // Stable Quick-Control Pill Toolbar
+  function updateQuickToolbar(counts, pageHasOffers) {
+    if (!CONFIG.ENABLE_FILTER_COUNTER) {
+      const bar = document.getElementById('tp-quick-toolbar');
+      if (bar) bar.style.display = 'none';
+      return;
+    }
+
+    let bar = document.getElementById('tp-quick-toolbar');
+    const totalHidden = counts.neg + counts.cat + counts.min;
+    const isRevealed = document.body.classList.contains('tp-reveal-filtered');
+
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'tp-quick-toolbar';
+      bar.innerHTML = `
+        <div class="tp-toolbar-group" title="Anzahl durch aktivierte Filter ausgeblendeter Produkte">
+          <span>🚫 <strong id="tp-tb-hidden-count">0</strong></span>
+          <button class="tp-toolbar-btn" id="tp-tb-reveal" title="Filter-Vorschau: Ausgeblendete Produkte gelb umrandet einblenden">
+            👁️ <span id="tp-tb-reveal-label">Einblenden</span>
+          </button>
+          <button class="tp-toolbar-btn" id="tp-tb-reset" title="Alle Filter (Ausschlüsse &amp; Kategorien) zurücksetzen">
+            🔄 Reset
+          </button>
+        </div>
+
+        <div class="tp-toolbar-divider" id="tp-tb-divider-offers"></div>
+
+        <div class="tp-toolbar-group" id="tp-tb-min-group" title="Mindestanzahl benötigter Händler-Angebote pro Produkt (Produkte mit weniger Angeboten werden ausgeblendet)">
+          <span title="Filter für Mindestanzahl Angebote">Min. Angebote:</span>
+          <button class="tp-stepper-btn" id="tp-tb-min-minus" title="Mindestanzahl Angebote verringern">-</button>
+          <span id="tp-tb-min-val" title="Aktuelle Mindestanzahl Angebote" style="min-width: 16px; text-align: center;">0</span>
+          <button class="tp-stepper-btn" id="tp-tb-min-plus" title="Mindestanzahl Angebote erhöhen">+</button>
+        </div>
+      `;
+      document.body.appendChild(bar);
+
+      bar.querySelector('#tp-tb-reveal').onclick = () => {
+        document.body.classList.toggle('tp-reveal-filtered');
+        processListings();
+      };
+
+      bar.querySelector('#tp-tb-reset').onclick = () => {
+        saveConfigKey('NEGATIVE_TERMS', '');
+        saveConfigKey('EXCLUDED_CATEGORIES', []);
+        saveConfigKey('MIN_OFFERS', 0);
+        const modalInput = document.getElementById('tp-negative-terms-input');
+        if (modalInput) modalInput.value = '';
+        const inlineInput = document.getElementById('tp-inline-negative-input');
+        if (inlineInput) inlineInput.value = '';
+        const modalMinOffersVal = document.getElementById('tp-min-offers-val');
+        const modalMinOffersRange = document.getElementById('tp-min-offers-range');
+        if (modalMinOffersVal) modalMinOffersVal.value = 0;
+        if (modalMinOffersRange) modalMinOffersRange.value = 0;
+        processListings();
+      };
+
+      bar.querySelector('#tp-tb-min-minus').onclick = () => {
+        if (CONFIG.MIN_OFFERS > 0) {
+          saveConfigKey('MIN_OFFERS', CONFIG.MIN_OFFERS - 1);
+          const modalVal = document.getElementById('tp-min-offers-val');
+          const modalRange = document.getElementById('tp-min-offers-range');
+          if (modalVal) modalVal.value = CONFIG.MIN_OFFERS;
+          if (modalRange) modalRange.value = CONFIG.MIN_OFFERS;
+          processListings();
+        }
+      };
+
+      bar.querySelector('#tp-tb-min-plus').onclick = () => {
+        saveConfigKey('MIN_OFFERS', CONFIG.MIN_OFFERS + 1);
+        const modalVal = document.getElementById('tp-min-offers-val');
+        const modalRange = document.getElementById('tp-min-offers-range');
+        if (modalVal) modalVal.value = CONFIG.MIN_OFFERS;
+        if (modalRange) modalRange.value = CONFIG.MIN_OFFERS;
+        processListings();
+      };
+    }
+
+    bar.style.display = 'flex';
+    const countEl = bar.querySelector('#tp-tb-hidden-count');
+    const revealBtn = bar.querySelector('#tp-tb-reveal');
+    const revealLabel = bar.querySelector('#tp-tb-reveal-label');
+    const minValEl = bar.querySelector('#tp-tb-min-val');
+
+    const dividerOffers = bar.querySelector('#tp-tb-divider-offers');
+    const minOffersGroup = bar.querySelector('#tp-tb-min-group');
+
+    if (dividerOffers) dividerOffers.style.display = pageHasOffers ? 'block' : 'none';
+    if (minOffersGroup) minOffersGroup.style.display = pageHasOffers ? 'flex' : 'none';
+
+    if (countEl) countEl.textContent = totalHidden;
+    if (minValEl) minValEl.textContent = CONFIG.MIN_OFFERS;
+    if (revealBtn) revealBtn.classList.toggle('tp-active', isRevealed);
+    if (revealLabel) revealLabel.textContent = isRevealed ? 'Verbergen' : 'Einblenden';
   }
 
   // Dedicated Power Filter Bar Target Selector (Targets main page frame on Toppreise.ch)
