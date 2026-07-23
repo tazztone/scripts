@@ -74,6 +74,9 @@ const STYLE = ` /* injected CSS */ `;
 
 ### Resiliency Principles
 
+- **Anchor Card Elements**: When parsing list items/cards, check if the container element itself is an anchor tag (`card.tagName === 'A'`), check `card.closest('a[href]')`, or query descendant `<a>` tags. Searching only children (`card.querySelectorAll('a')`) fails when the card IS the `<a>` element.
+- **2-Layer Reinstall-Proof Storage**: Extension storage (`GM_setValue`) is purged when a script is uninstalled or clean-reinstalled. Dual-write state to `GM_setValue` and `window.localStorage` on the target web domain (`localStorage.setItem('us_' + key, JSON.stringify(val))`). If `GM_getValue` returns `undefined` on script start, read `localStorage` and auto-reseed `GM_setValue`.
+- **Inline Input Labels**: Avoid `position: absolute` icons with fixed pixel padding inside text inputs; emoji widths vary dynamically across OS font engines. Use flexbox containers with inline label elements (`<span class="tp-input-label">`) positioned outside `<input>` boxes.
 - **Visibility Verification**: Always check `isVisible()` before interacting. Be extra vigilant on responsive sites.
 - **Event Fidelity**: For React/Radix, simple `.click()` may fail. Fire complete chains of events (`PointerEvent` + `MouseEvent`).
 - **Locks and Cooldowns**: Use flag locks (`isInteracting`) and timestamp-based throttles to enforce cooldowns.

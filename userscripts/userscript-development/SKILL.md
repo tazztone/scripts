@@ -42,7 +42,7 @@ Structure your script with clear boundaries:
 - **Metadata**: Add `@grant GM_*` explicitly. Add `@connect` for hosts used by `GM_xmlhttpRequest`. Always pin exact library versions in `@require`.
 - **Component Scope**: For foreground scripts, place **CONFIG & STYLES** outside the IIFE for user-tunability (or use `==UserConfig==`). Keep everything else strictly inside the IIFE.
 - **Async Background Work**: ScriptCat background scripts must return a `Promise`. Resolve only when GM work is truly finished. Use `new CATRetryError(msg, secs)` for retries.
-- **Resiliency**: Always verify DOM visibility (`getBoundingClientRect().width > 0`), use timestamp-based throttles, apply `dataset.processed` markers for idempotency, wrap `MutationObserver` callbacks in `try/catch`, prevent self-observation loops by selectively disabling attribute observation (`attributes: false`), and use robust text normalization when matching string identifiers across distinct elements.
+- **Resiliency**: Always verify DOM visibility (`getBoundingClientRect().width > 0`), check if card containers are anchor tags (`card.tagName === 'A'`), use 2-layer storage dual-sync (`GM_setValue` + domain `localStorage`) for reinstall resilience, use flexbox inline labels outside inputs to prevent emoji overlap, use timestamp throttles, apply `dataset.processed` markers, wrap `MutationObserver` callbacks in `try/catch`, prevent self-observation loops (`attributes: false`), and use text normalization across distinct elements.
 
 See the complete architectural rules, metadata guidelines, and code patterns in **[REFERENCE.md](references/REFERENCE.md)**.
 
