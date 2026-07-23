@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.0.0
+// @version      2.1.0
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -809,19 +809,46 @@ const STYLES = `
     return clean.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
   }
 
+  // Helper: Collect all href strings from card element itself, its ancestors, and its descendants
+  function getCardHrefs(card) {
+    if (!card) return [];
+    const hrefs = [];
+    
+    // 1. If card itself is an <a> tag
+    if (card.tagName && card.tagName.toLowerCase() === 'a') {
+      const href = card.getAttribute('href') || card.href || '';
+      if (href) hrefs.push(href);
+    }
+    
+    // 2. Nearest ancestor <a> tag
+    const closestA = card.closest ? card.closest('a[href]') : null;
+    if (closestA) {
+      const href = closestA.getAttribute('href') || closestA.href || '';
+      if (href && !hrefs.includes(href)) hrefs.push(href);
+    }
+    
+    // 3. Descendant <a> tags
+    if (card.querySelectorAll) {
+      card.querySelectorAll('a[href]').forEach(a => {
+        if (a.closest('header, nav, footer, .breadcrumb, #tp-quick-toolbar, #tp-suite-filter-bar')) return;
+        const href = a.getAttribute('href') || a.href || '';
+        if (href && !hrefs.includes(href)) hrefs.push(href);
+      });
+    }
+
+    return hrefs;
+  }
+
   // Helper: Universal Category Extractor (Prioritizes Product URL Category Path)
   function extractCardCategory(card) {
     if (!card) return '';
-    if (card.dataset.tpCategory) return card.dataset.tpCategory;
+    if (card.dataset && card.dataset.tpCategory) return card.dataset.tpCategory;
 
     let extracted = '';
+    const hrefs = getCardHrefs(card);
 
     // Tier 1 (Primary): Product URL Category Path (/preisvergleich/CategorySlug/ProductTitle-p123)
-    const productLinks = card.querySelectorAll('a[href*="/preisvergleich/"]');
-    for (const link of productLinks) {
-      if (link.closest('header, nav, footer, .breadcrumb, #tp-quick-toolbar, #tp-suite-filter-bar')) continue;
-
-      const href = link.getAttribute('href') || link.href || '';
+    for (const href of hrefs) {
       const match = href.match(/\/preisvergleich\/(.+)\/[^\/]+-p\d+/i);
       if (match && match[1]) {
         const segments = match[1].split('/').filter(Boolean);
@@ -838,17 +865,7 @@ const STYLES = `
 
     // Tier 2: Category Search Links (/produktsuche/.../CategoryName-c123)
     if (!extracted) {
-      const catLinks = card.querySelectorAll('a[href*="/produktsuche/"], a[href*="-c"]');
-      for (const link of catLinks) {
-        if (link.closest('header, nav, footer, .breadcrumb, #tp-quick-toolbar, #tp-suite-filter-bar')) continue;
-
-        const text = link.textContent.trim().replace(/\(\d+\)/g, '').trim();
-        if (text && text.length > 1 && !['home', 'toppreise', 'neue toppreise', 'produktsuche'].includes(text.toLowerCase()) && !text.includes('CHF') && !text.includes('Angebot') && !text.includes('%')) {
-          extracted = text;
-          break;
-        }
-
-        const href = link.getAttribute('href') || link.href || '';
+      for (const href of hrefs) {
         const catMatch = href.match(/\/produktsuche\/(?:.*\/)?([^\/-]+(?:-[^\/-]+)*)-c\d+/i) || href.match(/(?:.*\/)?([^\/]+)-c\d+/i);
         if (catMatch && catMatch[1]) {
           const formatted = formatCategorySlug(catMatch[1]);
@@ -861,7 +878,7 @@ const STYLES = `
     }
 
     // Tier 3: DOM Category Classes & Data Attributes
-    if (!extracted) {
+    if (!extracted && card.querySelector) {
       const catEl = card.querySelector('.subCategory, .productCategory, .categoryLink, [class*="Category"], [data-category]');
       if (catEl) {
         const text = (catEl.getAttribute('data-category') || catEl.textContent).trim().replace(/\(\d+\)/g, '').trim();
@@ -882,7 +899,7 @@ const STYLES = `
       }
     }
 
-    if (extracted) {
+    if (extracted && card.dataset) {
       card.dataset.tpCategory = extracted;
     }
     return extracted;
