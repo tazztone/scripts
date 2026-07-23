@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      0.7.0
+// @version      0.8.0
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -314,6 +314,8 @@ const STYLES = `
     border-radius: 8px;
     border: 1px solid rgba(255, 255, 255, 0.05);
   }
+
+  /* High-Contrast Crisp Readable Category Pills */
   .tp-cat-pill {
     padding: 4px 10px;
     border-radius: 12px;
@@ -322,19 +324,20 @@ const STYLES = `
     cursor: pointer;
     user-select: none;
     transition: all 0.2s ease;
-    background: rgba(255, 255, 255, 0.08);
-    color: #cbd5e1;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #1e293b !important;
+    color: #f8fafc !important;
+    border: 1px solid #334155 !important;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
   }
   .tp-cat-pill:hover {
-    background: rgba(255, 255, 255, 0.18);
-    color: #fff;
+    background: #334155 !important;
+    color: #ffffff !important;
   }
   .tp-cat-pill.tp-excluded {
-    background: rgba(239, 68, 68, 0.25);
-    color: #fca5a5;
-    border-color: rgba(239, 68, 68, 0.4);
-    text-decoration: line-through;
+    background: #7f1d1d !important;
+    color: #fca5a5 !important;
+    border-color: #ef4444 !important;
+    text-decoration: line-through !important;
   }
 
   /* Switch Toggle */
@@ -519,15 +522,13 @@ const STYLES = `
     display: flex;
     align-items: center;
     gap: 8px;
-    background: rgba(30, 41, 59, 0.88);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
     border-radius: 10px;
     padding: 8px 14px;
-    color: #cbd5e1;
+    color: #f8fafc !important;
     font-size: 12px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   }
   #tp-inline-negative-input {
@@ -636,7 +637,7 @@ const STYLES = `
 
   const log = (...args) => { if (CONFIG.DEBUG) console.log('[Toppreise-Suite]', ...args); };
 
-  // Set of categories detected on page
+  // Set of categories detected on active page cards
   const pageCategories = new Set();
 
   // Inject Custom Stylesheet safely
@@ -669,11 +670,11 @@ const STYLES = `
     return isNaN(val) ? 0 : val;
   }
 
-  // Helper: Extract Card Category
+  // Helper: Extract Card Category (strictly from active product cards)
   function extractCardCategory(card) {
     const catEl = card.querySelector(
       'a[href*="/produktsuche/"], a[href*="/katalog/"], a[href*="/preisvergleich/"], ' +
-      '.categoryLink, .productCategory, .subCategory, .category, .catName, [class*="category"]'
+      '.categoryLink, .productCategory, .subCategory, .category, .catName'
     );
     if (catEl) {
       const text = catEl.textContent.trim().replace(/\(\d+\)/g, '').trim();
@@ -682,28 +683,6 @@ const STYLES = `
       }
     }
     return '';
-  }
-
-  // Helper: Scan page-level categories from breadcrumbs & sidebar tree
-  function scanPageCategories() {
-    // 1. Breadcrumbs
-    const breadcrumbs = document.querySelectorAll('.breadcrumb a, [class*="breadcrumb"] a, nav a, .navigation_breadcrumb a');
-    breadcrumbs.forEach(link => {
-      const text = link.textContent.trim().replace(/\(\d+\)/g, '').trim();
-      const lower = text.toLowerCase();
-      if (text && text.length > 1 && !['home', 'toppreise', 'neue toppreise', 'startseite', 'preisvergleich'].includes(lower)) {
-        pageCategories.add(text);
-      }
-    });
-
-    // 2. Sidebar category links & filter groups
-    const sidebarLinks = document.querySelectorAll('.filterGroup a, [class*="category"] a, .sideMenu a, a[href*="/produktsuche/"]');
-    sidebarLinks.forEach(link => {
-      const text = link.textContent.trim().replace(/\(\d+\)/g, '').trim();
-      if (text && text.length > 1 && !text.includes('CHF') && !text.includes('Angebote') && text.length < 50) {
-        pageCategories.add(text);
-      }
-    });
   }
 
   // Helper: Extract Offer Count
@@ -723,7 +702,7 @@ const STYLES = `
     return termsList.some(term => term.length > 0 && fullText.includes(term));
   }
 
-  // Stable Quick-Control Pill Toolbar (No InnerHTML Thrashing!)
+  // Stable Quick-Control Pill Toolbar
   function updateQuickToolbar(counts) {
     if (!CONFIG.ENABLE_FILTER_COUNTER) {
       const bar = document.getElementById('tp-quick-toolbar');
@@ -804,8 +783,7 @@ const STYLES = `
       const targetList = document.querySelector(
         '.productList, .mixedBrowsingListContainer, [class*="productList"], .Plugin_Product'
       );
-      const targetHolder = targetList ? targetList.parentElement : document.querySelector('.pageContent, main, #content, body');
-      if (!targetHolder) return;
+      if (!targetList) return;
 
       bar = document.createElement('div');
       bar.id = 'tp-inline-negative-bar';
@@ -814,11 +792,7 @@ const STYLES = `
         <input type="text" id="tp-inline-negative-input" title="Kommagetrennte Begriffe eingeben (z.B. Hülle, Refurbished, Gebraucht), um passende Produkte auszublenden" placeholder="Wörter ausschließen, z. B. Hülle, Case, Refurbished..." value="${CONFIG.NEGATIVE_TERMS || ''}">
       `;
 
-      if (targetList) {
-        targetList.parentElement.insertBefore(bar, targetList);
-      } else {
-        targetHolder.prepend(bar);
-      }
+      targetList.parentElement.insertBefore(bar, targetList);
 
       const input = bar.querySelector('#tp-inline-negative-input');
       input.oninput = (e) => {
@@ -838,9 +812,9 @@ const STYLES = `
   // Render Inline Category Pills Bar
   function renderInlineCategoryBar() {
     let bar = document.getElementById('tp-inline-category-bar');
-    const targetHolder = document.querySelector('.productList, .mixedBrowsingListContainer, .pageContent');
+    const targetList = document.querySelector('.productList, .mixedBrowsingListContainer, [class*="productList"]');
 
-    if (!targetHolder || pageCategories.size === 0) {
+    if (!targetList || pageCategories.size === 0) {
       if (bar) bar.style.display = 'none';
       return;
     }
@@ -848,11 +822,11 @@ const STYLES = `
     if (!bar) {
       bar = document.createElement('div');
       bar.id = 'tp-inline-category-bar';
-      targetHolder.parentElement.insertBefore(bar, targetHolder);
+      targetList.parentElement.insertBefore(bar, targetList);
     }
 
     bar.style.display = 'flex';
-    bar.innerHTML = '<span style="font-size: 11px; font-weight: 700; color: #94a3b8; margin-right: 4px;" title="Klicken, um komplette Kategorien aus- oder einzublenden">🏷️ Kategorien:</span>';
+    bar.innerHTML = '<span style="font-size: 11px; font-weight: 700; color: #475569; margin-right: 6px;" title="Klicken, um komplette Kategorien aus- oder einzublenden">🏷️ Kategorien auf dieser Seite:</span>';
 
     const excluded = CONFIG.EXCLUDED_CATEGORIES || [];
     pageCategories.forEach(cat => {
@@ -879,12 +853,10 @@ const STYLES = `
   function processListings() {
     log('Processing product listings...');
 
-    // Scan page-level categories (breadcrumbs & sidebar trees)
-    scanPageCategories();
+    pageCategories.clear();
 
     const cards = document.querySelectorAll('.Plugin_Product.mixedBrowsingList, .Plugin_Product');
     if (cards.length === 0) {
-      // Even if cards are empty, render page-level UI bars
       renderInlineNegativeBar();
       renderInlineCategoryBar();
       return;
@@ -905,7 +877,7 @@ const STYLES = `
     const counts = { neg: 0, cat: 0, min: 0 };
 
     cards.forEach(card => {
-      // 1. Category extraction
+      // 1. Category extraction (strictly from active product cards)
       const catName = extractCardCategory(card);
       if (catName) pageCategories.add(catName);
 
@@ -1022,11 +994,9 @@ const STYLES = `
     modalContainer.dataset.tpAlarmProcessed = 'true';
     log('Price Alarm modal detected! Automating configuration...');
 
-    // 1. Locate Dialog & Close Button references before submission
     const dialogContainer = modalContainer.closest('.AbstractDialog');
     const closeButton = dialogContainer ? dialogContainer.querySelector('.AbstractDialog_CloseButton') : null;
 
-    // 2. Extract present price
     const priceEl = modalContainer.querySelector('.shippingPrice .Plugin_Price') ||
                     modalContainer.querySelector('.productPrice .Plugin_Price') ||
                     document.querySelector('.pageContent .priceContainer .Plugin_Price');
@@ -1045,7 +1015,6 @@ const STYLES = `
     const targetPrice = (presentValue * CONFIG.ALARM_TARGET_PERCENT).toFixed(2);
     log(`Present Price: CHF ${presentValue} -> Setting Target Price: CHF ${targetPrice}`);
 
-    // 3. Set Target Price Input
     const priceInput = modalContainer.querySelector('input#f_NewInfoMailForm_priceFrom') ||
                        modalContainer.querySelector('input[name="im_nimf_pvf"]');
     if (priceInput) {
@@ -1054,7 +1023,6 @@ const STYLES = `
       priceInput.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
-    // 4. Set Duration (2 years / 730 days)
     const durationHidden = modalContainer.querySelector('input[name="im_nimf_du"]');
     if (durationHidden) {
       durationHidden.value = CONFIG.ALARM_DURATION_DAYS;
@@ -1063,21 +1031,18 @@ const STYLES = `
     const durationOption = modalContainer.querySelector(`li[data-value="${CONFIG.ALARM_DURATION_DAYS}"]`);
     if (durationOption) durationOption.click();
 
-    // 5. Check GDPR Terms checkbox
     const termsCheckbox = modalContainer.querySelector('input#im_nimf_prtrm');
     if (termsCheckbox) {
       termsCheckbox.checked = true;
       termsCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
-    // 6. Submit & Auto-Close
     if (CONFIG.ALARM_AUTO_SUBMIT) {
       const submitBtn = modalContainer.querySelector('input.f_submitbtn');
       if (submitBtn) {
         log('Auto-submitting price alarm...');
         submitBtn.click();
 
-        // Polling loop to close dialog once form is detached
         let polls = 0;
         const autoCloseInterval = setInterval(() => {
           polls++;
@@ -1238,7 +1203,7 @@ const STYLES = `
               <label for="tp-sort-none" title="Standard-Reihenfolge der Seite beibehalten">Standard</label>
               
               <input type="radio" id="tp-sort-desc" name="tp-sort-offers" value="desc">
-              <label for="tp-sort-desc" title="Produkte mit den meisten Angeboten zuerst">Meiste ⬇</label>
+              <label for="tp-sort-desc" title="Produkte mit den meichten Angeboten zuerst">Meiste ⬇</label>
               
               <input type="radio" id="tp-sort-asc" name="tp-sort-offers" value="asc">
               <label for="tp-sort-asc" title="Produkte mit den wenigsten Angeboten zuerst">Wenigste ⬆</label>
