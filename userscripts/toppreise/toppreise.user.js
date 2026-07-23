@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      0.9.0
+// @version      1.0.0
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -670,28 +670,58 @@ const STYLES = `
     return isNaN(val) ? 0 : val;
   }
 
-  // Helper: Robust Category Extractor (combines DOM elements & URL path slugs)
+  // Helper: Universal Card Grabber (Matches search, neue-toppreise, top-100, etc.)
+  function getProductCards() {
+    // Standard Toppreise list cards
+    const standardCards = Array.from(document.querySelectorAll('.Plugin_Product, [class*="Plugin_Product"], .mixedBrowsingList, [class*="mixedBrowsingList"]'));
+    if (standardCards.length > 0) {
+      return standardCards.filter(c => !c.parentElement.closest('.Plugin_Product, [class*="Plugin_Product"]'));
+    }
+
+    // Fallback for Neue Toppreise / special layout grid lists
+    const productLinks = document.querySelectorAll('a[href*="/preisvergleich/"]');
+    const gridCards = new Set();
+
+    productLinks.forEach(link => {
+      if (link.closest('header, nav, .breadcrumb, #tp-quick-toolbar, #tp-inline-category-bar, #tp-inline-negative-bar')) return;
+      
+      let container = link.parentElement;
+      while (container && container !== document.body && container.parentElement !== document.body) {
+        if (container.querySelector('.Plugin_Price, [class*="Price"], [class*="price"]') || 
+            container.querySelector('[class*="Differenz"], [class*="differenz"]')) {
+          gridCards.add(container);
+          break;
+        }
+        container = container.parentElement;
+      }
+    });
+
+    return Array.from(gridCards);
+  }
+
+  // Helper: Robust Category Extractor (DOM Text + Product Link URL Path Slug Parser)
   function extractCardCategory(card) {
-    // 1. Check explicit category link elements inside card DOM
+    // 1. Check explicit DOM category links inside card
     const catEl = card.querySelector(
       'a[href*="/produktsuche/"], a[href*="/katalog/"], a[href*="/preisvergleich/"], ' +
       '.categoryLink, .productCategory, .subCategory, .category, .catName'
     );
     if (catEl) {
       const text = catEl.textContent.trim().replace(/\(\d+\)/g, '').trim();
-      if (text && text.length > 1 && !text.includes('CHF') && !text.includes('Angebot')) {
+      if (text && text.length > 1 && !text.includes('CHF') && !text.includes('Angebot') && !text.includes('%')) {
         return text;
       }
     }
 
     // 2. Extract category slug directly from product link URL path (/preisvergleich/CategoryName/...)
-    const mainLink = card.querySelector('a[href*="/preisvergleich/"], a[href*="/produktsuche/"], a.titleLink');
-    if (mainLink) {
+    const mainLinks = card.querySelectorAll('a[href*="/preisvergleich/"], a[href*="/produktsuche/"], a[href*="/katalog/"], a.titleLink');
+    for (const mainLink of mainLinks) {
       const href = mainLink.getAttribute('href') || '';
       const match = href.match(/\/(?:preisvergleich|produktsuche|katalog)\/([^/]+)\//i);
       if (match && match[1]) {
-        const catSlug = decodeURIComponent(match[1]).replace(/-/g, ' ').trim();
-        if (catSlug && catSlug.length > 1) {
+        let catSlug = decodeURIComponent(match[1]).replace(/-/g, ' ').trim();
+        catSlug = catSlug.charAt(0).toUpperCase() + catSlug.slice(1);
+        if (catSlug && catSlug.length > 1 && !catSlug.startsWith('p') && isNaN(catSlug)) {
           return catSlug;
         }
       }
@@ -711,14 +741,14 @@ const STYLES = `
   // Helper: Check Negative Term Match
   function matchesNegativeTerms(card, termsList) {
     if (!termsList || termsList.length === 0) return false;
-    const title = (card.querySelector('.titleLink, .title')?.textContent || '').toLowerCase();
+    const title = (card.querySelector('.titleLink, .title, a')?.textContent || '').toLowerCase();
     const specs = (card.querySelector('.specs, .description')?.textContent || '').toLowerCase();
     const fullText = title + ' ' + specs;
     return termsList.some(term => term.length > 0 && fullText.includes(term));
   }
 
-  // Stable Quick-Control Pill Toolbar
-  function updateQuickToolbar(counts) {
+  // Stable Quick-Control Pill Toolbar (Hides "Min. Angebote" if page has no offer counts)
+  function updateQuickToolbar(counts, pageHasOffers) {
     if (!CONFIG.ENABLE_FILTER_COUNTER) {
       const bar = document.getElementById('tp-quick-toolbar');
       if (bar) bar.style.display = 'none';
@@ -740,9 +770,9 @@ const STYLES = `
           </button>
         </div>
 
-        <div class="tp-toolbar-divider"></div>
+        <div class="tp-toolbar-divider" id="tp-tb-divider-offers"></div>
 
-        <div class="tp-toolbar-group" title="Mindestanzahl benötigter Händler-Angebote pro Produkt (Produkte mit weniger Angeboten werden ausgeblendet)">
+        <div class="tp-toolbar-group" id="tp-tb-min-group" title="Mindestanzahl benötigter Händler-Angebote pro Produkt (Produkte mit weniger Angeboten werden ausgeblendet)">
           <span title="Filter für Mindestanzahl Angebote">Min. Angebote:</span>
           <button class="tp-stepper-btn" id="tp-tb-min-minus" title="Mindestanzahl Angebote verringern">-</button>
           <span id="tp-tb-min-val" title="Aktuelle Mindestanzahl Angebote" style="min-width: 16px; text-align: center;">0</span>
@@ -785,6 +815,13 @@ const STYLES = `
     const revealLabel = bar.querySelector('#tp-tb-reveal-label');
     const minValEl = bar.querySelector('#tp-tb-min-val');
 
+    const dividerOffers = bar.querySelector('#tp-tb-divider-offers');
+    const minOffersGroup = bar.querySelector('#tp-tb-min-group');
+
+    // Hide offer stepper if page cards don't support offer counts (e.g. Neue Toppreise)
+    if (dividerOffers) dividerOffers.style.display = pageHasOffers ? 'block' : 'none';
+    if (minOffersGroup) minOffersGroup.style.display = pageHasOffers ? 'flex' : 'none';
+
     if (countEl) countEl.textContent = totalHidden;
     if (minValEl) minValEl.textContent = CONFIG.MIN_OFFERS;
     if (revealBtn) revealBtn.classList.toggle('tp-active', isRevealed);
@@ -792,10 +829,10 @@ const STYLES = `
   }
 
   // Render Inline Negative Filter Search Bar
-  function renderInlineNegativeBar() {
+  function renderInlineNegativeBar(targetContainer) {
     let bar = document.getElementById('tp-inline-negative-bar');
     if (!bar) {
-      const targetList = document.querySelector(
+      const targetList = targetContainer || document.querySelector(
         '.productList, .mixedBrowsingListContainer, [class*="productList"], .Plugin_Product'
       );
       if (!targetList) return;
@@ -825,9 +862,9 @@ const STYLES = `
   }
 
   // Render Inline Category Pills Bar
-  function renderInlineCategoryBar() {
+  function renderInlineCategoryBar(targetContainer) {
     let bar = document.getElementById('tp-inline-category-bar');
-    const targetList = document.querySelector('.productList, .mixedBrowsingListContainer, [class*="productList"]');
+    const targetList = targetContainer || document.querySelector('.productList, .mixedBrowsingListContainer, [class*="productList"]');
 
     if (!targetList || pageCategories.size === 0) {
       if (bar) bar.style.display = 'none';
@@ -870,7 +907,9 @@ const STYLES = `
 
     pageCategories.clear();
 
-    const cards = document.querySelectorAll('.Plugin_Product.mixedBrowsingList, .Plugin_Product');
+    const cards = getProductCards();
+    const firstCard = cards.length > 0 ? cards[0] : null;
+
     if (cards.length === 0) {
       renderInlineNegativeBar();
       renderInlineCategoryBar();
@@ -890,6 +929,7 @@ const STYLES = `
     const termsList = rawTerms.split(/[,;\n]/).map(t => t.trim().toLowerCase()).filter(t => t.length > 0);
     const excludedCats = CONFIG.EXCLUDED_CATEGORIES || [];
     const counts = { neg: 0, cat: 0, min: 0 };
+    let pageHasOffers = false;
 
     cards.forEach(card => {
       // 1. Category extraction (DOM text + URL path slug parser)
@@ -908,7 +948,9 @@ const STYLES = `
 
       // 4. Offer Count Filter
       const offerCount = extractOfferCount(card);
-      const isLowOffers = CONFIG.MIN_OFFERS > 0 && offerCount < CONFIG.MIN_OFFERS;
+      if (offerCount > 0) pageHasOffers = true;
+
+      const isLowOffers = pageHasOffers && CONFIG.MIN_OFFERS > 0 && offerCount < CONFIG.MIN_OFFERS;
       card.classList.toggle('tp-min-offers-filtered', isLowOffers);
       if (isLowOffers) counts.min++;
 
@@ -980,7 +1022,7 @@ const STYLES = `
     });
 
     // 6. Re-sorting by Offer Count
-    if (CONFIG.SORT_BY_OFFERS !== 'none' && cards.length > 1) {
+    if (pageHasOffers && CONFIG.SORT_BY_OFFERS !== 'none' && cards.length > 1) {
       const parent = cards[0].parentElement;
       if (parent) {
         const cardArray = Array.from(cards);
@@ -994,9 +1036,9 @@ const STYLES = `
     }
 
     // 7. Render UI Modules
-    updateQuickToolbar(counts);
-    renderInlineNegativeBar();
-    renderInlineCategoryBar();
+    updateQuickToolbar(counts, pageHasOffers);
+    renderInlineNegativeBar(firstCard ? firstCard.parentElement : null);
+    renderInlineCategoryBar(firstCard ? firstCard.parentElement : null);
   }
 
   // ─── MODULE 2: PRICE ALARM AUTOMATION ────────────────────────────────────────
