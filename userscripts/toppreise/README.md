@@ -4,7 +4,7 @@ All-in-one userscript for Toppreise.ch that highlights best prices, excludes unw
 
 ## 🚀 Installation
 
-### 👉 [**CLICK HERE TO INSTALL USERSCRIPT**](https://github.com/tazztone/scripts/raw/refs/heads/main/userscripts/toppreise/toppreise.user.js?v=1.5.0)
+### 👉 [**CLICK HERE TO INSTALL USERSCRIPT**](https://github.com/tazztone/scripts/raw/refs/heads/main/userscripts/toppreise/toppreise.user.js?v=1.6.0)
 *(Requires Violentmonkey / Tampermonkey)*
 
 ---
@@ -12,11 +12,11 @@ All-in-one userscript for Toppreise.ch that highlights best prices, excludes unw
 ## ⚡ Features
 
 1. **Händler Bestpreis Highlights**: Highlights products with an emerald green border & "Best Price" badge when a filtered store is the cheapest (or within custom margin %), while dimming/hiding non-cheapest products.
-2. **Negativer Textfilter (Ausschluss)**: Exclude products containing specific unwanted keywords (e.g. `SAMSUNG, Hülle, Case, Refurbished, Gebraucht`) from card title, manufacturer, or spec text via the inline negative search bar or modal.
-3. **Kategorien-Filter (Neue Toppreise & Suche)**: Multi-tier category extraction engine combining DOM elements, URL path slugs, and active breadcrumb fallbacks. Features stable DOM reconciliation so pill clicks never misregister.
+2. **Negativer Textfilter (Ausschluss)**: Exclude products containing specific unwanted keywords (e.g. `SAMSUNG, Hülle, Case, Refurbished, Gebraucht`) with word-boundary precision via the inline search bar or modal.
+3. **Kategorien-Filter (Neue Toppreise & Suche)**: Multi-tier category extraction engine combining DOM elements, URL path slugs, and active breadcrumb fallbacks with dynamic re-anchoring across AJAX page updates.
 4. **Angebote & Sortierung**: Filter out marketplace items with fewer than $N$ offers, plus optional client-side re-sorting by total offer count (automatically hidden on pages without offer counts like "Neue Toppreise").
-5. **Preisalarm Auto-Filler**: Automatically configures target price (e.g. 60% of current price) and 2-year duration upon clicking the price alarm bell icon, auto-submitting and closing the dialog cleanly.
-6. **Floating Quick-Control Pill Toolbar**: Bottom floating toolbar displaying hidden product count, 1-click reveal preview toggle, and context-sensitive offer count stepper with hover tooltips.
+5. **Preisalarm Auto-Filler**: Automatically configures target price (e.g. 60% of current price) and 2-year duration upon clicking the price alarm bell icon, supporting Swiss currency formatting (`CHF 1'299.–`).
+6. **Floating Quick-Control Pill Toolbar**: Bottom floating toolbar displaying hidden product count, 1-click reveal preview toggle, 1-click **Reset Filters** button, and context-sensitive offer count stepper.
 
 ---
 

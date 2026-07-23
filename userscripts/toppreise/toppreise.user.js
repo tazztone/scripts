@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.5.1
+// @version      1.6.0
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -561,78 +561,42 @@ const STYLES = `
 (() => {
   'use strict';
 
-  // Persistent GM storage helpers with localStorage fallback
+  // Fast GM storage helpers with in-memory caching
   const _getValue = (key, def) => {
     try {
       if (typeof GM_getValue !== 'undefined') return GM_getValue(key, def);
-    } catch (e) {}
-    try {
-      const local = localStorage.getItem(`tp_suite_${key}`);
-      return local !== null ? JSON.parse(local) : def;
     } catch (e) {}
     return def;
   };
 
   const _setValue = (key, val) => {
     try {
-      if (typeof GM_setValue !== 'undefined') {
-        GM_setValue(key, val);
-        return;
-      }
-    } catch (e) {}
-    try {
-      localStorage.setItem(`tp_suite_${key}`, JSON.stringify(val));
+      if (typeof GM_setValue !== 'undefined') GM_setValue(key, val);
     } catch (e) {}
   };
 
-  // Dynamic config bindings using getters and setters
+  // Cached configuration state loaded once at startup
   const CONFIG = {
-    get MODE() { return _getValue('MODE', DEFAULTS.MODE); },
-    set MODE(v) { _setValue('MODE', v); },
-    
-    get MARGIN_PERCENT() { return parseFloat(_getValue('MARGIN_PERCENT', DEFAULTS.MARGIN_PERCENT)); },
-    set MARGIN_PERCENT(v) { _setValue('MARGIN_PERCENT', parseFloat(v)); },
-    
-    get DIM_OPACITY() { return parseFloat(_getValue('DIM_OPACITY', DEFAULTS.DIM_OPACITY)); },
-    set DIM_OPACITY(v) { _setValue('DIM_OPACITY', parseFloat(v)); },
-    
-    get USE_SHIPPING_PRICE() { return _getValue('USE_SHIPPING_PRICE', DEFAULTS.USE_SHIPPING_PRICE); },
-    set USE_SHIPPING_PRICE(v) { _setValue('USE_SHIPPING_PRICE', v); },
+    MODE: _getValue('MODE', DEFAULTS.MODE),
+    MARGIN_PERCENT: parseFloat(_getValue('MARGIN_PERCENT', DEFAULTS.MARGIN_PERCENT)),
+    DIM_OPACITY: parseFloat(_getValue('DIM_OPACITY', DEFAULTS.DIM_OPACITY)),
+    USE_SHIPPING_PRICE: _getValue('USE_SHIPPING_PRICE', DEFAULTS.USE_SHIPPING_PRICE),
+    NEGATIVE_TERMS: _getValue('NEGATIVE_TERMS', DEFAULTS.NEGATIVE_TERMS),
+    EXCLUDED_CATEGORIES: _getValue('EXCLUDED_CATEGORIES', DEFAULTS.EXCLUDED_CATEGORIES),
+    MIN_OFFERS: parseInt(_getValue('MIN_OFFERS', DEFAULTS.MIN_OFFERS)),
+    SORT_BY_OFFERS: _getValue('SORT_BY_OFFERS', DEFAULTS.SORT_BY_OFFERS),
+    ENABLE_FILTER_COUNTER: _getValue('ENABLE_FILTER_COUNTER', DEFAULTS.ENABLE_FILTER_COUNTER),
+    ALARM_ENABLED: _getValue('ALARM_ENABLED', DEFAULTS.ALARM_ENABLED),
+    ALARM_TARGET_PERCENT: parseFloat(_getValue('ALARM_TARGET_PERCENT', DEFAULTS.ALARM_TARGET_PERCENT)),
+    ALARM_DURATION_DAYS: String(_getValue('ALARM_DURATION_DAYS', DEFAULTS.ALARM_DURATION_DAYS)),
+    ALARM_AUTO_SUBMIT: _getValue('ALARM_AUTO_SUBMIT', DEFAULTS.ALARM_AUTO_SUBMIT),
+    OBSERVER_DEBOUNCE_MS: parseInt(_getValue('OBSERVER_DEBOUNCE_MS', DEFAULTS.OBSERVER_DEBOUNCE_MS)),
+    DEBUG: _getValue('DEBUG', DEFAULTS.DEBUG)
+  };
 
-    get NEGATIVE_TERMS() { return _getValue('NEGATIVE_TERMS', DEFAULTS.NEGATIVE_TERMS); },
-    set NEGATIVE_TERMS(v) { _setValue('NEGATIVE_TERMS', v); },
-
-    get EXCLUDED_CATEGORIES() { return _getValue('EXCLUDED_CATEGORIES', DEFAULTS.EXCLUDED_CATEGORIES); },
-    set EXCLUDED_CATEGORIES(v) { _setValue('EXCLUDED_CATEGORIES', v); },
-
-    get MIN_OFFERS() { return parseInt(_getValue('MIN_OFFERS', DEFAULTS.MIN_OFFERS)); },
-    set MIN_OFFERS(v) { _setValue('MIN_OFFERS', parseInt(v)); },
-
-    get SORT_BY_OFFERS() { return _getValue('SORT_BY_OFFERS', DEFAULTS.SORT_BY_OFFERS); },
-    set SORT_BY_OFFERS(v) { _setValue('SORT_BY_OFFERS', v); },
-
-    get ENABLE_FILTER_COUNTER() { return _getValue('ENABLE_FILTER_COUNTER', DEFAULTS.ENABLE_FILTER_COUNTER); },
-    set ENABLE_FILTER_COUNTER(v) { _setValue('ENABLE_FILTER_COUNTER', v); },
-
-    // Price Alarm Config
-    get ALARM_ENABLED() { return _getValue('ALARM_ENABLED', DEFAULTS.ALARM_ENABLED); },
-    set ALARM_ENABLED(v) { _setValue('ALARM_ENABLED', v); },
-
-    get ALARM_TARGET_PERCENT() { return parseFloat(_getValue('ALARM_TARGET_PERCENT', DEFAULTS.ALARM_TARGET_PERCENT)); },
-    set ALARM_TARGET_PERCENT(v) { _setValue('ALARM_TARGET_PERCENT', parseFloat(v)); },
-
-    get ALARM_DURATION_DAYS() { return String(_getValue('ALARM_DURATION_DAYS', DEFAULTS.ALARM_DURATION_DAYS)); },
-    set ALARM_DURATION_DAYS(v) { _setValue('ALARM_DURATION_DAYS', String(v)); },
-
-    get ALARM_AUTO_SUBMIT() { return _getValue('ALARM_AUTO_SUBMIT', DEFAULTS.ALARM_AUTO_SUBMIT); },
-    set ALARM_AUTO_SUBMIT(v) { _setValue('ALARM_AUTO_SUBMIT', v); },
-
-    // System
-    get OBSERVER_DEBOUNCE_MS() { return parseInt(_getValue('OBSERVER_DEBOUNCE_MS', DEFAULTS.OBSERVER_DEBOUNCE_MS)); },
-    set OBSERVER_DEBOUNCE_MS(v) { _setValue('OBSERVER_DEBOUNCE_MS', parseInt(v)); },
-    
-    get DEBUG() { return _getValue('DEBUG', DEFAULTS.DEBUG); },
-    set DEBUG(v) { _setValue('DEBUG', v); }
+  const saveConfigKey = (key, val) => {
+    CONFIG[key] = val;
+    _setValue(key, val);
   };
 
   const log = (...args) => { if (CONFIG.DEBUG) console.log('[Toppreise-Suite]', ...args); };
@@ -662,10 +626,10 @@ const STYLES = `
     return name.toLowerCase().replace(/[^a-z0-9]/g, '');
   }
 
-  // Helper: Parse price string into float
+  // Helper: Parse price string into float (supports Swiss .– / .- and apostrophe separators)
   function parsePrice(priceStr) {
     if (!priceStr) return 0;
-    const clean = priceStr.replace(/[^\d,.]/g, '').replace("'", "").replace(',', '.');
+    const clean = priceStr.replace(/[.–\-]\s*$/g, '.00').replace(/[^\d,.]/g, '').replace("'", "").replace(',', '.');
     const val = parseFloat(clean);
     return isNaN(val) ? 0 : val;
   }
@@ -754,11 +718,18 @@ const STYLES = `
     return card.querySelectorAll('.Plugin_DealerRelProdPriceInfo').length;
   }
 
-  // Helper: Check Negative Term Match (Strictly checks full card text content)
+  // Helper: Check Negative Term Match (Checks visible innerText with word-boundary matching for short terms)
   function matchesNegativeTerms(card, termsList) {
     if (!termsList || termsList.length === 0) return false;
-    const cardText = (card.textContent || '').toLowerCase();
-    return termsList.some(term => term.length > 0 && cardText.includes(term));
+    const visibleText = (card.innerText || card.textContent || '').toLowerCase();
+    return termsList.some(term => {
+      if (!term) return false;
+      if (term.length <= 3) {
+        const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return new RegExp(`\\b${escaped}\\b`, 'i').test(visibleText);
+      }
+      return visibleText.includes(term);
+    });
   }
 
   // Find optimal insertion target for inline bars
@@ -816,6 +787,9 @@ const STYLES = `
           <button class="tp-toolbar-btn" id="tp-tb-reveal" title="Filter-Vorschau: Ausgeblendete Produkte gelb umrandet einblenden">
             👁️ <span id="tp-tb-reveal-label">Einblenden</span>
           </button>
+          <button class="tp-toolbar-btn" id="tp-tb-reset" title="Alle Filter (Ausschlüsse &amp; Kategorien) zurücksetzen">
+            🔄 Reset
+          </button>
         </div>
 
         <div class="tp-toolbar-divider" id="tp-tb-divider-offers"></div>
@@ -834,9 +808,24 @@ const STYLES = `
         processListings();
       };
 
+      bar.querySelector('#tp-tb-reset').onclick = () => {
+        saveConfigKey('NEGATIVE_TERMS', '');
+        saveConfigKey('EXCLUDED_CATEGORIES', []);
+        saveConfigKey('MIN_OFFERS', 0);
+        const modalInput = document.getElementById('tp-negative-terms-input');
+        if (modalInput) modalInput.value = '';
+        const inlineInput = document.getElementById('tp-inline-negative-input');
+        if (inlineInput) inlineInput.value = '';
+        const modalMinOffersVal = document.getElementById('tp-min-offers-val');
+        const modalMinOffersRange = document.getElementById('tp-min-offers-range');
+        if (modalMinOffersVal) modalMinOffersVal.value = 0;
+        if (modalMinOffersRange) modalMinOffersRange.value = 0;
+        processListings();
+      };
+
       bar.querySelector('#tp-tb-min-minus').onclick = () => {
         if (CONFIG.MIN_OFFERS > 0) {
-          CONFIG.MIN_OFFERS = CONFIG.MIN_OFFERS - 1;
+          saveConfigKey('MIN_OFFERS', CONFIG.MIN_OFFERS - 1);
           const modalVal = document.getElementById('tp-min-offers-val');
           const modalRange = document.getElementById('tp-min-offers-range');
           if (modalVal) modalVal.value = CONFIG.MIN_OFFERS;
@@ -846,7 +835,7 @@ const STYLES = `
       };
 
       bar.querySelector('#tp-tb-min-plus').onclick = () => {
-        CONFIG.MIN_OFFERS = CONFIG.MIN_OFFERS + 1;
+        saveConfigKey('MIN_OFFERS', CONFIG.MIN_OFFERS + 1);
         const modalVal = document.getElementById('tp-min-offers-val');
         const modalRange = document.getElementById('tp-min-offers-range');
         if (modalVal) modalVal.value = CONFIG.MIN_OFFERS;
@@ -889,7 +878,7 @@ const STYLES = `
 
       const input = bar.querySelector('#tp-inline-negative-input');
       input.oninput = (e) => {
-        CONFIG.NEGATIVE_TERMS = e.target.value;
+        saveConfigKey('NEGATIVE_TERMS', e.target.value);
         const modalInput = document.getElementById('tp-negative-terms-input');
         if (modalInput) modalInput.value = e.target.value;
         processListings();
@@ -955,7 +944,7 @@ const STYLES = `
           } else {
             updated = [...currentExcluded, cat];
           }
-          CONFIG.EXCLUDED_CATEGORIES = updated;
+          saveConfigKey('EXCLUDED_CATEGORIES', updated);
           processListings();
         };
 
@@ -1549,27 +1538,27 @@ const STYLES = `
       const checkedModeEl = document.querySelector('input[name="tp-mode"]:checked');
       if (!checkedModeEl) return;
 
-      CONFIG.MODE = checkedModeEl.value;
-      CONFIG.MARGIN_PERCENT = Math.max(0, Math.min(100, parseFloat(marginVal.value) || 0));
-      CONFIG.DIM_OPACITY = Math.max(0.05, Math.min(0.95, parseFloat(opacityRange.value) || 0.25));
-      CONFIG.USE_SHIPPING_PRICE = shippingToggle.checked;
+      saveConfigKey('MODE', checkedModeEl.value);
+      saveConfigKey('MARGIN_PERCENT', Math.max(0, Math.min(100, parseFloat(marginVal.value) || 0)));
+      saveConfigKey('DIM_OPACITY', Math.max(0.05, Math.min(0.95, parseFloat(opacityRange.value) || 0.25)));
+      saveConfigKey('USE_SHIPPING_PRICE', shippingToggle.checked);
 
-      CONFIG.NEGATIVE_TERMS = negTermsInput.value.trim();
-      CONFIG.EXCLUDED_CATEGORIES = currentExcludedCats;
-      CONFIG.MIN_OFFERS = Math.max(0, parseInt(minOffersVal.value) || 0);
+      saveConfigKey('NEGATIVE_TERMS', negTermsInput.value.trim());
+      saveConfigKey('EXCLUDED_CATEGORIES', currentExcludedCats);
+      saveConfigKey('MIN_OFFERS', Math.max(0, parseInt(minOffersVal.value) || 0));
 
       const checkedSort = document.querySelector('input[name="tp-sort-offers"]:checked');
-      if (checkedSort) CONFIG.SORT_BY_OFFERS = checkedSort.value;
+      if (checkedSort) saveConfigKey('SORT_BY_OFFERS', checkedSort.value);
 
-      CONFIG.ENABLE_FILTER_COUNTER = counterToggle.checked;
+      saveConfigKey('ENABLE_FILTER_COUNTER', counterToggle.checked);
 
-      CONFIG.ALARM_ENABLED = alarmEnabledToggle.checked;
-      CONFIG.ALARM_TARGET_PERCENT = Math.max(0.05, Math.min(0.99, (parseInt(alarmTargetVal.value) || 60) / 100));
+      saveConfigKey('ALARM_ENABLED', alarmEnabledToggle.checked);
+      saveConfigKey('ALARM_TARGET_PERCENT', Math.max(0.05, Math.min(0.99, (parseInt(alarmTargetVal.value) || 60) / 100)));
       
       const checkedDur = document.querySelector('input[name="tp-alarm-duration"]:checked');
-      if (checkedDur) CONFIG.ALARM_DURATION_DAYS = checkedDur.value;
+      if (checkedDur) saveConfigKey('ALARM_DURATION_DAYS', checkedDur.value);
 
-      CONFIG.ALARM_AUTO_SUBMIT = alarmAutoSubmitToggle.checked;
+      saveConfigKey('ALARM_AUTO_SUBMIT', alarmAutoSubmitToggle.checked);
 
       updateBodyClasses();
       processListings();
@@ -1578,11 +1567,24 @@ const STYLES = `
 
   // ─── OBSERVER & INITIALIZATION ───────────────────────────────────────────────
   let debounceTimer = null;
+  let isModifyingDOM = false;
+
+  function safeProcessListings() {
+    if (isModifyingDOM) return;
+    isModifyingDOM = true;
+    try {
+      processListings();
+    } finally {
+      isModifyingDOM = false;
+    }
+  }
+
   const observer = new MutationObserver(() => {
+    if (isModifyingDOM) return;
     try {
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        processListings();
+        safeProcessListings();
         processPriceAlarmModal();
       }, CONFIG.OBSERVER_DEBOUNCE_MS);
     } catch (e) {
@@ -1599,13 +1601,7 @@ const STYLES = `
 
   // Initialize UI controls, filters, and alarm listener
   setupUI();
-  processListings();
+  safeProcessListings();
   processPriceAlarmModal();
-
-  // Periodic safety check
-  setInterval(() => {
-    processListings();
-    processPriceAlarmModal();
-  }, 5000);
 
 })();
