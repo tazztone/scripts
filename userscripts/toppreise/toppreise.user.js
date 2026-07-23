@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.1.0
+// @version      1.3.0
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -736,13 +736,11 @@ const STYLES = `
     return card.querySelectorAll('.Plugin_DealerRelProdPriceInfo').length;
   }
 
-  // Helper: Check Negative Term Match
+  // Helper: Check Negative Term Match (Strictly checks full card text content)
   function matchesNegativeTerms(card, termsList) {
     if (!termsList || termsList.length === 0) return false;
-    const title = (card.querySelector('.titleLink, .title, a')?.textContent || '').toLowerCase();
-    const specs = (card.querySelector('.specs, .description')?.textContent || '').toLowerCase();
-    const fullText = title + ' ' + specs;
-    return termsList.some(term => term.length > 0 && fullText.includes(term));
+    const cardText = (card.textContent || '').toLowerCase();
+    return termsList.some(term => term.length > 0 && cardText.includes(term));
   }
 
   // Stable Quick-Control Pill Toolbar
@@ -856,7 +854,7 @@ const STYLES = `
     }
   }
 
-  // Render Inline Category Pills Bar (STABLE DOM RECONCILIATION - ZERO INNERHTML THRASHING!)
+  // Render Inline Category Pills Bar (STABLE DOM RECONCILIATION)
   function renderInlineCategoryBar(targetContainer) {
     let bar = document.getElementById('tp-inline-category-bar');
     const targetList = targetContainer || document.querySelector('.productList, .mixedBrowsingListContainer, [class*="productList"]');
@@ -883,8 +881,6 @@ const STYLES = `
     }
 
     const excluded = CONFIG.EXCLUDED_CATEGORIES || [];
-    
-    // Track existing pill elements by category name for in-place DOM reconciliation
     const existingPills = new Map();
     bar.querySelectorAll('.tp-cat-pill').forEach(pill => {
       existingPills.set(pill.dataset.catName, pill);
@@ -902,7 +898,6 @@ const STYLES = `
         pill.dataset.catName = cat;
         pill.textContent = cat;
         
-        // Permanent click listener attached ONCE on pill creation!
         pill.onclick = () => {
           const currentExcluded = CONFIG.EXCLUDED_CATEGORIES || [];
           let updated;
@@ -917,15 +912,13 @@ const STYLES = `
 
         bar.appendChild(pill);
       } else {
-        existingPills.delete(cat); // Retain pill element
+        existingPills.delete(cat);
       }
 
-      // Update state in-place without destroying DOM nodes
       pill.className = `tp-cat-pill ${isExcluded ? 'tp-excluded' : ''}`;
       pill.title = isExcluded ? `Kategorie "${cat}" wieder einblenden` : `Kategorie "${cat}" dauerhaft ausblenden`;
     });
 
-    // Remove pills for categories no longer present on page
     existingPills.forEach(obsoletePill => obsoletePill.remove());
   }
 
@@ -964,7 +957,7 @@ const STYLES = `
       const catName = extractCardCategory(card);
       if (catName) pageCategories.add(catName);
 
-      // 2. Negative Text Filter
+      // 2. Negative Text Filter (Strictly checks full card text content)
       const isNeg = matchesNegativeTerms(card, termsList);
       card.classList.toggle('tp-negative-filtered', isNeg);
       if (isNeg) counts.neg++;
