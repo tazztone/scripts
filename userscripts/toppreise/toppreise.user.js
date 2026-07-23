@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.9.0
+// @version      2.0.0
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -809,64 +809,83 @@ const STYLES = `
     return clean.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
   }
 
-  // Helper: Universal 4-Tier Category Extractor
+  // Helper: Universal Category Extractor (Prioritizes Product URL Category Path)
   function extractCardCategory(card) {
     if (!card) return '';
+    if (card.dataset.tpCategory) return card.dataset.tpCategory;
 
-    // Tier 1: Dedicated category anchor links inside card (e.g. <a href="/produktsuche/.../Notebooks-c13">Notebooks</a>)
-    const catAnchor = card.querySelector('a[href*="-c"], a[href*="/produktsuche/"]');
-    if (catAnchor) {
-      const text = catAnchor.textContent.trim().replace(/\(\d+\)/g, '').trim();
-      if (text && text.length > 1 && !text.includes('CHF') && !text.includes('Angebot') && !text.includes('%')) {
-        return text;
+    let extracted = '';
+
+    // Tier 1 (Primary): Product URL Category Path (/preisvergleich/CategorySlug/ProductTitle-p123)
+    const productLinks = card.querySelectorAll('a[href*="/preisvergleich/"]');
+    for (const link of productLinks) {
+      if (link.closest('header, nav, footer, .breadcrumb, #tp-quick-toolbar, #tp-suite-filter-bar')) continue;
+
+      const href = link.getAttribute('href') || link.href || '';
+      const match = href.match(/\/preisvergleich\/(.+)\/[^\/]+-p\d+/i);
+      if (match && match[1]) {
+        const segments = match[1].split('/').filter(Boolean);
+        if (segments.length > 0) {
+          const subCat = segments[segments.length - 1];
+          const formatted = formatCategorySlug(subCat);
+          if (formatted) {
+            extracted = formatted;
+            break;
+          }
+        }
       }
     }
 
-    // Tier 2: Inspect all links inside card for category ID patterns (-c\d+) or nested /preisvergleich/ subpaths
-    const links = card.querySelectorAll('a[href*="/produktsuche/"], a[href*="/preisvergleich/"], a[href*="-c"], a.titleLink');
-    for (const link of links) {
-      if (link.closest('header, nav, footer, .breadcrumb, #tp-quick-toolbar, #tp-suite-filter-bar')) continue;
+    // Tier 2: Category Search Links (/produktsuche/.../CategoryName-c123)
+    if (!extracted) {
+      const catLinks = card.querySelectorAll('a[href*="/produktsuche/"], a[href*="-c"]');
+      for (const link of catLinks) {
+        if (link.closest('header, nav, footer, .breadcrumb, #tp-quick-toolbar, #tp-suite-filter-bar')) continue;
 
-      const href = link.getAttribute('href') || '';
+        const text = link.textContent.trim().replace(/\(\d+\)/g, '').trim();
+        if (text && text.length > 1 && !['home', 'toppreise', 'neue toppreise', 'produktsuche'].includes(text.toLowerCase()) && !text.includes('CHF') && !text.includes('Angebot') && !text.includes('%')) {
+          extracted = text;
+          break;
+        }
 
-      // Match category ID slug right before -c\d+ (handles multi-level /produktsuche/ paths)
-      const catMatch = href.match(/\/produktsuche\/(?:.*\/)?([^\/-]+(?:-[^\/-]+)*)-c\d+/i) || href.match(/(?:.*\/)?([^\/]+)-c\d+/i);
-      if (catMatch && catMatch[1]) {
-        const formatted = formatCategorySlug(catMatch[1]);
-        if (formatted) return formatted;
-      }
-
-      // Match subcategory path in /preisvergleich/Category/SubCategory/ProductTitle-p123
-      const pvMatch = href.match(/\/preisvergleich\/(.+)\/[^\/]+-p\d+/i);
-      if (pvMatch && pvMatch[1]) {
-        const parts = pvMatch[1].split('/').filter(Boolean);
-        if (parts.length > 0) {
-          const subCat = parts[parts.length - 1];
-          const formatted = formatCategorySlug(subCat);
-          if (formatted) return formatted;
+        const href = link.getAttribute('href') || link.href || '';
+        const catMatch = href.match(/\/produktsuche\/(?:.*\/)?([^\/-]+(?:-[^\/-]+)*)-c\d+/i) || href.match(/(?:.*\/)?([^\/]+)-c\d+/i);
+        if (catMatch && catMatch[1]) {
+          const formatted = formatCategorySlug(catMatch[1]);
+          if (formatted) {
+            extracted = formatted;
+            break;
+          }
         }
       }
     }
 
     // Tier 3: DOM Category Classes & Data Attributes
-    const catEl = card.querySelector('.subCategory, .productCategory, .categoryLink, [class*="Category"], [class*="category"], [data-category]');
-    if (catEl) {
-      const text = (catEl.getAttribute('data-category') || catEl.textContent).trim().replace(/\(\d+\)/g, '').trim();
-      if (text && text.length > 1 && !text.includes('CHF') && !text.includes('Angebot') && !text.includes('%')) {
-        return text;
+    if (!extracted) {
+      const catEl = card.querySelector('.subCategory, .productCategory, .categoryLink, [class*="Category"], [data-category]');
+      if (catEl) {
+        const text = (catEl.getAttribute('data-category') || catEl.textContent).trim().replace(/\(\d+\)/g, '').trim();
+        if (text && text.length > 1 && !text.includes('CHF') && !text.includes('Angebot') && !text.includes('%')) {
+          extracted = text;
+        }
       }
     }
 
     // Tier 4: Fallback to Active Breadcrumb section (for single-category search result views)
-    const activeBreadcrumb = document.querySelector('.breadcrumb a:last-of-type, [class*="breadcrumb"] a:last-of-type');
-    if (activeBreadcrumb) {
-      const text = activeBreadcrumb.textContent.trim().replace(/\(\d+\)/g, '').trim();
-      if (text && text.length > 1 && !['home', 'toppreise', 'neue toppreise', 'startseite'].includes(text.toLowerCase())) {
-        return text;
+    if (!extracted) {
+      const activeBreadcrumb = document.querySelector('.breadcrumb a:last-of-type, [class*="breadcrumb"] a:last-of-type');
+      if (activeBreadcrumb) {
+        const text = activeBreadcrumb.textContent.trim().replace(/\(\d+\)/g, '').trim();
+        if (text && text.length > 1 && !['home', 'toppreise', 'neue toppreise', 'startseite'].includes(text.toLowerCase())) {
+          extracted = text;
+        }
       }
     }
 
-    return '';
+    if (extracted) {
+      card.dataset.tpCategory = extracted;
+    }
+    return extracted;
   }
 
   // Helper: Extract Offer Count
