@@ -1,0 +1,1581 @@
+{
+  "bekleidung schuhe": {
+    "root": "Bekleidung & Schuhe",
+    "title": "Bekleidung Schuhe",
+    "path": [
+      "Bekleidung Schuhe"
+    ]
+  },
+  "auto motorrad": {
+    "root": "Auto & Motorrad",
+    "title": "Auto Motorrad",
+    "path": [
+      "Auto Motorrad"
+    ]
+  },
+  "buerobedarf schreibwaren": {
+    "root": "Bürobedarf & Schreibwaren",
+    "title": "Buerobedarf Schreibwaren",
+    "path": [
+      "Buerobedarf Schreibwaren"
+    ]
+  },
+  "computer zubehoer": {
+    "root": "Computer & Zubehör",
+    "title": "Computer Zubehoer",
+    "path": [
+      "Computer Zubehoer"
+    ]
+  },
+  "drogerie": {
+    "root": "Drogerie",
+    "title": "Drogerie",
+    "path": [
+      "Drogerie"
+    ]
+  },
+  "filme": {
+    "root": "Filme",
+    "title": "Filme",
+    "path": [
+      "Filme"
+    ]
+  },
+  "foto": {
+    "root": "Foto",
+    "title": "Foto",
+    "path": [
+      "Foto"
+    ]
+  },
+  "haus garten": {
+    "root": "Haus & Garten",
+    "title": "Haus Garten",
+    "path": [
+      "Haus Garten"
+    ]
+  },
+  "haushalt kueche": {
+    "root": "Haushalt & Küche",
+    "title": "Haushalt Kueche",
+    "path": [
+      "Haushalt Kueche"
+    ]
+  },
+  "hifi audio": {
+    "root": "HiFi & Audio",
+    "title": "Hifi Audio",
+    "path": [
+      "Hifi Audio"
+    ]
+  },
+  "lust liebe": {
+    "root": "Lust & Liebe",
+    "title": "Lust Liebe",
+    "path": [
+      "Lust Liebe"
+    ]
+  },
+  "musikinstrumente pro audio": {
+    "root": "Musikinstrumente & Pro Audio",
+    "title": "Musikinstrumente Pro Audio",
+    "path": [
+      "Musikinstrumente Pro Audio"
+    ]
+  },
+  "navigation": {
+    "root": "Navigation",
+    "title": "Navigation",
+    "path": [
+      "Navigation"
+    ]
+  },
+  "schmuck": {
+    "root": "Schmuck",
+    "title": "Schmuck",
+    "path": [
+      "Schmuck"
+    ]
+  },
+  "smartphones mobiltelefone": {
+    "root": "Smartphones & Mobiltelefone",
+    "title": "Smartphones Mobiltelefone",
+    "path": [
+      "Smartphones Mobiltelefone"
+    ]
+  },
+  "spielwaren": {
+    "root": "Spielwaren",
+    "title": "Spielwaren",
+    "path": [
+      "Spielwaren"
+    ]
+  },
+  "sport freizeit": {
+    "root": "Sport & Freizeit",
+    "title": "Sport Freizeit",
+    "path": [
+      "Sport Freizeit"
+    ]
+  },
+  "telefon voip": {
+    "root": "Telefon & VoIP",
+    "title": "Telefon Voip",
+    "path": [
+      "Telefon Voip"
+    ]
+  },
+  "tv video": {
+    "root": "TV & Video",
+    "title": "Tv Video",
+    "path": [
+      "Tv Video"
+    ]
+  },
+  "uhren": {
+    "root": "Uhren",
+    "title": "Uhren",
+    "path": [
+      "Uhren"
+    ]
+  },
+  "videogames": {
+    "root": "Videogames",
+    "title": "Videogames",
+    "path": [
+      "Videogames"
+    ]
+  },
+  "wein spirituosen": {
+    "root": "Wein & Spirituosen",
+    "title": "Wein Spirituosen",
+    "path": [
+      "Wein Spirituosen"
+    ]
+  },
+  "werkzeuge werkstatt": {
+    "root": "Werkzeuge & Werkstatt",
+    "title": "Werkzeuge Werkstatt",
+    "path": [
+      "Werkzeuge Werkstatt"
+    ]
+  },
+  "notebooks": {
+    "root": "Computer & Zubehör",
+    "title": "Notebooks",
+    "path": [
+      "Computer Zubehoer",
+      "Notebooks Tablets Ereader",
+      "Notebooks"
+    ]
+  },
+  "tablets": {
+    "root": "Computer & Zubehör",
+    "title": "Tablets",
+    "path": [
+      "Computer Zubehoer",
+      "Notebooks Tablets Ereader",
+      "Tablets"
+    ]
+  },
+  "solid state drives ssd": {
+    "root": "Computer & Zubehör",
+    "title": "Solid State Drives Ssd",
+    "path": [
+      "Computer Zubehoer",
+      "Pc Komponenten",
+      "Festplatten Ssd",
+      "Solid State Drives Ssd"
+    ]
+  },
+  "monitore": {
+    "root": "Computer & Zubehör",
+    "title": "Monitore",
+    "path": [
+      "Computer Zubehoer",
+      "Peripheriegeraete",
+      "Monitore",
+      "Monitore"
+    ]
+  },
+  "drucker": {
+    "root": "Computer & Zubehör",
+    "title": "Drucker",
+    "path": [
+      "Computer Zubehoer",
+      "Peripheriegeraete",
+      "Drucker Scanner",
+      "Drucker"
+    ]
+  },
+  "verbrauchsmaterial fuer drucker": {
+    "root": "Computer & Zubehör",
+    "title": "Verbrauchsmaterial Fuer Drucker",
+    "path": [
+      "Computer Zubehoer",
+      "Peripheriegeraete",
+      "Drucker Scanner",
+      "Verbrauchsmaterial Fuer Drucker"
+    ]
+  },
+  "ebook reader": {
+    "root": "Computer & Zubehör",
+    "title": "Ebook Reader",
+    "path": [
+      "Computer Zubehoer",
+      "Notebooks Tablets Ereader",
+      "Ebook Reader"
+    ]
+  },
+  "drucker scanner": {
+    "root": "Computer & Zubehör",
+    "title": "Drucker Scanner",
+    "path": [
+      "Computer Zubehoer",
+      "Peripheriegeraete",
+      "Drucker Scanner"
+    ]
+  },
+  "grafikkarten": {
+    "root": "Computer & Zubehör",
+    "title": "Grafikkarten",
+    "path": [
+      "Computer Zubehoer",
+      "Pc Komponenten",
+      "Grafikkarten Zubehoer",
+      "Grafikkarten"
+    ]
+  },
+  "mainboards": {
+    "root": "Computer & Zubehör",
+    "title": "Mainboards",
+    "path": [
+      "Computer Zubehoer",
+      "Pc Komponenten",
+      "Mainboards",
+      "Mainboards"
+    ]
+  },
+  "prozessoren": {
+    "root": "Computer & Zubehör",
+    "title": "Prozessoren",
+    "path": [
+      "Computer Zubehoer",
+      "Pc Komponenten",
+      "Prozessoren"
+    ]
+  },
+  "festplatten ssd": {
+    "root": "Computer & Zubehör",
+    "title": "Festplatten Ssd",
+    "path": [
+      "Computer Zubehoer",
+      "Pc Komponenten",
+      "Festplatten Ssd"
+    ]
+  },
+  "nas systeme": {
+    "root": "Computer & Zubehör",
+    "title": "Nas Systeme",
+    "path": [
+      "Computer Zubehoer",
+      "Nas Systeme",
+      "Nas Systeme"
+    ]
+  },
+  "netzwerktechnik": {
+    "root": "Computer & Zubehör",
+    "title": "Netzwerktechnik",
+    "path": [
+      "Computer Zubehoer",
+      "Netzwerktechnik"
+    ]
+  },
+  "schreibmaterial": {
+    "root": "Bürobedarf & Schreibwaren",
+    "title": "Schreibmaterial",
+    "path": [
+      "Buerobedarf Schreibwaren",
+      "Schreibmaterial"
+    ]
+  },
+  "arbeitsplatz": {
+    "root": "Bürobedarf & Schreibwaren",
+    "title": "Arbeitsplatz",
+    "path": [
+      "Buerobedarf Schreibwaren",
+      "Arbeitsplatz"
+    ]
+  },
+  "bueroeinrichtung": {
+    "root": "Bürobedarf & Schreibwaren",
+    "title": "Bueroeinrichtung",
+    "path": [
+      "Buerobedarf Schreibwaren",
+      "Bueroeinrichtung"
+    ]
+  },
+  "kalender": {
+    "root": "Bürobedarf & Schreibwaren",
+    "title": "Kalender",
+    "path": [
+      "Buerobedarf Schreibwaren",
+      "Kalender"
+    ]
+  },
+  "aktenordner": {
+    "root": "Bürobedarf & Schreibwaren",
+    "title": "Aktenordner",
+    "path": [
+      "Buerobedarf Schreibwaren",
+      "Aktenordner"
+    ]
+  },
+  "taschenrechner": {
+    "root": "Bürobedarf & Schreibwaren",
+    "title": "Taschenrechner",
+    "path": [
+      "Buerobedarf Schreibwaren",
+      "Taschenrechner"
+    ]
+  },
+  "papier": {
+    "root": "Bürobedarf & Schreibwaren",
+    "title": "Papier",
+    "path": [
+      "Buerobedarf Schreibwaren",
+      "Papier"
+    ]
+  },
+  "bueroelektronik": {
+    "root": "Bürobedarf & Schreibwaren",
+    "title": "Bueroelektronik",
+    "path": [
+      "Buerobedarf Schreibwaren",
+      "Bueroelektronik"
+    ]
+  },
+  "heften": {
+    "root": "Bürobedarf & Schreibwaren",
+    "title": "Heften",
+    "path": [
+      "Buerobedarf Schreibwaren",
+      "Heften"
+    ]
+  },
+  "binden laminieren": {
+    "root": "Bürobedarf & Schreibwaren",
+    "title": "Binden Laminieren",
+    "path": [
+      "Buerobedarf Schreibwaren",
+      "Binden Laminieren"
+    ]
+  },
+  "verpacken versand": {
+    "root": "Bürobedarf & Schreibwaren",
+    "title": "Verpacken Versand",
+    "path": [
+      "Buerobedarf Schreibwaren",
+      "Verpacken Versand"
+    ]
+  },
+  "stempeln": {
+    "root": "Bürobedarf & Schreibwaren",
+    "title": "Stempeln",
+    "path": [
+      "Buerobedarf Schreibwaren",
+      "Stempeln"
+    ]
+  },
+  "tv geraete zubehoer": {
+    "root": "TV & Video",
+    "title": "Tv Geraete Zubehoer",
+    "path": [
+      "Tv Video",
+      "Tv Geraete Zubehoer"
+    ]
+  },
+  "beamer": {
+    "root": "TV & Video",
+    "title": "Beamer",
+    "path": [
+      "Tv Video",
+      "Beamer"
+    ]
+  },
+  "digitalkameras": {
+    "root": "Foto",
+    "title": "Digitalkameras",
+    "path": [
+      "Foto",
+      "Digitalkameras"
+    ]
+  },
+  "audio streaming": {
+    "root": "HiFi & Audio",
+    "title": "Audio Streaming",
+    "path": [
+      "Hifi Audio",
+      "Audio Streaming"
+    ]
+  },
+  "bluetooth lautsprecher": {
+    "root": "HiFi & Audio",
+    "title": "Bluetooth Lautsprecher",
+    "path": [
+      "Hifi Audio",
+      "Lautsprecher",
+      "Bluetooth Lautsprecher"
+    ]
+  },
+  "blu ray player": {
+    "root": "TV & Video",
+    "title": "Blu Ray Player",
+    "path": [
+      "Tv Video",
+      "Home Cinema Video",
+      "Blu Ray Player"
+    ]
+  },
+  "multimedia player": {
+    "root": "TV & Video",
+    "title": "Multimedia Player",
+    "path": [
+      "Tv Video",
+      "Home Cinema Video",
+      "Multimedia Player"
+    ]
+  },
+  "action cameras": {
+    "root": "TV & Video",
+    "title": "Action Cameras",
+    "path": [
+      "Tv Video",
+      "Camcorder",
+      "Action Cameras"
+    ]
+  },
+  "tv receiver": {
+    "root": "TV & Video",
+    "title": "Tv Receiver",
+    "path": [
+      "Tv Video",
+      "Tv Receiver"
+    ]
+  },
+  "objektive": {
+    "root": "Foto",
+    "title": "Objektive",
+    "path": [
+      "Foto",
+      "Objektive"
+    ]
+  },
+  "speicherkarten": {
+    "root": "TV & Video",
+    "title": "Speicherkarten",
+    "path": [
+      "Tv Video",
+      "Speicherkarten"
+    ]
+  },
+  "stative": {
+    "root": "Foto",
+    "title": "Stative",
+    "path": [
+      "Foto",
+      "Stative Studiozubehoer",
+      "Stative"
+    ]
+  },
+  "sofortbildkameras": {
+    "root": "Foto",
+    "title": "Sofortbildkameras",
+    "path": [
+      "Foto",
+      "Sofortbildkameras"
+    ]
+  },
+  "kopfhoerer": {
+    "root": "HiFi & Audio",
+    "title": "Kopfhoerer",
+    "path": [
+      "Hifi Audio",
+      "Kopfhoerer"
+    ]
+  },
+  "radios radio recorder": {
+    "root": "HiFi & Audio",
+    "title": "Radios Radio Recorder",
+    "path": [
+      "Hifi Audio",
+      "Portables",
+      "Radios Radio Recorder"
+    ]
+  },
+  "receiver": {
+    "root": "HiFi & Audio",
+    "title": "Receiver",
+    "path": [
+      "Hifi Audio",
+      "Hifi Einzelkomponenten",
+      "Receiver"
+    ]
+  },
+  "verstaerker": {
+    "root": "HiFi & Audio",
+    "title": "Verstaerker",
+    "path": [
+      "Hifi Audio",
+      "Hifi Einzelkomponenten",
+      "Verstaerker"
+    ]
+  },
+  "plattenspieler": {
+    "root": "HiFi & Audio",
+    "title": "Plattenspieler",
+    "path": [
+      "Hifi Audio",
+      "Hifi Einzelkomponenten",
+      "Plattenspieler"
+    ]
+  },
+  "cd sacd player": {
+    "root": "HiFi & Audio",
+    "title": "Cd Sacd Player",
+    "path": [
+      "Hifi Audio",
+      "Hifi Einzelkomponenten",
+      "Cd Sacd Player"
+    ]
+  },
+  "tuner": {
+    "root": "HiFi & Audio",
+    "title": "Tuner",
+    "path": [
+      "Hifi Audio",
+      "Hifi Einzelkomponenten",
+      "Tuner"
+    ]
+  },
+  "lautsprecher": {
+    "root": "HiFi & Audio",
+    "title": "Lautsprecher",
+    "path": [
+      "Hifi Audio",
+      "Lautsprecher"
+    ]
+  },
+  "hifi einzelkomponenten": {
+    "root": "HiFi & Audio",
+    "title": "Hifi Einzelkomponenten",
+    "path": [
+      "Hifi Audio",
+      "Hifi Einzelkomponenten"
+    ]
+  },
+  "portable lautsprecher": {
+    "root": "HiFi & Audio",
+    "title": "Portable Lautsprecher",
+    "path": [
+      "Hifi Audio",
+      "Portables",
+      "Portable Lautsprecher"
+    ]
+  },
+  "apple h10": {
+    "root": "Smartphones & Mobiltelefone",
+    "title": "Apple H10",
+    "path": [
+      "Smartphones Mobiltelefone",
+      "Smartwatches",
+      "Apple H10"
+    ]
+  },
+  "smartphones": {
+    "root": "Smartphones & Mobiltelefone",
+    "title": "Smartphones",
+    "path": [
+      "Smartphones Mobiltelefone",
+      "Smartphones"
+    ]
+  },
+  "smartwatches": {
+    "root": "Smartphones & Mobiltelefone",
+    "title": "Smartwatches",
+    "path": [
+      "Smartphones Mobiltelefone",
+      "Smartwatches"
+    ]
+  },
+  "funkgeraete": {
+    "root": "Telefon & VoIP",
+    "title": "Funkgeraete",
+    "path": [
+      "Telefon Voip",
+      "Funkgeraete"
+    ]
+  },
+  "festnetz telefone": {
+    "root": "Telefon & VoIP",
+    "title": "Festnetz Telefone",
+    "path": [
+      "Telefon Voip",
+      "Festnetz Telefone"
+    ]
+  },
+  "voice over ip voip": {
+    "root": "Telefon & VoIP",
+    "title": "Voice Over Ip Voip",
+    "path": [
+      "Telefon Voip",
+      "Voice Over Ip Voip"
+    ]
+  },
+  "taschen cover fuer iphone": {
+    "root": "Smartphones & Mobiltelefone",
+    "title": "Taschen Cover Fuer Iphone",
+    "path": [
+      "Smartphones Mobiltelefone",
+      "Zubehoer Fuer Mobiltelefone",
+      "Taschen Cover Fuer Iphone"
+    ]
+  },
+  "sonstiges zubehoer fuer iphone": {
+    "root": "Smartphones & Mobiltelefone",
+    "title": "Sonstiges Zubehoer Fuer Iphone",
+    "path": [
+      "Smartphones Mobiltelefone",
+      "Zubehoer Fuer Mobiltelefone",
+      "Sonstiges Zubehoer Fuer Iphone"
+    ]
+  },
+  "samsung h1": {
+    "root": "Smartphones & Mobiltelefone",
+    "title": "Samsung H1",
+    "path": [
+      "Smartphones Mobiltelefone",
+      "Smartphones",
+      "Samsung H1"
+    ]
+  },
+  "google h1825": {
+    "root": "Smartphones & Mobiltelefone",
+    "title": "Google H1825",
+    "path": [
+      "Smartphones Mobiltelefone",
+      "Smartphones",
+      "Google H1825"
+    ]
+  },
+  "xiaomi h2460": {
+    "root": "Smartphones & Mobiltelefone",
+    "title": "Xiaomi H2460",
+    "path": [
+      "Smartphones Mobiltelefone",
+      "Smartphones",
+      "Xiaomi H2460"
+    ]
+  },
+  "oppo h2007": {
+    "root": "Smartphones & Mobiltelefone",
+    "title": "Oppo H2007",
+    "path": [
+      "Smartphones Mobiltelefone",
+      "Smartphones",
+      "Oppo H2007"
+    ]
+  },
+  "oneplus h2516": {
+    "root": "Smartphones & Mobiltelefone",
+    "title": "Oneplus H2516",
+    "path": [
+      "Smartphones Mobiltelefone",
+      "Smartphones",
+      "Oneplus H2516"
+    ]
+  },
+  "fairphone h3048": {
+    "root": "Smartphones & Mobiltelefone",
+    "title": "Fairphone H3048",
+    "path": [
+      "Smartphones Mobiltelefone",
+      "Smartphones",
+      "Fairphone H3048"
+    ]
+  },
+  "zubehoer fuer mobiltelefone": {
+    "root": "Smartphones & Mobiltelefone",
+    "title": "Zubehoer Fuer Mobiltelefone",
+    "path": [
+      "Smartphones Mobiltelefone",
+      "Zubehoer Fuer Mobiltelefone"
+    ]
+  },
+  "akkus": {
+    "root": "Smartphones & Mobiltelefone",
+    "title": "Akkus",
+    "path": [
+      "Smartphones Mobiltelefone",
+      "Zubehoer Fuer Mobiltelefone",
+      "Akkus"
+    ]
+  },
+  "mobile akku ladegeraete powerbanks": {
+    "root": "Haus & Garten",
+    "title": "Mobile Akku Ladegeraete Powerbanks",
+    "path": [
+      "Haus Garten",
+      "Batterien Akkus Ladegeraete",
+      "Akkus Ladegeraete",
+      "Mobile Akku Ladegeraete Powerbanks"
+    ]
+  },
+  "headsets": {
+    "root": "Smartphones & Mobiltelefone",
+    "title": "Headsets",
+    "path": [
+      "Smartphones Mobiltelefone",
+      "Zubehoer Fuer Mobiltelefone",
+      "Headsets"
+    ]
+  },
+  "vr brillen": {
+    "root": "Smartphones & Mobiltelefone",
+    "title": "Vr Brillen",
+    "path": [
+      "Smartphones Mobiltelefone",
+      "Zubehoer Fuer Mobiltelefone",
+      "Vr Brillen"
+    ]
+  },
+  "analoge telefone": {
+    "root": "Telefon & VoIP",
+    "title": "Analoge Telefone",
+    "path": [
+      "Telefon Voip",
+      "Festnetz Telefone",
+      "Analoge Telefone"
+    ]
+  },
+  "analoge funktelefone": {
+    "root": "Telefon & VoIP",
+    "title": "Analoge Funktelefone",
+    "path": [
+      "Telefon Voip",
+      "Festnetz Telefone",
+      "Analoge Funktelefone"
+    ]
+  },
+  "voip router": {
+    "root": "Telefon & VoIP",
+    "title": "Voip Router",
+    "path": [
+      "Telefon Voip",
+      "Voice Over Ip Voip",
+      "Voip Router"
+    ]
+  },
+  "voip telefone": {
+    "root": "Telefon & VoIP",
+    "title": "Voip Telefone",
+    "path": [
+      "Telefon Voip",
+      "Voice Over Ip Voip",
+      "Voip Telefone"
+    ]
+  },
+  "activity tracker smartwatches": {
+    "root": "Sport & Freizeit",
+    "title": "Activity Tracker Smartwatches",
+    "path": [
+      "Sport Freizeit",
+      "Sportgeraete",
+      "Activity Tracker Smartwatches"
+    ]
+  },
+  "multicopter": {
+    "root": "Spielwaren",
+    "title": "Multicopter",
+    "path": [
+      "Spielwaren",
+      "Rc Modelle",
+      "Multicopter"
+    ]
+  },
+  "rc modelle": {
+    "root": "Spielwaren",
+    "title": "Rc Modelle",
+    "path": [
+      "Spielwaren",
+      "Rc Modelle"
+    ]
+  },
+  "gesellschaftsspiele": {
+    "root": "Spielwaren",
+    "title": "Gesellschaftsspiele",
+    "path": [
+      "Spielwaren",
+      "Gesellschaftsspiele"
+    ]
+  },
+  "lego": {
+    "root": "Spielwaren",
+    "title": "Lego",
+    "path": [
+      "Spielwaren",
+      "Lego"
+    ]
+  },
+  "e pianos": {
+    "root": "Musikinstrumente & Pro Audio",
+    "title": "E Pianos",
+    "path": [
+      "Musikinstrumente Pro Audio",
+      "Musikinstrumente",
+      "Tasteninstrumente",
+      "E Pianos"
+    ]
+  },
+  "spielzeugroboter": {
+    "root": "Spielwaren",
+    "title": "Spielzeugroboter",
+    "path": [
+      "Spielwaren",
+      "Spielzeugfiguren Roboter",
+      "Spielzeugroboter"
+    ]
+  },
+  "autorennbahnen": {
+    "root": "Spielwaren",
+    "title": "Autorennbahnen",
+    "path": [
+      "Spielwaren",
+      "Autorennbahnen"
+    ]
+  },
+  "kinderspielzeug": {
+    "root": "Spielwaren",
+    "title": "Kinderspielzeug",
+    "path": [
+      "Spielwaren",
+      "Kinderspielzeug"
+    ]
+  },
+  "outdoor spielzeug": {
+    "root": "Spielwaren",
+    "title": "Outdoor Spielzeug",
+    "path": [
+      "Spielwaren",
+      "Outdoor Spielzeug"
+    ]
+  },
+  "bau konstruktionsspielzeug": {
+    "root": "Spielwaren",
+    "title": "Bau Konstruktionsspielzeug",
+    "path": [
+      "Spielwaren",
+      "Bau Konstruktionsspielzeug"
+    ]
+  },
+  "familienspiele": {
+    "root": "Spielwaren",
+    "title": "Familienspiele",
+    "path": [
+      "Spielwaren",
+      "Gesellschaftsspiele",
+      "Familienspiele"
+    ]
+  },
+  "kartenspiele": {
+    "root": "Spielwaren",
+    "title": "Kartenspiele",
+    "path": [
+      "Spielwaren",
+      "Gesellschaftsspiele",
+      "Kartenspiele"
+    ]
+  },
+  "strategie rollenspiele": {
+    "root": "Spielwaren",
+    "title": "Strategie Rollenspiele",
+    "path": [
+      "Spielwaren",
+      "Gesellschaftsspiele",
+      "Strategie Rollenspiele"
+    ]
+  },
+  "experimentierkaesten": {
+    "root": "Spielwaren",
+    "title": "Experimentierkaesten",
+    "path": [
+      "Spielwaren",
+      "Gesellschaftsspiele",
+      "Experimentierkaesten"
+    ]
+  },
+  "velos": {
+    "root": "Sport & Freizeit",
+    "title": "Velos",
+    "path": [
+      "Sport Freizeit",
+      "Velos"
+    ]
+  },
+  "fernglaeser": {
+    "root": "Sport & Freizeit",
+    "title": "Fernglaeser",
+    "path": [
+      "Sport Freizeit",
+      "Optik",
+      "Fernglaeser"
+    ]
+  },
+  "taschenmesser tools": {
+    "root": "Sport & Freizeit",
+    "title": "Taschenmesser Tools",
+    "path": [
+      "Sport Freizeit",
+      "Camping Outdoor",
+      "Taschenmesser Tools"
+    ]
+  },
+  "musikinstrumente": {
+    "root": "Musikinstrumente & Pro Audio",
+    "title": "Musikinstrumente",
+    "path": [
+      "Musikinstrumente Pro Audio",
+      "Musikinstrumente"
+    ]
+  },
+  "professional audio djing": {
+    "root": "Musikinstrumente & Pro Audio",
+    "title": "Professional Audio Djing",
+    "path": [
+      "Musikinstrumente Pro Audio",
+      "Professional Audio Djing"
+    ]
+  },
+  "dvd filme": {
+    "root": "Filme",
+    "title": "Dvd Filme",
+    "path": [
+      "Filme",
+      "Dvd Filme"
+    ]
+  },
+  "blu ray filme": {
+    "root": "Filme",
+    "title": "Blu Ray Filme",
+    "path": [
+      "Filme",
+      "Blu Ray Filme"
+    ]
+  },
+  "blu ray 4k ultra hd filme": {
+    "root": "Filme",
+    "title": "Blu Ray 4k Ultra Hd Filme",
+    "path": [
+      "Filme",
+      "Blu Ray 4k Ultra Hd Filme"
+    ]
+  },
+  "playstation 5": {
+    "root": "Videogames",
+    "title": "Playstation 5",
+    "path": [
+      "Videogames",
+      "Playstation 5"
+    ]
+  },
+  "ps5 games": {
+    "root": "Videogames",
+    "title": "Ps5 Games",
+    "path": [
+      "Videogames",
+      "Playstation 5",
+      "Ps5 Games"
+    ]
+  },
+  "nintendo switch 2": {
+    "root": "Videogames",
+    "title": "Nintendo Switch 2",
+    "path": [
+      "Videogames",
+      "Nintendo Switch 2"
+    ]
+  },
+  "nintendo switch 2 games": {
+    "root": "Videogames",
+    "title": "Nintendo Switch 2 Games",
+    "path": [
+      "Videogames",
+      "Nintendo Switch 2",
+      "Nintendo Switch 2 Games"
+    ]
+  },
+  "playstation 4": {
+    "root": "Videogames",
+    "title": "Playstation 4",
+    "path": [
+      "Videogames",
+      "Playstation 4"
+    ]
+  },
+  "ps4 games": {
+    "root": "Videogames",
+    "title": "Ps4 Games",
+    "path": [
+      "Videogames",
+      "Playstation 4",
+      "Ps4 Games"
+    ]
+  },
+  "nintendo switch": {
+    "root": "Videogames",
+    "title": "Nintendo Switch",
+    "path": [
+      "Videogames",
+      "Nintendo Switch"
+    ]
+  },
+  "nintendo switch games": {
+    "root": "Videogames",
+    "title": "Nintendo Switch Games",
+    "path": [
+      "Videogames",
+      "Nintendo Switch",
+      "Nintendo Switch Games"
+    ]
+  },
+  "xbox series x": {
+    "root": "Videogames",
+    "title": "Xbox Series X",
+    "path": [
+      "Videogames",
+      "Xbox Series X"
+    ]
+  },
+  "xbox series x games": {
+    "root": "Videogames",
+    "title": "Xbox Series X Games",
+    "path": [
+      "Videogames",
+      "Xbox Series X",
+      "Xbox Series X Games"
+    ]
+  },
+  "computerspiele fuer windows": {
+    "root": "Videogames",
+    "title": "Computerspiele Fuer Windows",
+    "path": [
+      "Videogames",
+      "Computerspiele Fuer Windows"
+    ]
+  },
+  "sim racing flying": {
+    "root": "Videogames",
+    "title": "Sim Racing Flying",
+    "path": [
+      "Videogames",
+      "Sim Racing Flying"
+    ]
+  },
+  "sonstige spielekonsolen": {
+    "root": "Videogames",
+    "title": "Sonstige Spielekonsolen",
+    "path": [
+      "Videogames",
+      "Sonstige Spielekonsolen"
+    ]
+  },
+  "kaffee espressomaschinen": {
+    "root": "Haushalt & Küche",
+    "title": "Kaffee Espressomaschinen",
+    "path": [
+      "Haushalt Kueche",
+      "Kaffee Espressomaschinen"
+    ]
+  },
+  "staubsauger": {
+    "root": "Haushalt & Küche",
+    "title": "Staubsauger",
+    "path": [
+      "Haushalt Kueche",
+      "Haushaltsgeraete",
+      "Staubsauger"
+    ]
+  },
+  "grillieren": {
+    "root": "Haus & Garten",
+    "title": "Grillieren",
+    "path": [
+      "Haus Garten",
+      "Grillieren"
+    ]
+  },
+  "smart home": {
+    "root": "Haus & Garten",
+    "title": "Smart Home",
+    "path": [
+      "Haus Garten",
+      "Smart Home"
+    ]
+  },
+  "reifen": {
+    "root": "Auto & Motorrad",
+    "title": "Reifen",
+    "path": [
+      "Auto Motorrad",
+      "Reifen"
+    ]
+  },
+  "haushaltsgeraete": {
+    "root": "Haushalt & Küche",
+    "title": "Haushaltsgeraete",
+    "path": [
+      "Haushalt Kueche",
+      "Haushaltsgeraete"
+    ]
+  },
+  "kuechengeraete": {
+    "root": "Haushalt & Küche",
+    "title": "Kuechengeraete",
+    "path": [
+      "Haushalt Kueche",
+      "Kuechengeraete"
+    ]
+  },
+  "kochgeschirr": {
+    "root": "Haushalt & Küche",
+    "title": "Kochgeschirr",
+    "path": [
+      "Haushalt Kueche",
+      "Kochgeschirr"
+    ]
+  },
+  "geschirr besteck glaeser": {
+    "root": "Haushalt & Küche",
+    "title": "Geschirr Besteck Glaeser",
+    "path": [
+      "Haushalt Kueche",
+      "Geschirr Besteck Glaeser"
+    ]
+  },
+  "baby": {
+    "root": "Haushalt & Küche",
+    "title": "Baby",
+    "path": [
+      "Haushalt Kueche",
+      "Baby"
+    ]
+  },
+  "wohnen": {
+    "root": "Haus & Garten",
+    "title": "Wohnen",
+    "path": [
+      "Haus Garten",
+      "Wohnen"
+    ]
+  },
+  "lampen leuchtmittel": {
+    "root": "Haus & Garten",
+    "title": "Lampen Leuchtmittel",
+    "path": [
+      "Haus Garten",
+      "Lampen Leuchtmittel"
+    ]
+  },
+  "haus sicherheitstechnik": {
+    "root": "Haus & Garten",
+    "title": "Haus Sicherheitstechnik",
+    "path": [
+      "Haus Garten",
+      "Haus Sicherheitstechnik"
+    ]
+  },
+  "batterien akkus ladegeraete": {
+    "root": "Haus & Garten",
+    "title": "Batterien Akkus Ladegeraete",
+    "path": [
+      "Haus Garten",
+      "Batterien Akkus Ladegeraete"
+    ]
+  },
+  "gasgrills": {
+    "root": "Haus & Garten",
+    "title": "Gasgrills",
+    "path": [
+      "Haus Garten",
+      "Grillieren",
+      "Gasgrills"
+    ]
+  },
+  "holzkohlegrills": {
+    "root": "Haus & Garten",
+    "title": "Holzkohlegrills",
+    "path": [
+      "Haus Garten",
+      "Grillieren",
+      "Holzkohlegrills"
+    ]
+  },
+  "elektrogrills": {
+    "root": "Haus & Garten",
+    "title": "Elektrogrills",
+    "path": [
+      "Haus Garten",
+      "Grillieren",
+      "Elektrogrills"
+    ]
+  },
+  "gartenmoebel": {
+    "root": "Haus & Garten",
+    "title": "Gartenmoebel",
+    "path": [
+      "Haus Garten",
+      "Gartenmoebel"
+    ]
+  },
+  "gartengeraete": {
+    "root": "Haus & Garten",
+    "title": "Gartengeraete",
+    "path": [
+      "Haus Garten",
+      "Gartengeraete"
+    ]
+  },
+  "car hifi car video": {
+    "root": "Auto & Motorrad",
+    "title": "Car Hifi Car Video",
+    "path": [
+      "Auto Motorrad",
+      "Car Hifi Car Video"
+    ]
+  },
+  "kindersitze": {
+    "root": "Auto & Motorrad",
+    "title": "Kindersitze",
+    "path": [
+      "Auto Motorrad",
+      "Kindersitze"
+    ]
+  },
+  "handwerkzeuge": {
+    "root": "Werkzeuge & Werkstatt",
+    "title": "Handwerkzeuge",
+    "path": [
+      "Werkzeuge Werkstatt",
+      "Handwerkzeuge"
+    ]
+  },
+  "bohrmaschinen schrauber": {
+    "root": "Werkzeuge & Werkstatt",
+    "title": "Bohrmaschinen Schrauber",
+    "path": [
+      "Werkzeuge Werkstatt",
+      "Bohrmaschinen Schrauber"
+    ]
+  },
+  "saegen fraesen": {
+    "root": "Werkzeuge & Werkstatt",
+    "title": "Saegen Fraesen",
+    "path": [
+      "Werkzeuge Werkstatt",
+      "Saegen Fraesen"
+    ]
+  },
+  "bekleidung accessoires": {
+    "root": "Bekleidung Accessoires",
+    "title": "Bekleidung Accessoires",
+    "path": [
+      "Bekleidung Accessoires",
+      "Bekleidung Accessoires"
+    ]
+  },
+  "schuhe": {
+    "root": "Bekleidung Accessoires",
+    "title": "Schuhe",
+    "path": [
+      "Bekleidung Accessoires",
+      "Schuhe"
+    ]
+  },
+  "parfuemerie": {
+    "root": "Drogerie",
+    "title": "Parfuemerie",
+    "path": [
+      "Drogerie",
+      "Parfuemerie"
+    ]
+  },
+  "elektrorasierer": {
+    "root": "Drogerie",
+    "title": "Elektrorasierer",
+    "path": [
+      "Drogerie",
+      "Rasur Haarpflege",
+      "Rasur Enthaarung",
+      "Elektrorasierer"
+    ]
+  },
+  "elektrozahnbuersten": {
+    "root": "Drogerie",
+    "title": "Elektrozahnbuersten",
+    "path": [
+      "Drogerie",
+      "Mund Zahnpflege",
+      "Elektrozahnbuersten"
+    ]
+  },
+  "kontaktlinsen": {
+    "root": "Drogerie",
+    "title": "Kontaktlinsen",
+    "path": [
+      "Drogerie",
+      "Kontaktlinsen"
+    ]
+  },
+  "wein": {
+    "root": "Wein & Spirituosen",
+    "title": "Wein",
+    "path": [
+      "Wein Spirituosen",
+      "Wein"
+    ]
+  },
+  "damenduefte": {
+    "root": "Drogerie",
+    "title": "Damenduefte",
+    "path": [
+      "Drogerie",
+      "Parfuemerie",
+      "Damenduefte"
+    ]
+  },
+  "deodorant": {
+    "root": "Drogerie",
+    "title": "Deodorant",
+    "path": [
+      "Drogerie",
+      "Parfuemerie",
+      "Damenduefte",
+      "Deodorant"
+    ]
+  },
+  "herrenduefte": {
+    "root": "Drogerie",
+    "title": "Herrenduefte",
+    "path": [
+      "Drogerie",
+      "Parfuemerie",
+      "Herrenduefte"
+    ]
+  },
+  "after shave": {
+    "root": "Drogerie",
+    "title": "After Shave",
+    "path": [
+      "Drogerie",
+      "Parfuemerie",
+      "Herrenduefte",
+      "After Shave"
+    ]
+  },
+  "unisexduefte": {
+    "root": "Drogerie",
+    "title": "Unisexduefte",
+    "path": [
+      "Drogerie",
+      "Parfuemerie",
+      "Unisexduefte"
+    ]
+  },
+  "baby kinderpflege": {
+    "root": "Drogerie",
+    "title": "Baby Kinderpflege",
+    "path": [
+      "Drogerie",
+      "Baby Kinderpflege"
+    ]
+  },
+  "koerperpflege": {
+    "root": "Drogerie",
+    "title": "Koerperpflege",
+    "path": [
+      "Drogerie",
+      "Koerperpflege"
+    ]
+  },
+  "mund zahnpflege": {
+    "root": "Drogerie",
+    "title": "Mund Zahnpflege",
+    "path": [
+      "Drogerie",
+      "Mund Zahnpflege"
+    ]
+  },
+  "rasur haarpflege": {
+    "root": "Drogerie",
+    "title": "Rasur Haarpflege",
+    "path": [
+      "Drogerie",
+      "Rasur Haarpflege"
+    ]
+  },
+  "erotik": {
+    "root": "Erotik",
+    "title": "Erotik",
+    "path": [
+      "Erotik"
+    ]
+  },
+  "spirituosen": {
+    "root": "Wein & Spirituosen",
+    "title": "Spirituosen",
+    "path": [
+      "Wein Spirituosen",
+      "Spirituosen"
+    ]
+  },
+  "science fiction": {
+    "root": "Filme",
+    "title": "Science Fiction",
+    "path": [
+      "Filme",
+      "Dvd Filme",
+      "Dvd Science Fiction Fantasy",
+      "Science Fiction"
+    ]
+  },
+  "abenteuer": {
+    "root": "Filme",
+    "title": "Abenteuer",
+    "path": [
+      "Filme",
+      "Dvd Filme",
+      "Dvd Kinder Familie",
+      "Abenteuer"
+    ]
+  },
+  "natur": {
+    "root": "Filme",
+    "title": "Natur",
+    "path": [
+      "Filme",
+      "Dvd Filme",
+      "Dvd Tv Dokumentationen",
+      "Natur"
+    ]
+  },
+  "thriller": {
+    "root": "Filme",
+    "title": "Thriller",
+    "path": [
+      "Filme",
+      "Dvd Filme",
+      "Dvd Action Thriller Horror",
+      "Thriller"
+    ]
+  },
+  "mehr komoedie": {
+    "root": "Filme",
+    "title": "Mehr Komoedie",
+    "path": [
+      "Filme",
+      "Dvd Filme",
+      "Dvd Komoedie Drama",
+      "Mehr Komoedie"
+    ]
+  },
+  "mehr drama": {
+    "root": "Filme",
+    "title": "Mehr Drama",
+    "path": [
+      "Filme",
+      "Dvd Filme",
+      "Dvd Komoedie Drama",
+      "Mehr Drama"
+    ]
+  },
+  "fantasy": {
+    "root": "Filme",
+    "title": "Fantasy",
+    "path": [
+      "Filme",
+      "Dvd Filme",
+      "Dvd Science Fiction Fantasy",
+      "Fantasy"
+    ]
+  },
+  "horror": {
+    "root": "Filme",
+    "title": "Horror",
+    "path": [
+      "Filme",
+      "Dvd Filme",
+      "Dvd Action Thriller Horror",
+      "Horror"
+    ]
+  },
+  "romantische komoedie": {
+    "root": "Filme",
+    "title": "Romantische Komoedie",
+    "path": [
+      "Filme",
+      "Dvd Filme",
+      "Dvd Komoedie Drama",
+      "Romantische Komoedie"
+    ]
+  },
+  "horrorkomoedie": {
+    "root": "Filme",
+    "title": "Horrorkomoedie",
+    "path": [
+      "Filme",
+      "Dvd Filme",
+      "Dvd Komoedie Drama",
+      "Horrorkomoedie"
+    ]
+  },
+  "klassisches drama": {
+    "root": "Filme",
+    "title": "Klassisches Drama",
+    "path": [
+      "Filme",
+      "Dvd Filme",
+      "Dvd Komoedie Drama",
+      "Klassisches Drama"
+    ]
+  },
+  "biografie": {
+    "root": "Filme",
+    "title": "Biografie",
+    "path": [
+      "Filme",
+      "Dvd Filme",
+      "Dvd Tv Dokumentationen",
+      "Biografie"
+    ]
+  },
+  "action": {
+    "root": "Filme",
+    "title": "Action",
+    "path": [
+      "Filme",
+      "Dvd Filme",
+      "Dvd Action Thriller Horror",
+      "Action"
+    ]
+  },
+  "komoedie": {
+    "root": "Filme",
+    "title": "Komoedie",
+    "path": [
+      "Filme",
+      "Dvd Filme",
+      "Dvd Kinder Familie",
+      "Komoedie"
+    ]
+  }
+}

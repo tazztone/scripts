@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.3.0
+// @version      2.4.0
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -339,6 +339,63 @@ const STYLES = `
     color: #fca5a5 !important;
     border-color: #ef4444 !important;
     text-decoration: line-through !important;
+  }
+
+  /* Group Pills & Collapsible Subcategories */
+  .tp-group-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .tp-group-pill {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    padding: 4px 10px !important;
+    border-radius: 12px !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    cursor: pointer !important;
+    user-select: none !important;
+    transition: all 0.2s ease !important;
+    background: #0f172a !important;
+    color: #38bdf8 !important;
+    border: 1px solid #0284c7 !important;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2) !important;
+  }
+  .tp-group-pill:hover {
+    background: #1e293b !important;
+    color: #7dd3fc !important;
+    border-color: #38bdf8 !important;
+  }
+  .tp-group-pill.tp-excluded {
+    background: #7f1d1d !important;
+    color: #fca5a5 !important;
+    border-color: #ef4444 !important;
+    text-decoration: line-through !important;
+  }
+  .tp-group-pill.tp-partial {
+    border-color: #f59e0b !important;
+    color: #fef08a !important;
+  }
+  .tp-group-chevron {
+    font-size: 9px !important;
+    padding: 1px 5px !important;
+    border-radius: 4px !important;
+    background: rgba(255, 255, 255, 0.15) !important;
+    cursor: pointer !important;
+    margin-left: 2px !important;
+  }
+  .tp-group-chevron:hover {
+    background: rgba(255, 255, 255, 0.3) !important;
+  }
+  .tp-group-children {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding-left: 10px;
+    margin-top: 2px;
+    border-left: 2px solid rgba(2, 132, 199, 0.3);
   }
 
   /* Switch Toggle */
@@ -801,6 +858,117 @@ const STYLES = `
     return name.toLowerCase().replace(/[^a-z0-9]/g, '');
   }
 
+  // Auto-generated Toppreise Category Lookup Table
+  const CATEGORY_LOOKUP = {
+    "abenteuer": "Filme",
+    "krimi": "Filme",
+    "anime": "Filme",
+    "mehr komoedie": "Filme",
+    "tv serien": "Filme",
+    "fantasy": "Filme",
+    "mehr drama": "Filme",
+    "thriller": "Filme",
+    "dvd filme": "Filme",
+    "blu ray filme": "Filme",
+    "dvd kinder familie": "Filme",
+    "komplettsysteme": "Computer & Zubehör",
+    "grafikkarten": "Computer & Zubehör",
+    "tablets": "Computer & Zubehör",
+    "maeuse": "Computer & Zubehör",
+    "pc gehaeuse": "Computer & Zubehör",
+    "notebooks": "Computer & Zubehör",
+    "gehaeuseluefter": "Computer & Zubehör",
+    "sd speicherkarten": "Computer & Zubehör",
+    "externe festplatten hdd": "Computer & Zubehör",
+    "monitore": "Computer & Zubehör",
+    "lego architecture": "Spielwaren",
+    "schleich": "Spielwaren",
+    "action figuren": "Spielwaren",
+    "kinderspiele": "Spielwaren",
+    "hot wheels": "Spielwaren",
+    "disney": "Spielwaren",
+    "puzzles": "Spielwaren",
+    "barbie": "Spielwaren",
+    "cobi": "Spielwaren",
+    "playmobil wiltopia": "Spielwaren",
+    "tabletop spiele": "Spielwaren",
+    "playmobil action": "Spielwaren",
+    "playmobil novelmore": "Spielwaren",
+    "lego": "Spielwaren",
+    "strategie rollenspiele": "Spielwaren",
+    "zubehoer fuer nintendo switch": "Videogames",
+    "jump n run geschicklichkeit": "Videogames",
+    "actionspiele": "Videogames",
+    "rollenspiele adventures": "Videogames",
+    "action": "Filme",
+    "nintendo switch games": "Videogames",
+    "kopfhoerer": "HiFi & Audio",
+    "plattenspieler": "HiFi & Audio",
+    "bluetooth lautsprecher": "HiFi & Audio",
+    "tv geraete": "TV & Video",
+    "beamer": "TV & Video",
+    "eau de parfum": "Drogerie",
+    "elektrozahnbuersten": "Drogerie",
+    "hautpflege": "Drogerie",
+    "lockenstaebe buersten": "Drogerie",
+    "ersatzbuersten": "Drogerie",
+    "saug und wischroboter": "Haushalt & Küche",
+    "abfallsysteme": "Haushalt & Küche",
+    "zubehoer fuer haushaltsgeraete": "Haushalt & Küche",
+    "thermoskannen bidons": "Haushalt & Küche",
+    "kaffee espressomaschinen": "Haushalt & Küche",
+    "skihelme": "Sport & Freizeit",
+    "koffer": "Sport & Freizeit",
+    "ventilatoren heizgeraete": "Sport & Freizeit",
+    "einkaufstrolleys taschen": "Sport & Freizeit",
+    "sportbrillen goggles": "Sport & Freizeit",
+    "velotaschen": "Sport & Freizeit",
+    "rucksaecke": "Sport & Freizeit",
+    "inline skates rollschuhe": "Sport & Freizeit",
+    "huellen": "Smartphones & Mobiltelefone",
+    "oberschalen cover": "Smartphones & Mobiltelefone",
+    "taschen cover fuer iphone": "Smartphones & Mobiltelefone",
+    "smartphones": "Smartphones & Mobiltelefone",
+    "reifen": "Auto & Motorrad",
+    "autos": "Auto & Motorrad",
+    "uhren": "Uhren"
+  };
+
+  // Helper: Resolve Top-Level Root Group for any Category (with DOM Fallback Auto-Learning)
+  function resolveCategoryGroup(categoryName, card = null) {
+    if (!categoryName) return 'Sonstiges';
+    const norm = categoryName.trim().toLowerCase();
+    const slug = norm.replace(/[^a-z0-9]/g, '');
+    const spaceSlug = norm.replace(/-/g, ' ');
+
+    if (CATEGORY_LOOKUP[norm]) return CATEGORY_LOOKUP[norm];
+    if (CATEGORY_LOOKUP[slug]) return CATEGORY_LOOKUP[slug];
+    if (CATEGORY_LOOKUP[spaceSlug]) return CATEGORY_LOOKUP[spaceSlug];
+
+    const dynamicMap = _getValue('DYNAMIC_CAT_MAP', {});
+    if (dynamicMap[norm]) return dynamicMap[norm];
+    if (dynamicMap[slug]) return dynamicMap[slug];
+
+    if (card && card.querySelectorAll) {
+      const links = card.querySelectorAll('a[href*="/produktsuche/"]');
+      for (const a of links) {
+        const href = a.getAttribute('href') || '';
+        const match = href.match(/\/produktsuche\/([^\/]+)\//i);
+        if (match && match[1]) {
+          const rootSlug = match[1].split('-c')[0];
+          const formattedRoot = formatCategorySlug(rootSlug);
+          if (formattedRoot) {
+            dynamicMap[norm] = formattedRoot;
+            saveConfigKey('DYNAMIC_CAT_MAP', dynamicMap);
+            return formattedRoot;
+          }
+        }
+      }
+    }
+
+    return 'Sonstiges';
+  }
+
   // Helper: Parse price string into float (supports Swiss .– / .- and apostrophe separators)
   function parsePrice(priceStr) {
     if (!priceStr) return 0;
@@ -1178,52 +1346,98 @@ const STYLES = `
     if (toggleBtn) toggleBtn.classList.toggle('tp-active', isExpanded);
     if (catRow) catRow.style.display = isExpanded ? 'block' : 'none';
 
-    // Reconcile category pills
+    // Reconcile category pills & Group Pills
     const pillsHolder = bar.querySelector('#tp-inline-category-pills');
     if (pillsHolder && isExpanded) {
       if (allCats.size === 0) {
         pillsHolder.innerHTML = '<span style="font-size:11px; color:#64748b;">(Keine Kategorien auf aktueller Ansicht)</span>';
       } else {
-        const existingPills = new Map();
-        pillsHolder.querySelectorAll('.tp-cat-pill').forEach(pill => {
-          existingPills.set(pill.dataset.catName, pill);
+        pillsHolder.innerHTML = '';
+        
+        // Group detected pageCategories by Root Category Group
+        const groups = new Map();
+        allCats.forEach(cat => {
+          const root = resolveCategoryGroup(cat);
+          if (!groups.has(root)) groups.set(root, []);
+          groups.get(root).push(cat);
         });
 
-        const placeholder = pillsHolder.querySelector('span');
-        if (placeholder) placeholder.remove();
+        if (!window._tpExpandedGroups) window._tpExpandedGroups = new Set();
 
-        allCats.forEach(cat => {
-          const isExcluded = excluded.includes(cat);
-          let pill = existingPills.get(cat);
+        groups.forEach((subcats, rootGroup) => {
+          const allSubcatsExcluded = subcats.every(sc => excluded.includes(sc) || excluded.includes(`GROUP:${rootGroup}`));
+          const someSubcatsExcluded = subcats.some(sc => excluded.includes(sc) || excluded.includes(`GROUP:${rootGroup}`));
+          const isGroupExpanded = window._tpExpandedGroups.has(rootGroup);
 
-          if (!pill) {
-            pill = document.createElement('div');
-            pill.className = 'tp-cat-pill';
-            pill.dataset.catName = cat;
-            pill.textContent = cat;
+          const groupWrapper = document.createElement('div');
+          groupWrapper.className = 'tp-group-wrapper';
 
-            pill.onclick = () => {
-              const currentExcluded = CONFIG.EXCLUDED_CATEGORIES || [];
-              let updated;
-              if (currentExcluded.includes(cat)) {
-                updated = currentExcluded.filter(c => c !== cat);
-              } else {
-                updated = [...currentExcluded, cat];
-              }
-              saveConfigKey('EXCLUDED_CATEGORIES', updated);
-              processListings();
-            };
+          const groupPill = document.createElement('div');
+          groupPill.className = `tp-group-pill ${allSubcatsExcluded ? 'tp-excluded' : someSubcatsExcluded ? 'tp-partial' : ''}`;
 
-            pillsHolder.appendChild(pill);
-          } else {
-            existingPills.delete(cat);
+          const titleSpan = document.createElement('span');
+          titleSpan.textContent = `📁 ${rootGroup} (${subcats.length})`;
+          titleSpan.title = allSubcatsExcluded ? `Gruppe "${rootGroup}" wieder einblenden` : `Alle Kategorien unter "${rootGroup}" ausblenden`;
+          titleSpan.onclick = () => {
+            const currentExcluded = CONFIG.EXCLUDED_CATEGORIES || [];
+            let updated;
+            if (allSubcatsExcluded) {
+              updated = currentExcluded.filter(c => !subcats.includes(c) && c !== `GROUP:${rootGroup}`);
+            } else {
+              const toAdd = subcats.filter(sc => !currentExcluded.includes(sc));
+              updated = [...currentExcluded, ...toAdd];
+            }
+            saveConfigKey('EXCLUDED_CATEGORIES', updated);
+            processListings();
+          };
+
+          const chevronBtn = document.createElement('span');
+          chevronBtn.className = 'tp-group-chevron';
+          chevronBtn.textContent = isGroupExpanded ? '▲' : '▼';
+          chevronBtn.title = isGroupExpanded ? 'Unterkategorien einklappen' : 'Unterkategorien ausklappen';
+          chevronBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (window._tpExpandedGroups.has(rootGroup)) {
+              window._tpExpandedGroups.delete(rootGroup);
+            } else {
+              window._tpExpandedGroups.add(rootGroup);
+            }
+            renderSuiteFilterBar();
+          };
+
+          groupPill.appendChild(titleSpan);
+          groupPill.appendChild(chevronBtn);
+          groupWrapper.appendChild(groupPill);
+
+          if (isGroupExpanded) {
+            const childContainer = document.createElement('div');
+            childContainer.className = 'tp-group-children';
+
+            subcats.forEach(cat => {
+              const isCatExcluded = excluded.includes(cat) || excluded.includes(`GROUP:${rootGroup}`);
+              const childPill = document.createElement('div');
+              childPill.className = `tp-cat-pill ${isCatExcluded ? 'tp-excluded' : ''}`;
+              childPill.textContent = cat;
+              childPill.title = isCatExcluded ? `Kategorie "${cat}" wieder einblenden` : `Kategorie "${cat}" ausblenden`;
+              childPill.onclick = () => {
+                const currentExcluded = CONFIG.EXCLUDED_CATEGORIES || [];
+                let updated;
+                if (currentExcluded.includes(cat)) {
+                  updated = currentExcluded.filter(c => c !== cat && c !== `GROUP:${rootGroup}`);
+                } else {
+                  updated = [...currentExcluded, cat];
+                }
+                saveConfigKey('EXCLUDED_CATEGORIES', updated);
+                processListings();
+              };
+              childContainer.appendChild(childPill);
+            });
+
+            groupWrapper.appendChild(childContainer);
           }
 
-          pill.className = `tp-cat-pill ${isExcluded ? 'tp-excluded' : ''}`;
-          pill.title = isExcluded ? `Kategorie "${cat}" wieder einblenden` : `Kategorie "${cat}" dauerhaft ausblenden`;
+          pillsHolder.appendChild(groupWrapper);
         });
-
-        existingPills.forEach(obsoletePill => obsoletePill.remove());
       }
     }
   }
@@ -1267,7 +1481,8 @@ const STYLES = `
       if (isNeg) counts.neg++;
 
       // 3. Category Filter
-      const isCatExcluded = catName && excludedCats.includes(catName);
+      const rootGroup = resolveCategoryGroup(catName, card);
+      const isCatExcluded = catName && (excludedCats.includes(catName) || excludedCats.includes(`GROUP:${rootGroup}`));
       card.classList.toggle('tp-category-filtered', isCatExcluded);
       if (isCatExcluded) counts.cat++;
 
