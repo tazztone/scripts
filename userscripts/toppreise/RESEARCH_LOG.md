@@ -36,3 +36,16 @@ When a price alarm bell icon is clicked:
 4. Terms checkbox is set `.checked = true`.
 5. Submit button `.click()` fires AJAX request.
 6. A 200ms polling loop checks `!document.contains(modalContainer)`. Once detached, the script invokes `closeButton.click()` to dismiss the wrapper dialog cleanly.
+
+---
+
+## 3. Category Link & URL Patterns (Neue Toppreise & Search)
+
+- **Category Links in Product Cards (`a[href*="-c"]`)**:
+  - Single-level: `/produktsuche/HiFi-Audio-c653`
+  - Multi-level nested: `/produktsuche/Computer-Zubehoer/Notebooks-Tablets-eReader/Notebooks-c13`
+  - Category extraction regex: `/\/produktsuche\/(?:.*\/)?([^\/-]+(?:-[^\/-]+)*)-c\d+/i`
+- **Product Links with Category Subpath**:
+  - Pattern: `/preisvergleich/Category/Subcategory/ProductTitle-p123456`
+  - Product URL extraction regex: `/\/preisvergleich\/(.+)\/[^\/]+-p\d+/i`
+- **Breadcrumb Fallback**: `.breadcrumb a:last-of-type, [class*="breadcrumb"] a:last-of-type`

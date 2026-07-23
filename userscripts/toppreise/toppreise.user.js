@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.8.0
+// @version      1.9.0
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -801,44 +801,63 @@ const STYLES = `
     return Array.from(gridCards);
   }
 
-  // Helper: Multi-Tier Category Extractor
+  // Helper: Format raw category URL slugs into clean title case
+  function formatCategorySlug(slug) {
+    if (!slug) return '';
+    const clean = decodeURIComponent(slug).replace(/-/g, ' ').trim();
+    if (!clean || clean.length < 2 || (clean.toLowerCase().startsWith('p') && !isNaN(clean.slice(1)))) return '';
+    return clean.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  }
+
+  // Helper: Universal 4-Tier Category Extractor
   function extractCardCategory(card) {
-    // 1. Explicit subcategory text/link inside card DOM
-    const catEl = card.querySelector('.subCategory, .productCategory, .categoryLink, [class*="Category"]');
-    if (catEl) {
-      const text = catEl.textContent.trim().replace(/\(\d+\)/g, '').trim();
+    if (!card) return '';
+
+    // Tier 1: Dedicated category anchor links inside card (e.g. <a href="/produktsuche/.../Notebooks-c13">Notebooks</a>)
+    const catAnchor = card.querySelector('a[href*="-c"], a[href*="/produktsuche/"]');
+    if (catAnchor) {
+      const text = catAnchor.textContent.trim().replace(/\(\d+\)/g, '').trim();
       if (text && text.length > 1 && !text.includes('CHF') && !text.includes('Angebot') && !text.includes('%')) {
         return text;
       }
     }
 
-    // 2. Product link URL path (/preisvergleich/CategorySlug/ProductTitle-p123 or /produktsuche/CategorySlug-c123)
-    const links = card.querySelectorAll('a[href*="/preisvergleich/"], a[href*="/produktsuche/"], a.titleLink');
+    // Tier 2: Inspect all links inside card for category ID patterns (-c\d+) or nested /preisvergleich/ subpaths
+    const links = card.querySelectorAll('a[href*="/produktsuche/"], a[href*="/preisvergleich/"], a[href*="-c"], a.titleLink');
     for (const link of links) {
-      if (link.closest('header, nav, footer, .breadcrumb, #tp-quick-toolbar')) continue;
+      if (link.closest('header, nav, footer, .breadcrumb, #tp-quick-toolbar, #tp-suite-filter-bar')) continue;
 
       const href = link.getAttribute('href') || '';
-      
-      // Match /preisvergleich/CategorySlug/ProductTitle-p123
-      const pvMatch = href.match(/\/preisvergleich\/([^/]+)\/([^/]+)/i);
-      if (pvMatch && pvMatch[1]) {
-        let catSlug = decodeURIComponent(pvMatch[1]).replace(/-/g, ' ').trim();
-        if (catSlug && catSlug.length > 1 && !catSlug.startsWith('p') && isNaN(catSlug)) {
-          return catSlug.charAt(0).toUpperCase() + catSlug.slice(1);
-        }
+
+      // Match category ID slug right before -c\d+ (handles multi-level /produktsuche/ paths)
+      const catMatch = href.match(/\/produktsuche\/(?:.*\/)?([^\/-]+(?:-[^\/-]+)*)-c\d+/i) || href.match(/(?:.*\/)?([^\/]+)-c\d+/i);
+      if (catMatch && catMatch[1]) {
+        const formatted = formatCategorySlug(catMatch[1]);
+        if (formatted) return formatted;
       }
 
-      // Match /produktsuche/CategorySlug-c123
-      const psMatch = href.match(/\/produktsuche\/([^/]+)-c\d+/i);
-      if (psMatch && psMatch[1]) {
-        let catSlug = decodeURIComponent(psMatch[1]).replace(/-/g, ' ').trim();
-        if (catSlug && catSlug.length > 1) {
-          return catSlug.charAt(0).toUpperCase() + catSlug.slice(1);
+      // Match subcategory path in /preisvergleich/Category/SubCategory/ProductTitle-p123
+      const pvMatch = href.match(/\/preisvergleich\/(.+)\/[^\/]+-p\d+/i);
+      if (pvMatch && pvMatch[1]) {
+        const parts = pvMatch[1].split('/').filter(Boolean);
+        if (parts.length > 0) {
+          const subCat = parts[parts.length - 1];
+          const formatted = formatCategorySlug(subCat);
+          if (formatted) return formatted;
         }
       }
     }
 
-    // 3. Fallback: Active Breadcrumb section category (for subcategory search pages)
+    // Tier 3: DOM Category Classes & Data Attributes
+    const catEl = card.querySelector('.subCategory, .productCategory, .categoryLink, [class*="Category"], [class*="category"], [data-category]');
+    if (catEl) {
+      const text = (catEl.getAttribute('data-category') || catEl.textContent).trim().replace(/\(\d+\)/g, '').trim();
+      if (text && text.length > 1 && !text.includes('CHF') && !text.includes('Angebot') && !text.includes('%')) {
+        return text;
+      }
+    }
+
+    // Tier 4: Fallback to Active Breadcrumb section (for single-category search result views)
     const activeBreadcrumb = document.querySelector('.breadcrumb a:last-of-type, [class*="breadcrumb"] a:last-of-type');
     if (activeBreadcrumb) {
       const text = activeBreadcrumb.textContent.trim().replace(/\(\d+\)/g, '').trim();
