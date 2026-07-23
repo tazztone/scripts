@@ -85,3 +85,7 @@ When a price alarm bell icon is clicked:
 6. **MutationObserver Infinite Re-render Pulsing Loop**:
    - *Gotcha*: Un-guarded DOM mutations inside a `MutationObserver` callback trigger the observer again, causing infinite re-render loops where UI elements flicker and pulse continuously.
    - *Rule*: Always guard DOM manipulations with element ID checks (`if (document.getElementById('tp-suite-filter-bar')) return;`) or `dataset.processed` flags to ensure idempotency and prevent self-observation loops.
+
+7. **GitHub Raw CDN Edge Caching on Script Updates**:
+   - *Gotcha*: `raw.githubusercontent.com` caches raw files on CDN edge servers for ~5 minutes. Installing/reinstalling via a raw GitHub URL immediately after pushing a commit causes userscript managers to pull stale cached code.
+   - *Rule*: Append a query-parameter cache-buster (e.g. `?v=VERSION` or `?t=TIMESTAMP`) or use specific commit hashes in raw GitHub links (`raw.githubusercontent.com/.../COMMIT_HASH/toppreise.user.js`) to force the CDN and browser to serve the latest script code instantly.
