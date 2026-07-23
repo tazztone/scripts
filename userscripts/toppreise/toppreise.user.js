@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.4.1
+// @version      2.5.0
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -388,6 +388,66 @@ const STYLES = `
   }
   .tp-group-chevron:hover {
     background: rgba(255, 255, 255, 0.3) !important;
+  }
+
+  /* Floating Glassmorphic Group Popover */
+  .tp-group-popover {
+    position: absolute !important;
+    z-index: 100000 !important;
+    min-width: 260px !important;
+    max-width: 380px !important;
+    padding: 10px !important;
+    background: rgba(15, 23, 42, 0.95) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    border: 1px solid rgba(56, 189, 248, 0.3) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(56, 189, 248, 0.1) !important;
+    animation: tpPopoverFadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+  @keyframes tpPopoverFadeIn {
+    from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .tp-popover-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding-bottom: 8px !important;
+    margin-bottom: 8px !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+  }
+  .tp-popover-title {
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    color: #38bdf8 !important;
+  }
+  .tp-popover-actions {
+    display: flex !important;
+    gap: 6px !important;
+  }
+  .tp-popover-btn {
+    font-size: 10px !important;
+    padding: 2px 6px !important;
+    border-radius: 4px !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: #cbd5e1 !important;
+    cursor: pointer !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    transition: all 0.15s ease !important;
+  }
+  .tp-popover-btn:hover {
+    background: rgba(56, 189, 248, 0.2) !important;
+    color: #ffffff !important;
+    border-color: rgba(56, 189, 248, 0.4) !important;
+  }
+  .tp-popover-body {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+    max-height: 220px !important;
+    overflow-y: auto !important;
+    padding: 2px !important;
   }
   .tp-group-children {
     display: flex;
@@ -969,6 +1029,119 @@ const STYLES = `
     return 'Sonstiges';
   }
 
+  // Floating Glassmorphic Group Popover Controller
+  let activePopover = null;
+
+  function closeActivePopover() {
+    if (activePopover) {
+      activePopover.remove();
+      activePopover = null;
+    }
+  }
+
+  document.addEventListener('click', (e) => {
+    if (activePopover && !activePopover.contains(e.target) && !e.target.closest('.tp-group-pill')) {
+      closeActivePopover();
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && activePopover) {
+      closeActivePopover();
+    }
+  });
+
+  function toggleGroupPopover(anchorEl, rootGroup, subcats, getExcludedCats, updateExcludedCats) {
+    if (activePopover && activePopover.dataset.rootGroup === rootGroup) {
+      closeActivePopover();
+      return;
+    }
+    closeActivePopover();
+
+    const rect = anchorEl.getBoundingClientRect();
+    const popover = document.createElement('div');
+    popover.className = 'tp-group-popover';
+    popover.dataset.rootGroup = rootGroup;
+
+    const popoverWidth = 300;
+    const topPos = rect.bottom + 6 + window.scrollY;
+    let leftPos = rect.left + window.scrollX;
+    if (rect.left + popoverWidth > window.innerWidth - 16) {
+      leftPos = Math.max(16, window.innerWidth - popoverWidth - 16 + window.scrollX);
+    }
+
+    popover.style.top = `${topPos}px`;
+    popover.style.left = `${leftPos}px`;
+
+    const header = document.createElement('div');
+    header.className = 'tp-popover-header';
+
+    const title = document.createElement('div');
+    title.className = 'tp-popover-title';
+    title.textContent = `📁 ${rootGroup} (${subcats.length})`;
+
+    const actions = document.createElement('div');
+    actions.className = 'tp-popover-actions';
+
+    const btnHideAll = document.createElement('button');
+    btnHideAll.className = 'tp-popover-btn';
+    btnHideAll.textContent = 'Alle ausblenden';
+    btnHideAll.onclick = () => {
+      const excluded = getExcludedCats();
+      const toAdd = subcats.filter(sc => !excluded.includes(sc));
+      updateExcludedCats([...excluded, ...toAdd]);
+      renderPopoverBody();
+    };
+
+    const btnShowAll = document.createElement('button');
+    btnShowAll.className = 'tp-popover-btn';
+    btnShowAll.textContent = 'Alle einblenden';
+    btnShowAll.onclick = () => {
+      const excluded = getExcludedCats();
+      const updated = excluded.filter(c => !subcats.includes(c) && c !== `GROUP:${rootGroup}`);
+      updateExcludedCats(updated);
+      renderPopoverBody();
+    };
+
+    actions.appendChild(btnHideAll);
+    actions.appendChild(btnShowAll);
+    header.appendChild(title);
+    header.appendChild(actions);
+    popover.appendChild(header);
+
+    const body = document.createElement('div');
+    body.className = 'tp-popover-body';
+
+    function renderPopoverBody() {
+      body.innerHTML = '';
+      const excluded = getExcludedCats();
+      subcats.forEach(cat => {
+        const isCatExcluded = excluded.includes(cat) || excluded.includes(`GROUP:${rootGroup}`);
+        const pill = document.createElement('div');
+        pill.className = `tp-cat-pill ${isCatExcluded ? 'tp-excluded' : ''}`;
+        pill.textContent = cat;
+        pill.title = isCatExcluded ? `Kategorie "${cat}" wieder einblenden` : `Kategorie "${cat}" ausblenden`;
+        pill.onclick = () => {
+          const curr = getExcludedCats();
+          let updated;
+          if (curr.includes(cat)) {
+            updated = curr.filter(c => c !== cat && c !== `GROUP:${rootGroup}`);
+          } else {
+            updated = [...curr, cat];
+          }
+          updateExcludedCats(updated);
+          renderPopoverBody();
+        };
+        body.appendChild(pill);
+      });
+    }
+
+    renderPopoverBody();
+    popover.appendChild(body);
+    document.body.appendChild(popover);
+    activePopover = popover;
+  }
+
   // Helper: Parse price string into float (supports Swiss .– / .- and apostrophe separators)
   function parsePrice(priceStr) {
     if (!priceStr) return 0;
@@ -1429,66 +1602,22 @@ const STYLES = `
             processListings();
           };
 
-          const newChevronText = isGroupExpanded ? '▲' : '▼';
+          const newChevronText = '▼';
           if (chevronBtn.textContent !== newChevronText) chevronBtn.textContent = newChevronText;
-          chevronBtn.title = isGroupExpanded ? 'Unterkategorien einklappen' : 'Unterkategorien ausklappen';
+          chevronBtn.title = `Unterkategorien von "${rootGroup}" anzeigen`;
           chevronBtn.onclick = (e) => {
             e.stopPropagation();
-            if (window._tpExpandedGroups.has(rootGroup)) {
-              window._tpExpandedGroups.delete(rootGroup);
-            } else {
-              window._tpExpandedGroups.add(rootGroup);
-            }
-            renderSuiteFilterBar();
-          };
-
-          // Child Subcategories Accordion Reconciliation
-          childContainer = groupWrapper.querySelector('.tp-group-children');
-          if (isGroupExpanded) {
-            if (!childContainer) {
-              childContainer = document.createElement('div');
-              childContainer.className = 'tp-group-children';
-              groupWrapper.appendChild(childContainer);
-            }
-
-            const existingChildPills = new Map();
-            childContainer.querySelectorAll('.tp-cat-pill').forEach(pill => {
-              if (pill.dataset.catName) existingChildPills.set(pill.dataset.catName, pill);
-            });
-
-            subcats.forEach(cat => {
-              const isCatExcluded = excluded.includes(cat) || excluded.includes(`GROUP:${rootGroup}`);
-              let childPill = existingChildPills.get(cat);
-
-              if (!childPill) {
-                childPill = document.createElement('div');
-                childPill.dataset.catName = cat;
-                childPill.textContent = cat;
-                childPill.onclick = () => {
-                  const currentExcluded = CONFIG.EXCLUDED_CATEGORIES || [];
-                  let updated;
-                  if (currentExcluded.includes(cat)) {
-                    updated = currentExcluded.filter(c => c !== cat && c !== `GROUP:${rootGroup}`);
-                  } else {
-                    updated = [...currentExcluded, cat];
-                  }
-                  saveConfigKey('EXCLUDED_CATEGORIES', updated);
-                  processListings();
-                };
-                childContainer.appendChild(childPill);
-              } else {
-                existingChildPills.delete(cat);
+            toggleGroupPopover(
+              groupPill,
+              rootGroup,
+              subcats,
+              () => CONFIG.EXCLUDED_CATEGORIES || [],
+              (updated) => {
+                saveConfigKey('EXCLUDED_CATEGORIES', updated);
+                processListings();
               }
-
-              const newChildClass = `tp-cat-pill ${isCatExcluded ? 'tp-excluded' : ''}`;
-              if (childPill.className !== newChildClass) childPill.className = newChildClass;
-              childPill.title = isCatExcluded ? `Kategorie "${cat}" wieder einblenden` : `Kategorie "${cat}" ausblenden`;
-            });
-
-            existingChildPills.forEach(obsoletePill => obsoletePill.remove());
-          } else if (childContainer) {
-            childContainer.remove();
-          }
+            );
+          };
         });
 
         // Remove obsolete groups no longer present on page
@@ -2040,62 +2169,22 @@ const STYLES = `
           renderCategoryPills();
         };
 
-        const newChevronText = isGroupExpanded ? '▲' : '▼';
+        const newChevronText = '▼';
         if (chevronBtn.textContent !== newChevronText) chevronBtn.textContent = newChevronText;
-        chevronBtn.title = isGroupExpanded ? 'Unterkategorien einklappen' : 'Unterkategorien ausklappen';
+        chevronBtn.title = `Unterkategorien von "${rootGroup}" anzeigen`;
         chevronBtn.onclick = (e) => {
           e.stopPropagation();
-          if (window._tpModalExpandedGroups.has(rootGroup)) {
-            window._tpModalExpandedGroups.delete(rootGroup);
-          } else {
-            window._tpModalExpandedGroups.add(rootGroup);
-          }
-          renderCategoryPills();
-        };
-
-        childContainer = groupWrapper.querySelector('.tp-group-children');
-        if (isGroupExpanded) {
-          if (!childContainer) {
-            childContainer = document.createElement('div');
-            childContainer.className = 'tp-group-children';
-            groupWrapper.appendChild(childContainer);
-          }
-
-          const existingChildPills = new Map();
-          childContainer.querySelectorAll('.tp-cat-pill').forEach(pill => {
-            if (pill.dataset.catName) existingChildPills.set(pill.dataset.catName, pill);
-          });
-
-          subcats.forEach(cat => {
-            const isCatExcluded = currentExcludedCats.includes(cat) || currentExcludedCats.includes(`GROUP:${rootGroup}`);
-            let childPill = existingChildPills.get(cat);
-
-            if (!childPill) {
-              childPill = document.createElement('div');
-              childPill.dataset.catName = cat;
-              childPill.textContent = cat;
-              childPill.onclick = () => {
-                if (currentExcludedCats.includes(cat)) {
-                  currentExcludedCats = currentExcludedCats.filter(c => c !== cat && c !== `GROUP:${rootGroup}`);
-                } else {
-                  currentExcludedCats.push(cat);
-                }
-                renderCategoryPills();
-              };
-              childContainer.appendChild(childPill);
-            } else {
-              existingChildPills.delete(cat);
+          toggleGroupPopover(
+            groupPill,
+            rootGroup,
+            subcats,
+            () => currentExcludedCats,
+            (updated) => {
+              currentExcludedCats = updated;
+              renderCategoryPills();
             }
-
-            const newChildClass = `tp-cat-pill ${isCatExcluded ? 'tp-excluded' : ''}`;
-            if (childPill.className !== newChildClass) childPill.className = newChildClass;
-            childPill.title = isCatExcluded ? `Kategorie "${cat}" wieder einblenden` : `Kategorie "${cat}" ausblenden`;
-          });
-
-          existingChildPills.forEach(obsoletePill => obsoletePill.remove());
-        } else if (childContainer) {
-          childContainer.remove();
-        }
+          );
+        };
       });
 
       existingGroupWrappers.forEach(obsoleteWrapper => obsoleteWrapper.remove());
