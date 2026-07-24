@@ -829,6 +829,38 @@ const STYLES = `
     align-items: center !important;
     flex: 1 !important;
   }
+
+  /* Mobile Responsive Fixes */
+  @media (max-width: 768px) {
+    .tp-filter-main-row {
+      flex-wrap: wrap !important;
+      gap: 8px !important;
+    }
+    .tp-input-wrapper {
+      min-width: 100% !important;
+      width: 100% !important;
+    }
+    #tp-quick-toolbar {
+      width: 95% !important;
+      max-width: 95% !important;
+      flex-wrap: wrap !important;
+      justify-content: center !important;
+      padding: 8px 10px !important;
+      border-radius: 16px !important;
+      gap: 8px !important;
+    }
+    .tp-toolbar-group {
+      flex-wrap: wrap !important;
+      justify-content: center !important;
+    }
+    .tp-btn-toggle, .tp-filter-bar-reset {
+      flex: 1 !important;
+      justify-content: center !important;
+    }
+    #tp-suite-filter-bar {
+      padding: 8px !important;
+    }
+  }
 `;
 
 // ─────────────────────────────────────────────────────────────────────────────
