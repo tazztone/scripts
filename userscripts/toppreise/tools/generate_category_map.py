@@ -68,12 +68,15 @@ SEED_LOOKUP = {
     "schuhe": "Bekleidung & Schuhe",
     "bekleidung accessoires": "Bekleidung & Schuhe",
     "bekleidung-accessoires": "Bekleidung & Schuhe",
+    "sonnenbrillen": "Bekleidung & Schuhe",
+    "kleidung": "Bekleidung & Schuhe",
     
     # Filme
     "abenteuer": "Filme", "krimi": "Filme", "anime": "Filme", "mehr komoedie": "Filme",
     "tv serien": "Filme", "fantasy": "Filme", "mehr drama": "Filme", "thriller": "Filme",
     "dvd filme": "Filme", "blu ray filme": "Filme", "dvd kinder familie": "Filme",
     "science fiction": "Filme", "klassisches drama": "Filme", "biografie": "Filme", "horror": "Filme",
+    "slapstick komoedie": "Filme", "slapstick komoediten": "Filme",
     
     # Computer & Zubehör
     "komplettsysteme": "Computer & Zubehör", "grafikkarten": "Computer & Zubehör", 
@@ -82,7 +85,8 @@ SEED_LOOKUP = {
     "gehaeuseluefter": "Computer & Zubehör", "sd speicherkarten": "Computer & Zubehör",
     "externe festplatten hdd": "Computer & Zubehör", "monitore": "Computer & Zubehör",
     "prozessorkuehler": "Computer & Zubehör", "headsets mikrofone": "Computer & Zubehör",
-    "multifunktionsgeraete": "Computer & Zubehör",
+    "multifunktionsgeraete": "Computer & Zubehör", "mausmatten": "Computer & Zubehör",
+    "lenkraeder": "Computer & Zubehör", "lenkraeder pedale": "Computer & Zubehör",
     
     # Spielwaren
     "lego architecture": "Spielwaren", "schleich": "Spielwaren", "action figuren": "Spielwaren",
@@ -93,28 +97,33 @@ SEED_LOOKUP = {
     "playmobil my life": "Spielwaren", "playmobil asterix": "Spielwaren", "lego duplo": "Spielwaren",
     "lego city": "Spielwaren", "vtech": "Spielwaren", "fischertechnik": "Spielwaren",
     "experimentierkaesten": "Spielwaren", "kartenspiele": "Spielwaren", "mega construx": "Spielwaren",
-    "familienspiele": "Spielwaren",
+    "familienspiele": "Spielwaren", "basteln malen": "Spielwaren", "komplett sets": "Spielwaren",
+    "zubehoer fuer rc modelle": "Spielwaren", "lego marvel": "Spielwaren", "evolution autos": "Spielwaren",
     
     # Videogames
     "strategie rollenspiele": "Videogames", "zubehoer fuer nintendo switch": "Videogames",
     "jump n run geschicklichkeit": "Videogames", "actionspiele": "Videogames",
     "rollenspiele adventures": "Videogames", "action": "Videogames", "nintendo switch games": "Videogames",
-    "sonstige handheld konsolen": "Videogames",
+    "sonstige handheld konsolen": "Videogames", "ps5 konsolen": "Videogames", "playstation 5": "Videogames",
     
     # HiFi & Audio / TV & Video
     "kopfhoerer": "HiFi & Audio", "plattenspieler": "HiFi & Audio", "bluetooth lautsprecher": "HiFi & Audio",
-    "lautsprecher": "HiFi & Audio",
+    "lautsprecher": "HiFi & Audio", "smart speaker": "HiFi & Audio",
     "tv geraete": "TV & Video", "beamer": "TV & Video", "actionkameras": "TV & Video",
     
     # Drogerie
-    "eau de parfum": "Drogerie", "elektrozahnbuersten": "Drogerie", "hautpflege": "Drogerie",
-    "lockenstaebe buersten": "Drogerie", "ersatzbuersten": "Drogerie", "koerperpflege": "Drogerie",
+    "eau de parfum": "Drogerie", "eau de toilette": "Drogerie", "elektrozahnbuersten": "Drogerie",
+    "hautpflege": "Drogerie", "lockenstaebe buersten": "Drogerie", "ersatzbuersten": "Drogerie",
+    "koerperpflege": "Drogerie", "haartrockner": "Drogerie", "health wellness": "Drogerie",
+    "haarpflege": "Drogerie", "epilierer haarentferner": "Drogerie",
     
     # Haushalt & Küche
     "saug und wischroboter": "Haushalt & Küche", "abfallsysteme": "Haushalt & Küche",
     "zubehoer fuer haushaltsgeraete": "Haushalt & Küche", "thermoskannen bidons": "Haushalt & Küche",
-    "kaffee espressomaschinen": "Haushalt & Küche", "staubsauger": "Haushalt & Küche",
-    "klimageraete": "Haushalt & Küche", "raumduft": "Haushalt & Küche", "senseo maschinen": "Haushalt & Küche",
+    "kaffee espressomaschinen": "Haushalt & Küche", "kaffeemuehlen": "Haushalt & Küche",
+    "staubsauger": "Haushalt & Küche", "klimageraete": "Haushalt & Küche", "raumduft": "Haushalt & Küche",
+    "senseo maschinen": "Haushalt & Küche", "sonstige kuechengeraete": "Haushalt & Küche",
+    "heizung klima": "Haushalt & Küche",
     
     # Sport & Freizeit
     "skihelme": "Sport & Freizeit", "koffer": "Sport & Freizeit", "ventilatoren heizgeraete": "Sport & Freizeit",
@@ -125,6 +134,10 @@ SEED_LOOKUP = {
     "pedale": "Sport & Freizeit", "taschenlampen": "Sport & Freizeit", "skibrillen": "Sport & Freizeit",
     "protektoren": "Sport & Freizeit", "activity tracker smartwatches": "Sport & Freizeit", "velofahren": "Sport & Freizeit",
     "fitness krafttraining": "Sport & Freizeit", "fitness-krafttraining": "Sport & Freizeit",
+    "velohelme": "Sport & Freizeit", "saettel": "Sport & Freizeit",
+    
+    # Garten & Baumarkt
+    "schwingschleifer": "Garten & Baumarkt",
     
     # Smartphones & Mobiltelefone / Auto / Uhren
     "huellen": "Smartphones & Mobiltelefone", "oberschalen cover": "Smartphones & Mobiltelefone",
@@ -148,10 +161,22 @@ def fetch_url(url):
     except Exception:
         return url, ""
 
+def expand_umlaut_keys(key):
+    keys = {key}
+    u_map = key.replace('ue', 'ü').replace('ae', 'ä').replace('oe', 'ö')
+    keys.add(u_map)
+    a_map = key.replace('ü', 'ue').replace('ä', 'ae').replace('ö', 'oe')
+    keys.add(a_map)
+    return keys
+
 def generate_deep_map(max_workers=32):
     print("🚀 Starting Deterministic Category Crawl of Toppreise.ch...", flush=True)
     
-    lookup_map = dict(SEED_LOOKUP)
+    lookup_map = {}
+    for k, v in SEED_LOOKUP.items():
+        for variant in expand_umlaut_keys(k):
+            lookup_map[variant] = v
+
     detailed_map = {}
     
     root_slug_to_name = {slug.split('-c')[0].lower(): name for slug, name in ROOT_CATEGORIES}
@@ -160,7 +185,7 @@ def generate_deep_map(max_workers=32):
     to_visit = set(f"https://www.toppreise.ch/produktsuche/{slug}" for slug, name in ROOT_CATEGORIES)
     
     depth_round = 0
-    while to_visit:
+    while to_visit and depth_round < 4:
         depth_round += 1
         current_urls = sorted(list(to_visit - visited_urls))
         if not current_urls:
@@ -178,13 +203,13 @@ def generate_deep_map(max_workers=32):
                 if not html:
                     continue
                 
-                # Parseproduktsuche links
+                # Parse produktsuche links
                 ps_matches = re.findall(r'href=["\'](/produktsuche/[^"\']+)["\']', html)
                 for m in ps_matches:
                     clean_path = m.split('?')[0]
                     parts = clean_path.strip('/').split('/')
                     if len(parts) >= 2 and parts[0] == 'produktsuche':
-                        if '-c' in parts[-1]:
+                        if '-c' in parts[-1] and depth_round < 3:
                             full_url = f"https://www.toppreise.ch{clean_path}"
                             if full_url not in visited_urls:
                                 next_urls.add(full_url)
@@ -199,21 +224,37 @@ def generate_deep_map(max_workers=32):
                             slug_key = seg.split('-c')[0].lower().replace('-', ' ')
                             raw_slug = seg.split('-c')[0].lower()
                             
-                            # Only set if not already present in protected seed
-                            if leaf_key not in SEED_LOOKUP:
-                                lookup_map[leaf_key] = cur_root_title
-                            if slug_key not in SEED_LOOKUP:
-                                lookup_map[slug_key] = cur_root_title
-                            if raw_slug not in SEED_LOOKUP:
-                                lookup_map[raw_slug] = cur_root_title
+                            for k in (leaf_key, slug_key, raw_slug):
+                                for variant in expand_umlaut_keys(k):
+                                    if variant not in SEED_LOOKUP:
+                                        lookup_map[variant] = cur_root_title
                             
                             detailed_map[slug_key] = {
                                 "root": cur_root_title,
                                 "title": leaf_title,
                                 "path": [format_title(s) for s in segments]
                             }
-        
-        to_visit = next_urls
+
+                # Parse preisvergleich links for category paths
+                pv_matches = re.findall(r'href=["\'](/preisvergleich/[^"\']+)["\']', html)
+                for m in pv_matches:
+                    clean_path = m.split('?')[0]
+                    parts = clean_path.strip('/').split('/')
+                    if len(parts) >= 3 and parts[0] == 'preisvergleich':
+                        segments = parts[1:-1] # exclude product slug
+                        if segments:
+                            cur_root_slug = segments[0].split('-c')[0].lower()
+                            cur_root_title = root_slug_to_name.get(cur_root_slug, CANONICAL_GROUPS.get(cur_root_slug.replace('-', ' '), format_title(segments[0])))
+                            for seg in segments[1:]:
+                                leaf_title = format_title(seg)
+                                leaf_key = leaf_title.lower()
+                                slug_key = seg.replace('-', ' ').lower()
+                                raw_slug = seg.lower()
+
+                                for k in (leaf_key, slug_key, raw_slug):
+                                    for variant in expand_umlaut_keys(k):
+                                        if variant not in SEED_LOOKUP:
+                                            lookup_map[variant] = cur_root_title
 
     # Sort lookup map alphabetically for 100% deterministic git diff stability
     sorted_lookup_map = dict(sorted(lookup_map.items()))

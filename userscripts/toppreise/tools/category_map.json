@@ -1,48 +1,11 @@
 {
-  "3d shooter fps": {
-    "root": "Videogames",
-    "title": "3d Shooter Fps",
-    "path": [
-      "Videogames",
-      "Xbox Series X S",
-      "Xbox Series X S Games",
-      "3d Shooter Fps"
-    ]
-  },
-  "4k uhd action thriller horror": {
-    "root": "Filme",
-    "title": "4k Uhd Action Thriller Horror",
-    "path": [
-      "Filme",
-      "Blu Ray 4k Ultra Hd Filme",
-      "4k Uhd Action Thriller Horror"
-    ]
-  },
-  "4k uhd kinder familie": {
-    "root": "Filme",
-    "title": "4k Uhd Kinder Familie",
-    "path": [
-      "Filme",
-      "Blu Ray 4k Ultra Hd Filme",
-      "4k Uhd Kinder Familie"
-    ]
-  },
-  "4k uhd science fiction fantasy": {
-    "root": "Filme",
-    "title": "4k Uhd Science Fiction Fantasy",
-    "path": [
-      "Filme",
-      "Blu Ray 4k Ultra Hd Filme",
-      "4k Uhd Science Fiction Fantasy"
-    ]
-  },
   "abenteuer": {
     "root": "Filme",
     "title": "Abenteuer",
     "path": [
       "Filme",
-      "Blu Ray 4k Ultra Hd Filme",
-      "4k Uhd Kinder Familie",
+      "Dvd Filme",
+      "Dvd Kinder Familie",
       "Abenteuer"
     ]
   },
@@ -51,8 +14,8 @@
     "title": "Action",
     "path": [
       "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Action Thriller Horror",
+      "Dvd Filme",
+      "Dvd Action Thriller Horror",
       "Action"
     ]
   },
@@ -63,25 +26,6 @@
       "Tv Video",
       "Camcorder",
       "Action Cameras"
-    ]
-  },
-  "actionkameras": {
-    "root": "TV & Video",
-    "title": "Actionkameras",
-    "path": [
-      "Tv Video",
-      "Camcorder",
-      "Actionkameras"
-    ]
-  },
-  "actionspiele": {
-    "root": "Videogames",
-    "title": "Actionspiele",
-    "path": [
-      "Videogames",
-      "Xbox One",
-      "Xbox One Games",
-      "Actionspiele"
     ]
   },
   "activity tracker smartwatches": {
@@ -221,16 +165,6 @@
       "Beamer"
     ]
   },
-  "beat em up": {
-    "root": "Videogames",
-    "title": "Beat Em Up",
-    "path": [
-      "Videogames",
-      "Xbox Series X S",
-      "Xbox Series X S Games",
-      "Beat Em Up"
-    ]
-  },
   "bekleidung accessoires": {
     "root": "Bekleidung Accessoires",
     "title": "Bekleidung Accessoires",
@@ -252,8 +186,8 @@
     "title": "Biografie",
     "path": [
       "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Tv Dokumentationen",
+      "Dvd Filme",
+      "Dvd Tv Dokumentationen",
       "Biografie"
     ]
   },
@@ -265,39 +199,12 @@
       "Blu Ray 4k Ultra Hd Filme"
     ]
   },
-  "blu ray action thriller horror": {
-    "root": "Filme",
-    "title": "Blu Ray Action Thriller Horror",
-    "path": [
-      "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Action Thriller Horror"
-    ]
-  },
   "blu ray filme": {
     "root": "Filme",
     "title": "Blu Ray Filme",
     "path": [
       "Filme",
       "Blu Ray Filme"
-    ]
-  },
-  "blu ray kinder familie": {
-    "root": "Filme",
-    "title": "Blu Ray Kinder Familie",
-    "path": [
-      "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Kinder Familie"
-    ]
-  },
-  "blu ray komoedie drama": {
-    "root": "Filme",
-    "title": "Blu Ray Komoedie Drama",
-    "path": [
-      "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Komoedie Drama"
     ]
   },
   "blu ray player": {
@@ -307,24 +214,6 @@
       "Tv Video",
       "Home Cinema Video",
       "Blu Ray Player"
-    ]
-  },
-  "blu ray science fiction fantasy": {
-    "root": "Filme",
-    "title": "Blu Ray Science Fiction Fantasy",
-    "path": [
-      "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Science Fiction Fantasy"
-    ]
-  },
-  "blu ray tv dokumentationen": {
-    "root": "Filme",
-    "title": "Blu Ray Tv Dokumentationen",
-    "path": [
-      "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Tv Dokumentationen"
     ]
   },
   "bluetooth lautsprecher": {
@@ -457,7 +346,8 @@
     "path": [
       "Filme",
       "Dvd Filme",
-      "Dvd Action Thriller Horror"
+      "Dvd Action Thriller Horror",
+      "Action"
     ]
   },
   "dvd filme": {
@@ -474,7 +364,8 @@
     "path": [
       "Filme",
       "Dvd Filme",
-      "Dvd Kinder Familie"
+      "Dvd Kinder Familie",
+      "Abenteuer"
     ]
   },
   "dvd komoedie drama": {
@@ -483,7 +374,8 @@
     "path": [
       "Filme",
       "Dvd Filme",
-      "Dvd Komoedie Drama"
+      "Dvd Komoedie Drama",
+      "Klassisches Drama"
     ]
   },
   "dvd science fiction fantasy": {
@@ -492,7 +384,8 @@
     "path": [
       "Filme",
       "Dvd Filme",
-      "Dvd Science Fiction Fantasy"
+      "Dvd Science Fiction Fantasy",
+      "Fantasy"
     ]
   },
   "dvd tv dokumentationen": {
@@ -501,7 +394,8 @@
     "path": [
       "Filme",
       "Dvd Filme",
-      "Dvd Tv Dokumentationen"
+      "Dvd Tv Dokumentationen",
+      "Biografie"
     ]
   },
   "e pianos": {
@@ -583,8 +477,8 @@
     "title": "Fantasy",
     "path": [
       "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Science Fiction Fantasy",
+      "Dvd Filme",
+      "Dvd Science Fiction Fantasy",
       "Fantasy"
     ]
   },
@@ -613,14 +507,6 @@
       "Computer Zubehoer",
       "Pc Komponenten",
       "Festplatten Ssd"
-    ]
-  },
-  "fitness krafttraining": {
-    "root": "Sport & Freizeit",
-    "title": "Fitness Krafttraining",
-    "path": [
-      "Sport Freizeit",
-      "Fitness Krafttraining"
     ]
   },
   "funkgeraete": {
@@ -792,8 +678,8 @@
     "title": "Horror",
     "path": [
       "Filme",
-      "Blu Ray 4k Ultra Hd Filme",
-      "4k Uhd Action Thriller Horror",
+      "Dvd Filme",
+      "Dvd Action Thriller Horror",
       "Horror"
     ]
   },
@@ -802,19 +688,9 @@
     "title": "Horrorkomoedie",
     "path": [
       "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Komoedie Drama",
+      "Dvd Filme",
+      "Dvd Komoedie Drama",
       "Horrorkomoedie"
-    ]
-  },
-  "jump n run geschicklichkeit": {
-    "root": "Videogames",
-    "title": "Jump N Run Geschicklichkeit",
-    "path": [
-      "Videogames",
-      "Xbox One",
-      "Xbox One Games",
-      "Jump N Run Geschicklichkeit"
     ]
   },
   "kaffee espressomaschinen": {
@@ -863,8 +739,8 @@
     "title": "Klassisches Drama",
     "path": [
       "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Komoedie Drama",
+      "Dvd Filme",
+      "Dvd Komoedie Drama",
       "Klassisches Drama"
     ]
   },
@@ -889,8 +765,8 @@
     "title": "Komoedie",
     "path": [
       "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Kinder Familie",
+      "Dvd Filme",
+      "Dvd Kinder Familie",
       "Komoedie"
     ]
   },
@@ -958,8 +834,8 @@
     "title": "Mehr Drama",
     "path": [
       "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Komoedie Drama",
+      "Dvd Filme",
+      "Dvd Komoedie Drama",
       "Mehr Drama"
     ]
   },
@@ -968,8 +844,8 @@
     "title": "Mehr Komoedie",
     "path": [
       "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Komoedie Drama",
+      "Dvd Filme",
+      "Dvd Komoedie Drama",
       "Mehr Komoedie"
     ]
   },
@@ -1041,8 +917,8 @@
     "title": "Natur",
     "path": [
       "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Tv Dokumentationen",
+      "Dvd Filme",
+      "Dvd Tv Dokumentationen",
       "Natur"
     ]
   },
@@ -1187,15 +1063,6 @@
       "Verbrauchsmaterial Fuer Drucker"
     ]
   },
-  "pkw sommerreifen": {
-    "root": "Auto & Motorrad",
-    "title": "Pkw Sommerreifen",
-    "path": [
-      "Auto Motorrad",
-      "Pneus",
-      "Pkw Sommerreifen"
-    ]
-  },
   "plattenspieler": {
     "root": "HiFi & Audio",
     "title": "Plattenspieler",
@@ -1221,15 +1088,6 @@
       "Videogames",
       "Playstation 5",
       "Ps5 Games"
-    ]
-  },
-  "pneus": {
-    "root": "Auto & Motorrad",
-    "title": "Pneus",
-    "path": [
-      "Auto Motorrad",
-      "Pneus",
-      "Pkw Sommerreifen"
     ]
   },
   "portable lautsprecher": {
@@ -1337,33 +1195,13 @@
       "Reifen"
     ]
   },
-  "rennspiele": {
-    "root": "Videogames",
-    "title": "Rennspiele",
-    "path": [
-      "Videogames",
-      "Xbox Series X S",
-      "Xbox Series X S Games",
-      "Rennspiele"
-    ]
-  },
-  "rollenspiele adventures": {
-    "root": "Videogames",
-    "title": "Rollenspiele Adventures",
-    "path": [
-      "Videogames",
-      "Xbox Series X S",
-      "Xbox Series X S Games",
-      "Rollenspiele Adventures"
-    ]
-  },
   "romantische komoedie": {
     "root": "Filme",
     "title": "Romantische Komoedie",
     "path": [
       "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Komoedie Drama",
+      "Dvd Filme",
+      "Dvd Komoedie Drama",
       "Romantische Komoedie"
     ]
   },
@@ -1405,8 +1243,8 @@
     "title": "Science Fiction",
     "path": [
       "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Science Fiction Fantasy",
+      "Dvd Filme",
+      "Dvd Science Fiction Fantasy",
       "Science Fiction"
     ]
   },
@@ -1416,15 +1254,6 @@
     "path": [
       "Videogames",
       "Sim Racing Flying"
-    ]
-  },
-  "simulationen": {
-    "root": "Videogames",
-    "title": "Simulationen",
-    "path": [
-      "Videogames",
-      "Computerspiele Fuer Windows",
-      "Simulationen"
     ]
   },
   "smart home": {
@@ -1495,16 +1324,6 @@
       "Speicherkarten"
     ]
   },
-  "spielesammlungen": {
-    "root": "Videogames",
-    "title": "Spielesammlungen",
-    "path": [
-      "Videogames",
-      "Xbox One",
-      "Xbox One Games",
-      "Spielesammlungen"
-    ]
-  },
   "spielzeugfiguren roboter": {
     "root": "Spielwaren",
     "title": "Spielzeugfiguren Roboter",
@@ -1538,16 +1357,6 @@
       "Sport Freizeit",
       "Sportgeraete",
       "Activity Tracker Smartwatches"
-    ]
-  },
-  "sportspiele": {
-    "root": "Videogames",
-    "title": "Sportspiele",
-    "path": [
-      "Videogames",
-      "Xbox Series X S",
-      "Xbox Series X S Games",
-      "Sportspiele"
     ]
   },
   "stative": {
@@ -1592,15 +1401,6 @@
       "Spielwaren",
       "Gesellschaftsspiele",
       "Strategie Rollenspiele"
-    ]
-  },
-  "strategiespiele": {
-    "root": "Videogames",
-    "title": "Strategiespiele",
-    "path": [
-      "Videogames",
-      "Computerspiele Fuer Windows",
-      "Strategiespiele"
     ]
   },
   "tablets": {
@@ -1653,8 +1453,8 @@
     "title": "Thriller",
     "path": [
       "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Action Thriller Horror",
+      "Dvd Filme",
+      "Dvd Action Thriller Horror",
       "Thriller"
     ]
   },
@@ -1690,14 +1490,6 @@
       "Drogerie",
       "Parfuemerie",
       "Unisexduefte"
-    ]
-  },
-  "velofahren": {
-    "root": "Sport & Freizeit",
-    "title": "Velofahren",
-    "path": [
-      "Sport Freizeit",
-      "Velofahren"
     ]
   },
   "velos": {
@@ -1787,24 +1579,6 @@
       "Wohnen"
     ]
   },
-  "xbox one": {
-    "root": "Videogames",
-    "title": "Xbox One",
-    "path": [
-      "Videogames",
-      "Xbox One"
-    ]
-  },
-  "xbox one games": {
-    "root": "Videogames",
-    "title": "Xbox One Games",
-    "path": [
-      "Videogames",
-      "Xbox One",
-      "Xbox One Games",
-      "Actionspiele"
-    ]
-  },
   "xbox series x": {
     "root": "Videogames",
     "title": "Xbox Series X",
@@ -1821,26 +1595,6 @@
       "Videogames",
       "Xbox Series X",
       "Xbox Series X Games"
-    ]
-  },
-  "xbox series x s": {
-    "root": "Videogames",
-    "title": "Xbox Series X S",
-    "path": [
-      "Videogames",
-      "Xbox Series X S",
-      "Xbox Series X S Games",
-      "3d Shooter Fps"
-    ]
-  },
-  "xbox series x s games": {
-    "root": "Videogames",
-    "title": "Xbox Series X S Games",
-    "path": [
-      "Videogames",
-      "Xbox Series X S",
-      "Xbox Series X S Games",
-      "3d Shooter Fps"
     ]
   },
   "xiaomi h2460": {
