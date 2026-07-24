@@ -1947,7 +1947,7 @@ const STYLES = `
 
     let bar = document.getElementById('tp-suite-filter-bar');
     const excluded = CONFIG.EXCLUDED_CATEGORIES || [];
-    const allCats = new Set([...pageCategories, ...excluded]);
+    const allCats = new Set([...pageCategories, ...excluded.filter(c => !c.startsWith('GROUP:'))]);
     const isExpanded = CONFIG.CATS_EXPANDED === true;
 
     if (!bar) {
