@@ -144,6 +144,9 @@ ENV/
 env.bak/
 venv.bak/
 
+# Playwright browser binaries used by userscript E2E tests
+userscripts/.playwright-browsers/
+
 # Spyder project settings
 .spyderproject
 .spyproject
