@@ -1,139 +1,243 @@
 # Userscript Development Reference
 
-This document provides detailed architectural guidelines, metadata choices, ScriptCat extensions, and orchestration patterns for building production-grade userscripts.
+This file contains implementation patterns for the workflow in `SKILL.md`. Keep the workflow and completion criteria in `SKILL.md`; keep detailed runtime, DOM, storage, orchestration, and test patterns here.
 
-## Runtime Selection & Scope
+## Runtime and metadata
 
-Before writing code, decide on the runtime environment:
-- **Portable Foreground Script**: Needs page DOM or page context. Ordinary `==UserScript==`.
-- **ScriptCat Background / Cron**: Needs persistent or scheduled work without DOM access. Uses `@background` or `@crontab`.
-- **ScriptCat Subscription Package**: Needs to install many scripts as one package. Uses `==UserSubscribe==`.
+Choose one runtime before writing page logic:
 
-Userscript work usually breaks at the runtime and metadata boundary, not in the page logic. Declare the minimum permissions up front, then debug in the environment where the script actually runs.
+- **Portable foreground**: ordinary `==UserScript==`; has page DOM access.
+- **ScriptCat background/cron**: no DOM access; use `@background` or `@crontab` for persistent or scheduled work.
+- **ScriptCat subscription**: use `==UserSubscribe==` only for a distributable bundle.
 
----
-
-## Metadata and API Map
-
-Start ordinary page scripts with `==UserScript==`, `@name`, `@namespace`, `@version`, and at least one `@match`.
-
-| Key                                           | Practical rule                                                                         |
-| --------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `@match`                                      | Default choice for normal host and path matching.                                      |
-| `@include` / `@exclude`                       | Use sparingly when `@match` is not expressive enough (legacy/broader pattern cases).   |
-| `@grant`                                      | Declare only what the script actually uses so permissions stay readable and minimal.   |
-| `@connect`                                    | Prefer explicit hosts first for `GM_xmlhttpRequest` or `GM_cookie`; avoid `*` unless required. |
-| `@run-at`                                     | Add only when `document-start`, `document-end`, or `document-idle` timing changes behavior. |
-
-**Versioning (semver)**: Use `MAJOR.MINOR.PATCH`. Keep update metadata simple: `@version` first, then `@updateURL` or `@downloadURL` if the distribution model actually needs them.
-
----
-
-## ScriptCat Extensions
-
-Use these features when the task goes beyond a normal portable userscript.
-
-### `@background` & `@crontab`
-- **Background scripts** are ScriptCat-specific and run in a sandbox **without DOM access**. Use for persistent workers or manager-managed state.
-- **Cron scripts** are background scripts for repeated scheduled work. Only the first `@crontab` entry is effective. Prefer standard 5-field cron form. Keep single-run time plus retry delay below the cron interval to prevent overlap.
-
-### Async Completion and `CATRetryError`
-- If a ScriptCat background or cron script does async work, it **must return a Promise**.
-- Resolve or reject only after the real work is finished. Once settled, ScriptCat considers the run complete.
-- To request retry, reject with `new CATRetryError(message, seconds)` (minimum 5 seconds).
-
-### `==UserConfig==` & `==UserSubscribe==`
-- Use `==UserConfig==` paired with `GM_getValue` for user-editable settings UIs.
-- Use `==UserSubscribe==` for silent bundle installs and updates (requires HTTPS, `user.sub.js`). Subscription `connect` overrides child scripts.
-
----
-
-## Implementation Architecture
-
-For standard foreground scripts, structure your `.user.js` files strictly as follows:
-
-### Component Separation
-Place **CONFIG** and **STYLES** constants *outside* the IIFE. Everything else lives inside the IIFE:
+For ordinary foreground scripts:
 
 ```javascript
-// ==UserScript== ... ==/UserScript==
+// ==UserScript==
+// @name         Example Userscript
+// @namespace    https://example.com/userscripts
+// @version      1.0.0
+// @match        https://example.com/*
+// @run-at       document-idle
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @noframes
+// ==/UserScript==
+```
 
-// ─── CONFIG ──────────────────────────────────────────────
-const CONFIG = { /* user-tunable values */ };
+Metadata rules:
 
-// ─── STYLES ──────────────────────────────────────────────
-const STYLE = ` /* injected CSS */ `;
+- Use the narrowest correct `@match`; use `@include`/`@exclude` only when necessary.
+- Declare only APIs the implementation calls. Add explicit `@connect` hosts for `GM_xmlhttpRequest` or `GM_cookie`.
+- Pin exact `@require` versions when external libraries are actually used.
+- Use semver for `@version`; add `@updateURL`/`@downloadURL` only when the distribution path needs them.
+- Keep user-tunable `CONFIG` and `STYLES` outside the IIFE; keep runtime implementation inside it.
 
-// ─────────────────────────────────────────────────────────
+ScriptCat background rules:
+
+- Background and cron scripts cannot use page DOM APIs.
+- Async work must return a `Promise` that settles after the real work finishes.
+- Retry with `new CATRetryError(message, seconds)` where supported; keep the retry delay and work duration below the cron interval.
+- `==UserConfig==` pairs with `GM_getValue` for manager-provided user settings; `==UserSubscribe==` is for bundles and requires HTTPS distribution.
+
+## Foreground module shape
+
+Use a deep private implementation behind a small orchestration seam:
+
+```javascript
+const DEFAULTS = { /* user-tunable defaults */ };
+const STYLES = `/* injected styles */`;
 
 (() => {
   'use strict';
-  // 1. STYLE INJECTION, 2. UTILITIES, 3. CORE LOGIC, 4. ORCHESTRATION
+
+  // 1. style injection
+  // 2. storage/configuration
+  // 3. normalization/visibility/event adapters
+  // 4. feature state transitions
+  // 5. timers and one-shot effects
+  // 6. settings UI
+  // 7. one shared orchestrator
 })();
 ```
 
-### Resiliency Principles
+Feature modules should expose narrow internal operations such as `runModelLock()`, `runAutoApprove()`, and `runConnectorEnablement()`. They should not create their own competing observers or intervals.
 
-- **Anchor Card Elements**: When parsing list items/cards, check if the container element itself is an anchor tag (`card.tagName === 'A'`), check `card.closest('a[href]')`, or query descendant `<a>` tags. Searching only children (`card.querySelectorAll('a')`) fails when the card IS the `<a>` element.
-- **2-Layer Reinstall-Proof Storage**: Extension storage (`GM_setValue`) is purged when a script is uninstalled or clean-reinstalled. Dual-write state to `GM_setValue` and `window.localStorage` on the target web domain (`localStorage.setItem('us_' + key, JSON.stringify(val))`). If `GM_getValue` returns `undefined` on script start, read `localStorage` and auto-reseed `GM_setValue`.
-- **Inline Input Labels**: Avoid `position: absolute` icons with fixed pixel padding inside text inputs; emoji widths vary dynamically across OS font engines. Use flexbox containers with inline label elements (`<span class="tp-input-label">`) positioned outside `<input>` boxes.
-- **Visibility Verification**: Always check `isVisible()` before interacting. Be extra vigilant on responsive sites.
-- **Event Fidelity**: For React/Radix, simple `.click()` may fail. Fire complete chains of events (`PointerEvent` + `MouseEvent`).
-- **Locks and Cooldowns**: Use flag locks (`isInteracting`) and timestamp-based throttles to enforce cooldowns.
-- **Processed Markers**: For one-shot actions on dynamically injected elements, mark the element with a `dataset.processed` attribute to prevent duplicate processing.
-- **Observer Error Guards**: Wrap `MutationObserver` callbacks and the `run()` function in `try/catch`. An uncaught exception inside an observer silently kills it.
-- **Mutation Loop Avoidance**: When modifying classes, styles, or contents of observed elements from inside a `MutationObserver` callback, those modifications trigger the observer again. Avoid infinite recursion loops by disabling attribute/character observation (`attributes: false, characterData: false`) or checking explicit processed flags to short-circuit.
-- **Text Normalization**: When matching text identifiers parsed from distinct DOM elements (e.g. comparing UI filter tags to card labels), normalize names to avoid spacing, casing, and symbol mismatching:
-  ```javascript
-  const normalize = str => str.toLowerCase().replace(/[^a-z0-9]/g, '');
-  ```
+## DOM discovery and event adapters
 
-### User Feedback
-- **Indicator dots**: Append a small glowing `<span>` (green = active, amber = syncing) to target elements.
-- **Toast notifications**: Inject a temporary toast for one-shot actions.
+Use ranked heuristics rather than one brittle selector:
 
----
+1. Stable semantic/structural anchor.
+2. Accessible role, label, or test identifier.
+3. Normalized text as a constrained fallback.
 
-## Orchestration Patterns
+For each target, define positive signals and exclusions. Exclude the script's own root (`#px-settings-modal`, or the project equivalent) before broad page scans so settings controls cannot be mistaken for domain controls.
 
-### Debounced MutationObserver & Reliable SPA Navigation
-Use a debounced observer to prevent thrashing on SPAs, and combine it with the Navigation API (or a fallback observer) to handle URL changes:
+Visibility should reject elements that are detached, `display:none`, `visibility:hidden`, transparent, or have zero width or height:
+
+```javascript
+function isVisible(element) {
+  if (!element || !document.contains(element)) return false;
+  const style = getComputedStyle(element);
+  const rect = element.getBoundingClientRect();
+  return style.display !== 'none'
+    && style.visibility !== 'hidden'
+    && style.opacity !== '0'
+    && rect.width > 0
+    && rect.height > 0;
+}
+```
+
+When parsing cards, account for the card itself being an anchor:
+
+```javascript
+const link = card.tagName === 'A' ? card : card.closest('a[href]') || card.querySelector('a[href]');
+```
+
+Normalize text before comparison:
+
+```javascript
+const normalize = value => String(value || '')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .toLowerCase();
+```
+
+For React/Radix controls, use the simplest event that is verified to work. When `.click()` is unreliable, dispatch a complete pointer/mouse sequence and ensure only one `click` is emitted:
+
+```javascript
+function dispatchClickEvents(element) {
+  if (!element) return;
+  const events = [
+    new PointerEvent('pointerdown', { bubbles: true, cancelable: true }),
+    new PointerEvent('pointerup', { bubbles: true, cancelable: true }),
+    new MouseEvent('mousedown', { bubbles: true, cancelable: true }),
+    new MouseEvent('mouseup', { bubbles: true, cancelable: true }),
+    new MouseEvent('click', { bubbles: true, cancelable: true }),
+  ];
+  events.forEach(event => element.dispatchEvent(event));
+}
+```
+
+## Storage and migration
+
+Use one canonical project prefix, for example `px_<project>_`, consistently in both layers:
+
+```javascript
+function writeValue(key, value) {
+  GM_setValue(`${PREFIX}${key}`, value);
+  localStorage.setItem(`${PREFIX}${key}`, JSON.stringify(value));
+}
+```
+
+Read precedence should be explicit:
+
+1. canonical GM value;
+2. canonical page-localStorage value, followed by GM reseeding;
+3. known legacy page-localStorage keys, followed by canonical dual-write;
+4. default.
+
+Guard every storage operation with `try/catch`; browser privacy settings and manager contexts can deny either layer. Validate types and ranges at the configuration seam rather than at every call site.
+
+Do not infer that a replacement script can read the old script's GM namespace. Managers commonly isolate values by userscript identity. Support legacy page-localStorage migration when possible, document the limitation, and provide a manual settings fallback for legacy GM-only values.
+
+When consolidating scripts, use new canonical keys to avoid collisions, preserve defaults unless intentionally changing them, and document that users must disable old installed scripts before enabling the replacement. Repository deletion does not disable copies already installed in a browser.
+
+## Idempotent state and timers
+
+Dynamic pages call the orchestrator repeatedly. Every action must be safe to discover more than once:
+
+- Track one timer per element with a `WeakMap`/`Map` and/or a `data-*` marker.
+- Skip detached, disabled, already-processed, or already-scheduled elements.
+- Clear timers, progress UI, hover state, and locks when elements disappear, complete, or the feature is disabled.
+- Store timer handles before the first asynchronous callback can schedule a duplicate.
+- Reset route-scoped attempt state on URL changes.
+- On interactions that mutate only attributes or text, schedule an explicit follow-up run after the cooldown; do not depend on a `childList` mutation that may never happen.
+- Release locks in both normal and exceptional paths.
+
+For a countdown, prefer a monotonic remaining-time calculation or a fixed tick that is clamped at zero. Hover pause must freeze the remaining value, not restart the full delay.
+
+## Settings UI
+
+Use one namespaced FAB/modal per script. The settings module should:
+
+- render once and update fields from current configuration on open;
+- validate and normalize values before saving;
+- support Save, Cancel, backdrop close, and Escape;
+- disable dependent controls visibly and functionally;
+- cancel pending feature work immediately when a feature is disabled;
+- avoid absolute icons inside text inputs; use inline/flex labels;
+- keep modal controls outside selector scans for the target site.
+
+## Observer and SPA orchestration
+
+Use one debounced observer and one safety interval:
 
 ```javascript
 let debounceTimer = null;
+let lastUrl = location.href;
+
 const observer = new MutationObserver(() => {
   try {
+    if (location.href !== lastUrl) {
+      lastUrl = location.href;
+      resetRouteState();
+    }
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(run, CONFIG.OBSERVER_DEBOUNCE_MS);
-  } catch (e) {
-    err('Observer error:', e);
+  } catch (error) {
+    logError('Observer failed', error);
   }
 });
 
-function handleUrlChange() {
-  logicLock = false; lastActionTime = 0; run();
+function handleNavigation() {
+  lastUrl = location.href;
+  resetRouteState();
+  run();
 }
-if (self.navigation) {
-  navigation.addEventListener('navigatesuccess', handleUrlChange);
-} // ... fallback observer for older browsers
-```
 
-### Bootstrap Sequence
-End the IIFE with:
-```javascript
+if (self.navigation && typeof self.navigation.addEventListener === 'function') {
+  self.navigation.addEventListener('navigatesuccess', handleNavigation);
+}
+
 observer.observe(document.documentElement, { childList: true, subtree: true });
 run();
-setInterval(run, 5000); // Safety net fallback
+setInterval(run, 5000);
 ```
 
----
+The observer is intentionally not watching script-owned attributes or character data. If an older browser lacks the Navigation API, URL comparison in the shared observer is the fallback; do not add a second continuously-running DOM observer just for navigation.
 
-## Testing & Documentation
+Wrap both `run()` and the observer callback in `try/catch`; an uncaught observer exception can silently end future automation. Keep the safety interval as recovery, not as the primary high-frequency loop.
 
-- **Debugging**: Debug where the code really runs (Foreground = page console; Background = manager run log).
-- **Playwright Tests**: Use a headless browser to load the target page, inject the userscript, and assert DOM mutations.
-- **README**: Provide direct installation links and a configuration mapping table.
-- **Raw CDN Caching Gotchas**: When installing/reinstalling scripts via GitHub Raw URLs (`raw.githubusercontent.com`), changes are cached by the GitHub CDN for ~5 minutes. If a reinstall prompt continues to present the old version:
-  - Add a temporary query parameter cache-buster (e.g. `?v=VERSION` or `?t=TIMESTAMP`) to the raw URL.
-  - Open the raw URL in a browser tab and force-reload (`Ctrl + F5` or `Cmd + Shift + R`) to bust the browser's local cache.
-  - Manually delete the existing script inside the userscript manager's dashboard before triggering the installation link.
+## Playwright test harness
+
+Foreground tests should load a local mock page and inject the source:
+
+```python
+page.goto(MOCK_HTML)
+page.evaluate(userscript_content)
+page.wait_for_selector('#target .expected-result')
+```
+
+Installing Violentmonkey/Tampermonkey is unnecessary unless the test is specifically about manager installation or metadata. Test the same seam the user exercises: DOM changes, clicks, storage, timers, and visible UI.
+
+Use condition-based waits, not arbitrary sleeps. Seed a short delay through canonical test storage or a fixture while preserving production defaults in the script. Cover initial state, recovery, opposite toggle state, timer pause/resume/cancel, duplicate mutations, route reset, settings validation/persistence, migration, and exclusion cases.
+
+Keep Python dependencies in `tests/requirements.txt`. Large browser binaries are machine-specific and should remain ignored. A project may use a repo-local path such as `userscripts/.playwright-browsers/` plus `tests/conftest.py` to set `PLAYWRIGHT_BROWSERS_PATH`; this keeps the environment reproducible without tracking binaries.
+
+Recommended checks:
+
+```bash
+node --check path/to/script.user.js
+pytest path/to/tests/test_userscript.py
+git diff --check
+```
+
+If installation or browser startup fails because of missing packages, network, sandbox policy, or permissions, report the exact command and failure. Do not convert an infrastructure blocker into a passing test claim.
+
+## Debugging and distribution
+
+- Foreground behavior: inspect the real page console and DOM.
+- ScriptCat background/cron behavior: inspect the manager's run log.
+- For raw GitHub installs, CDN/browser caching can show an old version. Bump `@version`, use a temporary query parameter such as `?v=1.0.1`, force-reload, or remove the old manager entry before reinstalling.
+- During consolidation, verify the replacement before deleting legacy repository files and tell users how to disable already-installed legacy copies.
