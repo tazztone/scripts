@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Hugging Face Yellow Hearts & Unliked Model Highlighter
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.2.0
-// @description  Make heart icons larger/yellow, highlight unliked models with a green border, and like models directly from list cards.
+// @version      1.3.1
+// @description  Make heart icons larger/yellow, highlight unliked models with a green border, like models directly from list cards, and filter models by date range slider.
 // @author       tazztone
 // @match        https://huggingface.co/models*
 // @run-at       document-start
@@ -20,8 +20,25 @@ const DEFAULTS = {
   SCALE_HOVER: 1.2,
   BORDER_UNLIKED_ENABLED: true,
   BORDER_UNLIKED_COLOR: '#10b981',
-  BORDER_UNLIKED_GLOW: true
+  BORDER_UNLIKED_GLOW: true,
+  DATE_FILTER_ENABLED: false,
+  DATE_MIN_DAYS: 0,
+  DATE_MAX_DAYS: 30,
+  DATE_PRESET: 'all'
 };
+
+const PRESETS = [
+  { id: '24h', label: '24h', min: 0, max: 1 },
+  { id: '3d', label: '3d', min: 0, max: 3 },
+  { id: '7d', label: '7d', min: 0, max: 7 },
+  { id: '14d', label: '14d', min: 0, max: 14 },
+  { id: '30d', label: '30d', min: 0, max: 30 },
+  { id: '60d', label: '60d', min: 0, max: 60 },
+  { id: '90d', label: '90d', min: 0, max: 90 },
+  { id: '180d', label: '180d', min: 0, max: 180 },
+  { id: '1y', label: '1y', min: 0, max: 365 },
+  { id: 'all', label: 'All', min: 0, max: 99999 }
+];
 
 const MODAL_STYLES = `
   #hf-settings-fab {
@@ -72,13 +89,13 @@ const MODAL_STYLES = `
   }
   #hf-settings-modal {
     width: 90%;
-    max-width: 480px;
-    max-height: 80vh;
+    max-width: 520px;
+    max-height: 85vh;
     overflow-y: auto;
     padding: 24px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 16px;
-    background: rgba(30, 41, 59, 0.92);
+    background: rgba(30, 41, 59, 0.95);
     color: #f8fafc;
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -105,14 +122,17 @@ const MODAL_STYLES = `
     font-weight: 600;
   }
   .hf-settings-group input[type="color"],
-  .hf-settings-group input[type="number"] {
+  .hf-settings-group input[type="number"],
+  .hf-settings-group select {
     box-sizing: border-box;
     width: 100%;
     min-height: 34px;
+    padding: 6px 10px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 6px;
     background: rgba(15, 23, 42, 0.6);
     color: #fff;
+    font-size: 13px;
   }
   .hf-settings-group input[type="color"] {
     padding: 3px;
@@ -130,6 +150,7 @@ const MODAL_STYLES = `
     width: 44px;
     height: 24px;
     position: relative;
+    display: inline-block;
   }
   .hf-switch input {
     opacity: 0;
@@ -185,6 +206,147 @@ const MODAL_STYLES = `
     background: linear-gradient(135deg, #fbbf24, #f59e0b);
     color: #451a03;
   }
+
+  /* ─── SIDEBAR DATE FILTER WIDGET STYLES ───────────────────────────────── */
+  article.overview-card-wrapper.hf-date-filtered-out {
+    display: none !important;
+  }
+
+  #hf-date-filter-widget {
+    margin-bottom: 24px;
+    padding: 14px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(8px);
+    color: #f1f5f9;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  }
+  #hf-date-filter-widget .hf-df-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  #hf-date-filter-widget .hf-df-title {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #fbbf24;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  #hf-date-filter-widget .hf-df-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 12px;
+  }
+  .hf-df-preset-btn {
+    padding: 3px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .hf-df-preset-btn:hover {
+    background: rgba(251, 191, 36, 0.15);
+    color: #fef08a;
+    border-color: rgba(251, 191, 36, 0.4);
+  }
+  .hf-df-preset-btn.active {
+    background: rgba(245, 158, 11, 0.25);
+    color: #fbbf24;
+    border-color: #f59e0b;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.3);
+  }
+  .hf-df-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .hf-df-range-container {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .hf-df-inputs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .hf-df-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+  }
+  .hf-df-input-group label {
+    font-size: 10px;
+    color: #94a3b8;
+    text-transform: uppercase;
+  }
+  .hf-df-input-group input[type="number"] {
+    box-sizing: border-box;
+    width: 100%;
+    height: 28px;
+    padding: 2px 6px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    background: rgba(15, 23, 42, 0.8);
+    color: #f8fafc;
+    font-size: 12px;
+  }
+  .hf-df-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .hf-df-slider-row input[type="range"] {
+    flex: 1;
+    accent-color: #f59e0b;
+  }
+  .hf-df-range-label {
+    font-size: 11px;
+    color: #cbd5e1;
+    line-height: 1.3;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  .hf-df-status {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+    font-size: 11px;
+    color: #94a3b8;
+  }
+  .hf-df-badge {
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    font-weight: 600;
+  }
+  #hf-df-empty-notice {
+    margin: 16px 0;
+    padding: 14px 16px;
+    border: 1px dashed rgba(245, 158, 11, 0.4);
+    border-radius: 12px;
+    background: rgba(245, 158, 11, 0.08);
+    color: #fbbf24;
+    font-size: 13px;
+    text-align: center;
+  }
 `;
 
 (() => {
@@ -229,7 +391,15 @@ const MODAL_STYLES = `
     get BORDER_UNLIKED_COLOR() { return getValue('BORDER_UNLIKED_COLOR', DEFAULTS.BORDER_UNLIKED_COLOR); },
     set BORDER_UNLIKED_COLOR(value) { setValue('BORDER_UNLIKED_COLOR', value); },
     get BORDER_UNLIKED_GLOW() { return getValue('BORDER_UNLIKED_GLOW', DEFAULTS.BORDER_UNLIKED_GLOW); },
-    set BORDER_UNLIKED_GLOW(value) { setValue('BORDER_UNLIKED_GLOW', value); }
+    set BORDER_UNLIKED_GLOW(value) { setValue('BORDER_UNLIKED_GLOW', value); },
+    get DATE_FILTER_ENABLED() { return getValue('DATE_FILTER_ENABLED', DEFAULTS.DATE_FILTER_ENABLED); },
+    set DATE_FILTER_ENABLED(value) { setValue('DATE_FILTER_ENABLED', value); },
+    get DATE_MIN_DAYS() { return parseInt(getValue('DATE_MIN_DAYS', DEFAULTS.DATE_MIN_DAYS), 10); },
+    set DATE_MIN_DAYS(value) { setValue('DATE_MIN_DAYS', Math.max(0, parseInt(value, 10) || 0)); },
+    get DATE_MAX_DAYS() { return parseInt(getValue('DATE_MAX_DAYS', DEFAULTS.DATE_MAX_DAYS), 10); },
+    set DATE_MAX_DAYS(value) { setValue('DATE_MAX_DAYS', Math.max(0, parseInt(value, 10) || 0)); },
+    get DATE_PRESET() { return getValue('DATE_PRESET', DEFAULTS.DATE_PRESET); },
+    set DATE_PRESET(value) { setValue('DATE_PRESET', value); }
   };
 
   let currentUser = null;
@@ -298,6 +468,55 @@ const MODAL_STYLES = `
     }
   }
 
+  // ─── DATE HELPERS ────────────────────────────────────────────────────────────
+  function getModelDate(card) {
+    const timeEl = card.querySelector('time');
+    if (!timeEl) return null;
+
+    const dtAttr = timeEl.getAttribute('datetime');
+    if (dtAttr) {
+      const parsed = Date.parse(dtAttr);
+      if (!isNaN(parsed)) return parsed;
+    }
+
+    const titleAttr = timeEl.getAttribute('title');
+    if (titleAttr) {
+      const parsed = Date.parse(titleAttr);
+      if (!isNaN(parsed)) return parsed;
+    }
+
+    const text = timeEl.textContent.trim().toLowerCase();
+    const now = Date.now();
+
+    const hourMatch = text.match(/^(\d+)\s*hours?\s*ago/);
+    if (hourMatch) return now - parseInt(hourMatch[1], 10) * 3600 * 1000;
+
+    const dayMatch = text.match(/^(\d+)\s*days?\s*ago/);
+    if (dayMatch) return now - parseInt(dayMatch[1], 10) * 86400 * 1000;
+
+    const monthMatch = text.match(/^(\d+)\s*months?\s*ago/);
+    if (monthMatch) return now - parseInt(monthMatch[1], 10) * 30 * 86400 * 1000;
+
+    const yearMatch = text.match(/^(\d+)\s*years?\s*ago/);
+    if (yearMatch) return now - parseInt(yearMatch[1], 10) * 365 * 86400 * 1000;
+
+    return null;
+  }
+
+  function getDaysAgo(timestamp) {
+    if (!timestamp) return null;
+    const diffMs = Date.now() - timestamp;
+    return Math.max(0, diffMs / (1000 * 60 * 60 * 24));
+  }
+
+  function formatDateLabel(daysAgo) {
+    if (daysAgo >= 9999) return 'Beginning of time';
+    if (daysAgo === 0) return 'Today';
+    const date = new Date(Date.now() - daysAgo * 86400 * 1000);
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  // ─── USER LIKES & CARDS ──────────────────────────────────────────────────────
   async function initUserLikes() {
     try {
       let username = null;
@@ -440,13 +659,59 @@ const MODAL_STYLES = `
 
   function processModelCards() {
     const cards = document.querySelectorAll('article.overview-card-wrapper');
+    let totalCards = cards.length;
+    let visibleCards = 0;
+
+    const isDateFilterActive = CONFIG.DATE_FILTER_ENABLED;
+    const minDays = CONFIG.DATE_MIN_DAYS;
+    const maxDays = CONFIG.DATE_MAX_DAYS;
+
     cards.forEach(card => {
       const modelId = getModelIdFromCard(card);
-      if (!modelId) return;
 
-      updateCardVisual(card, modelId);
-      setupHeartButton(card, modelId);
+      if (isDateFilterActive) {
+        const timestamp = getModelDate(card);
+        if (timestamp !== null) {
+          const daysAgo = getDaysAgo(timestamp);
+          if (daysAgo !== null && (daysAgo < minDays || daysAgo > maxDays)) {
+            card.classList.add('hf-date-filtered-out');
+          } else {
+            card.classList.remove('hf-date-filtered-out');
+            visibleCards++;
+          }
+        } else {
+          card.classList.remove('hf-date-filtered-out');
+          visibleCards++;
+        }
+      } else {
+        card.classList.remove('hf-date-filtered-out');
+        visibleCards++;
+      }
+
+      if (modelId) {
+        updateCardVisual(card, modelId);
+        setupHeartButton(card, modelId);
+      }
     });
+
+    updateWidgetStats(visibleCards, totalCards);
+    updateEmptyNotice(visibleCards, totalCards, isDateFilterActive);
+  }
+
+  function updateEmptyNotice(visibleCount, totalCount, isActive) {
+    let noticeEl = document.getElementById('hf-df-empty-notice');
+    if (isActive && totalCount > 0 && visibleCount === 0) {
+      if (!noticeEl) {
+        noticeEl = document.createElement('div');
+        noticeEl.id = 'hf-df-empty-notice';
+        const main = document.querySelector('main') || document.querySelector('article')?.parentElement || document.body;
+        main.insertBefore(noticeEl, main.firstChild);
+      }
+      noticeEl.textContent = `No models match the active date filter on the currently loaded list (${totalCount} models scanned). Scroll down to load more models or expand the date range slider.`;
+      noticeEl.style.display = 'block';
+    } else if (noticeEl) {
+      noticeEl.style.display = 'none';
+    }
   }
 
   function setupHeartButton(card, modelId) {
@@ -464,8 +729,6 @@ const MODAL_STYLES = `
     if (heartContainer.dataset.hfBound === modelId) return;
     heartContainer.dataset.hfBound = modelId;
 
-    // Prevent parent <a> link drag/selection without calling preventDefault on mousedown
-    // (calling preventDefault on mousedown cancels browser click generation)
     heartContainer.addEventListener('mousedown', (e) => {
       e.stopPropagation();
     }, true);
@@ -486,7 +749,6 @@ const MODAL_STYLES = `
 
       console.log(`[HF Yellow Hearts] Toggling like for ${modelId}: ${isCurrentlyLiked} -> ${nextLikedState}`);
 
-      // Optimistic UI update
       if (nextLikedState) {
         likedModelIds.add(modelId);
       } else {
@@ -555,18 +817,210 @@ const MODAL_STYLES = `
     const observer = new MutationObserver(() => {
       if (observerTimer) clearTimeout(observerTimer);
       observerTimer = setTimeout(() => {
+        setupSidebarWidget();
         processModelCards();
       }, 200);
     });
     observer.observe(document.body, { childList: true, subtree: true });
   }
 
+  // ─── SIDEBAR WIDGET ─────────────────────────────────────────────────────────
+  function findSidebarParent() {
+    const headers = Array.from(document.querySelectorAll('h3, h4, div, span'));
+    for (const h of headers) {
+      const text = h.textContent.trim();
+      if (text === 'Parameters' || text === 'Tasks' || text === 'Libraries') {
+        const form = h.closest('form');
+        if (form) return form;
+        const aside = h.closest('aside');
+        if (aside) return aside;
+        const parentDiv = h.parentElement?.parentElement;
+        if (parentDiv && parentDiv.children.length > 1) return parentDiv;
+      }
+    }
+    return document.querySelector('form') || document.querySelector('aside') || document.querySelector('.grid > div');
+  }
+
+  function setupSidebarWidget() {
+    if (document.getElementById('hf-date-filter-widget')) return;
+
+    const targetParent = findSidebarParent();
+    if (!targetParent) return;
+
+    const widget = document.createElement('div');
+    widget.id = 'hf-date-filter-widget';
+
+    widget.innerHTML = `
+      <div class="hf-df-header">
+        <div class="hf-df-title">
+          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          Date Range
+        </div>
+        <label class="hf-switch">
+          <input id="hf-df-toggle" type="checkbox">
+          <span class="hf-slider"></span>
+        </label>
+      </div>
+
+      <div class="hf-df-presets" id="hf-df-presets-container">
+        ${PRESETS.map(p => `<button type="button" class="hf-df-preset-btn" data-preset="${p.id}">${p.label}</button>`).join('')}
+      </div>
+
+      <div class="hf-df-controls">
+        <div class="hf-df-range-container">
+          <div class="hf-df-slider-row">
+            <input type="range" id="hf-df-slider-max" min="1" max="365" step="1" title="Max days ago (Updated recently)">
+          </div>
+          <div class="hf-df-inputs">
+            <div class="hf-df-input-group">
+              <label for="hf-df-min-input">Min Days</label>
+              <input type="number" id="hf-df-min-input" min="0" max="3650" placeholder="0">
+            </div>
+            <div class="hf-df-input-group">
+              <label for="hf-df-max-input">Max Days</label>
+              <input type="number" id="hf-df-max-input" min="0" max="3650" placeholder="30">
+            </div>
+          </div>
+        </div>
+
+        <div class="hf-df-range-label" id="hf-df-range-label">
+          Updated: Today – 30 days ago
+        </div>
+
+        <div class="hf-df-status">
+          <span>Filter Status</span>
+          <span class="hf-df-badge" id="hf-df-badge">All shown</span>
+        </div>
+      </div>
+    `;
+
+    targetParent.insertBefore(widget, targetParent.firstChild);
+    bindWidgetEvents();
+    syncWidgetUI();
+  }
+
+  function bindWidgetEvents() {
+    const toggle = document.getElementById('hf-df-toggle');
+    const sliderMax = document.getElementById('hf-df-slider-max');
+    const minInput = document.getElementById('hf-df-min-input');
+    const maxInput = document.getElementById('hf-df-max-input');
+    const presetsContainer = document.getElementById('hf-df-presets-container');
+
+    toggle?.addEventListener('change', (e) => {
+      CONFIG.DATE_FILTER_ENABLED = e.target.checked;
+      syncWidgetUI();
+      processModelCards();
+    });
+
+    sliderMax?.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value, 10);
+      CONFIG.DATE_MAX_DAYS = val;
+      CONFIG.DATE_PRESET = 'custom';
+      syncWidgetUI();
+      processModelCards();
+    });
+
+    minInput?.addEventListener('change', (e) => {
+      const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+      CONFIG.DATE_MIN_DAYS = val;
+      CONFIG.DATE_PRESET = 'custom';
+      syncWidgetUI();
+      processModelCards();
+    });
+
+    maxInput?.addEventListener('change', (e) => {
+      const val = Math.max(CONFIG.DATE_MIN_DAYS, parseInt(e.target.value, 10) || 0);
+      CONFIG.DATE_MAX_DAYS = val;
+      CONFIG.DATE_PRESET = 'custom';
+      syncWidgetUI();
+      processModelCards();
+    });
+
+    presetsContainer?.addEventListener('click', (e) => {
+      const btn = e.target.closest('.hf-df-preset-btn');
+      if (!btn) return;
+
+      const presetId = btn.dataset.preset;
+      const preset = PRESETS.find(p => p.id === presetId);
+      if (!preset) return;
+
+      CONFIG.DATE_PRESET = presetId;
+      CONFIG.DATE_MIN_DAYS = preset.min;
+      CONFIG.DATE_MAX_DAYS = preset.max;
+      if (presetId !== 'all') {
+        CONFIG.DATE_FILTER_ENABLED = true;
+      } else {
+        CONFIG.DATE_FILTER_ENABLED = false;
+      }
+
+      syncWidgetUI();
+      processModelCards();
+    });
+  }
+
+  function syncWidgetUI() {
+    const toggle = document.getElementById('hf-df-toggle');
+    const sliderMax = document.getElementById('hf-df-slider-max');
+    const minInput = document.getElementById('hf-df-min-input');
+    const maxInput = document.getElementById('hf-df-max-input');
+    const rangeLabel = document.getElementById('hf-df-range-label');
+    const presetBtns = document.querySelectorAll('.hf-df-preset-btn');
+
+    if (toggle) toggle.checked = CONFIG.DATE_FILTER_ENABLED;
+    if (minInput) minInput.value = CONFIG.DATE_MIN_DAYS;
+    if (maxInput) maxInput.value = CONFIG.DATE_MAX_DAYS;
+    if (sliderMax) sliderMax.value = Math.min(365, CONFIG.DATE_MAX_DAYS);
+
+    presetBtns.forEach(btn => {
+      if (btn.dataset.preset === CONFIG.DATE_PRESET) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+
+    if (rangeLabel) {
+      const minStr = formatDateLabel(CONFIG.DATE_MIN_DAYS);
+      const maxStr = formatDateLabel(CONFIG.DATE_MAX_DAYS);
+      if (CONFIG.DATE_MAX_DAYS >= 9999) {
+        rangeLabel.textContent = `Updated: ${minStr} and older`;
+      } else if (CONFIG.DATE_MIN_DAYS === 0) {
+        rangeLabel.textContent = `Updated: Last ${CONFIG.DATE_MAX_DAYS} days (${maxStr} – Today)`;
+      } else {
+        rangeLabel.textContent = `Updated: ${CONFIG.DATE_MIN_DAYS} to ${CONFIG.DATE_MAX_DAYS} days ago (${maxStr} – ${minStr})`;
+      }
+    }
+  }
+
+  function updateWidgetStats(visibleCount, totalCount) {
+    const badge = document.getElementById('hf-df-badge');
+    if (!badge) return;
+
+    if (!CONFIG.DATE_FILTER_ENABLED) {
+      badge.textContent = `All shown (${totalCount})`;
+      badge.style.background = 'rgba(16, 185, 129, 0.15)';
+      badge.style.color = '#34d399';
+    } else {
+      badge.textContent = `Showing ${visibleCount} / ${totalCount}`;
+      if (visibleCount === 0) {
+        badge.style.background = 'rgba(239, 68, 68, 0.2)';
+        badge.style.color = '#f87171';
+      } else {
+        badge.style.background = 'rgba(245, 158, 11, 0.2)';
+        badge.style.color = '#fbbf24';
+      }
+    }
+  }
+
+  // ─── FAB SETTINGS MODAL ─────────────────────────────────────────────────────
   function setupUI() {
     if (document.getElementById('hf-settings-fab')) return;
 
     const container = document.createElement('div');
     container.innerHTML = `
-      <button id="hf-settings-fab" type="button" title="Configure Hugging Face hearts" aria-label="Configure Hugging Face hearts">
+      <button id="hf-settings-fab" type="button" title="Configure Hugging Face hearts & date filter" aria-label="Configure Hugging Face hearts & date filter">
         <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -574,7 +1028,39 @@ const MODAL_STYLES = `
       </button>
       <div id="hf-settings-modal-backdrop">
         <div id="hf-settings-modal" role="dialog" aria-modal="true" aria-labelledby="hf-settings-title">
-          <h3 id="hf-settings-title">Hugging Face Hearts</h3>
+          <h3 id="hf-settings-title">Hugging Face Enhancements</h3>
+
+          <!-- DATE FILTER SECTION -->
+          <div style="font-size: 14px; font-weight: 700; color: #fbbf24; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px;">
+            Date Range Filter
+          </div>
+          <div class="hf-settings-group hf-switch-container">
+            <label for="hf-df-modal-enabled">Enable Date Filter</label>
+            <label class="hf-switch">
+              <input id="hf-df-modal-enabled" type="checkbox">
+              <span class="hf-slider"></span>
+            </label>
+          </div>
+          <div class="hf-settings-group">
+            <label for="hf-df-modal-preset">Quick Preset</label>
+            <select id="hf-df-modal-preset">
+              ${PRESETS.map(p => `<option value="${p.id}">${p.label}</option>`).join('')}
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+          <div class="hf-settings-group">
+            <label for="hf-df-modal-min-days">Min Days Ago</label>
+            <input id="hf-df-modal-min-days" type="number" min="0" max="3650">
+          </div>
+          <div class="hf-settings-group">
+            <label for="hf-df-modal-max-days">Max Days Ago</label>
+            <input id="hf-df-modal-max-days" type="number" min="0" max="3650">
+          </div>
+
+          <!-- HEART STYLING SECTION -->
+          <div style="font-size: 14px; font-weight: 700; color: #fbbf24; margin: 20px 0 12px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px;">
+            Heart Styling & Highlighting
+          </div>
           <div class="hf-settings-group hf-switch-container">
             <label for="hf-enabled">Enable heart styling</label>
             <label class="hf-switch">
@@ -598,7 +1084,6 @@ const MODAL_STYLES = `
             <label for="hf-scale-hover">Hover scale</label>
             <input id="hf-scale-hover" type="number" min="1" max="5" step="0.1">
           </div>
-          <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 16px 0;">
           <div class="hf-settings-group hf-switch-container">
             <label for="hf-border-unliked-enabled">Highlight unliked models</label>
             <label class="hf-switch">
@@ -617,6 +1102,7 @@ const MODAL_STYLES = `
               <span class="hf-slider"></span>
             </label>
           </div>
+
           <div class="hf-modal-actions">
             <button type="button" class="hf-btn hf-btn-secondary" id="hf-btn-close">Cancel</button>
             <button type="button" class="hf-btn hf-btn-primary" id="hf-btn-save">Save Settings</button>
@@ -628,6 +1114,7 @@ const MODAL_STYLES = `
 
     const fab = document.getElementById('hf-settings-fab');
     fab.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>';
+
     const backdrop = document.getElementById('hf-settings-modal-backdrop');
     const enabled = document.getElementById('hf-enabled');
     const colorIdle = document.getElementById('hf-color-idle');
@@ -638,6 +1125,11 @@ const MODAL_STYLES = `
     const borderUnlikedColor = document.getElementById('hf-border-unliked-color');
     const borderUnlikedGlow = document.getElementById('hf-border-unliked-glow');
 
+    const dfModalEnabled = document.getElementById('hf-df-modal-enabled');
+    const dfModalPreset = document.getElementById('hf-df-modal-preset');
+    const dfModalMinDays = document.getElementById('hf-df-modal-min-days');
+    const dfModalMaxDays = document.getElementById('hf-df-modal-max-days');
+
     const syncFields = () => {
       enabled.checked = CONFIG.ENABLED;
       colorIdle.value = CONFIG.COLOR_IDLE;
@@ -647,7 +1139,20 @@ const MODAL_STYLES = `
       borderUnlikedEnabled.checked = CONFIG.BORDER_UNLIKED_ENABLED;
       borderUnlikedColor.value = CONFIG.BORDER_UNLIKED_COLOR;
       borderUnlikedGlow.checked = CONFIG.BORDER_UNLIKED_GLOW;
+
+      dfModalEnabled.checked = CONFIG.DATE_FILTER_ENABLED;
+      dfModalPreset.value = CONFIG.DATE_PRESET;
+      dfModalMinDays.value = CONFIG.DATE_MIN_DAYS;
+      dfModalMaxDays.value = CONFIG.DATE_MAX_DAYS;
     };
+
+    dfModalPreset.addEventListener('change', (e) => {
+      const p = PRESETS.find(pr => pr.id === e.target.value);
+      if (p) {
+        dfModalMinDays.value = p.min;
+        dfModalMaxDays.value = p.max;
+      }
+    });
 
     const close = () => backdrop.classList.remove('open');
     fab.addEventListener('click', () => {
@@ -667,7 +1172,14 @@ const MODAL_STYLES = `
       CONFIG.BORDER_UNLIKED_ENABLED = borderUnlikedEnabled.checked;
       CONFIG.BORDER_UNLIKED_COLOR = borderUnlikedColor.value;
       CONFIG.BORDER_UNLIKED_GLOW = borderUnlikedGlow.checked;
+
+      CONFIG.DATE_FILTER_ENABLED = dfModalEnabled.checked;
+      CONFIG.DATE_PRESET = dfModalPreset.value;
+      CONFIG.DATE_MIN_DAYS = Math.max(0, parseInt(dfModalMinDays.value, 10) || 0);
+      CONFIG.DATE_MAX_DAYS = Math.max(CONFIG.DATE_MIN_DAYS, parseInt(dfModalMaxDays.value, 10) || 0);
+
       injectStyles();
+      syncWidgetUI();
       processModelCards();
       close();
     });
@@ -677,6 +1189,7 @@ const MODAL_STYLES = `
 
   const init = async () => {
     setupUI();
+    setupSidebarWidget();
     observeCards();
     await initUserLikes();
     processModelCards();
