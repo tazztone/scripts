@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.8.7
+// @version      2.8.8
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -1948,9 +1948,11 @@ const STYLES = `
 
   // Dedicated Power Filter Bar Target & Placement Selector
   function getSuiteBarPlacement() {
+    const bar = document.getElementById('tp-suite-filter-bar');
+
     // 1. Native filter container on category/search pages
     const nativeFilters = document.querySelector('.filters, #filters, .filter_box, .filter-box');
-    if (nativeFilters && nativeFilters.parentElement) {
+    if (nativeFilters && nativeFilters.parentElement && nativeFilters !== bar) {
       return { container: nativeFilters.parentElement, reference: nativeFilters };
     }
 
@@ -1961,22 +1963,38 @@ const STYLES = `
       document.querySelector('main') ||
       document.querySelector('#content');
 
-    if (mainContent) {
+    if (mainContent && mainContent !== bar) {
       const heading = mainContent.querySelector('h1, .page-title, .breadcrumb, [class*="breadcrumb"]');
-      if (heading && heading.nextElementSibling) {
-        return { container: mainContent, reference: heading.nextElementSibling };
+      if (heading) {
+        let ref = heading.nextElementSibling;
+        while (ref === bar) {
+          ref = ref.nextElementSibling;
+        }
+        return { container: mainContent, reference: ref };
       }
-      return { container: mainContent, reference: mainContent.firstChild };
+      let ref = mainContent.firstChild;
+      while (ref === bar) {
+        ref = ref.nextSibling;
+      }
+      return { container: mainContent, reference: ref };
     }
 
-    // 3. Fallback: FrameContent or Body (placed AFTER the site header, NOT before it)
+    // 3. Fallback: FrameContent or Body (placed AFTER site header)
     const frameContent = document.getElementById('FrameContent') || document.body;
     const header = frameContent.querySelector('#FrameHeader, header, .header, #header, nav');
-    if (header && header.nextElementSibling) {
-      return { container: frameContent, reference: header.nextElementSibling };
+    if (header) {
+      let ref = header.nextElementSibling;
+      while (ref === bar) {
+        ref = ref.nextElementSibling;
+      }
+      return { container: frameContent, reference: ref };
     }
 
-    return { container: frameContent, reference: frameContent.firstChild };
+    let ref = frameContent.firstChild;
+    while (ref === bar) {
+      ref = ref.nextSibling;
+    }
+    return { container: frameContent, reference: ref };
   }
 
   // Unified Glassmorphic Power Filter Bar prepended to top of product content
@@ -2016,7 +2034,12 @@ const STYLES = `
         </div>
       `;
 
-      placement.container.insertBefore(bar, placement.reference);
+      try {
+        placement.container.insertBefore(bar, placement.reference);
+      } catch (e) {
+        log('Error inserting filter bar:', e);
+        placement.container.appendChild(bar);
+      }
 
       const input = bar.querySelector('#tp-inline-negative-input');
       const clearBtn = bar.querySelector('#tp-clear-neg-btn');
@@ -2067,8 +2090,12 @@ const STYLES = `
       };
     } else {
       // Re-anchor to target if detached or moved
-      if (bar.parentElement !== placement.container || bar.nextSibling !== placement.reference) {
-        placement.container.insertBefore(bar, placement.reference);
+      if (bar.parentElement !== placement.container || (bar.nextSibling !== placement.reference && placement.reference !== bar)) {
+        try {
+          placement.container.insertBefore(bar, placement.reference);
+        } catch (e) {
+          log('Re-anchor insertion error:', e);
+        }
       }
     }
 
