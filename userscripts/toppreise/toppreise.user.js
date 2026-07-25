@@ -1453,7 +1453,7 @@ const STYLES = `
 
   function normalizeUmlautKey(str) {
     if (!str) return '';
-    return str.toLowerCase().replace(/ue/g, 'ü').replace(/ae/g, 'ä').replace(/oe/g, 'ö');
+    return str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   }
 
   const GROUP_EMOJIS = {
@@ -2221,107 +2221,115 @@ const STYLES = `
     }
   }
 
-  // ─── MODULE 1: PRODUCT LISTING PROCESSOR ─────────────────────────────────────
   function processListings() {
-    log('Processing product listings...');
+    if (isModifyingDOM) return;
+    isModifyingDOM = true;
+    try {
+      log('Processing product listings...');
 
-    pageCategories.clear();
+      pageCategories.clear();
 
-    const cards = getProductCards();
+      const cards = getProductCards();
 
-    if (cards.length === 0) {
-      renderSuiteFilterBar();
-      return;
-    }
+      if (cards.length === 0) {
+        renderSuiteFilterBar();
+        return;
+      }
 
-    // Parse Store Best Price Filters
-    const filterElements = document.querySelectorAll('.filters .f_remove_filter[data-target-type="df"]');
-    const activeStores = Array.from(filterElements).map(el => {
-      const clone = el.cloneNode(true);
-      const closeIcons = clone.querySelectorAll('.icon-close, .f_remove_icon, .close, span');
-      closeIcons.forEach(icon => icon.remove());
-      return normalizeName(clone.textContent);
-    }).filter(name => name.length > 0);
+      // Parse Store Best Price Filters
+      const filterElements = document.querySelectorAll('.filters .f_remove_filter[data-target-type="df"]');
+      const activeStores = Array.from(filterElements).map(el => {
+        const clone = el.cloneNode(true);
+        const closeIcons = clone.querySelectorAll('.icon-close, .f_remove_icon, .close, span');
+        closeIcons.forEach(icon => icon.remove());
+        return normalizeName(clone.textContent);
+      }).filter(name => name.length > 0);
 
-    const rawTerms = CONFIG.NEGATIVE_TERMS || '';
-    const termsList = rawTerms.split(/[,;\n]/).map(t => t.trim().toLowerCase()).filter(t => t.length > 0);
-    const excludedCats = CONFIG.EXCLUDED_CATEGORIES || [];
-    const counts = { neg: 0, cat: 0, min: 0 };
-    let pageHasOffers = false;
+      const rawTerms = CONFIG.NEGATIVE_TERMS || '';
+      const termsList = rawTerms.split(/[,;\n]/).map(t => t.trim().toLowerCase()).filter(t => t.length > 0);
+      const excludedCats = CONFIG.EXCLUDED_CATEGORIES || [];
+      const counts = { neg: 0, cat: 0, min: 0 };
+      let pageHasOffers = false;
 
-    cards.forEach(card => {
-      // 1. Category extraction (DOM text + URL path slug parser + active breadcrumbs)
-      const catName = extractCardCategory(card);
-      if (catName) pageCategories.add(catName);
+      cards.forEach(card => {
+        // 1. Category extraction (DOM text + URL path slug parser + active breadcrumbs)
+        const catName = extractCardCategory(card);
+        if (catName) pageCategories.add(catName);
 
-      // 2. Negative Text Filter (Strictly checks full card text content)
-      const isNeg = matchesNegativeTerms(card, termsList);
-      card.classList.toggle('tp-negative-filtered', isNeg);
-      if (isNeg) counts.neg++;
+        // 2. Negative Text Filter (Strictly checks full card text content)
+        const isNeg = matchesNegativeTerms(card, termsList);
+        card.classList.toggle('tp-negative-filtered', isNeg);
+        if (isNeg) counts.neg++;
 
-      // 3. Category Filter
-      const rootGroup = resolveCategoryGroup(catName, card);
-      const isCatExcluded = catName && (excludedCats.includes(catName) || excludedCats.includes(`GROUP:${rootGroup}`));
-      card.classList.toggle('tp-category-filtered', isCatExcluded);
-      if (isCatExcluded) counts.cat++;
+        // 3. Category Filter
+        const rootGroup = resolveCategoryGroup(catName, card);
+        const isCatExcluded = catName && (excludedCats.includes(catName) || excludedCats.includes(`GROUP:${rootGroup}`));
+        card.classList.toggle('tp-category-filtered', isCatExcluded);
+        if (isCatExcluded) counts.cat++;
 
-      // 4. Offer Count Filter
-      const offerCount = extractOfferCount(card);
-      if (offerCount > 0) pageHasOffers = true;
+        // 4. Offer Count Filter
+        const offerCount = extractOfferCount(card);
+        if (offerCount > 0) pageHasOffers = true;
 
-      const isLowOffers = pageHasOffers && CONFIG.MIN_OFFERS > 0 && offerCount < CONFIG.MIN_OFFERS;
-      card.classList.toggle('tp-min-offers-filtered', isLowOffers);
-      if (isLowOffers) counts.min++;
+        const isLowOffers = pageHasOffers && CONFIG.MIN_OFFERS > 0 && offerCount < CONFIG.MIN_OFFERS;
+        card.classList.toggle('tp-min-offers-filtered', isLowOffers);
+        if (isLowOffers) counts.min++;
 
-      // 5. Best Price Highlighting / Dimming
-      if (activeStores.length === 0) {
-        card.classList.remove('tp-is-cheapest', 'tp-not-cheapest', 'tp-no-store-offer');
-        const badge = card.querySelector('.tp-best-price-badge');
-        if (badge) badge.remove();
-      } else {
-        const dealerRows = card.querySelectorAll('.Plugin_DealerRelProdPriceInfo');
-        let matchedRow = null;
+        // 5. Best Price Highlighting / Dimming
+        if (activeStores.length === 0) {
+          card.classList.remove('tp-is-cheapest', 'tp-not-cheapest', 'tp-no-store-offer');
+          const badge = card.querySelector('.tp-best-price-badge');
+          if (badge) badge.remove();
+        } else {
+          const dealerRows = card.querySelectorAll('.Plugin_DealerRelProdPriceInfo');
+          let matchedRow = null;
 
-        for (const row of dealerRows) {
-          const titleEl = row.querySelector('.title');
-          if (titleEl) {
-            const rowStoreNormalized = normalizeName(titleEl.textContent);
-            if (activeStores.some(store => rowStoreNormalized.includes(store) || store.includes(rowStoreNormalized))) {
-              matchedRow = row;
-              break;
+          for (const row of dealerRows) {
+            const titleEl = row.querySelector('.title');
+            if (titleEl) {
+              const rowStoreNormalized = normalizeName(titleEl.textContent);
+              if (activeStores.some(store => rowStoreNormalized.includes(store) || store.includes(rowStoreNormalized))) {
+                matchedRow = row;
+                break;
+              }
             }
           }
-        }
 
-        if (matchedRow) {
-          const storePriceEl = CONFIG.USE_SHIPPING_PRICE
-            ? (matchedRow.querySelector('.shippingPrice .Plugin_Price') || matchedRow.querySelector('.productPrice .Plugin_Price'))
-            : (matchedRow.querySelector('.productPrice .Plugin_Price') || matchedRow.querySelector('.shippingPrice .Plugin_Price'));
-          const storePrice = storePriceEl ? parsePrice(storePriceEl.textContent) : 0;
+          if (matchedRow) {
+            const storePriceEl = CONFIG.USE_SHIPPING_PRICE
+              ? (matchedRow.querySelector('.shippingPrice .Plugin_Price') || matchedRow.querySelector('.productPrice .Plugin_Price'))
+              : (matchedRow.querySelector('.productPrice .Plugin_Price') || matchedRow.querySelector('.shippingPrice .Plugin_Price'));
+            const storePrice = storePriceEl ? parsePrice(storePriceEl.textContent) : 0;
 
-          const bestPriceEl = CONFIG.USE_SHIPPING_PRICE
-            ? (card.querySelector('.price_information_product .shippingPrice .Plugin_Price') || card.querySelector('.price_information_product .productPrice .Plugin_Price'))
-            : (card.querySelector('.price_information_product .productPrice .Plugin_Price') || card.querySelector('.price_information_product .shippingPrice .Plugin_Price'));
-          const bestPrice = bestPriceEl ? parsePrice(bestPriceEl.textContent) : 0;
+            const bestPriceEl = CONFIG.USE_SHIPPING_PRICE
+              ? (card.querySelector('.price_information_product .shippingPrice .Plugin_Price') || card.querySelector('.price_information_product .productPrice .Plugin_Price'))
+              : (card.querySelector('.price_information_product .productPrice .Plugin_Price') || card.querySelector('.price_information_product .shippingPrice .Plugin_Price'));
+            const bestPrice = bestPriceEl ? parsePrice(bestPriceEl.textContent) : 0;
 
-          if (storePrice > 0 && bestPrice > 0) {
-            const threshold = bestPrice * (1 + CONFIG.MARGIN_PERCENT / 100);
-            const isCheapest = storePrice <= threshold;
+            if (storePrice > 0 && bestPrice > 0) {
+              const threshold = bestPrice * (1 + CONFIG.MARGIN_PERCENT / 100);
+              const isCheapest = storePrice <= threshold;
 
-            if (isCheapest) {
-              card.classList.add('tp-is-cheapest');
-              card.classList.remove('tp-not-cheapest', 'tp-no-store-offer');
-              
-              let badge = card.querySelector('.tp-best-price-badge');
-              if (!badge) {
-                badge = document.createElement('div');
-                badge.className = 'tp-best-price-badge';
-                badge.textContent = 'Best Price';
-                card.appendChild(badge);
+              if (isCheapest) {
+                card.classList.add('tp-is-cheapest');
+                card.classList.remove('tp-not-cheapest', 'tp-no-store-offer');
+                
+                let badge = card.querySelector('.tp-best-price-badge');
+                if (!badge) {
+                  badge = document.createElement('div');
+                  badge.className = 'tp-best-price-badge';
+                  badge.textContent = 'Best Price';
+                  card.appendChild(badge);
+                }
+              } else {
+                card.classList.add('tp-not-cheapest');
+                card.classList.remove('tp-is-cheapest', 'tp-no-store-offer');
+                const badge = card.querySelector('.tp-best-price-badge');
+                if (badge) badge.remove();
               }
             } else {
-              card.classList.add('tp-not-cheapest');
-              card.classList.remove('tp-is-cheapest', 'tp-no-store-offer');
+              card.classList.add('tp-no-store-offer');
+              card.classList.remove('tp-is-cheapest', 'tp-not-cheapest');
               const badge = card.querySelector('.tp-best-price-badge');
               if (badge) badge.remove();
             }
@@ -2331,32 +2339,29 @@ const STYLES = `
             const badge = card.querySelector('.tp-best-price-badge');
             if (badge) badge.remove();
           }
-        } else {
-          card.classList.add('tp-no-store-offer');
-          card.classList.remove('tp-is-cheapest', 'tp-not-cheapest');
-          const badge = card.querySelector('.tp-best-price-badge');
-          if (badge) badge.remove();
+        }
+      });
+
+      // 6. Re-sorting by Offer Count
+      if (pageHasOffers && CONFIG.SORT_BY_OFFERS !== 'none' && cards.length > 1) {
+        const parent = cards[0].parentElement;
+        if (parent) {
+          const cardArray = Array.from(cards);
+          cardArray.sort((a, b) => {
+            const countA = extractOfferCount(a);
+            const countB = extractOfferCount(b);
+            return CONFIG.SORT_BY_OFFERS === 'desc' ? countB - countA : countA - countB;
+          });
+          cardArray.forEach(c => parent.appendChild(c));
         }
       }
-    });
 
-    // 6. Re-sorting by Offer Count
-    if (pageHasOffers && CONFIG.SORT_BY_OFFERS !== 'none' && cards.length > 1) {
-      const parent = cards[0].parentElement;
-      if (parent) {
-        const cardArray = Array.from(cards);
-        cardArray.sort((a, b) => {
-          const countA = extractOfferCount(a);
-          const countB = extractOfferCount(b);
-          return CONFIG.SORT_BY_OFFERS === 'desc' ? countB - countA : countA - countB;
-        });
-        cardArray.forEach(c => parent.appendChild(c));
-      }
+      // 7. Render UI Modules
+      updateQuickToolbar(counts, pageHasOffers);
+      renderSuiteFilterBar();
+    } finally {
+      isModifyingDOM = false;
     }
-
-    // 7. Render UI Modules
-    updateQuickToolbar(counts, pageHasOffers);
-    renderSuiteFilterBar();
   }
 
   // ─── MODULE 2: PRICE ALARM AUTOMATION ────────────────────────────────────────
@@ -2915,22 +2920,12 @@ const STYLES = `
   let debounceTimer = null;
   let isModifyingDOM = false;
 
-  function safeProcessListings() {
-    if (isModifyingDOM) return;
-    isModifyingDOM = true;
-    try {
-      processListings();
-    } finally {
-      isModifyingDOM = false;
-    }
-  }
-
   const observer = new MutationObserver(() => {
     if (isModifyingDOM) return;
     try {
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        safeProcessListings();
+        processListings();
         processPriceAlarmModal();
       }, CONFIG.OBSERVER_DEBOUNCE_MS);
     } catch (e) {
@@ -2947,7 +2942,7 @@ const STYLES = `
 
   // Initialize UI controls, filters, and alarm listener
   setupUI();
-  safeProcessListings();
+  processListings();
   processPriceAlarmModal();
 
 })();
