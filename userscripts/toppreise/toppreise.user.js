@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.8.4
+// @version      2.8.5
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -647,6 +647,7 @@ const STYLES = `
   #tp-suite-filter-bar {
     margin: 8px auto 12px auto !important;
     width: 100% !important;
+    max-width: 100% !important;
     box-sizing: border-box !important;
     background: #1e293b !important;
     border: 1px solid #334155 !important;
@@ -660,13 +661,17 @@ const STYLES = `
     gap: 8px !important;
     z-index: 9990 !important;
     position: relative !important;
+    overflow: hidden !important;
   }
 
   .tp-filter-main-row {
     display: flex !important;
     align-items: center !important;
-    gap: 10px !important;
+    gap: 8px !important;
     width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    flex-wrap: wrap !important;
   }
 
   .tp-filter-badge {
@@ -676,14 +681,17 @@ const STYLES = `
     display: flex !important;
     align-items: center !important;
     user-select: none !important;
+    flex-shrink: 0 !important;
   }
 
   .tp-input-wrapper {
-    flex: 1 !important;
+    flex: 1 1 240px !important;
     display: flex !important;
     align-items: center !important;
-    gap: 8px !important;
-    min-width: 260px !important;
+    gap: 6px !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
   }
 
   .tp-input-label-inline {
@@ -695,10 +703,12 @@ const STYLES = `
     display: flex !important;
     align-items: center !important;
     gap: 4px !important;
+    flex-shrink: 0 !important;
   }
 
   .tp-input-field-box {
     flex: 1 !important;
+    min-width: 0 !important;
     position: relative !important;
     display: flex !important;
     align-items: center !important;
@@ -706,6 +716,7 @@ const STYLES = `
 
   #tp-inline-negative-input {
     width: 100% !important;
+    min-width: 0 !important;
     background: rgba(15, 23, 42, 0.8) !important;
     border: 1px solid #334155 !important;
     border-radius: 8px !important;
@@ -750,6 +761,7 @@ const STYLES = `
     transition: all 0.2s ease !important;
     user-select: none !important;
     white-space: nowrap !important;
+    flex-shrink: 0 !important;
   }
   .tp-btn-toggle:hover {
     background: #334155 !important;
@@ -772,6 +784,7 @@ const STYLES = `
     cursor: pointer !important;
     transition: all 0.2s ease !important;
     white-space: nowrap !important;
+    flex-shrink: 0 !important;
   }
   .tp-filter-bar-reset:hover {
     background: rgba(244, 63, 94, 0.3) !important;
@@ -781,45 +794,8 @@ const STYLES = `
   .tp-cat-collapsible-body {
     border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
     padding-top: 8px !important;
-  }
-
-  .tp-input-wrapper {
-    flex: 1 !important;
-    display: flex !important;
-    align-items: center !important;
-    position: relative !important;
-    min-width: 240px !important;
-  }
-
-  #tp-inline-negative-input {
-    width: 100% !important;
-    background: rgba(15, 23, 42, 0.8) !important;
-    border: 1px solid #334155 !important;
-    border-radius: 8px !important;
-    color: #fff !important;
-    padding: 7px 30px 7px 12px !important;
-    font-size: 12px !important;
-    outline: none !important;
-    transition: border-color 0.2s ease !important;
+    max-width: 100% !important;
     box-sizing: border-box !important;
-  }
-  #tp-inline-negative-input:focus {
-    border-color: #10b981 !important;
-  }
-
-  #tp-clear-neg-btn {
-    position: absolute !important;
-    right: 8px !important;
-    background: transparent !important;
-    border: none !important;
-    color: #64748b !important;
-    font-size: 12px !important;
-    cursor: pointer !important;
-    padding: 2px 6px !important;
-    border-radius: 50% !important;
-  }
-  #tp-clear-neg-btn:hover {
-    color: #f43f5e !important;
   }
 
   .tp-cat-pills-row {
@@ -828,37 +804,44 @@ const STYLES = `
     gap: 6px !important;
     align-items: center !important;
     flex: 1 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
   }
 
   /* Mobile Responsive Fixes */
-  @media (max-width: 768px) {
+  @media (max-width: 640px) {
+    #tp-suite-filter-bar {
+      padding: 8px 10px !important;
+      margin: 6px auto 10px auto !important;
+    }
     .tp-filter-main-row {
       flex-wrap: wrap !important;
-      gap: 8px !important;
+      gap: 6px !important;
     }
     .tp-input-wrapper {
-      min-width: 100% !important;
+      flex: 1 1 100% !important;
       width: 100% !important;
+      min-width: 0 !important;
+    }
+    .tp-btn-toggle, .tp-filter-bar-reset {
+      flex: 1 1 auto !important;
+      justify-content: center !important;
+      text-align: center !important;
+      font-size: 11px !important;
+      padding: 6px 8px !important;
     }
     #tp-quick-toolbar {
       width: 95% !important;
       max-width: 95% !important;
       flex-wrap: wrap !important;
       justify-content: center !important;
-      padding: 8px 10px !important;
+      padding: 6px 10px !important;
       border-radius: 16px !important;
-      gap: 8px !important;
+      gap: 6px !important;
     }
     .tp-toolbar-group {
       flex-wrap: wrap !important;
       justify-content: center !important;
-    }
-    .tp-btn-toggle, .tp-filter-bar-reset {
-      flex: 1 !important;
-      justify-content: center !important;
-    }
-    #tp-suite-filter-bar {
-      padding: 8px !important;
     }
   }
 `;
@@ -1963,19 +1946,57 @@ const STYLES = `
     if (revealLabel) revealLabel.textContent = isRevealed ? 'Verbergen' : 'Einblenden';
   }
 
-  // Dedicated Power Filter Bar Target Selector (Targets main page frame on Toppreise.ch)
-  function getSuiteBarTarget() {
-    return document.getElementById('FrameContent') ||
-           document.querySelector('#tpContent .pageContent') ||
-           document.querySelector('main') ||
-           document.querySelector('#content') ||
-           document.body;
+  // Dedicated Power Filter Bar Target & Placement Selector
+  function getSuiteBarPlacement() {
+    // 1. Native filter container on category/search pages
+    const nativeFilters = document.querySelector('.filters, #filters, .filter_box, .filter-box, [class*="filterBar"], [class*="filter_bar"]');
+    if (nativeFilters && nativeFilters.parentElement) {
+      return { container: nativeFilters.parentElement, reference: nativeFilters };
+    }
+
+    // 2. Locate product list container or first product card
+    const cards = getProductCards();
+    if (cards.length > 0) {
+      const firstCard = cards[0];
+      const listWrapper = firstCard.closest('.Plugin_ProductList, .mixedBrowsingList, #browseContent, #productList, [class*="ProductList"], [class*="browseList"], [class*="productList"]') || firstCard.parentElement;
+      if (listWrapper && listWrapper.parentElement) {
+        const siblingHeader = listWrapper.parentElement.querySelector('.sort_box, .sorting, [class*="sort"], [class*="filter"], .page-title, h1');
+        if (siblingHeader && siblingHeader.parentElement === listWrapper.parentElement) {
+          return { container: listWrapper.parentElement, reference: siblingHeader };
+        }
+        return { container: listWrapper.parentElement, reference: listWrapper };
+      }
+    }
+
+    // 3. Main page content area below header
+    const mainContent = document.querySelector('#tpContent .pageContent') ||
+                        document.querySelector('#browseContent') ||
+                        document.querySelector('main') ||
+                        document.querySelector('#content') ||
+                        document.querySelector('.pageContent');
+
+    if (mainContent) {
+      const heading = mainContent.querySelector('h1, .page-title, .breadcrumb, [class*="breadcrumb"]');
+      if (heading && heading.nextElementSibling) {
+        return { container: mainContent, reference: heading.nextElementSibling };
+      }
+      return { container: mainContent, reference: mainContent.firstChild };
+    }
+
+    // 4. FrameContent or Body fallback (placed AFTER site header/nav, NOT before it)
+    const frameContent = document.getElementById('FrameContent') || document.body;
+    const header = frameContent.querySelector('header, #FrameHeader, .header, #header, nav');
+    if (header && header.nextElementSibling) {
+      return { container: frameContent, reference: header.nextElementSibling };
+    }
+
+    return { container: frameContent, reference: frameContent.firstChild };
   }
 
-  // Unified Glassmorphic Power Filter Bar prepended to top of page content (Single-row collapsed by default)
+  // Unified Glassmorphic Power Filter Bar prepended to top of product content
   function renderSuiteFilterBar() {
-    const target = getSuiteBarTarget();
-    if (!target) return;
+    const placement = getSuiteBarPlacement();
+    if (!placement || !placement.container) return;
 
     let bar = document.getElementById('tp-suite-filter-bar');
     const excluded = CONFIG.EXCLUDED_CATEGORIES || [];
@@ -2009,12 +2030,7 @@ const STYLES = `
         </div>
       `;
 
-      const nativeFilters = document.querySelector('.filters');
-      if (nativeFilters && nativeFilters.parentElement) {
-        nativeFilters.parentElement.insertBefore(bar, nativeFilters);
-      } else {
-        target.insertBefore(bar, target.firstChild);
-      }
+      placement.container.insertBefore(bar, placement.reference);
 
       const input = bar.querySelector('#tp-inline-negative-input');
       const clearBtn = bar.querySelector('#tp-clear-neg-btn');
@@ -2064,14 +2080,9 @@ const STYLES = `
         processListings();
       };
     } else {
-      // Re-anchor to top of target if detached or moved
-      const nativeFilters = document.querySelector('.filters');
-      if (nativeFilters && nativeFilters.parentElement) {
-        if (bar.parentElement !== nativeFilters.parentElement || bar.nextSibling !== nativeFilters) {
-          nativeFilters.parentElement.insertBefore(bar, nativeFilters);
-        }
-      } else if (bar.parentElement !== target || bar !== target.firstChild) {
-        target.insertBefore(bar, target.firstChild);
+      // Re-anchor to target if detached or moved
+      if (bar.parentElement !== placement.container || bar.nextSibling !== placement.reference) {
+        placement.container.insertBefore(bar, placement.reference);
       }
     }
 
