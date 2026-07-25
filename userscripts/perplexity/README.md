@@ -10,7 +10,7 @@ A [Violentmonkey](https://violentmonkey.github.io/) userscript that combines thr
 
 Install directly through Violentmonkey:
 
-[`perplexity-enhancements.user.js` (raw)](https://raw.githubusercontent.com/tazztone/scripts/main/userscripts/perplexity-enhancements/perplexity-enhancements.user.js)
+[`perplexity-enhancements.user.js` (raw)](https://raw.githubusercontent.com/tazztone/scripts/main/userscripts/perplexity/perplexity-enhancements.user.js)
 
 Before installing, disable the old `Perplexity Model Lock` and `Perplexity Auto Approve` scripts. The replacement cannot disable scripts already installed in a browser, and running all three would duplicate clicks and UI.
 
