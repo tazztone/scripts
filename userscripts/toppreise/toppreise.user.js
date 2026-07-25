@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.8.5
+// @version      2.8.7
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -20,7 +20,7 @@ const DEFAULTS = {
   MARGIN_PERCENT: 0.0,
   DIM_OPACITY: 0.25,
   USE_SHIPPING_PRICE: true,
-  
+
   // Power Filters
   NEGATIVE_TERMS: '',
   EXCLUDED_CATEGORIES: [],
@@ -28,7 +28,7 @@ const DEFAULTS = {
   SORT_BY_OFFERS: 'none',
   ENABLE_FILTER_COUNTER: true,
   CATS_EXPANDED: false,
-  
+
   // Price Alarm Automation
   ALARM_ENABLED: true,
   ALARM_TARGET_PERCENT: 0.60, // 60% of present value
@@ -860,7 +860,7 @@ const STYLES = `
         const val = GM_getValue(key);
         if (val !== undefined && val !== null) return val;
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // Failover: Try domain localStorage backup if GM_getValue was wiped on script reinstall
     try {
@@ -873,7 +873,7 @@ const STYLES = `
           return parsed;
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     return def;
   };
@@ -881,13 +881,13 @@ const STYLES = `
   const _setValue = (key, val) => {
     try {
       if (typeof GM_setValue !== 'undefined') GM_setValue(key, val);
-    } catch (e) {}
+    } catch (e) { }
 
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.setItem(LOCAL_STORAGE_PREFIX + key, JSON.stringify(val));
       }
-    } catch (e) {}
+    } catch (e) { }
   };
 
   // Cached configuration state loaded once at startup
@@ -1406,7 +1406,7 @@ const STYLES = `
     "zubehör für rc modelle": "Spielwaren",
     "zubehör für sportgeräte": "Sport & Freizeit",
     "zubehör-für-mobiltelefone": "Smartphones & Mobiltelefone"
-};
+  };
 
   const CANONICAL_ROOT_GROUPS = {
     'auto-motorrad': 'Auto & Motorrad',
@@ -1689,11 +1689,11 @@ const STYLES = `
 
     productLinks.forEach(link => {
       if (link.closest('header, nav, footer, .breadcrumb, #tp-quick-toolbar, #tp-inline-category-bar, #tp-inline-negative-bar')) return;
-      
+
       let container = link.parentElement;
       while (container && container !== document.body && container.parentElement !== document.body) {
-        if (container.querySelector('.Plugin_Price, [class*="Price"], [class*="price"]') || 
-            container.querySelector('[class*="Differenz"], [class*="differenz"]')) {
+        if (container.querySelector('.Plugin_Price, [class*="Price"], [class*="price"]') ||
+          container.querySelector('[class*="Differenz"], [class*="differenz"]')) {
           gridCards.add(container);
           break;
         }
@@ -1716,20 +1716,20 @@ const STYLES = `
   function getCardHrefs(card) {
     if (!card) return [];
     const hrefs = [];
-    
+
     // 1. If card itself is an <a> tag
     if (card.tagName && card.tagName.toLowerCase() === 'a') {
       const href = card.getAttribute('href') || card.href || '';
       if (href) hrefs.push(href);
     }
-    
+
     // 2. Nearest ancestor <a> tag
     const closestA = card.closest ? card.closest('a[href]') : null;
     if (closestA) {
       const href = closestA.getAttribute('href') || closestA.href || '';
       if (href && !hrefs.includes(href)) hrefs.push(href);
     }
-    
+
     // 3. Descendant <a> tags
     if (card.querySelectorAll) {
       card.querySelectorAll('a[href]').forEach(a => {
@@ -1956,10 +1956,10 @@ const STYLES = `
 
     // 2. Main content container below header
     const mainContent = document.querySelector('#tpContent .pageContent') ||
-                        document.querySelector('#browseContent') ||
-                        document.querySelector('.pageContent') ||
-                        document.querySelector('main') ||
-                        document.querySelector('#content');
+      document.querySelector('#browseContent') ||
+      document.querySelector('.pageContent') ||
+      document.querySelector('main') ||
+      document.querySelector('#content');
 
     if (mainContent) {
       const heading = mainContent.querySelector('h1, .page-title, .breadcrumb, [class*="breadcrumb"]');
@@ -2299,7 +2299,7 @@ const STYLES = `
               if (isCheapest) {
                 card.classList.add('tp-is-cheapest');
                 card.classList.remove('tp-not-cheapest', 'tp-no-store-offer');
-                
+
                 let badge = card.querySelector('.tp-best-price-badge');
                 if (!badge) {
                   badge = document.createElement('div');
@@ -2364,8 +2364,8 @@ const STYLES = `
     const closeButton = dialogContainer ? dialogContainer.querySelector('.AbstractDialog_CloseButton') : null;
 
     const priceEl = modalContainer.querySelector('.shippingPrice .Plugin_Price') ||
-                    modalContainer.querySelector('.productPrice .Plugin_Price') ||
-                    document.querySelector('.pageContent .priceContainer .Plugin_Price');
+      modalContainer.querySelector('.productPrice .Plugin_Price') ||
+      document.querySelector('.pageContent .priceContainer .Plugin_Price');
 
     if (!priceEl) {
       log('Could not parse present price for price alarm.');
@@ -2382,7 +2382,7 @@ const STYLES = `
     log(`Present Price: CHF ${presentValue} -> Setting Target Price: CHF ${targetPrice}`);
 
     const priceInput = modalContainer.querySelector('input#f_NewInfoMailForm_priceFrom') ||
-                       modalContainer.querySelector('input[name="im_nimf_pvf"]');
+      modalContainer.querySelector('input[name="im_nimf_pvf"]');
     if (priceInput) {
       priceInput.value = targetPrice;
       priceInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -2797,7 +2797,7 @@ const STYLES = `
 
       marginRange.value = CONFIG.MARGIN_PERCENT;
       marginVal.value = CONFIG.MARGIN_PERCENT;
-      
+
       opacityRange.value = CONFIG.DIM_OPACITY;
       opacityVal.value = Math.round(CONFIG.DIM_OPACITY * 100);
 
@@ -2891,7 +2891,7 @@ const STYLES = `
 
       saveConfigKey('ALARM_ENABLED', alarmEnabledToggle.checked);
       saveConfigKey('ALARM_TARGET_PERCENT', Math.max(0.05, Math.min(0.99, (parseInt(alarmTargetVal.value) || 60) / 100)));
-      
+
       const checkedDur = document.querySelector('input[name="tp-alarm-duration"]:checked');
       if (checkedDur) saveConfigKey('ALARM_DURATION_DAYS', checkedDur.value);
 
