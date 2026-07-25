@@ -21,7 +21,7 @@ scripts/
 │   ├── lora_remove_te_weights/          # Strip TE (text encoder) weights from LoRA .safetensors
 │   └── put_files_into_folder_by_extension/  # Auto-organizer: sort files into folders by extension
 └── userscripts/                    # Browser userscripts (Violentmonkey / Tampermonkey)
-    └── perplexity-auto-approve/    # Auto-click Approve on Perplexity agent action cards
+    └── perplexity/                 # Perplexity model lock, approvals, and GitHub enhancements
 ```
 
 ## Highlights
@@ -41,7 +41,7 @@ scripts/
 - **Extension-based File Organizer** — auto-sorts a flat directory into sub-folders by file extension
 
 ### `userscripts/` — Browser Userscripts
-- **Perplexity Auto Approve** — detects Perplexity agent approval cards and clicks Approve after a configurable delay; uses `MutationObserver` for React SPA compatibility
+- **Perplexity Enhancements** — locks the preferred model, automates agent approvals, and enables the GitHub connector; uses `MutationObserver` for React SPA compatibility
 
 ## Usage
 
@@ -50,7 +50,7 @@ Each subdirectory contains its own `README.md` with specific requirements and us
 - Bash scripts: [`sh/README.md`](sh/README.md)
 - Python utilities: [`python/README.md`](python/README.md)
 - Windows Batch: [`bat/README.md`](bat/README.md)
-- Userscripts: [`userscripts/perplexity-auto-approve/README.md`](userscripts/perplexity-auto-approve/README.md)
+- Userscripts: [`userscripts/perplexity/README.md`](userscripts/perplexity/README.md)
 
 ### Quick examples
 
@@ -67,7 +67,7 @@ python python/lora_remove_te_weights/remove_te.py model.safetensors
 
 ```
 # Install userscript (Violentmonkey → Install from URL):
-https://raw.githubusercontent.com/tazztone/scripts/main/userscripts/perplexity-auto-approve/perplexity-auto-approve.user.js
+https://raw.githubusercontent.com/tazztone/scripts/main/userscripts/perplexity/perplexity-enhancements.user.js
 ```
 
 ## License
