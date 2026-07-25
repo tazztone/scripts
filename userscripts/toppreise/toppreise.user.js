@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.8.8
+// @version      2.8.9
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -1956,7 +1956,21 @@ const STYLES = `
       return { container: nativeFilters.parentElement, reference: nativeFilters };
     }
 
-    // 2. Main content container below header
+    // 2. Main page listing container (Page_ListTopPriceReductionProducts, bestListContainer, etc.)
+    const mainPage = document.querySelector('[id^="Page_List"], .bestListContainer, .pageContainer, #browseContent');
+    if (mainPage && mainPage.parentElement && mainPage !== bar) {
+      return { container: mainPage.parentElement, reference: mainPage };
+    }
+
+    // 3. Directly below site header (Plugin_MainHead) inside FrameContent
+    const mainHead = document.querySelector('[class*="MainHead"]');
+    if (mainHead && mainHead.parentElement && mainHead !== bar) {
+      let ref = mainHead.nextElementSibling;
+      while (ref === bar) ref = ref.nextElementSibling;
+      return { container: mainHead.parentElement, reference: ref };
+    }
+
+    // 4. Main page content area fallback
     const mainContent = document.querySelector('#tpContent .pageContent') ||
       document.querySelector('#browseContent') ||
       document.querySelector('.pageContent') ||
@@ -1964,36 +1978,15 @@ const STYLES = `
       document.querySelector('#content');
 
     if (mainContent && mainContent !== bar) {
-      const heading = mainContent.querySelector('h1, .page-title, .breadcrumb, [class*="breadcrumb"]');
-      if (heading) {
-        let ref = heading.nextElementSibling;
-        while (ref === bar) {
-          ref = ref.nextElementSibling;
-        }
-        return { container: mainContent, reference: ref };
-      }
       let ref = mainContent.firstChild;
-      while (ref === bar) {
-        ref = ref.nextSibling;
-      }
+      while (ref === bar) ref = ref.nextSibling;
       return { container: mainContent, reference: ref };
     }
 
-    // 3. Fallback: FrameContent or Body (placed AFTER site header)
+    // 5. Fallback: FrameContent or Body
     const frameContent = document.getElementById('FrameContent') || document.body;
-    const header = frameContent.querySelector('#FrameHeader, header, .header, #header, nav');
-    if (header) {
-      let ref = header.nextElementSibling;
-      while (ref === bar) {
-        ref = ref.nextElementSibling;
-      }
-      return { container: frameContent, reference: ref };
-    }
-
     let ref = frameContent.firstChild;
-    while (ref === bar) {
-      ref = ref.nextSibling;
-    }
+    while (ref === bar) ref = ref.nextSibling;
     return { container: frameContent, reference: ref };
   }
 
@@ -2006,6 +1999,19 @@ const STYLES = `
     const excluded = CONFIG.EXCLUDED_CATEGORIES || [];
     const allCats = new Set([...pageCategories, ...excluded.filter(c => !c.startsWith('GROUP:'))]);
     const isExpanded = CONFIG.CATS_EXPANDED === true;
+
+    const safeInsert = (container, node, ref) => {
+      try {
+        if (ref && ref.parentElement === container && ref !== node) {
+          container.insertBefore(node, ref);
+        } else {
+          container.appendChild(node);
+        }
+      } catch (e) {
+        log('DOM Insertion fallback:', e);
+        container.appendChild(node);
+      }
+    };
 
     if (!bar) {
       bar = document.createElement('div');
@@ -2034,12 +2040,7 @@ const STYLES = `
         </div>
       `;
 
-      try {
-        placement.container.insertBefore(bar, placement.reference);
-      } catch (e) {
-        log('Error inserting filter bar:', e);
-        placement.container.appendChild(bar);
-      }
+      safeInsert(placement.container, bar, placement.reference);
 
       const input = bar.querySelector('#tp-inline-negative-input');
       const clearBtn = bar.querySelector('#tp-clear-neg-btn');
@@ -2091,11 +2092,7 @@ const STYLES = `
     } else {
       // Re-anchor to target if detached or moved
       if (bar.parentElement !== placement.container || (bar.nextSibling !== placement.reference && placement.reference !== bar)) {
-        try {
-          placement.container.insertBefore(bar, placement.reference);
-        } catch (e) {
-          log('Re-anchor insertion error:', e);
-        }
+        safeInsert(placement.container, bar, placement.reference);
       }
     }
 
