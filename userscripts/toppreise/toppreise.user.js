@@ -1987,9 +1987,9 @@ const STYLES = `
       bar.id = 'tp-suite-filter-bar';
       bar.innerHTML = `
         <div class="tp-filter-main-row">
-          <span class="tp-filter-badge" title="Toppreise Power Filter">⚡</span>
           
           <div class="tp-input-wrapper" title="Kommagetrennte Begriffe eingeben (z.B. Hülle, Refurbished, Gebraucht), um passende Produkte auszublenden">
+            <span class="tp-filter-badge" title="Toppreise Power Filter">⚡</span>
             <span class="tp-input-label-inline">🚫 Negativ-Filter:</span>
             <div class="tp-input-field-box">
               <input type="text" id="tp-inline-negative-input" placeholder="Wörter ausschließen (z. B. Hülle, Case, Refurbished...)" value="${CONFIG.NEGATIVE_TERMS || ''}">
@@ -2009,7 +2009,12 @@ const STYLES = `
         </div>
       `;
 
-      target.insertBefore(bar, target.firstChild);
+      const nativeFilters = document.querySelector('.filters');
+      if (nativeFilters && nativeFilters.parentElement) {
+        nativeFilters.parentElement.insertBefore(bar, nativeFilters);
+      } else {
+        target.insertBefore(bar, target.firstChild);
+      }
 
       const input = bar.querySelector('#tp-inline-negative-input');
       const clearBtn = bar.querySelector('#tp-clear-neg-btn');
@@ -2060,7 +2065,12 @@ const STYLES = `
       };
     } else {
       // Re-anchor to top of target if detached or moved
-      if (bar.parentElement !== target || bar !== target.firstChild) {
+      const nativeFilters = document.querySelector('.filters');
+      if (nativeFilters && nativeFilters.parentElement) {
+        if (bar.parentElement !== nativeFilters.parentElement || bar.nextSibling !== nativeFilters) {
+          nativeFilters.parentElement.insertBefore(bar, nativeFilters);
+        }
+      } else if (bar.parentElement !== target || bar !== target.firstChild) {
         target.insertBefore(bar, target.firstChild);
       }
     }
