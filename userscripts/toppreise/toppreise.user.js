@@ -1949,31 +1949,17 @@ const STYLES = `
   // Dedicated Power Filter Bar Target & Placement Selector
   function getSuiteBarPlacement() {
     // 1. Native filter container on category/search pages
-    const nativeFilters = document.querySelector('.filters, #filters, .filter_box, .filter-box, [class*="filterBar"], [class*="filter_bar"]');
+    const nativeFilters = document.querySelector('.filters, #filters, .filter_box, .filter-box');
     if (nativeFilters && nativeFilters.parentElement) {
       return { container: nativeFilters.parentElement, reference: nativeFilters };
     }
 
-    // 2. Locate product list container or first product card
-    const cards = getProductCards();
-    if (cards.length > 0) {
-      const firstCard = cards[0];
-      const listWrapper = firstCard.closest('.Plugin_ProductList, .mixedBrowsingList, #browseContent, #productList, [class*="ProductList"], [class*="browseList"], [class*="productList"]') || firstCard.parentElement;
-      if (listWrapper && listWrapper.parentElement) {
-        const siblingHeader = listWrapper.parentElement.querySelector('.sort_box, .sorting, [class*="sort"], [class*="filter"], .page-title, h1');
-        if (siblingHeader && siblingHeader.parentElement === listWrapper.parentElement) {
-          return { container: listWrapper.parentElement, reference: siblingHeader };
-        }
-        return { container: listWrapper.parentElement, reference: listWrapper };
-      }
-    }
-
-    // 3. Main page content area below header
+    // 2. Main content container below header
     const mainContent = document.querySelector('#tpContent .pageContent') ||
                         document.querySelector('#browseContent') ||
+                        document.querySelector('.pageContent') ||
                         document.querySelector('main') ||
-                        document.querySelector('#content') ||
-                        document.querySelector('.pageContent');
+                        document.querySelector('#content');
 
     if (mainContent) {
       const heading = mainContent.querySelector('h1, .page-title, .breadcrumb, [class*="breadcrumb"]');
@@ -1983,9 +1969,9 @@ const STYLES = `
       return { container: mainContent, reference: mainContent.firstChild };
     }
 
-    // 4. FrameContent or Body fallback (placed AFTER site header/nav, NOT before it)
+    // 3. Fallback: FrameContent or Body (placed AFTER the site header, NOT before it)
     const frameContent = document.getElementById('FrameContent') || document.body;
-    const header = frameContent.querySelector('header, #FrameHeader, .header, #header, nav');
+    const header = frameContent.querySelector('#FrameHeader, header, .header, #header, nav');
     if (header && header.nextElementSibling) {
       return { container: frameContent, reference: header.nextElementSibling };
     }
