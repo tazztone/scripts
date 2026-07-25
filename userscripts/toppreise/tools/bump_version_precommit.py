@@ -9,22 +9,34 @@ import re
 import sys
 from pathlib import Path
 
-def get_staged_userscripts():
+def get_git_root():
+    try:
+        res = subprocess.run(
+            ['git', 'rev-parse', '--show-toplevel'],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return Path(res.stdout.strip())
+    except Exception:
+        return Path.cwd()
+
+def get_staged_userscripts(git_root):
     try:
         res = subprocess.run(
             ['git', 'diff', '--cached', '--name-only', '--diff-filter=ACM'],
             capture_output=True,
             text=True,
-            check=True
+            check=True,
+            cwd=git_root
         )
         files = res.stdout.strip().splitlines()
-        return [f for f in files if f.endswith('.user.js') and not f.endswith('example.user.js')]
+        return [git_root / f for f in files if f.endswith('.user.js') and not f.endswith('example.user.js')]
     except Exception as e:
         print(f"⚠️ Error checking staged files: {e}")
         return []
 
-def bump_version_in_file(filepath):
-    path = Path(filepath)
+def bump_version_in_file(path):
     if not path.exists():
         return False
 
@@ -38,8 +50,8 @@ def bump_version_in_file(filepath):
             new_version = f"{match_two.group(2)}.1"
             new_content = content[:match_two.start(2)] + new_version + content[match_two.end(2):]
             path.write_text(new_content, encoding='utf-8')
-            subprocess.run(['git', 'add', filepath], check=True)
-            print(f"🚀 Auto-bumped {filepath} @version to {new_version}")
+            subprocess.run(['git', 'add', str(path)], check=True)
+            print(f"🚀 Auto-bumped {path.name} @version to {new_version}")
             return True
         return False
 
@@ -52,12 +64,13 @@ def bump_version_in_file(filepath):
     path.write_text(new_content, encoding='utf-8')
     
     # Re-stage the modified userscript
-    subprocess.run(['git', 'add', filepath], check=True)
-    print(f"🚀 Auto-bumped {filepath} @version to {major_minor}{patch}")
+    subprocess.run(['git', 'add', str(path)], check=True)
+    print(f"🚀 Auto-bumped {path.name} @version to {major_minor}{patch}")
     return True
 
 def main():
-    staged_scripts = get_staged_userscripts()
+    git_root = get_git_root()
+    staged_scripts = get_staged_userscripts(git_root)
     if not staged_scripts:
         sys.exit(0)
 
