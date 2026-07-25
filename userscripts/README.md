@@ -23,7 +23,7 @@ Every userscript resides in its own subdirectory and adheres to the standard wor
 
 | Directory | Description |
 | :--- | :--- |
-| [**`perplexity-auto-approve`**](./perplexity-auto-approve) | Automates specific action card approvals and enables external connectors on Perplexity.ai. |
+| [**`perplexity-enhancements`**](./perplexity-enhancements) | Keeps a preferred Perplexity model active, automates action-card approvals, and enables the GitHub connector. |
 | [**`topp-alarm`**](./topp-alarm) | Streamlines setting price alarms on Toppreise.ch directly from item views. |
 | [**`userscript-development`**](./userscript-development) | Specialized workflow guidelines, architectural standards, and reference templates used to generate and maintain these scripts. |
 

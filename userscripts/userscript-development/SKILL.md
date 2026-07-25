@@ -1,61 +1,119 @@
 ---
 name: userscript-development
-description: Build, debug, or refactor robust browser userscripts for Tampermonkey, Violentmonkey, or ScriptCat. Triggers whenever the user mentions "userscript", "Tampermonkey", "ScriptCat", `@match`, `@background`, `==UserConfig==`, or wants to automate interactions on a web page or schedule background browser tasks using client-side JavaScript.
+description: Build, refactor, debug, test, or document browser userscripts for Tampermonkey, Violentmonkey, or ScriptCat, including tasks involving @match, @grant, @require, ==UserConfig==, ==UserSubscribe==, or @background.
 ---
 
 # Userscript Development
 
-Follow this workflow to create production-grade browser userscripts resilient to DOM changes, compatible with modern Single Page Applications (SPAs), or leveraging advanced ScriptCat background runtimes.
+Scripts fail most often at three seams: the runtime/metadata boundary, the DOM-selector boundary, and the test/installation boundary. Work outward from each seam in order.
 
-## The Workflow
+## Workflow
 
-Userscript work usually breaks at the runtime and metadata boundary, not in the page logic. **Choose the runtime first**, declare the minimum permissions up front, then debug in the environment where the script actually runs.
+### 1. Inventory
 
-Always produce or maintain these core artifacts:
-1.  **`RESEARCH_LOG.md`**: Document the target site's DOM structure, selectors, behavioral nuances, and edge cases (for foreground scripts).
-2.  **`[name].user.js`**: The script itself.
-3.  **`README.md`**: Clear user guide for installation and configuration.
+Read the repository before asking questions or editing:
 
-## 1. Runtime Selection & Preflight
+- Locate existing scripts, research logs, READMEs, mocks, test commands, and package manifests.
+- Read the current userscript, its tests, its research log, and [REFERENCE.md](references/REFERENCE.md).
+- Record the runtime, matched hosts, granted APIs, persistent keys, user-visible behavior, test command, and any cleanup/migration scope.
 
-Decide on the runtime environment before writing code:
-- **Portable Foreground Script**: Needs page DOM or page context. Use ordinary `==UserScript==` patterns.
-- **ScriptCat Background / Cron**: Needs persistent or scheduled work *without* DOM access. Use `@background` or `@crontab`.
-- **ScriptCat Subscription Package**: Needs to install many scripts as one package. Use `==UserSubscribe==`.
+Completion criterion: the target files, current behavior, verification path, and deletion/migration scope are known from repository evidence.
 
-Start with metadata, not implementation: declare `@match`, `@grant`, `@connect`, and `@run-at`. Declare the *smallest* permission surface that fits the task.
+### 2. Metadata first
 
-## 2. Research-First DOM Analysis (Foreground Scripts)
+Choose exactly one runtime branch:
 
-If writing a foreground script, create `RESEARCH_LOG.md` before writing logic. Use numbered sections:
-1. **Trigger & Target Elements**: Primary and Fallback selectors.
-2. **Element Selectors**: Catalog every interactive element.
-3. **Exclusion Logic**: What NOT to interact with.
-4. **Event Management**: `.click()` vs `PointerEvent` chains.
-5. **Lifecycle & SPA Behavior**: Navigation resets, debounce, cooldowns.
+- **Foreground DOM script** — ordinary `==UserScript==` metadata; use when the script interacts with a page.
+- **ScriptCat background/cron** — use `@background` or `@crontab` only when work must run without DOM access; return a `Promise` for async work.
+- **ScriptCat subscription** — use `==UserSubscribe==` only when distributing a bundle.
 
-If the site blocks static fetching, use Playwright to dump the DOM. (Recreate the environment using `uv venv --clear` if OS Python upgrades break C-extensions).
+For every branch, declare the smallest correct `@match`, `@run-at`, `@grant`, `@connect`, and `@require` surface. Pin exact library versions in `@require`. Keep foreground `CONFIG` and `STYLES` outside the IIFE; keep implementation inside.
 
-## 3. Implementation Principles
+Completion criterion: every declared permission is justified by an implementation use.
 
-Structure your script with clear boundaries:
-- **Metadata**: Add `@grant GM_*` explicitly. Add `@connect` for hosts used by `GM_xmlhttpRequest`. Always pin exact library versions in `@require`.
-- **Component Scope**: For foreground scripts, place **CONFIG & STYLES** outside the IIFE for user-tunability (or use `==UserConfig==`). Keep everything else strictly inside the IIFE.
-- **Async Background Work**: ScriptCat background scripts must return a `Promise`. Resolve only when GM work is truly finished. Use `new CATRetryError(msg, secs)` for retries.
-- **Resiliency**: Always verify DOM visibility (`getBoundingClientRect().width > 0`), check if card containers are anchor tags (`card.tagName === 'A'`), use 2-layer storage dual-sync (`GM_setValue` + domain `localStorage`) for reinstall resilience, use flexbox inline labels outside inputs to prevent emoji overlap, use timestamp throttles, apply `dataset.processed` markers, wrap `MutationObserver` callbacks in `try/catch`, prevent self-observation loops (`attributes: false`), and use text normalization across distinct elements.
+### 3. Research the page
 
-See the complete architectural rules, metadata guidelines, and code patterns in **[REFERENCE.md](references/REFERENCE.md)**.
+For foreground scripts, create or update `RESEARCH_LOG.md` before writing selectors. Document:
 
-## 4. Orchestration & Debugging
+1. Trigger and target elements — primary and fallback selectors.
+2. Positive signals and explicit exclusions for every automated interaction.
+3. Visibility, disabled-state, and locked-state checks.
+4. `.click()` versus full PointerEvent/MouseEvent dispatch requirements.
+5. SPA navigation, DOM replacement, cooldown, and failure behavior.
 
-- **Debugging**: Debug where the code really runs (Foreground = page console; Background = ScriptCat run log). Bypass raw script installation caches using query-parameter cache-busters on raw GitHub links.
-- **SPA Handling**: Use a debounced `MutationObserver` combined with the `Navigation API` (or fallback observer) to handle route changes in foreground scripts.
-- **Safety Net**: Always include a periodic `setInterval` fallback in case observers die.
+Treat an element as visible only when it is in the document, not hidden by computed style, and has non-zero dimensions. Exclude the script's own UI from domain-element discovery. Label any mock assumptions in the log.
 
-Detailed orchestration patterns and ScriptCat API usages are available in **[REFERENCE.md](references/REFERENCE.md)**.
+Completion criterion: every automated action has a documented target, exclusion rule, event method, and recovery path.
 
-## Example Templates
+### 4. Deep modules, one orchestration seam
 
-- Architecture Rules & Code Snippets: **[REFERENCE.md](references/REFERENCE.md)**
-- Reference Script Template: **[example.user.js](references/example.user.js)**
-- Reference Research Log: **[example_research_log.md](references/example_research_log.md)**
+Keep the public surface small. A foreground script should separate:
+
+- storage, configuration, and migration;
+- normalization, visibility, and event adapters;
+- feature detection and state transitions;
+- timers and one-shot side effects;
+- settings UI;
+- one shared orchestrator.
+
+The orchestrator owns one debounced `MutationObserver`, one navigation listener with a URL-change fallback, and one safety interval. Feature modules expose narrow operations (`runModelLock()`, `runAutoApprove()`); they do not create competing observers or intervals.
+
+Make dynamic behavior **idempotent**:
+
+- Track one timer per element with a `WeakMap`; mark completed elements.
+- Cancel timers when an element disappears, is acted on, or its feature is disabled.
+- Reset route-scoped locks on SPA navigation.
+- Observe `childList`/`subtree`; avoid observing script-owned attributes or styles.
+- Release locks on both success and exceptions; schedule a follow-up run after a cooldown.
+
+Completion criterion: repeated `run()` calls, duplicate mutation events, route changes, and feature toggles cannot create duplicate controls, clicks, timers, or stuck locks.
+
+### 5. Storage migration
+
+Use canonical, namespaced keys. Dual-write to GM storage and page `localStorage`; if a canonical local value exists and GM storage is empty, reseed GM storage. Read legacy keys once and write their values to canonical keys.
+
+Do not claim cross-script GM migration unless the target manager demonstrably exposes the old namespace — separate installations commonly isolate GM storage. Document this limitation and provide a manual fallback.
+
+When consolidating scripts: preserve existing defaults, namespace new keys, document that users must disable old scripts before enabling the replacement, and verify the replacement before deleting legacy directories.
+
+Completion criterion: each setting has a canonical key, default, type/range validation, read precedence, write behavior, migration source, and documented limitation.
+
+### 6. Tests
+
+Maintain an integrated mock page under `tests/` and inject the userscript source directly with Playwright. Do not install Violentmonkey or Tampermonkey in the test browser unless the behavior under test is the extension manager itself.
+
+Cover behavior, not implementation:
+
+- Initial discovery and state application.
+- Manual deviation and recovery.
+- Already-correct and opposite toggle states.
+- Countdown, hover pause/resume, completion, removal, and cancellation.
+- Duplicate mutation events and duplicate scheduling.
+- Route reset and connector fallback.
+- Settings save/cancel/Escape, validation, persistence, and feature disablement.
+- Legacy storage migration and canonical persistence.
+- Exclusion cases: follow-up text, locked options, disabled controls, script-owned UI.
+
+Use condition-based waits (`wait_for_selector`, `wait_for_function`), not arbitrary sleeps. Seed a short test-only delay through storage or a fixture; keep production defaults in the userscript. Keep Python dependencies in `tests/requirements.txt`.
+
+Completion criterion: the suite proves each user-visible feature and its important failure modes, and runs from the documented command.
+
+### 7. Verify and clean up
+
+```bash
+node --check path/to/script.user.js
+pytest path/to/tests/test_userscript.py
+git diff --check
+```
+
+Verify the README, research log, root inventory, and final file list. If a test is blocked by missing dependencies, network, or permissions, report the exact blocked command — do not describe the suite as passing.
+
+Remove legacy files only after the replacement passes syntax and behavior checks. State what was removed and whether browser-installed copies still need manual disabling.
+
+Completion criterion: syntax checks pass, tests pass or have an explicit blocker, every modified artifact is documented, and cleanup matches the requested scope.
+
+## References
+
+- Metadata, DOM heuristics, storage, observers, Playwright patterns: [REFERENCE.md](references/REFERENCE.md)
+- Reference foreground script: [example.user.js](references/example.user.js)
+- Research-log template: [example_research_log.md](references/example_research_log.md)
