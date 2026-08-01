@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.8.10
+// @version      2.8.11
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -1529,18 +1529,64 @@ const STYLES = `
     return GROUP_EMOJIS[groupName] || '📦';
   }
 
+  function extractSubcatFromExclusionKey(key) {
+    if (!key) return null;
+    if (key.startsWith('GROUP:')) return null;
+    if (key.startsWith('PATH:')) {
+      const parts = key.slice(5).split('/');
+      return parts.slice(1).join('/');
+    }
+    return key;
+  }
+
   const BRAND_RULES = [
-    { regex: /^\b(lego|legos)\b/i, group: 'Spielwaren', parent: 'Lego' },
-    { regex: /^\b(playmobil)\b/i, group: 'Spielwaren', parent: 'Playmobil' },
-    { regex: /^\b(cobi|mega construx|fischertechnik|ravensburger)\b/i, group: 'Spielwaren', parent: 'Konstruktionsspielzeug' },
-    { regex: /^\b(schleich|barbie|hot wheels|action figuren|funko|nerf)\b/i, group: 'Spielwaren', parent: 'Figuren & Spielsets' },
-    { regex: /^\b(crosstrainer|laufbaender|laufbänder|ergometer|rudergeraet|rudergerät)\b/i, group: 'Sport & Freizeit', parent: 'Fitnessgeräte' },
-    { regex: /^\b(fensterreinigungsroboter|saugroboter|wischroboter)\b/i, group: 'Haushalt & Küche', parent: 'Saugen & Reinigen' },
-    { regex: /^\b(duschpflege|duschgel|shampoo|seife|geschenksets)\b/i, group: 'Drogerie', parent: 'Körper & Duschpflege' },
-    { regex: /^\b(dachboxen|dachtraeger|dachträger)\b/i, group: 'Auto & Motorrad', parent: 'Dachboxen & Träger' },
-    { regex: /^\b(aktenvernichter|papierschredder)\b/i, group: 'Computer & Zubehör', parent: 'PC Komponenten' },
-    { regex: /^\b(simulationen|rennspiel|sportsimulation)\b/i, group: 'Videogames', parent: 'Computerspiele' },
-    { regex: /^\b(schalter taster)\b/i, group: 'Garten & Baumarkt', parent: 'Haus & Elektro' }
+    // Spielwaren 🧸
+    { regex: /\b(lego|legos|playmobil|cobi|cada|mega construx|fischertechnik|ravensburger|schleich|barbie|hot wheels|action figuren|funko|nerf|amiibo|spielwaren|spielzeug|puppe|puppen|pluesch|plüsch|autorennbahn|rc modelle|multicopter|puzzles|gesellschaftsspiele|familienspiele|kartenspiele)\b/i, group: 'Spielwaren', parent: 'Spielwaren' },
+
+    // Haushalt & Küche ☕
+    { regex: /\b(fritteuse|fritteusen|heissluftfritteuse|heissluftfritteusen|vollautomat|vollautomaten|kaffee|espressomaschine|espressomaschinen|kaffeemuehle|kaffeemühle|kuechengeraet|kuechengeraete|küchengerät|küchengeräte|haushaltsgeraet|haushaltsgeraete|haushaltsgerät|haushaltsgeräte|staubsauger|saugroboter|wischroboter|fensterreinigungsroboter|mikrowelle|mikrowellen|backofen|herd|kuehlschrank|kühlschrank|gefrierschrank|geschirrspueler|geschirrspüler|waschmaschine|waschmaschinen|waeschetrockner|wäschetrockner|mixer|blender|wasserkocher|toaster|thermoskanne|abfallsystem|raumduft|dampfgarer|slowcooker|saftpresse|entsafter|geschirr|besteck|glaeser|gläser|topf|toepfe|töpfe|pfanne|pfannen|kochgeschirr|spirituosen|wein|whisky|gin|rum|vodka)\b/i, group: 'Haushalt & Küche', parent: 'Haushalt & Küche' },
+
+    // Drogerie 🧴
+    { regex: /\b(haarglaetter|haarglätter|glaetteisen|glätteisen|bartschneider|haarschneider|rasierer|elektrorasierer|epilierer|haartrockner|foehn|föhn|zahnbuerste|zahnbürste|zahnbuersten|zahnbürsten|elektrozahnbuerste|parfum|parfüm|duft|duefte|düfte|eau de|duschpflege|duschgel|shampoo|seife|geschenkset|geschenksets|hautpflege|koerperpflege|körperpflege|kosmetik|make-up|makeup|sonnenschutz|kontaktlinsen|hygiene)\b/i, group: 'Drogerie', parent: 'Drogerie' },
+
+    // Computer & Zubehör 💻
+    { regex: /\b(usb|speicherstick|speichersticks|ssd|hdds?|solid state|festplatte|festplatten|grafikkarte|grafikkarten|notebook|notebooks|laptop|laptops|tablet|tablets|ebook|monitore|monitor|drucker|scanner|nas|mainboard|mainboards|prozessor|prozessoren|cpu|gpu|pc gehaeuse|netzteil|netzteile|ladegeraet|ladegerät|netzadapter|kabel|hub|dockingstation|tastatur|tastaturen|maus|maeuse|mäuse|mausmatte|webcam|headset|aktenvernichter|papierschredder|arbeitsspeicher|ram|netzwerk|wlan|router|switch|server|western digital)\b/i, group: 'Computer & Zubehör', parent: 'Computer & Zubehör' },
+
+    // Smartphones & Mobiltelefone 📱
+    { regex: /\b(smartphone|smartphones|mobiltelefon|mobiltelefone|handy|handys|iphone|galaxy|pixel|smartring|smartringe|smartwatch|smartwatches|activity tracker|huelle|huellen|hülle|hüllen|cover|schutzfolie|panzerglas|ladekabel|powerbank|powerbanks|magsafe|funktelefon|festnetz)\b/i, group: 'Smartphones & Mobiltelefone', parent: 'Smartphones & Mobiltelefone' },
+
+    // HiFi & Audio 🎧
+    { regex: /\b(kopfhoerer|kopfhörer|in-ear|earbuds|lautsprecher|bluetooth lautsprecher|soundbar|plattenspieler|receiver|av receiver|verstaerker|verstärker|hifi|radio|cd player|dac|subwoofer|mikrofon|musikinstrument|gitarre|piano|keyboard)\b/i, group: 'HiFi & Audio', parent: 'HiFi & Audio' },
+
+    // TV & Video 📺
+    { regex: /\b(tv|fernseher|beamer|projektor|home cinema|heimkino|blu-ray player|dvd player|actioncam|actionkamera|camcorder|media player|streaming stick|chromecast|apple tv)\b/i, group: 'TV & Video', parent: 'TV & Video' },
+
+    // Foto & Video 📷
+    { regex: /\b(kamera|kameras|digitalkamera|spiegellose|dslr|objektiv|objektive|stativ|stative|blitz|fotostudio|drohne|sofortbildkamera)\b/i, group: 'Foto & Video', parent: 'Foto & Video' },
+
+    // Filme 🎬
+    { regex: /\b(dvd|blu-ray|blu ray|4k ultra hd|film|filme|kino|serie|tv serien|western|abenteuer|action|krimi|drama|komoedie|komödie|thriller|horror|anime|dokumentation)\b/i, group: 'Filme', parent: 'Filme' },
+
+    // Videogames 🎮
+    { regex: /\b(game|games|spiel|spiele|nintendo|switch|playstation|ps5|ps4|ps3|xbox|pc spiele|konsole|konsolen|gamepad|controller|lenkrad|vr headset|amiibo|simulationen|rennspiel)\b/i, group: 'Videogames', parent: 'Videogames' },
+
+    // Sport & Freizeit ⚽
+    { regex: /\b(crosstrainer|laufband|laufbaender|laufbänder|ergometer|rudergeraet|rudergerät|fitness|krafttraining|hantel|hanteln|matten|velo|velos|fahrrad|ebike|e-bike|velohelm|skibrille|skihelm|koffer|rucksack|taschenmesser|fernglas|camping|zelt|schlafsack|tretroller|scooter|inline skates|gps|navigation|navigations)\b/i, group: 'Sport & Freizeit', parent: 'Sport & Freizeit' },
+
+    // Auto & Motorrad 🚗
+    { regex: /\b(reifen|pneus|sommerreifen|winterreifen|allwetterreifen|felgen|dachbox|dachboxen|dachtraeger|dachträger|kindersitz|kindersitze|autozubehoer|car hifi|motorradhelm|dashcam)\b/i, group: 'Auto & Motorrad', parent: 'Auto & Motorrad' },
+
+    // Garten & Baumarkt 🪴
+    { regex: /\b(rasenmaeher|rasenmäher|rasenroboter|grill|gasgrill|elektrogrill|holzkohlegrill|bohrmaschine|akkuschrauber|saege|säge|schleifer|schalter|taster|steckdose|lampe|lampen|leuchtmittel|led|smart home|gartenmoebel|gartenmöbel|hochdruckreiniger|werkzeug|werkzeuge)\b/i, group: 'Garten & Baumarkt', parent: 'Garten & Baumarkt' },
+
+    // Uhren ⌚
+    { regex: /\b(uhr|uhren|armbanduhr|damenuhr|herrenuhr|chronograph|automatikuhr|wanduhr|wecker)\b/i, group: 'Uhren', parent: 'Uhren' },
+
+    // Kleidung & Mode 👕
+    { regex: /\b(kleidung|bekleidung|jacke|jacken|hose|hosen|t-shirt|pullover|hemd|kleid|schuhe|sneaker|stiefel|tasche|taschen|handtasche|rucksack|sonnenbrille|sonnenbrillen|schmuck|ring|kette)\b/i, group: 'Kleidung & Mode', parent: 'Kleidung & Mode' },
+
+    // Bücher & Medien 📚
+    { regex: /\b(buch|buecher|bücher|roman|taschenbuch|sachbuch|hoerbuch|hörbuch|comic|manga|zeitschrift)\b/i, group: 'Bücher & Medien', parent: 'Bücher & Medien' }
   ];
 
   // Universal Hierarchical Path Resolver: Returns [RootGroup, SubGroup/Parent, LeafCategory]
@@ -1551,10 +1597,46 @@ const STYLES = `
     const spaceSlug = norm.replace(/-/g, ' ');
     const umlautNorm = normalizeUmlautKey(norm);
 
-    // 1. Direct Lookup in CATEGORY_LOOKUP
+    // 1. Direct Link Extraction from Product Card URL (Primary & 100% Authoritative Site Taxonomy)
+    if (card) {
+      const hrefs = getCardHrefs(card);
+      for (const href of hrefs) {
+        const match = href.match(/\/(?:preisvergleich|produktsuche)\/([^\/]+)\//i);
+        if (match && match[1]) {
+          const rootSlug = match[1].split('-c')[0];
+          const canonicalRoot = normalizeRootSlug(rootSlug);
+          if (canonicalRoot) {
+            const dynamicMap = _getValue('DYNAMIC_CAT_MAP', {});
+            dynamicMap[norm] = canonicalRoot;
+            dynamicMap[slug] = canonicalRoot;
+            dynamicMap[spaceSlug] = canonicalRoot;
+            saveConfigKey('DYNAMIC_CAT_MAP', dynamicMap);
+            return [canonicalRoot, categoryName, categoryName];
+          }
+        }
+      }
+    }
+
+    // 2. Direct Lookup in CATEGORY_LOOKUP
     let root = CATEGORY_LOOKUP[norm] || CATEGORY_LOOKUP[slug] || CATEGORY_LOOKUP[spaceSlug] || CATEGORY_LOOKUP[umlautNorm];
 
-    // 2. Word-Prefix Fallback (e.g. "Lego Star Wars" -> "Lego Star" -> "Lego")
+    // 3. Dynamic Map Lookup
+    if (!root) {
+      const dynamicMap = _getValue('DYNAMIC_CAT_MAP', {});
+      root = dynamicMap[norm] || dynamicMap[slug] || dynamicMap[spaceSlug] || dynamicMap[umlautNorm];
+    }
+
+    // 4. Comprehensive Regex Keyword Rules
+    if (!root) {
+      for (const rule of BRAND_RULES) {
+        if (rule.regex.test(norm) || rule.regex.test(spaceSlug)) {
+          root = rule.group;
+          break;
+        }
+      }
+    }
+
+    // 5. Word-Prefix Fallback (e.g. "Lego Star Wars" -> "Lego Star" -> "Lego")
     if (!root) {
       const words = norm.split(/\s+/);
       for (let i = words.length - 1; i >= 1; i--) {
@@ -1566,37 +1648,17 @@ const STYLES = `
       }
     }
 
-    // 3. Brand & Keyword Rules
+    // 6. Page-Level Breadcrumb Fallback
     if (!root) {
-      for (const rule of BRAND_RULES) {
-        if (rule.regex.test(norm) || rule.regex.test(spaceSlug)) {
-          return [rule.group, rule.parent, categoryName];
-        }
-      }
-    }
-
-    // 4. Dynamic Map Lookup
-    if (!root) {
-      const dynamicMap = _getValue('DYNAMIC_CAT_MAP', {});
-      root = dynamicMap[norm] || dynamicMap[slug] || dynamicMap[spaceSlug] || dynamicMap[umlautNorm];
-    }
-
-    // 5. DOM Link & Breadcrumb Fallback
-    if (!root && card && card.querySelectorAll) {
-      const links = card.querySelectorAll('a[href*="/produktsuche/"], a[href*="/preisvergleich/"]');
-      for (const a of links) {
-        const href = a.getAttribute('href') || '';
-        const match = href.match(/\/(?:produktsuche|preisvergleich)\/([^\/]+)\//i);
-        if (match && match[1]) {
-          const rootSlug = match[1].split('-c')[0];
-          const formattedRoot = normalizeRootSlug(rootSlug) || formatCategorySlug(rootSlug);
-          if (formattedRoot) {
-            root = formattedRoot;
-            const dynamicMap = _getValue('DYNAMIC_CAT_MAP', {});
-            dynamicMap[norm] = formattedRoot;
-            dynamicMap[slug] = formattedRoot;
-            saveConfigKey('DYNAMIC_CAT_MAP', dynamicMap);
-            break;
+      const pageBreadcrumb = document.querySelector('.breadcrumb, #Breadcrumb, [class*="breadcrumb"]');
+      if (pageBreadcrumb) {
+        const bcLink = pageBreadcrumb.querySelector('a[href*="/produktsuche/"], a[href*="/preisvergleich/"]');
+        if (bcLink) {
+          const href = bcLink.getAttribute('href') || '';
+          const match = href.match(/\/(?:produktsuche|preisvergleich)\/([^\/]+)\//i);
+          if (match && match[1]) {
+            const formattedRoot = normalizeRootSlug(match[1].split('-c')[0]);
+            if (formattedRoot) root = formattedRoot;
           }
         }
       }
@@ -1604,15 +1666,7 @@ const STYLES = `
 
     if (!root) root = 'Sonstiges';
 
-    let parent = categoryName;
-    for (const rule of BRAND_RULES) {
-      if (rule.regex.test(norm) || rule.regex.test(spaceSlug)) {
-        parent = rule.parent;
-        break;
-      }
-    }
-
-    return [root, parent, categoryName];
+    return [root, categoryName, categoryName];
   }
 
   // Helper: Resolve Top-Level Root Group for any Category
@@ -2799,7 +2853,11 @@ const STYLES = `
     let currentExcludedCats = [...(CONFIG.EXCLUDED_CATEGORIES || [])];
 
     function renderCategoryPills() {
-      const allCats = new Set([...pageCategories, ...currentExcludedCats.filter(c => !c.startsWith('GROUP:'))]);
+      const allCats = new Set([...pageCategories]);
+      currentExcludedCats.forEach(c => {
+        const sub = extractSubcatFromExclusionKey(c);
+        if (sub) allCats.add(sub);
+      });
 
       if (allCats.size === 0) {
         if (!catPillsContainer.querySelector('.tp-empty-msg')) {

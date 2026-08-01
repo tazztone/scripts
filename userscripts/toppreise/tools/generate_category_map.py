@@ -99,18 +99,18 @@ SEED_LOOKUP = {
     "experimentierkaesten": "Spielwaren", "kartenspiele": "Spielwaren", "mega construx": "Spielwaren",
     "familienspiele": "Spielwaren", "basteln malen": "Spielwaren", "komplett sets": "Spielwaren",
     "zubehoer fuer rc modelle": "Spielwaren", "lego marvel": "Spielwaren", "evolution autos": "Spielwaren",
-    "playmobil": "Spielwaren", "nerf": "Spielwaren", "funko": "Spielwaren",
+    "playmobil": "Spielwaren", "nerf": "Spielwaren", "funko": "Spielwaren", "cada": "Spielwaren",
     
     # Videogames
     "strategie rollenspiele": "Videogames", "zubehoer fuer nintendo switch": "Videogames",
     "jump n run geschicklichkeit": "Videogames", "actionspiele": "Videogames",
     "rollenspiele adventures": "Videogames", "action": "Videogames", "nintendo switch games": "Videogames",
     "sonstige handheld konsolen": "Videogames", "ps5 konsolen": "Videogames", "playstation 5": "Videogames",
-    "simulationen": "Videogames", "rennspiel": "Videogames",
+    "simulationen": "Videogames", "rennspiel": "Videogames", "amiibo": "Videogames",
     
     # HiFi & Audio / TV & Video
     "kopfhoerer": "HiFi & Audio", "plattenspieler": "HiFi & Audio", "bluetooth lautsprecher": "HiFi & Audio",
-    "lautsprecher": "HiFi & Audio", "smart speaker": "HiFi & Audio",
+    "lautsprecher": "HiFi & Audio", "smart speaker": "HiFi & Audio", "home cinema av receiver": "HiFi & Audio",
     "tv geraete": "TV & Video", "beamer": "TV & Video", "actionkameras": "TV & Video",
     
     # Drogerie
@@ -119,6 +119,7 @@ SEED_LOOKUP = {
     "koerperpflege": "Drogerie", "haartrockner": "Drogerie", "health wellness": "Drogerie",
     "haarpflege": "Drogerie", "epilierer haarentferner": "Drogerie", "duschpflege": "Drogerie",
     "duschgel": "Drogerie", "shampoo": "Drogerie", "geschenksets": "Drogerie",
+    "haarglaetter": "Drogerie", "haar bartschneider": "Drogerie", "parfum": "Drogerie",
     
     # Haushalt & Küche
     "saug und wischroboter": "Haushalt & Küche", "abfallsysteme": "Haushalt & Küche",
@@ -128,6 +129,8 @@ SEED_LOOKUP = {
     "senseo maschinen": "Haushalt & Küche", "sonstige kuechengeraete": "Haushalt & Küche",
     "heizung klima": "Haushalt & Küche", "fensterreinigungsroboter": "Haushalt & Küche",
     "saugroboter": "Haushalt & Küche", "wischroboter": "Haushalt & Küche",
+    "heissluftfritteusen": "Haushalt & Küche", "vollautomaten": "Haushalt & Küche",
+    "zubehoer fuer kuechengeraete": "Haushalt & Küche",
     
     # Sport & Freizeit
     "skihelme": "Sport & Freizeit", "koffer": "Sport & Freizeit", "ventilatoren heizgeraete": "Sport & Freizeit",
@@ -140,6 +143,7 @@ SEED_LOOKUP = {
     "fitness krafttraining": "Sport & Freizeit", "fitness-krafttraining": "Sport & Freizeit",
     "velohelme": "Sport & Freizeit", "saettel": "Sport & Freizeit", "crosstrainer": "Sport & Freizeit",
     "laufbaender": "Sport & Freizeit", "laufbänder": "Sport & Freizeit", "ergometer": "Sport & Freizeit",
+    "gps navigations geraete": "Sport & Freizeit",
     
     # Garten & Baumarkt
     "schwingschleifer": "Garten & Baumarkt", "schalter taster": "Garten & Baumarkt",
@@ -147,10 +151,12 @@ SEED_LOOKUP = {
     # Smartphones & Mobiltelefone / Auto / Uhren / Computer
     "huellen": "Smartphones & Mobiltelefone", "oberschalen cover": "Smartphones & Mobiltelefone",
     "taschen cover fuer iphone": "Smartphones & Mobiltelefone", "smartphones": "Smartphones & Mobiltelefone",
-    "webcams": "Computer & Zubehör", "naehmaschinen": "Haushalt & Küche",
+    "smartringe": "Smartphones & Mobiltelefone", "webcams": "Computer & Zubehör", "naehmaschinen": "Haushalt & Küche",
     "reifen": "Auto & Motorrad", "autos": "Auto & Motorrad", "uhren": "Uhren",
     "pneus": "Auto & Motorrad", "pkw sommerreifen": "Auto & Motorrad", "pkw-sommerreifen": "Auto & Motorrad",
-    "dachboxen": "Auto & Motorrad", "dachtraeger": "Auto & Motorrad", "aktenvernichter": "Computer & Zubehör"
+    "dachboxen": "Auto & Motorrad", "dachtraeger": "Auto & Motorrad", "aktenvernichter": "Computer & Zubehör",
+    "usb speichersticks": "Computer & Zubehör", "externe solid state drives ssd": "Computer & Zubehör",
+    "ladegeraete netzadapter": "Computer & Zubehör"
 }
 
 def format_title(slug):
