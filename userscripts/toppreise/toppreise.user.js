@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.8.9
+// @version      2.8.10
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -450,21 +450,49 @@ const STYLES = `
     color: #ffffff !important;
     border-color: rgba(56, 189, 248, 0.4) !important;
   }
+  .tp-popover-search {
+    width: 100% !important;
+    box-sizing: border-box !important;
+    padding: 4px 8px !important;
+    margin-bottom: 8px !important;
+    font-size: 11px !important;
+    color: #e2e8f0 !important;
+    background: rgba(15, 23, 42, 0.6) !important;
+    border: 1px solid rgba(56, 189, 248, 0.25) !important;
+    border-radius: 6px !important;
+    outline: none !important;
+  }
+  .tp-popover-search:focus {
+    border-color: rgba(56, 189, 248, 0.6) !important;
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.2) !important;
+  }
   .tp-popover-body {
     display: flex !important;
     flex-wrap: wrap !important;
     gap: 6px !important;
-    max-height: 220px !important;
+    max-height: 250px !important;
     overflow-y: auto !important;
     padding: 2px !important;
   }
-  .tp-group-children {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    padding-left: 10px;
-    margin-top: 2px;
-    border-left: 2px solid rgba(2, 132, 199, 0.3);
+  .tp-branch-wrapper {
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+    margin-bottom: 4px !important;
+  }
+  .tp-branch-header {
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+  }
+  .tp-branch-children {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 4px !important;
+    padding-left: 12px !important;
+    margin-top: 2px !important;
+    border-left: 2px solid rgba(56, 189, 248, 0.2) !important;
   }
 
   /* Switch Toggle */
@@ -963,6 +991,7 @@ const STYLES = `
     "akkus-ladegeraete": "Garten & Baumarkt",
     "akkus-ladegeräte": "Garten & Baumarkt",
     "aktenordner": "Bürobedarf & Schreibwaren",
+    "aktenvernichter": "Computer & Zubehör",
     "analoge funktelefone": "Smartphones & Mobiltelefone",
     "analoge telefone": "Smartphones & Mobiltelefone",
     "analoge-funktelefone": "Smartphones & Mobiltelefone",
@@ -1020,6 +1049,10 @@ const STYLES = `
     "computerspiele für windows": "Videogames",
     "computerspiele-fuer-windows": "Videogames",
     "computerspiele-für-windows": "Videogames",
+    "crosstrainer": "Sport & Freizeit",
+    "dachboxen": "Auto & Motorrad",
+    "dachtraeger": "Auto & Motorrad",
+    "dachträger": "Auto & Motorrad",
     "damenduefte": "Drogerie",
     "damendüfte": "Drogerie",
     "deodorant": "Drogerie",
@@ -1028,6 +1061,8 @@ const STYLES = `
     "drucker": "Computer & Zubehör",
     "drucker scanner": "Computer & Zubehör",
     "drucker-scanner": "Computer & Zubehör",
+    "duschgel": "Drogerie",
+    "duschpflege": "Drogerie",
     "dvd action thriller horror": "Filme",
     "dvd filme": "Filme",
     "dvd kinder familie": "Filme",
@@ -1054,6 +1089,7 @@ const STYLES = `
     "elektrozahnbuersten": "Drogerie",
     "elektrozahnbürsten": "Drogerie",
     "epilierer haarentferner": "Drogerie",
+    "ergometer": "Sport & Freizeit",
     "ersatzbuersten": "Drogerie",
     "ersatzbürsten": "Drogerie",
     "evolution autos": "Spielwaren",
@@ -1064,6 +1100,7 @@ const STYLES = `
     "fairphone-h3048": "Smartphones & Mobiltelefone",
     "familienspiele": "Spielwaren",
     "fantasy": "Filme",
+    "fensterreinigungsroboter": "Haushalt & Küche",
     "fernglaeser": "Sport & Freizeit",
     "ferngläser": "Sport & Freizeit",
     "festnetz telefone": "Smartphones & Mobiltelefone",
@@ -1075,6 +1112,7 @@ const STYLES = `
     "fitness-krafttraining": "Sport & Freizeit",
     "funkgeraete": "Smartphones & Mobiltelefone",
     "funkgeräte": "Smartphones & Mobiltelefone",
+    "funko": "Spielwaren",
     "gartengeraete": "Garten & Baumarkt",
     "gartengeräte": "Garten & Baumarkt",
     "gartenmoebel": "Garten & Baumarkt",
@@ -1082,6 +1120,7 @@ const STYLES = `
     "gasgrills": "Garten & Baumarkt",
     "gehaeuseluefter": "Computer & Zubehör",
     "gehäuselüfter": "Computer & Zubehör",
+    "geschenksets": "Drogerie",
     "geschirr besteck glaeser": "Haushalt & Küche",
     "geschirr besteck gläser": "Haushalt & Küche",
     "geschirr-besteck-glaeser": "Haushalt & Küche",
@@ -1153,6 +1192,8 @@ const STYLES = `
     "küchengeräte": "Haushalt & Küche",
     "lampen leuchtmittel": "Garten & Baumarkt",
     "lampen-leuchtmittel": "Garten & Baumarkt",
+    "laufbaender": "Sport & Freizeit",
+    "laufbänder": "Sport & Freizeit",
     "lautsprecher": "HiFi & Audio",
     "lego": "Spielwaren",
     "lego architecture": "Spielwaren",
@@ -1193,6 +1234,7 @@ const STYLES = `
     "nas systeme": "Computer & Zubehör",
     "nas-systeme": "Computer & Zubehör",
     "natur": "Filme",
+    "nerf": "Spielwaren",
     "netzwerktechnik": "Computer & Zubehör",
     "nintendo switch": "Videogames",
     "nintendo switch 2": "Videogames",
@@ -1228,6 +1270,7 @@ const STYLES = `
     "pkw sommerreifen": "Auto & Motorrad",
     "pkw-sommerreifen": "Auto & Motorrad",
     "plattenspieler": "HiFi & Audio",
+    "playmobil": "Spielwaren",
     "playmobil action": "Spielwaren",
     "playmobil asterix": "Spielwaren",
     "playmobil my life": "Spielwaren",
@@ -1265,6 +1308,7 @@ const STYLES = `
     "receiver": "HiFi & Audio",
     "reifen": "Auto & Motorrad",
     "reise sporttaschen": "Sport & Freizeit",
+    "rennspiel": "Videogames",
     "rollenspiele adventures": "Videogames",
     "romantische komoedie": "Filme",
     "romantische komödie": "Filme",
@@ -1278,6 +1322,8 @@ const STYLES = `
     "samsung h1": "Smartphones & Mobiltelefone",
     "samsung-h1": "Smartphones & Mobiltelefone",
     "saug und wischroboter": "Haushalt & Küche",
+    "saugroboter": "Haushalt & Küche",
+    "schalter taster": "Garten & Baumarkt",
     "schleich": "Spielwaren",
     "schreibmaterial": "Bürobedarf & Schreibwaren",
     "schuhe": "Bekleidung & Schuhe",
@@ -1286,8 +1332,10 @@ const STYLES = `
     "science-fiction": "Filme",
     "sd speicherkarten": "Computer & Zubehör",
     "senseo maschinen": "Haushalt & Küche",
+    "shampoo": "Drogerie",
     "sim racing flying": "Videogames",
     "sim-racing-flying": "Videogames",
+    "simulationen": "Videogames",
     "ski lawinenrucksaecke airbags": "Sport & Freizeit",
     "ski lawinenrucksäcke airbags": "Sport & Freizeit",
     "skibrillen": "Sport & Freizeit",
@@ -1387,6 +1435,7 @@ const STYLES = `
     "vtech": "Spielwaren",
     "webcams": "Computer & Zubehör",
     "wein": "Haushalt & Küche",
+    "wischroboter": "Haushalt & Küche",
     "wohnen": "Garten & Baumarkt",
     "xbox series x": "Videogames",
     "xbox series x games": "Videogames",
@@ -1406,7 +1455,7 @@ const STYLES = `
     "zubehör für rc modelle": "Spielwaren",
     "zubehör für sportgeräte": "Sport & Freizeit",
     "zubehör-für-mobiltelefone": "Smartphones & Mobiltelefone"
-  };
+};
 
   const CANONICAL_ROOT_GROUPS = {
     'auto-motorrad': 'Auto & Motorrad',
@@ -1480,25 +1529,60 @@ const STYLES = `
     return GROUP_EMOJIS[groupName] || '📦';
   }
 
-  // Helper: Resolve Top-Level Root Group for any Category (with DOM Fallback Auto-Learning)
-  function resolveCategoryGroup(categoryName, card = null) {
-    if (!categoryName) return 'Sonstiges';
+  const BRAND_RULES = [
+    { regex: /^\b(lego|legos)\b/i, group: 'Spielwaren', parent: 'Lego' },
+    { regex: /^\b(playmobil)\b/i, group: 'Spielwaren', parent: 'Playmobil' },
+    { regex: /^\b(cobi|mega construx|fischertechnik|ravensburger)\b/i, group: 'Spielwaren', parent: 'Konstruktionsspielzeug' },
+    { regex: /^\b(schleich|barbie|hot wheels|action figuren|funko|nerf)\b/i, group: 'Spielwaren', parent: 'Figuren & Spielsets' },
+    { regex: /^\b(crosstrainer|laufbaender|laufbänder|ergometer|rudergeraet|rudergerät)\b/i, group: 'Sport & Freizeit', parent: 'Fitnessgeräte' },
+    { regex: /^\b(fensterreinigungsroboter|saugroboter|wischroboter)\b/i, group: 'Haushalt & Küche', parent: 'Saugen & Reinigen' },
+    { regex: /^\b(duschpflege|duschgel|shampoo|seife|geschenksets)\b/i, group: 'Drogerie', parent: 'Körper & Duschpflege' },
+    { regex: /^\b(dachboxen|dachtraeger|dachträger)\b/i, group: 'Auto & Motorrad', parent: 'Dachboxen & Träger' },
+    { regex: /^\b(aktenvernichter|papierschredder)\b/i, group: 'Computer & Zubehör', parent: 'PC Komponenten' },
+    { regex: /^\b(simulationen|rennspiel|sportsimulation)\b/i, group: 'Videogames', parent: 'Computerspiele' },
+    { regex: /^\b(schalter taster)\b/i, group: 'Garten & Baumarkt', parent: 'Haus & Elektro' }
+  ];
+
+  // Universal Hierarchical Path Resolver: Returns [RootGroup, SubGroup/Parent, LeafCategory]
+  function resolveCategoryPath(categoryName, card = null) {
+    if (!categoryName) return ['Sonstiges', 'Sonstiges', 'Sonstiges'];
     const norm = categoryName.trim().toLowerCase();
     const slug = norm.replace(/[^a-z0-9]/g, '');
     const spaceSlug = norm.replace(/-/g, ' ');
     const umlautNorm = normalizeUmlautKey(norm);
 
-    if (CATEGORY_LOOKUP[norm]) return CATEGORY_LOOKUP[norm];
-    if (CATEGORY_LOOKUP[slug]) return CATEGORY_LOOKUP[slug];
-    if (CATEGORY_LOOKUP[spaceSlug]) return CATEGORY_LOOKUP[spaceSlug];
-    if (CATEGORY_LOOKUP[umlautNorm]) return CATEGORY_LOOKUP[umlautNorm];
+    // 1. Direct Lookup in CATEGORY_LOOKUP
+    let root = CATEGORY_LOOKUP[norm] || CATEGORY_LOOKUP[slug] || CATEGORY_LOOKUP[spaceSlug] || CATEGORY_LOOKUP[umlautNorm];
 
-    const dynamicMap = _getValue('DYNAMIC_CAT_MAP', {});
-    if (dynamicMap[norm]) return dynamicMap[norm];
-    if (dynamicMap[slug]) return dynamicMap[slug];
-    if (dynamicMap[umlautNorm]) return dynamicMap[umlautNorm];
+    // 2. Word-Prefix Fallback (e.g. "Lego Star Wars" -> "Lego Star" -> "Lego")
+    if (!root) {
+      const words = norm.split(/\s+/);
+      for (let i = words.length - 1; i >= 1; i--) {
+        const prefixKey = words.slice(0, i).join(' ');
+        if (CATEGORY_LOOKUP[prefixKey]) {
+          root = CATEGORY_LOOKUP[prefixKey];
+          break;
+        }
+      }
+    }
 
-    if (card && card.querySelectorAll) {
+    // 3. Brand & Keyword Rules
+    if (!root) {
+      for (const rule of BRAND_RULES) {
+        if (rule.regex.test(norm) || rule.regex.test(spaceSlug)) {
+          return [rule.group, rule.parent, categoryName];
+        }
+      }
+    }
+
+    // 4. Dynamic Map Lookup
+    if (!root) {
+      const dynamicMap = _getValue('DYNAMIC_CAT_MAP', {});
+      root = dynamicMap[norm] || dynamicMap[slug] || dynamicMap[spaceSlug] || dynamicMap[umlautNorm];
+    }
+
+    // 5. DOM Link & Breadcrumb Fallback
+    if (!root && card && card.querySelectorAll) {
       const links = card.querySelectorAll('a[href*="/produktsuche/"], a[href*="/preisvergleich/"]');
       for (const a of links) {
         const href = a.getAttribute('href') || '';
@@ -1507,42 +1591,46 @@ const STYLES = `
           const rootSlug = match[1].split('-c')[0];
           const formattedRoot = normalizeRootSlug(rootSlug) || formatCategorySlug(rootSlug);
           if (formattedRoot) {
+            root = formattedRoot;
+            const dynamicMap = _getValue('DYNAMIC_CAT_MAP', {});
             dynamicMap[norm] = formattedRoot;
             dynamicMap[slug] = formattedRoot;
-            dynamicMap[spaceSlug] = formattedRoot;
-            dynamicMap[umlautNorm] = formattedRoot;
             saveConfigKey('DYNAMIC_CAT_MAP', dynamicMap);
-            return formattedRoot;
+            break;
           }
         }
       }
     }
 
-    // Page-level breadcrumb fallback matching
-    const pageBreadcrumb = document.querySelector('.breadcrumb, #Breadcrumb, [class*="breadcrumb"]');
-    if (pageBreadcrumb) {
-      const bcLink = pageBreadcrumb.querySelector('a[href*="/produktsuche/"]');
-      if (bcLink) {
-        const href = bcLink.getAttribute('href') || '';
-        const match = href.match(/\/produktsuche\/([^\/]+)\//i);
-        if (match && match[1]) {
-          const formattedRoot = normalizeRootSlug(match[1].split('-c')[0]) || formatCategorySlug(match[1].split('-c')[0]);
-          if (formattedRoot) {
-            dynamicMap[norm] = formattedRoot;
-            dynamicMap[slug] = formattedRoot;
-            dynamicMap[spaceSlug] = formattedRoot;
-            dynamicMap[umlautNorm] = formattedRoot;
-            saveConfigKey('DYNAMIC_CAT_MAP', dynamicMap);
-            return formattedRoot;
-          }
-        }
+    if (!root) root = 'Sonstiges';
+
+    let parent = categoryName;
+    for (const rule of BRAND_RULES) {
+      if (rule.regex.test(norm) || rule.regex.test(spaceSlug)) {
+        parent = rule.parent;
+        break;
       }
     }
 
-    return 'Sonstiges';
+    return [root, parent, categoryName];
   }
 
-  // Floating Glassmorphic Group Popover Controller
+  // Helper: Resolve Top-Level Root Group for any Category
+  function resolveCategoryGroup(categoryName, card = null) {
+    const path = resolveCategoryPath(categoryName, card);
+    return path[0] || 'Sonstiges';
+  }
+
+  // Helper: Evaluates whether a card category or path is excluded
+  function isPathExcluded(catName, rootGroup, excludedCats = []) {
+    if (!excludedCats || excludedCats.length === 0) return false;
+    if (excludedCats.includes(`GROUP:${rootGroup}`)) return true;
+    if (catName && excludedCats.includes(catName)) return true;
+    if (catName && excludedCats.includes(`PATH:${rootGroup}/${catName}`)) return true;
+    return false;
+  }
+
+  // Floating Glassmorphic Group Popover Controller with Branch Search & Accordion
   let activePopover = null;
 
   function closeActivePopover() {
@@ -1576,7 +1664,7 @@ const STYLES = `
     popover.className = 'tp-group-popover';
     popover.dataset.rootGroup = rootGroup;
 
-    const popoverWidth = 300;
+    const popoverWidth = 320;
     const topPos = rect.bottom + 6 + window.scrollY;
     let leftPos = rect.left + window.scrollX;
     if (rect.left + popoverWidth > window.innerWidth - 16) {
@@ -1599,13 +1687,13 @@ const STYLES = `
     const btnHideAll = document.createElement('button');
     btnHideAll.className = 'tp-popover-btn';
     btnHideAll.textContent = 'Alle ausblenden';
-    btnHideAll.title = `Alle aktuellen & zukünftigen Unterkategorien von "${rootGroup}" ausblenden`;
+    btnHideAll.title = `Alle Unterkategorien von "${rootGroup}" ausblenden`;
     btnHideAll.onclick = (e) => {
       e.stopPropagation();
       const excluded = getExcludedCats();
       const groupKey = `GROUP:${rootGroup}`;
-      const toAdd = subcats.filter(sc => !excluded.includes(sc));
-      const updated = Array.from(new Set([...excluded, ...toAdd, groupKey]));
+      const toAdd = subcats.map(sc => `PATH:${rootGroup}/${sc}`);
+      const updated = Array.from(new Set([...excluded, ...subcats, ...toAdd, groupKey]));
       updateExcludedCats(updated);
       renderPopoverBody();
     };
@@ -1617,7 +1705,7 @@ const STYLES = `
     btnReset.onclick = (e) => {
       e.stopPropagation();
       const excluded = getExcludedCats();
-      const updated = excluded.filter(c => !subcats.includes(c) && c !== `GROUP:${rootGroup}`);
+      const updated = excluded.filter(c => !subcats.includes(c) && c !== `GROUP:${rootGroup}` && !c.startsWith(`PATH:${rootGroup}/`));
       updateExcludedCats(updated);
       renderPopoverBody();
     };
@@ -1628,6 +1716,14 @@ const STYLES = `
     header.appendChild(actions);
     popover.appendChild(header);
 
+    // Search Filter Bar inside Popover
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.placeholder = 'Kategorien filtern...';
+    searchInput.className = 'tp-popover-search';
+    searchInput.oninput = () => renderPopoverBody();
+    popover.appendChild(searchInput);
+
     const body = document.createElement('div');
     body.className = 'tp-popover-body';
 
@@ -1635,9 +1731,12 @@ const STYLES = `
       body.innerHTML = '';
       const excluded = getExcludedCats();
       const isGroupExplicitlyBlocked = excluded.includes(`GROUP:${rootGroup}`);
+      const query = (searchInput.value || '').trim().toLowerCase();
 
-      subcats.forEach(cat => {
-        const isCatExcluded = excluded.includes(cat) || isGroupExplicitlyBlocked;
+      const filteredSubcats = subcats.filter(sc => !query || sc.toLowerCase().includes(query));
+
+      filteredSubcats.forEach(cat => {
+        const isCatExcluded = isPathExcluded(cat, rootGroup, excluded);
         const pill = document.createElement('div');
         pill.className = `tp-cat-pill ${isCatExcluded ? 'tp-excluded' : ''}`;
         pill.textContent = cat;
@@ -1646,15 +1745,14 @@ const STYLES = `
           e.stopPropagation();
           const curr = getExcludedCats();
           let updated;
-          if (curr.includes(cat) || isGroupExplicitlyBlocked) {
-            // Remove individual subcat AND clear explicit GROUP block if present
-            const otherSubcatsToKeep = subcats.filter(sc => sc !== cat && (curr.includes(sc) || isGroupExplicitlyBlocked));
-            updated = curr.filter(c => c !== cat && c !== `GROUP:${rootGroup}`);
+          if (curr.includes(cat) || curr.includes(`PATH:${rootGroup}/${cat}`) || isGroupExplicitlyBlocked) {
+            const otherSubcatsToKeep = subcats.filter(sc => sc !== cat && isPathExcluded(sc, rootGroup, curr));
+            updated = curr.filter(c => c !== cat && c !== `PATH:${rootGroup}/${cat}` && c !== `GROUP:${rootGroup}`);
             if (otherSubcatsToKeep.length > 0) {
-              updated = Array.from(new Set([...updated, ...otherSubcatsToKeep]));
+              updated = Array.from(new Set([...updated, ...otherSubcatsToKeep.map(sc => `PATH:${rootGroup}/${sc}`)]));
             }
           } else {
-            updated = [...curr, cat];
+            updated = [...curr, `PATH:${rootGroup}/${cat}`];
           }
           updateExcludedCats(updated);
           renderPopoverBody();
@@ -2192,19 +2290,19 @@ const STYLES = `
           const newTitleText = `${getGroupEmoji(rootGroup)} ${rootGroup} (${subcats.length})`;
           if (titleSpan.textContent !== newTitleText) titleSpan.textContent = newTitleText;
 
-          groupPill.title = `Unterkategorien von "${rootGroup}" anzeigen & verwalten`;
-          groupPill.onclick = (e) => {
+          titleSpan.title = `Klick: Gesamte Gruppe "${rootGroup}" ausblenden/einblenden | ▼: Unterkategorien`;
+          titleSpan.onclick = (e) => {
             e.stopPropagation();
-            toggleGroupPopover(
-              groupPill,
-              rootGroup,
-              subcats,
-              () => CONFIG.EXCLUDED_CATEGORIES || [],
-              (updated) => {
-                saveConfigKey('EXCLUDED_CATEGORIES', updated);
-                processListings();
-              }
-            );
+            const curr = CONFIG.EXCLUDED_CATEGORIES || [];
+            const groupKey = `GROUP:${rootGroup}`;
+            let updated;
+            if (curr.includes(groupKey)) {
+              updated = curr.filter(c => c !== groupKey);
+            } else {
+              updated = Array.from(new Set([...curr, groupKey]));
+            }
+            saveConfigKey('EXCLUDED_CATEGORIES', updated);
+            processListings();
           };
 
           const newChevronText = '▼';
@@ -2273,7 +2371,7 @@ const STYLES = `
 
         // 3. Category Filter
         const rootGroup = resolveCategoryGroup(catName, card);
-        const isCatExcluded = catName && (excludedCats.includes(catName) || excludedCats.includes(`GROUP:${rootGroup}`));
+        const isCatExcluded = catName && isPathExcluded(catName, rootGroup, excludedCats);
         card.classList.toggle('tp-category-filtered', isCatExcluded);
         if (isCatExcluded) counts.cat++;
 
@@ -2777,19 +2875,16 @@ const STYLES = `
         const newTitleText = `${getGroupEmoji(rootGroup)} ${rootGroup} (${subcats.length})`;
         if (titleSpan.textContent !== newTitleText) titleSpan.textContent = newTitleText;
 
-        groupPill.title = `Unterkategorien von "${rootGroup}" anzeigen & verwalten`;
-        groupPill.onclick = (e) => {
+        titleSpan.title = `Klick: Gesamte Gruppe "${rootGroup}" ausblenden/einblenden | ▼: Unterkategorien`;
+        titleSpan.onclick = (e) => {
           e.stopPropagation();
-          toggleGroupPopover(
-            groupPill,
-            rootGroup,
-            subcats,
-            () => currentExcludedCats,
-            (updated) => {
-              currentExcludedCats = updated;
-              renderCategoryPills();
-            }
-          );
+          const groupKey = `GROUP:${rootGroup}`;
+          if (currentExcludedCats.includes(groupKey)) {
+            currentExcludedCats = currentExcludedCats.filter(c => c !== groupKey);
+          } else {
+            currentExcludedCats = Array.from(new Set([...currentExcludedCats, groupKey]));
+          }
+          renderCategoryPills();
         };
 
         const newChevronText = '▼';

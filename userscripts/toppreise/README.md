@@ -8,15 +8,17 @@ Requires Violentmonkey (or a compatible userscript manager):
 - [Firefox](https://addons.mozilla.org/en-US/firefox/addon/violentmonkey/)
 - [Chrome / Brave](https://chromewebstore.google.com/detail/violentmonkey/jinjaccalgkegednnccohejagnlnfdag)
 
-### 👉 [**CLICK HERE TO INSTALL USERSCRIPT (v2.8.1)**](https://raw.githubusercontent.com/tazztone/scripts/27a2540ea67d91937e948e7dbdf9a799431760ef/userscripts/toppreise/toppreise.user.js)
+### 👉 [**CLICK HERE TO INSTALL USERSCRIPT (v2.8.9)**](https://raw.githubusercontent.com/tazztone/scripts/main/userscripts/toppreise/toppreise.user.js)
 
 ---
 
 ## ⚡ Features
 
-1. **📁 High-Level Group Category Filtering**: Automatically resolves hundreds of subcategories directly to root categories (e.g. `Science Fiction`, `Horror` -> 🎬 **Filme**; `Lego Duplo`, `Playmobil` -> 🧸 **Spielwaren**; `Prozessorkuehler`, `Headsets` -> 💻 **Computer & Zubehör**; `Staubsauger` -> ☕ **Haushalt & Küche**). Filter out entire groups with 1 click instead of toggling dozens of individual genres.
-2. **💬 Linear / Vercel Floating Popover Dropdowns**: Group pills feature custom category emojis (🎬, 🧸, 💻, 🎮, 🎧, 📱, ☕, ⚽, 🚗, ⌚, etc.). Clicking any group pill opens a floating glassmorphic popover displaying its subcategories with `[Alle ausblenden]` and `[Reset]` action buttons.
-3. **📌 Persistent Popovers & Semantic Group States**: Popovers stay open while toggling subcategories so you can toggle multiple subcategories in one fluid pass. Group pills feature distinct visual states:
+1. **📁 Hierarchical Category Tree Engine & Zero-Orphan Resolution**: Multi-level resolution algorithm (`Root` $\rightarrow$ `Sub-Group` $\rightarrow$ `Sub-Sub-Group` $\rightarrow$ `Leaf`) with word-prefix matching, brand rules (*Lego*, *Playmobil*, *Cobi*, *Schleich*, *Barbie*, *Hot Wheels* $\rightarrow$ 🧸 **Spielwaren**), and keyword fallback routing (*Fensterreinigungsroboter* $\rightarrow$ ☕ **Haushalt & Küche**, *Crosstrainer* $\rightarrow$ ⚽ **Sport & Freizeit**, *Duschpflege* $\rightarrow$ 🧴 **Drogerie**, *Dachboxen* $\rightarrow$ 🚗 **Auto & Motorrad**, *Aktenvernichter* $\rightarrow$ 💻 **Computer & Zubehör**, *Simulationen* $\rightarrow$ 🎮 **Videogames**). Eliminates orphan categories in `Sonstiges`.
+2. **💬 Multi-Level Exclusion & Single-Click Group Toggling**: Group pills feature custom category emojis (🎬, 🧸, 💻, 🎮, 🎧, 📱, ☕, ⚽, 🚗, ⌚, etc.).
+   - **1-Click Title Toggle**: Click a group pill title to toggle the **entire main group** ON/OFF (`GROUP:<Name>`) instantly.
+   - **Chevron `▼` Dropdown**: Click the chevron to open a floating glassmorphic popover dropdown for granular sub-branch toggling.
+3. **🔍 Real-Time Popover Quick-Search & Semantic Group States**: Popover dropdowns feature an inline real-time search bar to quickly isolate subcategories (e.g. typing "star" or "lego"). Popover pills feature distinct visual states:
    - **Strikethrough Line-Through Red**: Explicit full group block (`[Alle ausblenden]`) — blocks all current and future subcategories.
    - **Solid Red (No Strikethrough)**: All current subcategories individually excluded — future subcategories remain enabled.
    - **Amber Warning Border**: Partial exclusion state.

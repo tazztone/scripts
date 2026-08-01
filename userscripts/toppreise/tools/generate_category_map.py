@@ -99,12 +99,14 @@ SEED_LOOKUP = {
     "experimentierkaesten": "Spielwaren", "kartenspiele": "Spielwaren", "mega construx": "Spielwaren",
     "familienspiele": "Spielwaren", "basteln malen": "Spielwaren", "komplett sets": "Spielwaren",
     "zubehoer fuer rc modelle": "Spielwaren", "lego marvel": "Spielwaren", "evolution autos": "Spielwaren",
+    "playmobil": "Spielwaren", "nerf": "Spielwaren", "funko": "Spielwaren",
     
     # Videogames
     "strategie rollenspiele": "Videogames", "zubehoer fuer nintendo switch": "Videogames",
     "jump n run geschicklichkeit": "Videogames", "actionspiele": "Videogames",
     "rollenspiele adventures": "Videogames", "action": "Videogames", "nintendo switch games": "Videogames",
     "sonstige handheld konsolen": "Videogames", "ps5 konsolen": "Videogames", "playstation 5": "Videogames",
+    "simulationen": "Videogames", "rennspiel": "Videogames",
     
     # HiFi & Audio / TV & Video
     "kopfhoerer": "HiFi & Audio", "plattenspieler": "HiFi & Audio", "bluetooth lautsprecher": "HiFi & Audio",
@@ -115,7 +117,8 @@ SEED_LOOKUP = {
     "eau de parfum": "Drogerie", "eau de toilette": "Drogerie", "elektrozahnbuersten": "Drogerie",
     "hautpflege": "Drogerie", "lockenstaebe buersten": "Drogerie", "ersatzbuersten": "Drogerie",
     "koerperpflege": "Drogerie", "haartrockner": "Drogerie", "health wellness": "Drogerie",
-    "haarpflege": "Drogerie", "epilierer haarentferner": "Drogerie",
+    "haarpflege": "Drogerie", "epilierer haarentferner": "Drogerie", "duschpflege": "Drogerie",
+    "duschgel": "Drogerie", "shampoo": "Drogerie", "geschenksets": "Drogerie",
     
     # Haushalt & Küche
     "saug und wischroboter": "Haushalt & Küche", "abfallsysteme": "Haushalt & Küche",
@@ -123,7 +126,8 @@ SEED_LOOKUP = {
     "kaffee espressomaschinen": "Haushalt & Küche", "kaffeemuehlen": "Haushalt & Küche",
     "staubsauger": "Haushalt & Küche", "klimageraete": "Haushalt & Küche", "raumduft": "Haushalt & Küche",
     "senseo maschinen": "Haushalt & Küche", "sonstige kuechengeraete": "Haushalt & Küche",
-    "heizung klima": "Haushalt & Küche",
+    "heizung klima": "Haushalt & Küche", "fensterreinigungsroboter": "Haushalt & Küche",
+    "saugroboter": "Haushalt & Küche", "wischroboter": "Haushalt & Küche",
     
     # Sport & Freizeit
     "skihelme": "Sport & Freizeit", "koffer": "Sport & Freizeit", "ventilatoren heizgeraete": "Sport & Freizeit",
@@ -134,17 +138,19 @@ SEED_LOOKUP = {
     "pedale": "Sport & Freizeit", "taschenlampen": "Sport & Freizeit", "skibrillen": "Sport & Freizeit",
     "protektoren": "Sport & Freizeit", "activity tracker smartwatches": "Sport & Freizeit", "velofahren": "Sport & Freizeit",
     "fitness krafttraining": "Sport & Freizeit", "fitness-krafttraining": "Sport & Freizeit",
-    "velohelme": "Sport & Freizeit", "saettel": "Sport & Freizeit",
+    "velohelme": "Sport & Freizeit", "saettel": "Sport & Freizeit", "crosstrainer": "Sport & Freizeit",
+    "laufbaender": "Sport & Freizeit", "laufbänder": "Sport & Freizeit", "ergometer": "Sport & Freizeit",
     
     # Garten & Baumarkt
-    "schwingschleifer": "Garten & Baumarkt",
+    "schwingschleifer": "Garten & Baumarkt", "schalter taster": "Garten & Baumarkt",
     
-    # Smartphones & Mobiltelefone / Auto / Uhren
+    # Smartphones & Mobiltelefone / Auto / Uhren / Computer
     "huellen": "Smartphones & Mobiltelefone", "oberschalen cover": "Smartphones & Mobiltelefone",
     "taschen cover fuer iphone": "Smartphones & Mobiltelefone", "smartphones": "Smartphones & Mobiltelefone",
     "webcams": "Computer & Zubehör", "naehmaschinen": "Haushalt & Küche",
     "reifen": "Auto & Motorrad", "autos": "Auto & Motorrad", "uhren": "Uhren",
-    "pneus": "Auto & Motorrad", "pkw sommerreifen": "Auto & Motorrad", "pkw-sommerreifen": "Auto & Motorrad"
+    "pneus": "Auto & Motorrad", "pkw sommerreifen": "Auto & Motorrad", "pkw-sommerreifen": "Auto & Motorrad",
+    "dachboxen": "Auto & Motorrad", "dachtraeger": "Auto & Motorrad", "aktenvernichter": "Computer & Zubehör"
 }
 
 def format_title(slug):
