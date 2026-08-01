@@ -89,3 +89,28 @@ When a price alarm bell icon is clicked:
 7. **GitHub Raw CDN Edge Caching on Script Updates**:
    - *Gotcha*: `raw.githubusercontent.com` caches raw files on CDN edge servers for ~5 minutes. Installing/reinstalling via a raw GitHub URL immediately after pushing a commit causes userscript managers to pull stale cached code.
    - *Rule*: Append a query-parameter cache-buster (e.g. `?v=VERSION` or `?t=TIMESTAMP`) or use specific commit hashes in raw GitHub links (`raw.githubusercontent.com/.../COMMIT_HASH/toppreise.user.js`) to force the CDN and browser to serve the latest script code instantly.
+
+---
+
+## 6. Comprehensive Category Taxonomy & Resolution Engine (v2.8.12)
+
+### 1. Site Taxonomy Structure & URL Patterns
+`Toppreise.ch` structures its catalog under **23 primary root category slugs** (mapped into 14–17 canonical display groups such as *Spielwaren*, *Computer & Zubehör*, *Haushalt & Küche*, *Drogerie*, *HiFi & Audio*, etc.).
+
+Subcategories appear in two distinct patterns across the site:
+- **Navigation Category Links (`/produktsuche/<Root>/<Subcat>-cNNN`)**: High-level and mid-level category nodes (e.g. `Spielwaren/Bau-Konstruktionsspielzeug-c2404`).
+- **Product URL Category Paths (`/preisvergleich/<SubcatSlug>/<ProductTitle>-pNNN`)**: Leaf subcategories (e.g. `Lego-City`, `Heissluftfritteusen`, `Vollautomaten`, `USB-SpeicherSticks`, `AV-Receiver`) appear as the first path segment in product links. These leaf nodes are pagination-dependent (`?p=1..10`).
+
+### 2. Crawl Tool & Yield (`tools/generate_category_map.py`)
+- **Automated Depth & Pagination Crawler**: Crawls `/produktsuche/` pages and follows subcategory links up to depth 5, including paginated product lists (`?p=1..10`).
+- **Crawl Metrics**: 1,194 pages crawled $\rightarrow$ **669 site subcategories** $\rightarrow$ **1,360 normalized lookup keys** (handling exact titles, URL slugs, space-separated forms, and German umlaut variants `ue` $\leftrightarrow$ `ü`, `ae` $\leftrightarrow$ `ä`, `oe` $\leftrightarrow$ `ö`).
+- **Auto-Injection**: Injects `const CATEGORY_LOOKUP` into `toppreise.user.js`.
+
+### 3. 6-Layer Category Resolution Pipeline (`resolveCategoryPath`)
+1. **Layer 1: On-Card Product URL Root Slug Extraction**: Reads `/preisvergleich/<RootSlug>/...` or `/produktsuche/<RootSlug>/...` directly from card links (**100% authoritative**).
+2. **Layer 2: Site-Crawled `CATEGORY_LOOKUP`**: Matches 1,360 auto-generated lookup keys.
+3. **Layer 3: Dynamic Storage `DYNAMIC_CAT_MAP`**: Saved in `GM_setValue` / `localStorage` to learn categories at runtime as user browses.
+4. **Layer 4: Brand & Keyword Rules (`BRAND_RULES`)**: Domain regex matching for brands (*CaDA*, *Playmobil*, *Cobi*, *Schleich*, etc.).
+5. **Layer 5: Word-Prefix Token Fallback**: Right-to-left word trimming (`Lego Star Wars` $\rightarrow$ `Lego` $\rightarrow$ `Spielwaren`).
+6. **Layer 6: DOM Breadcrumbs**: Fallback to page `.breadcrumb` links.
+
