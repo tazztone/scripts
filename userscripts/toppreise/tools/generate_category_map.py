@@ -70,7 +70,7 @@ def slug_to_key(slug):
 
 
 def expand_key_variants(key):
-    """Generate all lookup key variants: original, umlaut-expanded, umlaut-collapsed, no-spaces."""
+    """Generate normalized lookup keys: original, umlaut-expanded, and umlaut-collapsed."""
     variants = {key}
     # ue->ü, ae->ä, oe->ö
     u_map = key.replace('ue', 'ü').replace('ae', 'ä').replace('oe', 'ö')
@@ -78,10 +78,6 @@ def expand_key_variants(key):
     # ü->ue, ä->ae, ö->oe
     a_map = key.replace('ü', 'ue').replace('ä', 'ae').replace('ö', 'oe')
     variants.add(a_map)
-    # no-space slug
-    variants.add(key.replace(' ', ''))
-    variants.add(u_map.replace(' ', ''))
-    variants.add(a_map.replace(' ', ''))
     return variants
 
 
@@ -104,21 +100,29 @@ def resolve_root_from_url(url):
 
 
 def extract_subcategories_from_html(html, page_root_group):
-    """Extract all subcategory slugs from a page's HTML, mapped to page_root_group."""
+    """Extract all subcategory slugs and inner link titles from a page's HTML, mapped to page_root_group."""
     results = {}  # key -> root_group
     detailed = {}  # key -> {root, title, path}
 
-    # 1. Extract from /produktsuche/ navigation links
-    ps_matches = re.findall(r'href=["\'](/produktsuche/[^"\'?#]+)', html)
-    for href in ps_matches:
-        parts = href.strip('/').split('/')
+    # 1. Extract from /produktsuche/ navigation links with inner text
+    ps_matches = re.findall(r'href=["\'](/produktsuche/[^"\'#]+)["\'][^>]*>([^<]+)</a>', html)
+    for href, inner_text in ps_matches:
+        clean_path = href.split('?')[0]
+        parts = clean_path.strip('/').split('/')
         if len(parts) < 2 or parts[0] != 'produktsuche':
             continue
 
         segments = parts[1:]  # everything after 'produktsuche'
-        # Determine root from first segment
         root_key = slug_to_key(segments[0])
         root_group = ROOT_SLUG_MAP.get(root_key, page_root_group)
+
+        # Map inner text if valid
+        clean_title = inner_text.strip()
+        if clean_title and not clean_title.startswith('<'):
+            text_key = slug_to_key(clean_title)
+            if text_key and len(text_key) > 1 and not text_key.isdigit():
+                for variant in expand_key_variants(text_key):
+                    results[variant] = root_group
 
         # Map every non-root segment as a subcategory
         for seg in segments[1:]:
@@ -128,13 +132,12 @@ def extract_subcategories_from_html(html, page_root_group):
             title = format_title(seg)
             if not key or len(key) < 2:
                 continue
-            # Skip if it's just a numeric ID
             if key.replace(' ', '').isdigit():
                 continue
 
             for variant in expand_key_variants(key):
                 results[variant] = root_group
-            
+
             detailed[key] = {
                 "root": root_group,
                 "title": title,
@@ -192,22 +195,20 @@ def extract_subcategories_from_html(html, page_root_group):
 def discover_subcat_urls(html, current_url):
     """Find subcategory page URLs and pagination URLs to crawl deeper."""
     urls = set()
-    matches = re.findall(r'href=["\'](/produktsuche/[^"\'#]+)', html)
+    matches = re.findall(r'href=["\'](/produktsuche/[^"\'\s>]+)', html)
     for href in matches:
-        clean = href.split('?')[0]
-        query = href.split('?')[1] if '?' in href else ''
-        # Follow subcategory links (have -cNNN)
+        clean = href.split('?')[0].split('#')[0]
         if '-c' in clean.split('/')[-1]:
             urls.add(f"https://www.toppreise.ch{clean}")
-    
+
     # Also follow pagination links (?p=N) on current page to get more product URLs
-    base_url = current_url.split('?')[0]
+    base_url = current_url.split('?')[0].split('#')[0]
     page_matches = re.findall(r'[?&]p=(\d+)', html)
     for p in set(page_matches):
         page_num = int(p)
-        if 0 < page_num <= 10:  # cap pagination crawl at 10 pages
+        if 0 < page_num <= 15:
             urls.add(f"{base_url}?p={page_num}")
-    
+
     return urls
 
 

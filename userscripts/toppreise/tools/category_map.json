@@ -1,90 +1,12 @@
 {
-  "2 wochenlinsen": {
-    "root": "Drogerie",
-    "title": "2 Wochenlinsen",
-    "path": [
-      "2 Wochenlinsen"
-    ]
-  },
-  "3d drucker": {
-    "root": "Computer & Zubehör",
-    "title": "3d Drucker",
-    "path": [
-      "3d Drucker"
-    ]
-  },
-  "3d shooter fps": {
-    "root": "Videogames",
-    "title": "3d Shooter Fps",
-    "path": [
-      "Videogames",
-      "Playstation 4",
-      "Ps4 Games",
-      "3d Shooter Fps"
-    ]
-  },
-  "4k uhd action thriller horror": {
-    "root": "Filme",
-    "title": "4k Uhd Action Thriller Horror",
-    "path": [
-      "Filme",
-      "Blu Ray 4k Ultra Hd Filme",
-      "4k Uhd Action Thriller Horror",
-      "Horror"
-    ]
-  },
-  "4k uhd kinder familie": {
-    "root": "Filme",
-    "title": "4k Uhd Kinder Familie",
-    "path": [
-      "Filme",
-      "Blu Ray 4k Ultra Hd Filme",
-      "4k Uhd Kinder Familie"
-    ]
-  },
-  "4k uhd science fiction fantasy": {
-    "root": "Filme",
-    "title": "4k Uhd Science Fiction Fantasy",
-    "path": [
-      "Filme",
-      "Blu Ray 4k Ultra Hd Filme",
-      "4k Uhd Science Fiction Fantasy",
-      "Science Fiction"
-    ]
-  },
-  "4k ultra hd blu ray player": {
-    "root": "TV & Video",
-    "title": "4k Ultra Hd Blu Ray Player",
-    "path": [
-      "4k Ultra Hd Blu Ray Player"
-    ]
-  },
   "abenteuer": {
     "root": "Filme",
     "title": "Abenteuer",
     "path": [
+      "Filme",
+      "Dvd Filme",
+      "Dvd Kinder Familie",
       "Abenteuer"
-    ]
-  },
-  "abenteuer actiondrama": {
-    "root": "Filme",
-    "title": "Abenteuer Actiondrama",
-    "path": [
-      "Abenteuer Actiondrama"
-    ]
-  },
-  "abschlagbehaelter": {
-    "root": "Haushalt & Küche",
-    "title": "Abschlagbehaelter",
-    "path": [
-      "Abschlagbehaelter"
-    ]
-  },
-  "access points bridges": {
-    "root": "Computer & Zubehör",
-    "title": "Access Points Bridges",
-    "path": [
-      "Access Points Bridges"
     ]
   },
   "action": {
@@ -106,19 +28,13 @@
       "Action Cameras"
     ]
   },
-  "actionkameras": {
-    "root": "TV & Video",
-    "title": "Actionkameras",
-    "path": [
-      "Tv Video",
-      "Camcorder",
-      "Actionkameras"
-    ]
-  },
   "actionspiele": {
     "root": "Videogames",
     "title": "Actionspiele",
     "path": [
+      "Videogames",
+      "Nintendo Switch 2",
+      "Nintendo Switch 2 Games",
       "Actionspiele"
     ]
   },
@@ -129,13 +45,6 @@
       "Sport Freizeit",
       "Sportgeraete",
       "Activity Tracker Smartwatches"
-    ]
-  },
-  "adapterplatten": {
-    "root": "Foto & Video",
-    "title": "Adapterplatten",
-    "path": [
-      "Adapterplatten"
     ]
   },
   "after shave": {
@@ -189,27 +98,6 @@
       "Aktenordner"
     ]
   },
-  "aktenvernichter": {
-    "root": "Bürobedarf & Schreibwaren",
-    "title": "Aktenvernichter",
-    "path": [
-      "Aktenvernichter"
-    ]
-  },
-  "allesschneider brotschneidemaschinen": {
-    "root": "Haushalt & Küche",
-    "title": "Allesschneider Brotschneidemaschinen",
-    "path": [
-      "Allesschneider Brotschneidemaschinen"
-    ]
-  },
-  "anal vibratoren": {
-    "root": "Drogerie",
-    "title": "Anal Vibratoren",
-    "path": [
-      "Anal Vibratoren"
-    ]
-  },
   "analoge funktelefone": {
     "root": "Smartphones & Mobiltelefone",
     "title": "Analoge Funktelefone",
@@ -226,13 +114,6 @@
       "Telefon Voip",
       "Festnetz Telefone",
       "Analoge Telefone"
-    ]
-  },
-  "anime": {
-    "root": "Filme",
-    "title": "Anime",
-    "path": [
-      "Anime"
     ]
   },
   "apple h10": {
@@ -252,40 +133,12 @@
       "Arbeitsplatz"
     ]
   },
-  "arbeitsplatz ausstattung": {
-    "root": "Garten & Baumarkt",
-    "title": "Arbeitsplatz Ausstattung",
-    "path": [
-      "Arbeitsplatz Ausstattung"
-    ]
-  },
-  "arbeitsspeicher": {
-    "root": "Computer & Zubehör",
-    "title": "Arbeitsspeicher",
-    "path": [
-      "Arbeitsspeicher"
-    ]
-  },
   "audio streaming": {
     "root": "HiFi & Audio",
     "title": "Audio Streaming",
     "path": [
       "Hifi Audio",
       "Audio Streaming"
-    ]
-  },
-  "aufbewahren": {
-    "root": "Haushalt & Küche",
-    "title": "Aufbewahren",
-    "path": [
-      "Aufbewahren"
-    ]
-  },
-  "auflegevibratoren": {
-    "root": "Drogerie",
-    "title": "Auflegevibratoren",
-    "path": [
-      "Auflegevibratoren"
     ]
   },
   "autorennbahnen": {
@@ -326,41 +179,6 @@
       "Back Ofenformen"
     ]
   },
-  "backen": {
-    "root": "Haushalt & Küche",
-    "title": "Backen",
-    "path": [
-      "Backen"
-    ]
-  },
-  "backoefen herde": {
-    "root": "Haushalt & Küche",
-    "title": "Backoefen Herde",
-    "path": [
-      "Backoefen Herde"
-    ]
-  },
-  "bandschleifer": {
-    "root": "Garten & Baumarkt",
-    "title": "Bandschleifer",
-    "path": [
-      "Bandschleifer"
-    ]
-  },
-  "barbedarf": {
-    "root": "Haushalt & Küche",
-    "title": "Barbedarf",
-    "path": [
-      "Barbedarf"
-    ]
-  },
-  "basteln malen": {
-    "root": "Spielwaren",
-    "title": "Basteln Malen",
-    "path": [
-      "Basteln Malen"
-    ]
-  },
   "batterien akkus ladegeraete": {
     "root": "Garten & Baumarkt",
     "title": "Batterien Akkus Ladegeraete",
@@ -377,20 +195,6 @@
       "Bau Konstruktionsspielzeug"
     ]
   },
-  "bau und nutzfahrzeuge": {
-    "root": "Spielwaren",
-    "title": "Bau Und Nutzfahrzeuge",
-    "path": [
-      "Bau Und Nutzfahrzeuge"
-    ]
-  },
-  "baum strauchpflege": {
-    "root": "Garten & Baumarkt",
-    "title": "Baum Strauchpflege",
-    "path": [
-      "Baum Strauchpflege"
-    ]
-  },
   "beamer": {
     "root": "TV & Video",
     "title": "Beamer",
@@ -403,46 +207,15 @@
     "root": "Videogames",
     "title": "Beat Em Up",
     "path": [
-      "Videogames",
-      "Xbox Series X S",
-      "Xbox Series X S Games",
       "Beat Em Up"
     ]
   },
   "bekleidung accessoires": {
-    "root": "Drogerie",
+    "root": "Garten & Baumarkt",
     "title": "Bekleidung Accessoires",
     "path": [
       "Bekleidung Accessoires",
       "Bekleidung Accessoires"
-    ]
-  },
-  "besteck": {
-    "root": "Haushalt & Küche",
-    "title": "Besteck",
-    "path": [
-      "Besteck"
-    ]
-  },
-  "besteck set": {
-    "root": "Haushalt & Küche",
-    "title": "Besteck Set",
-    "path": [
-      "Besteck Set"
-    ]
-  },
-  "bewaesserungstechnik": {
-    "root": "Garten & Baumarkt",
-    "title": "Bewaesserungstechnik",
-    "path": [
-      "Bewaesserungstechnik"
-    ]
-  },
-  "bindegeraete": {
-    "root": "Bürobedarf & Schreibwaren",
-    "title": "Bindegeraete",
-    "path": [
-      "Bindegeraete"
     ]
   },
   "binden laminieren": {
@@ -457,6 +230,9 @@
     "root": "Filme",
     "title": "Biografie",
     "path": [
+      "Filme",
+      "Dvd Filme",
+      "Dvd Tv Dokumentationen",
       "Biografie"
     ]
   },
@@ -468,48 +244,12 @@
       "Blu Ray 4k Ultra Hd Filme"
     ]
   },
-  "blu ray action thriller horror": {
-    "root": "Filme",
-    "title": "Blu Ray Action Thriller Horror",
-    "path": [
-      "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Action Thriller Horror"
-    ]
-  },
-  "blu ray dvd recorder": {
-    "root": "TV & Video",
-    "title": "Blu Ray Dvd Recorder",
-    "path": [
-      "Blu Ray Dvd Recorder"
-    ]
-  },
   "blu ray filme": {
     "root": "Filme",
     "title": "Blu Ray Filme",
     "path": [
       "Filme",
       "Blu Ray Filme"
-    ]
-  },
-  "blu ray kinder familie": {
-    "root": "Filme",
-    "title": "Blu Ray Kinder Familie",
-    "path": [
-      "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Kinder Familie",
-      "Abenteuer"
-    ]
-  },
-  "blu ray komoedie drama": {
-    "root": "Filme",
-    "title": "Blu Ray Komoedie Drama",
-    "path": [
-      "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Komoedie Drama",
-      "Mehr Komoedie"
     ]
   },
   "blu ray player": {
@@ -521,26 +261,6 @@
       "Blu Ray Player"
     ]
   },
-  "blu ray science fiction fantasy": {
-    "root": "Filme",
-    "title": "Blu Ray Science Fiction Fantasy",
-    "path": [
-      "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Science Fiction Fantasy",
-      "Science Fiction"
-    ]
-  },
-  "blu ray tv dokumentationen": {
-    "root": "Filme",
-    "title": "Blu Ray Tv Dokumentationen",
-    "path": [
-      "Filme",
-      "Blu Ray Filme",
-      "Blu Ray Tv Dokumentationen",
-      "Biografie"
-    ]
-  },
   "bluetooth lautsprecher": {
     "root": "HiFi & Audio",
     "title": "Bluetooth Lautsprecher",
@@ -548,13 +268,6 @@
       "Hifi Audio",
       "Lautsprecher",
       "Bluetooth Lautsprecher"
-    ]
-  },
-  "bluetooth tracker": {
-    "root": "Smartphones & Mobiltelefone",
-    "title": "Bluetooth Tracker",
-    "path": [
-      "Bluetooth Tracker"
     ]
   },
   "bohrmaschinen schrauber": {
@@ -565,13 +278,6 @@
       "Bohrmaschinen Schrauber"
     ]
   },
-  "box sets": {
-    "root": "Filme",
-    "title": "Box Sets",
-    "path": [
-      "Box Sets"
-    ]
-  },
   "braeter dampfgarer": {
     "root": "Haushalt & Küche",
     "title": "Braeter Dampfgarer",
@@ -579,53 +285,11 @@
       "Braeter Dampfgarer"
     ]
   },
-  "brandschutz": {
-    "root": "Garten & Baumarkt",
-    "title": "Brandschutz",
-    "path": [
-      "Brandschutz"
-    ]
-  },
-  "brett knobelspiele": {
-    "root": "Videogames",
-    "title": "Brett Knobelspiele",
-    "path": [
-      "Brett Knobelspiele"
-    ]
-  },
   "brixies": {
     "root": "Spielwaren",
     "title": "Brixies",
     "path": [
       "Brixies"
-    ]
-  },
-  "brother tintenpatronen": {
-    "root": "Computer & Zubehör",
-    "title": "Brother Tintenpatronen",
-    "path": [
-      "Brother Tintenpatronen"
-    ]
-  },
-  "brother toner": {
-    "root": "Computer & Zubehör",
-    "title": "Brother Toner",
-    "path": [
-      "Brother Toner"
-    ]
-  },
-  "buegeleisen buegelmaschinen": {
-    "root": "Haushalt & Küche",
-    "title": "Buegeleisen Buegelmaschinen",
-    "path": [
-      "Buegeleisen Buegelmaschinen"
-    ]
-  },
-  "bueroanwendungen": {
-    "root": "Computer & Zubehör",
-    "title": "Bueroanwendungen",
-    "path": [
-      "Bueroanwendungen"
     ]
   },
   "bueroeinrichtung": {
@@ -669,47 +333,12 @@
       "Taschenmesser Tools"
     ]
   },
-  "campingzubehoer": {
-    "root": "Sport & Freizeit",
-    "title": "Campingzubehoer",
-    "path": [
-      "Campingzubehoer"
-    ]
-  },
-  "canon tintenpatronen": {
-    "root": "Computer & Zubehör",
-    "title": "Canon Tintenpatronen",
-    "path": [
-      "Canon Tintenpatronen"
-    ]
-  },
   "car hifi car video": {
     "root": "Auto & Motorrad",
     "title": "Car Hifi Car Video",
     "path": [
       "Auto Motorrad",
       "Car Hifi Car Video"
-    ]
-  },
-  "carrera hybrid": {
-    "root": "Spielwaren",
-    "title": "Carrera Hybrid",
-    "path": [
-      "Carrera Hybrid"
-    ]
-  },
-  "cd dvd receiver": {
-    "root": "HiFi & Audio",
-    "title": "Cd Dvd Receiver",
-    "path": [
-      "Cd Dvd Receiver"
-    ]
-  },
-  "cd receiver": {
-    "root": "Auto & Motorrad",
-    "title": "Cd Receiver",
-    "path": [
-      "Cd Receiver"
     ]
   },
   "cd sacd player": {
@@ -736,20 +365,14 @@
       "Computerspiele Fuer Windows"
     ]
   },
-  "dab tuner": {
-    "root": "Auto & Motorrad",
-    "title": "Dab Tuner",
-    "path": [
-      "Dab Tuner"
-    ]
-  },
   "damenduefte": {
     "root": "Drogerie",
     "title": "Damenduefte",
     "path": [
       "Drogerie",
       "Parfuemerie",
-      "Damenduefte"
+      "Damenduefte",
+      "Deodorant"
     ]
   },
   "dashboards buttonboxes": {
@@ -766,13 +389,6 @@
       "Decken Wandhalterungen"
     ]
   },
-  "dekorationswerkzeuge": {
-    "root": "Garten & Baumarkt",
-    "title": "Dekorationswerkzeuge",
-    "path": [
-      "Dekorationswerkzeuge"
-    ]
-  },
   "deodorant": {
     "root": "Drogerie",
     "title": "Deodorant",
@@ -783,85 +399,12 @@
       "Deodorant"
     ]
   },
-  "digital 124 autos": {
-    "root": "Spielwaren",
-    "title": "Digital 124 Autos",
-    "path": [
-      "Digital 124 Autos"
-    ]
-  },
-  "digital 132 autos": {
-    "root": "Spielwaren",
-    "title": "Digital 132 Autos",
-    "path": [
-      "Digital 132 Autos"
-    ]
-  },
-  "digital 132 sets": {
-    "root": "Spielwaren",
-    "title": "Digital 132 Sets",
-    "path": [
-      "Digital 132 Sets"
-    ]
-  },
-  "digital media receiver": {
-    "root": "Auto & Motorrad",
-    "title": "Digital Media Receiver",
-    "path": [
-      "Digital Media Receiver"
-    ]
-  },
-  "digitale bilderrahmen": {
-    "root": "Foto & Video",
-    "title": "Digitale Bilderrahmen",
-    "path": [
-      "Digitale Bilderrahmen"
-    ]
-  },
   "digitalkameras": {
     "root": "Foto & Video",
     "title": "Digitalkameras",
     "path": [
       "Foto",
       "Digitalkameras"
-    ]
-  },
-  "displays monitore": {
-    "root": "Auto & Motorrad",
-    "title": "Displays Monitore",
-    "path": [
-      "Displays Monitore"
-    ]
-  },
-  "dokumentation": {
-    "root": "Filme",
-    "title": "Dokumentation",
-    "path": [
-      "Dokumentation"
-    ]
-  },
-  "dolce gusto maschinen": {
-    "root": "Haushalt & Küche",
-    "title": "Dolce Gusto Maschinen",
-    "path": [
-      "Dolce Gusto Maschinen"
-    ]
-  },
-  "drama": {
-    "root": "Filme",
-    "title": "Drama",
-    "path": [
-      "Drama"
-    ]
-  },
-  "drucker": {
-    "root": "Computer & Zubehör",
-    "title": "Drucker",
-    "path": [
-      "Computer Zubehoer",
-      "Peripheriegeraete",
-      "Drucker Scanner",
-      "Drucker"
     ]
   },
   "drucker scanner": {
@@ -872,34 +415,6 @@
       "Peripheriegeraete",
       "Drucker Scanner",
       "Verbrauchsmaterial Fuer Drucker"
-    ]
-  },
-  "drumcomputer": {
-    "root": "HiFi & Audio",
-    "title": "Drumcomputer",
-    "path": [
-      "Drumcomputer"
-    ]
-  },
-  "dsl cable router": {
-    "root": "Computer & Zubehör",
-    "title": "Dsl Cable Router",
-    "path": [
-      "Dsl Cable Router"
-    ]
-  },
-  "duschpflege": {
-    "root": "Drogerie",
-    "title": "Duschpflege",
-    "path": [
-      "Duschpflege"
-    ]
-  },
-  "dvb s receiver": {
-    "root": "TV & Video",
-    "title": "Dvb S Receiver",
-    "path": [
-      "Dvb S Receiver"
     ]
   },
   "dvd action thriller horror": {
@@ -927,7 +442,7 @@
       "Filme",
       "Dvd Filme",
       "Dvd Kinder Familie",
-      "Abenteuer"
+      "Komoedie"
     ]
   },
   "dvd komoedie drama": {
@@ -938,20 +453,6 @@
       "Dvd Filme",
       "Dvd Komoedie Drama",
       "Klassisches Drama"
-    ]
-  },
-  "dvd player": {
-    "root": "TV & Video",
-    "title": "Dvd Player",
-    "path": [
-      "Dvd Player"
-    ]
-  },
-  "dvd receiver": {
-    "root": "Auto & Motorrad",
-    "title": "Dvd Receiver",
-    "path": [
-      "Dvd Receiver"
     ]
   },
   "dvd science fiction fantasy": {
@@ -970,38 +471,8 @@
     "path": [
       "Filme",
       "Dvd Filme",
-      "Dvd Tv Dokumentationen"
-    ]
-  },
-  "e block 9v": {
-    "root": "Garten & Baumarkt",
-    "title": "E Block 9v",
-    "path": [
-      "E Block 9v"
-    ]
-  },
-  "e block akkus 9v": {
-    "root": "Garten & Baumarkt",
-    "title": "E Block Akkus 9v",
-    "path": [
-      "E Block Akkus 9v"
-    ]
-  },
-  "e drums": {
-    "root": "HiFi & Audio",
-    "title": "E Drums",
-    "path": [
-      "E Drums"
-    ]
-  },
-  "e pianos": {
-    "root": "HiFi & Audio",
-    "title": "E Pianos",
-    "path": [
-      "Musikinstrumente Pro Audio",
-      "Musikinstrumente",
-      "Tasteninstrumente",
-      "E Pianos"
+      "Dvd Tv Dokumentationen",
+      "Biografie"
     ]
   },
   "e scooter": {
@@ -1018,13 +489,6 @@
       "Eastern"
     ]
   },
-  "eau de cologne": {
-    "root": "Drogerie",
-    "title": "Eau De Cologne",
-    "path": [
-      "Eau De Cologne"
-    ]
-  },
   "eau de parfum": {
     "root": "Drogerie",
     "title": "Eau De Parfum",
@@ -1039,13 +503,6 @@
       "Eau De Toilette"
     ]
   },
-  "eau fraiche": {
-    "root": "Drogerie",
-    "title": "Eau Fraiche",
-    "path": [
-      "Eau Fraiche"
-    ]
-  },
   "ebook reader": {
     "root": "Computer & Zubehör",
     "title": "Ebook Reader",
@@ -1053,27 +510,6 @@
       "Computer Zubehoer",
       "Notebooks Tablets Ereader",
       "Ebook Reader"
-    ]
-  },
-  "echolote": {
-    "root": "Computer & Zubehör",
-    "title": "Echolote",
-    "path": [
-      "Echolote"
-    ]
-  },
-  "einbau navigationssysteme": {
-    "root": "Auto & Motorrad",
-    "title": "Einbau Navigationssysteme",
-    "path": [
-      "Einbau Navigationssysteme"
-    ]
-  },
-  "einplatinencomputer": {
-    "root": "Computer & Zubehör",
-    "title": "Einplatinencomputer",
-    "path": [
-      "Einplatinencomputer"
     ]
   },
   "elektrogrills": {
@@ -1085,44 +521,11 @@
       "Elektrogrills"
     ]
   },
-  "elektrorasierer": {
-    "root": "Drogerie",
-    "title": "Elektrorasierer",
-    "path": [
-      "Drogerie",
-      "Rasur Haarpflege",
-      "Rasur Enthaarung",
-      "Elektrorasierer"
-    ]
-  },
   "elektrozahnbuersten": {
     "root": "Drogerie",
     "title": "Elektrozahnbuersten",
     "path": [
-      "Drogerie",
-      "Mund Zahnpflege",
       "Elektrozahnbuersten"
-    ]
-  },
-  "endstufen": {
-    "root": "HiFi & Audio",
-    "title": "Endstufen",
-    "path": [
-      "Endstufen"
-    ]
-  },
-  "epilierer haarentferner": {
-    "root": "Drogerie",
-    "title": "Epilierer Haarentferner",
-    "path": [
-      "Epilierer Haarentferner"
-    ]
-  },
-  "epson tintenpatronen": {
-    "root": "Computer & Zubehör",
-    "title": "Epson Tintenpatronen",
-    "path": [
-      "Epson Tintenpatronen"
     ]
   },
   "ersatzbuersten": {
@@ -1132,27 +535,6 @@
       "Ersatzbuersten"
     ]
   },
-  "etiketten aufkleber": {
-    "root": "Computer & Zubehör",
-    "title": "Etiketten Aufkleber",
-    "path": [
-      "Etiketten Aufkleber"
-    ]
-  },
-  "etikettendrucker": {
-    "root": "Computer & Zubehör",
-    "title": "Etikettendrucker",
-    "path": [
-      "Etikettendrucker"
-    ]
-  },
-  "evolution autos": {
-    "root": "Spielwaren",
-    "title": "Evolution Autos",
-    "path": [
-      "Evolution Autos"
-    ]
-  },
   "experimentierkaesten": {
     "root": "Spielwaren",
     "title": "Experimentierkaesten",
@@ -1160,27 +542,6 @@
       "Spielwaren",
       "Gesellschaftsspiele",
       "Experimentierkaesten"
-    ]
-  },
-  "externe festplatten hdd": {
-    "root": "Computer & Zubehör",
-    "title": "Externe Festplatten Hdd",
-    "path": [
-      "Externe Festplatten Hdd"
-    ]
-  },
-  "externe solid state drives ssd": {
-    "root": "Computer & Zubehör",
-    "title": "Externe Solid State Drives Ssd",
-    "path": [
-      "Externe Solid State Drives Ssd"
-    ]
-  },
-  "exzenterschleifer": {
-    "root": "Garten & Baumarkt",
-    "title": "Exzenterschleifer",
-    "path": [
-      "Exzenterschleifer"
     ]
   },
   "fairphone h3048": {
@@ -1211,13 +572,6 @@
       "Fantasy"
     ]
   },
-  "farbige kontaktlinsen": {
-    "root": "Drogerie",
-    "title": "Farbige Kontaktlinsen",
-    "path": [
-      "Farbige Kontaktlinsen"
-    ]
-  },
   "fenster tuer": {
     "root": "Garten & Baumarkt",
     "title": "Fenster Tuer",
@@ -1230,13 +584,6 @@
     "title": "Fensterreinigungsroboter",
     "path": [
       "Fensterreinigungsroboter"
-    ]
-  },
-  "fernbedienungen": {
-    "root": "Auto & Motorrad",
-    "title": "Fernbedienungen",
-    "path": [
-      "Fernbedienungen"
     ]
   },
   "fernglaeser": {
@@ -1257,13 +604,6 @@
       "Analoge Funktelefone"
     ]
   },
-  "festplatten hdd": {
-    "root": "Computer & Zubehör",
-    "title": "Festplatten Hdd",
-    "path": [
-      "Festplatten Hdd"
-    ]
-  },
   "festplatten ssd": {
     "root": "Computer & Zubehör",
     "title": "Festplatten Ssd",
@@ -1273,41 +613,11 @@
       "Festplatten Ssd"
     ]
   },
-  "film": {
-    "root": "Filme",
-    "title": "Film",
-    "path": [
-      "Film"
-    ]
-  },
-  "finanz wirtschaftsrechner": {
-    "root": "Bürobedarf & Schreibwaren",
-    "title": "Finanz Wirtschaftsrechner",
-    "path": [
-      "Finanz Wirtschaftsrechner"
-    ]
-  },
   "fischertechnik": {
     "root": "Spielwaren",
     "title": "Fischertechnik",
     "path": [
       "Fischertechnik"
-    ]
-  },
-  "fisher price": {
-    "root": "Spielwaren",
-    "title": "Fisher Price",
-    "path": [
-      "Fisher Price"
-    ]
-  },
-  "fitness krafttraining": {
-    "root": "Sport & Freizeit",
-    "title": "Fitness Krafttraining",
-    "path": [
-      "Sport Freizeit",
-      "Fitness Krafttraining",
-      "Activity Tracker Smartwatches"
     ]
   },
   "flight sticks sim flying": {
@@ -1324,47 +634,12 @@
       "Fondue"
     ]
   },
-  "fotopapier": {
-    "root": "Computer & Zubehör",
-    "title": "Fotopapier",
-    "path": [
-      "Fotopapier"
-    ]
-  },
-  "fuchsschwaenze": {
-    "root": "Garten & Baumarkt",
-    "title": "Fuchsschwaenze",
-    "path": [
-      "Fuchsschwaenze"
-    ]
-  },
   "funkgeraete": {
     "root": "Smartphones & Mobiltelefone",
     "title": "Funkgeraete",
     "path": [
       "Telefon Voip",
       "Funkgeraete"
-    ]
-  },
-  "g punkt vibratoren": {
-    "root": "Drogerie",
-    "title": "G Punkt Vibratoren",
-    "path": [
-      "G Punkt Vibratoren"
-    ]
-  },
-  "gamepads": {
-    "root": "Videogames",
-    "title": "Gamepads",
-    "path": [
-      "Gamepads"
-    ]
-  },
-  "gaming stuehle": {
-    "root": "Videogames",
-    "title": "Gaming Stuehle",
-    "path": [
-      "Gaming Stuehle"
     ]
   },
   "gartengeraete": {
@@ -1383,13 +658,6 @@
       "Gartenmoebel"
     ]
   },
-  "gas elektrokochfelder": {
-    "root": "Haushalt & Küche",
-    "title": "Gas Elektrokochfelder",
-    "path": [
-      "Gas Elektrokochfelder"
-    ]
-  },
   "gasgrills": {
     "root": "Garten & Baumarkt",
     "title": "Gasgrills",
@@ -1399,32 +667,11 @@
       "Gasgrills"
     ]
   },
-  "gefrierschraenke gefriertruhen": {
-    "root": "Haushalt & Küche",
-    "title": "Gefrierschraenke Gefriertruhen",
-    "path": [
-      "Gefrierschraenke Gefriertruhen"
-    ]
-  },
-  "gehoerschutz": {
-    "root": "Garten & Baumarkt",
-    "title": "Gehoerschutz",
-    "path": [
-      "Gehoerschutz"
-    ]
-  },
   "geschenksets": {
     "root": "Drogerie",
     "title": "Geschenksets",
     "path": [
       "Geschenksets"
-    ]
-  },
-  "geschichte": {
-    "root": "Filme",
-    "title": "Geschichte",
-    "path": [
-      "Geschichte"
     ]
   },
   "geschirr besteck glaeser": {
@@ -1435,40 +682,12 @@
       "Geschirr Besteck Glaeser"
     ]
   },
-  "geschirrspueler": {
-    "root": "Haushalt & Küche",
-    "title": "Geschirrspueler",
-    "path": [
-      "Geschirrspueler"
-    ]
-  },
   "gesellschaftsspiele": {
     "root": "Spielwaren",
     "title": "Gesellschaftsspiele",
     "path": [
       "Spielwaren",
       "Gesellschaftsspiele"
-    ]
-  },
-  "getraenkezubereitung": {
-    "root": "Haushalt & Küche",
-    "title": "Getraenkezubereitung",
-    "path": [
-      "Getraenkezubereitung"
-    ]
-  },
-  "glacemaschinen": {
-    "root": "Haushalt & Küche",
-    "title": "Glacemaschinen",
-    "path": [
-      "Glacemaschinen"
-    ]
-  },
-  "go go plus autos": {
-    "root": "Spielwaren",
-    "title": "Go Go Plus Autos",
-    "path": [
-      "Go Go Plus Autos"
     ]
   },
   "google h1825": {
@@ -1521,13 +740,6 @@
       "Grafikkarten"
     ]
   },
-  "grafische taschenrechner": {
-    "root": "Bürobedarf & Schreibwaren",
-    "title": "Grafische Taschenrechner",
-    "path": [
-      "Grafische Taschenrechner"
-    ]
-  },
   "grillieren": {
     "root": "Garten & Baumarkt",
     "title": "Grillieren",
@@ -1535,34 +747,6 @@
       "Haus Garten",
       "Grillieren",
       "Elektrogrills"
-    ]
-  },
-  "haar bartschneider": {
-    "root": "Drogerie",
-    "title": "Haar Bartschneider",
-    "path": [
-      "Haar Bartschneider"
-    ]
-  },
-  "haarglaetter": {
-    "root": "Drogerie",
-    "title": "Haarglaetter",
-    "path": [
-      "Haarglaetter"
-    ]
-  },
-  "haarpflege": {
-    "root": "Drogerie",
-    "title": "Haarpflege",
-    "path": [
-      "Haarpflege"
-    ]
-  },
-  "haartrockner": {
-    "root": "Drogerie",
-    "title": "Haartrockner",
-    "path": [
-      "Haartrockner"
     ]
   },
   "halterungen": {
@@ -1587,13 +771,6 @@
       "Handwerkzeuge"
     ]
   },
-  "handzahnbuersten": {
-    "root": "Drogerie",
-    "title": "Handzahnbuersten",
-    "path": [
-      "Handzahnbuersten"
-    ]
-  },
   "haus sicherheitstechnik": {
     "root": "Garten & Baumarkt",
     "title": "Haus Sicherheitstechnik",
@@ -1610,13 +787,6 @@
       "Haushaltsgeraete"
     ]
   },
-  "hautpflege": {
-    "root": "Drogerie",
-    "title": "Hautpflege",
-    "path": [
-      "Hautpflege"
-    ]
-  },
   "headsets": {
     "root": "Smartphones & Mobiltelefone",
     "title": "Headsets",
@@ -1626,26 +796,12 @@
       "Headsets"
     ]
   },
-  "health wellness": {
-    "root": "Drogerie",
-    "title": "Health Wellness",
-    "path": [
-      "Health Wellness"
-    ]
-  },
   "heften": {
     "root": "Bürobedarf & Schreibwaren",
     "title": "Heften",
     "path": [
       "Buerobedarf Schreibwaren",
       "Heften"
-    ]
-  },
-  "heissluftfritteusen": {
-    "root": "Haushalt & Küche",
-    "title": "Heissluftfritteusen",
-    "path": [
-      "Heissluftfritteusen"
     ]
   },
   "heizung klima": {
@@ -1673,41 +829,6 @@
       "Hifi Einzelkomponenten"
     ]
   },
-  "hifi receiver": {
-    "root": "HiFi & Audio",
-    "title": "Hifi Receiver",
-    "path": [
-      "Hifi Receiver"
-    ]
-  },
-  "hifi systeme": {
-    "root": "HiFi & Audio",
-    "title": "Hifi Systeme",
-    "path": [
-      "Hifi Systeme"
-    ]
-  },
-  "hifi verstaerker": {
-    "root": "HiFi & Audio",
-    "title": "Hifi Verstaerker",
-    "path": [
-      "Hifi Verstaerker"
-    ]
-  },
-  "hochdruckreiniger": {
-    "root": "Garten & Baumarkt",
-    "title": "Hochdruckreiniger",
-    "path": [
-      "Hochdruckreiniger"
-    ]
-  },
-  "hochtoener": {
-    "root": "Auto & Motorrad",
-    "title": "Hochtoener",
-    "path": [
-      "Hochtoener"
-    ]
-  },
   "holzkohlegrills": {
     "root": "Garten & Baumarkt",
     "title": "Holzkohlegrills",
@@ -1715,20 +836,6 @@
       "Haus Garten",
       "Grillieren",
       "Holzkohlegrills"
-    ]
-  },
-  "home cinema av receiver": {
-    "root": "HiFi & Audio",
-    "title": "Home Cinema Av Receiver",
-    "path": [
-      "Home Cinema Av Receiver"
-    ]
-  },
-  "home cinema verstaerker": {
-    "root": "HiFi & Audio",
-    "title": "Home Cinema Verstaerker",
-    "path": [
-      "Home Cinema Verstaerker"
     ]
   },
   "home cinema video": {
@@ -1744,6 +851,9 @@
     "root": "Filme",
     "title": "Horror",
     "path": [
+      "Filme",
+      "Dvd Filme",
+      "Dvd Action Thriller Horror",
       "Horror"
     ]
   },
@@ -1757,52 +867,13 @@
       "Horrorkomoedie"
     ]
   },
-  "hp tintenpatronen": {
-    "root": "Computer & Zubehör",
-    "title": "Hp Tintenpatronen",
-    "path": [
-      "Hp Tintenpatronen"
-    ]
-  },
-  "hp toner": {
-    "root": "Computer & Zubehör",
-    "title": "Hp Toner",
-    "path": [
-      "Hp Toner"
-    ]
-  },
-  "idisplayit": {
-    "root": "Spielwaren",
-    "title": "Idisplayit",
-    "path": [
-      "Idisplayit"
-    ]
-  },
-  "induktionskochfelder": {
-    "root": "Haushalt & Küche",
-    "title": "Induktionskochfelder",
-    "path": [
-      "Induktionskochfelder"
-    ]
-  },
-  "interdentalbuersten": {
-    "root": "Drogerie",
-    "title": "Interdentalbuersten",
-    "path": [
-      "Interdentalbuersten"
-    ]
-  },
-  "internet radio": {
-    "root": "HiFi & Audio",
-    "title": "Internet Radio",
-    "path": [
-      "Internet Radio"
-    ]
-  },
   "jump n run geschicklichkeit": {
     "root": "Videogames",
     "title": "Jump N Run Geschicklichkeit",
     "path": [
+      "Videogames",
+      "Nintendo Switch 2",
+      "Nintendo Switch 2 Games",
       "Jump N Run Geschicklichkeit"
     ]
   },
@@ -1814,40 +885,12 @@
       "Kaffee Espressomaschinen"
     ]
   },
-  "kaffee teezubereitung": {
-    "root": "Haushalt & Küche",
-    "title": "Kaffee Teezubereitung",
-    "path": [
-      "Kaffee Teezubereitung"
-    ]
-  },
-  "kaffeemuehlen": {
-    "root": "Haushalt & Küche",
-    "title": "Kaffeemuehlen",
-    "path": [
-      "Kaffeemuehlen"
-    ]
-  },
   "kalender": {
     "root": "Bürobedarf & Schreibwaren",
     "title": "Kalender",
     "path": [
       "Buerobedarf Schreibwaren",
       "Kalender"
-    ]
-  },
-  "kamera handgriffe": {
-    "root": "Foto & Video",
-    "title": "Kamera Handgriffe",
-    "path": [
-      "Kamera Handgriffe"
-    ]
-  },
-  "karaffen dekanter": {
-    "root": "Haushalt & Küche",
-    "title": "Karaffen Dekanter",
-    "path": [
-      "Karaffen Dekanter"
     ]
   },
   "karten software": {
@@ -1864,34 +907,6 @@
       "Spielwaren",
       "Gesellschaftsspiele",
       "Kartenspiele"
-    ]
-  },
-  "keyboards": {
-    "root": "HiFi & Audio",
-    "title": "Keyboards",
-    "path": [
-      "Keyboards"
-    ]
-  },
-  "kfz batterien": {
-    "root": "Auto & Motorrad",
-    "title": "Kfz Batterien",
-    "path": [
-      "Kfz Batterien"
-    ]
-  },
-  "kfz ladegeraete": {
-    "root": "Auto & Motorrad",
-    "title": "Kfz Ladegeraete",
-    "path": [
-      "Kfz Ladegeraete"
-    ]
-  },
-  "kinderfahrzeuge": {
-    "root": "Spielwaren",
-    "title": "Kinderfahrzeuge",
-    "path": [
-      "Kinderfahrzeuge"
     ]
   },
   "kindersitze": {
@@ -1915,13 +930,6 @@
     "path": [
       "Spielwaren",
       "Kinderspielzeug"
-    ]
-  },
-  "klassische vibratoren": {
-    "root": "Drogerie",
-    "title": "Klassische Vibratoren",
-    "path": [
-      "Klassische Vibratoren"
     ]
   },
   "klassisches drama": {
@@ -1948,27 +956,6 @@
       "Klingel Tuersprechanlage"
     ]
   },
-  "knopfzellen": {
-    "root": "Garten & Baumarkt",
-    "title": "Knopfzellen",
-    "path": [
-      "Knopfzellen"
-    ]
-  },
-  "koaxiallautsprecher": {
-    "root": "Auto & Motorrad",
-    "title": "Koaxiallautsprecher",
-    "path": [
-      "Koaxiallautsprecher"
-    ]
-  },
-  "koch backgeraete": {
-    "root": "Haushalt & Küche",
-    "title": "Koch Backgeraete",
-    "path": [
-      "Koch Backgeraete"
-    ]
-  },
   "kochgeschirr": {
     "root": "Haushalt & Küche",
     "title": "Kochgeschirr",
@@ -1982,13 +969,6 @@
     "title": "Kochkellen",
     "path": [
       "Kochkellen"
-    ]
-  },
-  "koerper fussmassage": {
-    "root": "Garten & Baumarkt",
-    "title": "Koerper Fussmassage",
-    "path": [
-      "Koerper Fussmassage"
     ]
   },
   "koerperpflege": {
@@ -2009,41 +989,6 @@
       "Komoedie"
     ]
   },
-  "kompatible tintenpatronen": {
-    "root": "Computer & Zubehör",
-    "title": "Kompatible Tintenpatronen",
-    "path": [
-      "Kompatible Tintenpatronen"
-    ]
-  },
-  "kompatibler toner": {
-    "root": "Computer & Zubehör",
-    "title": "Kompatibler Toner",
-    "path": [
-      "Kompatibler Toner"
-    ]
-  },
-  "komplett sets": {
-    "root": "Computer & Zubehör",
-    "title": "Komplett Sets",
-    "path": [
-      "Komplett Sets"
-    ]
-  },
-  "komplettsysteme": {
-    "root": "Computer & Zubehör",
-    "title": "Komplettsysteme",
-    "path": [
-      "Komplettsysteme"
-    ]
-  },
-  "komponentensysteme": {
-    "root": "Auto & Motorrad",
-    "title": "Komponentensysteme",
-    "path": [
-      "Komponentensysteme"
-    ]
-  },
   "kontaktlinsen": {
     "root": "Drogerie",
     "title": "Kontaktlinsen",
@@ -2058,20 +1003,6 @@
     "path": [
       "Hifi Audio",
       "Kopfhoerer"
-    ]
-  },
-  "kreissaegen": {
-    "root": "Garten & Baumarkt",
-    "title": "Kreissaegen",
-    "path": [
-      "Kreissaegen"
-    ]
-  },
-  "krimi": {
-    "root": "Filme",
-    "title": "Krimi",
-    "path": [
-      "Krimi"
     ]
   },
   "krimikomoedie": {
@@ -2096,74 +1027,11 @@
       "Kuechenhelfer"
     ]
   },
-  "kuechenmaschinen": {
-    "root": "Haushalt & Küche",
-    "title": "Kuechenmaschinen",
-    "path": [
-      "Kuechenmaschinen"
-    ]
-  },
-  "kuechenwaagen": {
-    "root": "Haushalt & Küche",
-    "title": "Kuechenwaagen",
-    "path": [
-      "Kuechenwaagen"
-    ]
-  },
-  "kuehl gefrierkombinationen": {
-    "root": "Haushalt & Küche",
-    "title": "Kuehl Gefrierkombinationen",
-    "path": [
-      "Kuehl Gefrierkombinationen"
-    ]
-  },
-  "kuehlboxen": {
-    "root": "Sport & Freizeit",
-    "title": "Kuehlboxen",
-    "path": [
-      "Kuehlboxen"
-    ]
-  },
-  "kuehlschraenke": {
-    "root": "Haushalt & Küche",
-    "title": "Kuehlschraenke",
-    "path": [
-      "Kuehlschraenke"
-    ]
-  },
-  "kyocera toner": {
-    "root": "Computer & Zubehör",
-    "title": "Kyocera Toner",
-    "path": [
-      "Kyocera Toner"
-    ]
-  },
   "ladegeraete netzadapter": {
     "root": "Smartphones & Mobiltelefone",
     "title": "Ladegeraete Netzadapter",
     "path": [
       "Ladegeraete Netzadapter"
-    ]
-  },
-  "ladestationen": {
-    "root": "Auto & Motorrad",
-    "title": "Ladestationen",
-    "path": [
-      "Ladestationen"
-    ]
-  },
-  "lager transport": {
-    "root": "Garten & Baumarkt",
-    "title": "Lager Transport",
-    "path": [
-      "Lager Transport"
-    ]
-  },
-  "laminiergeraete": {
-    "root": "Bürobedarf & Schreibwaren",
-    "title": "Laminiergeraete",
-    "path": [
-      "Laminiergeraete"
     ]
   },
   "lampen leuchtmittel": {
@@ -2172,27 +1040,6 @@
     "path": [
       "Haus Garten",
       "Lampen Leuchtmittel"
-    ]
-  },
-  "lampen reflektoren": {
-    "root": "Foto & Video",
-    "title": "Lampen Reflektoren",
-    "path": [
-      "Lampen Reflektoren"
-    ]
-  },
-  "laubblaeser und sauger": {
-    "root": "Garten & Baumarkt",
-    "title": "Laubblaeser Und Sauger",
-    "path": [
-      "Laubblaeser Und Sauger"
-    ]
-  },
-  "laufschuhe": {
-    "root": "Sport & Freizeit",
-    "title": "Laufschuhe",
-    "path": [
-      "Laufschuhe"
     ]
   },
   "lautsprecher": {
@@ -2204,40 +1051,12 @@
       "Bluetooth Lautsprecher"
     ]
   },
-  "led leuchten": {
-    "root": "Garten & Baumarkt",
-    "title": "Led Leuchten",
-    "path": [
-      "Led Leuchten"
-    ]
-  },
-  "led leuchtmittel": {
-    "root": "Garten & Baumarkt",
-    "title": "Led Leuchtmittel",
-    "path": [
-      "Led Leuchtmittel"
-    ]
-  },
   "lego": {
     "root": "Spielwaren",
     "title": "Lego",
     "path": [
       "Spielwaren",
       "Lego"
-    ]
-  },
-  "lego architecture": {
-    "root": "Spielwaren",
-    "title": "Lego Architecture",
-    "path": [
-      "Lego Architecture"
-    ]
-  },
-  "lego botanicals": {
-    "root": "Spielwaren",
-    "title": "Lego Botanicals",
-    "path": [
-      "Lego Botanicals"
     ]
   },
   "lego city": {
@@ -2247,25 +1066,11 @@
       "Lego City"
     ]
   },
-  "lego dreamzzz": {
-    "root": "Spielwaren",
-    "title": "Lego Dreamzzz",
-    "path": [
-      "Lego Dreamzzz"
-    ]
-  },
   "lego editions": {
     "root": "Spielwaren",
     "title": "Lego Editions",
     "path": [
       "Lego Editions"
-    ]
-  },
-  "lego harry potter": {
-    "root": "Spielwaren",
-    "title": "Lego Harry Potter",
-    "path": [
-      "Lego Harry Potter"
     ]
   },
   "lego icons": {
@@ -2289,39 +1094,11 @@
       "Lego Marvel"
     ]
   },
-  "lego one piece": {
-    "root": "Spielwaren",
-    "title": "Lego One Piece",
-    "path": [
-      "Lego One Piece"
-    ]
-  },
   "lego pokemon": {
     "root": "Spielwaren",
     "title": "Lego Pokemon",
     "path": [
       "Lego Pokemon"
-    ]
-  },
-  "lego simpsons": {
-    "root": "Spielwaren",
-    "title": "Lego Simpsons",
-    "path": [
-      "Lego Simpsons"
-    ]
-  },
-  "lego speed champions": {
-    "root": "Spielwaren",
-    "title": "Lego Speed Champions",
-    "path": [
-      "Lego Speed Champions"
-    ]
-  },
-  "lego star wars": {
-    "root": "Spielwaren",
-    "title": "Lego Star Wars",
-    "path": [
-      "Lego Star Wars"
     ]
   },
   "lego super mario": {
@@ -2367,38 +1144,10 @@
     ]
   },
   "lesegeraete fuer speicherkarten": {
-    "root": "Foto & Video",
+    "root": "TV & Video",
     "title": "Lesegeraete Fuer Speicherkarten",
     "path": [
       "Lesegeraete Fuer Speicherkarten"
-    ]
-  },
-  "lexmark toner": {
-    "root": "Computer & Zubehör",
-    "title": "Lexmark Toner",
-    "path": [
-      "Lexmark Toner"
-    ]
-  },
-  "live monitorboxen": {
-    "root": "HiFi & Audio",
-    "title": "Live Monitorboxen",
-    "path": [
-      "Live Monitorboxen"
-    ]
-  },
-  "lnbs": {
-    "root": "TV & Video",
-    "title": "Lnbs",
-    "path": [
-      "Lnbs"
-    ]
-  },
-  "lockenstaebe buersten": {
-    "root": "Drogerie",
-    "title": "Lockenstaebe Buersten",
-    "path": [
-      "Lockenstaebe Buersten"
     ]
   },
   "luftbefeuchter luftentfeuchter luftreiniger": {
@@ -2408,25 +1157,11 @@
       "Luftbefeuchter Luftentfeuchter Luftreiniger"
     ]
   },
-  "lufterfrischer": {
-    "root": "Auto & Motorrad",
-    "title": "Lufterfrischer",
-    "path": [
-      "Lufterfrischer"
-    ]
-  },
   "lumibricks funwhole": {
     "root": "Spielwaren",
     "title": "Lumibricks Funwhole",
     "path": [
       "Lumibricks Funwhole"
-    ]
-  },
-  "maeuse": {
-    "root": "Computer & Zubehör",
-    "title": "Maeuse",
-    "path": [
-      "Maeuse"
     ]
   },
   "mainboards": {
@@ -2439,32 +1174,11 @@
       "Mainboards"
     ]
   },
-  "massagestaebe": {
-    "root": "Drogerie",
-    "title": "Massagestaebe",
-    "path": [
-      "Massagestaebe"
-    ]
-  },
-  "masturbatoren": {
-    "root": "Drogerie",
-    "title": "Masturbatoren",
-    "path": [
-      "Masturbatoren"
-    ]
-  },
   "mattel brick shop": {
     "root": "Spielwaren",
     "title": "Mattel Brick Shop",
     "path": [
       "Mattel Brick Shop"
-    ]
-  },
-  "maus tastatur sets": {
-    "root": "Computer & Zubehör",
-    "title": "Maus Tastatur Sets",
-    "path": [
-      "Maus Tastatur Sets"
     ]
   },
   "mega construx": {
@@ -2494,116 +1208,11 @@
       "Mehr Komoedie"
     ]
   },
-  "mess schaltgeraete": {
-    "root": "Garten & Baumarkt",
-    "title": "Mess Schaltgeraete",
-    "path": [
-      "Mess Schaltgeraete"
-    ]
-  },
-  "messer": {
-    "root": "Haushalt & Küche",
-    "title": "Messer",
-    "path": [
-      "Messer"
-    ]
-  },
-  "messerbloecke": {
-    "root": "Haushalt & Küche",
-    "title": "Messerbloecke",
-    "path": [
-      "Messerbloecke"
-    ]
-  },
-  "messwerkzeuge": {
-    "root": "Garten & Baumarkt",
-    "title": "Messwerkzeuge",
-    "path": [
-      "Messwerkzeuge"
-    ]
-  },
-  "micro aaa": {
-    "root": "Garten & Baumarkt",
-    "title": "Micro Aaa",
-    "path": [
-      "Micro Aaa"
-    ]
-  },
   "microsd speicherkarten": {
-    "root": "Foto & Video",
+    "root": "TV & Video",
     "title": "Microsd Speicherkarten",
     "path": [
       "Microsd Speicherkarten"
-    ]
-  },
-  "midi audio interfaces": {
-    "root": "Smartphones & Mobiltelefone",
-    "title": "Midi Audio Interfaces",
-    "path": [
-      "Midi Audio Interfaces"
-    ]
-  },
-  "midi controller": {
-    "root": "HiFi & Audio",
-    "title": "Midi Controller",
-    "path": [
-      "Midi Controller"
-    ]
-  },
-  "mignon aa": {
-    "root": "Garten & Baumarkt",
-    "title": "Mignon Aa",
-    "path": [
-      "Mignon Aa"
-    ]
-  },
-  "mignon akkus aa": {
-    "root": "Garten & Baumarkt",
-    "title": "Mignon Akkus Aa",
-    "path": [
-      "Mignon Akkus Aa"
-    ]
-  },
-  "mikrofone": {
-    "root": "HiFi & Audio",
-    "title": "Mikrofone",
-    "path": [
-      "Mikrofone"
-    ]
-  },
-  "mikrowellen": {
-    "root": "Haushalt & Küche",
-    "title": "Mikrowellen",
-    "path": [
-      "Mikrowellen"
-    ]
-  },
-  "mini aaaa": {
-    "root": "Garten & Baumarkt",
-    "title": "Mini Aaaa",
-    "path": [
-      "Mini Aaaa"
-    ]
-  },
-  "mischpulte": {
-    "root": "HiFi & Audio",
-    "title": "Mischpulte",
-    "path": [
-      "Mischpulte"
-    ]
-  },
-  "mitteltoener": {
-    "root": "Auto & Motorrad",
-    "title": "Mitteltoener",
-    "path": [
-      "Mitteltoener"
-    ]
-  },
-  "mixer": {
-    "root": "Haushalt & Küche",
-    "title": "Mixer",
-    "path": [
-      "Mixer"
     ]
   },
   "mobile akku ladegeraete powerbanks": {
@@ -2616,25 +1225,11 @@
       "Mobile Akku Ladegeraete Powerbanks"
     ]
   },
-  "mobiles internet umts 3g lte 4g": {
-    "root": "Computer & Zubehör",
-    "title": "Mobiles Internet Umts 3g Lte 4g",
-    "path": [
-      "Mobiles Internet Umts 3g Lte 4g"
-    ]
-  },
   "mobilteile": {
     "root": "Smartphones & Mobiltelefone",
     "title": "Mobilteile",
     "path": [
       "Mobilteile"
-    ]
-  },
-  "monatslinsen": {
-    "root": "Drogerie",
-    "title": "Monatslinsen",
-    "path": [
-      "Monatslinsen"
     ]
   },
   "monitore": {
@@ -2645,27 +1240,6 @@
       "Peripheriegeraete",
       "Monitore",
       "Monitore"
-    ]
-  },
-  "mono akkus d": {
-    "root": "Garten & Baumarkt",
-    "title": "Mono Akkus D",
-    "path": [
-      "Mono Akkus D"
-    ]
-  },
-  "mono d": {
-    "root": "Garten & Baumarkt",
-    "title": "Mono D",
-    "path": [
-      "Mono D"
-    ]
-  },
-  "motorrad headsets": {
-    "root": "Auto & Motorrad",
-    "title": "Motorrad Headsets",
-    "path": [
-      "Motorrad Headsets"
     ]
   },
   "mould king": {
@@ -2682,20 +1256,6 @@
       "Spielwaren",
       "Rc Modelle",
       "Multicopter"
-    ]
-  },
-  "multifokale kontaktlinsen": {
-    "root": "Drogerie",
-    "title": "Multifokale Kontaktlinsen",
-    "path": [
-      "Multifokale Kontaktlinsen"
-    ]
-  },
-  "multifunktionsgeraete": {
-    "root": "Computer & Zubehör",
-    "title": "Multifunktionsgeraete",
-    "path": [
-      "Multifunktionsgeraete"
     ]
   },
   "multimedia player": {
@@ -2715,25 +1275,11 @@
       "Mund Zahnpflege"
     ]
   },
-  "mund zahnpflegeprodukte": {
-    "root": "Drogerie",
-    "title": "Mund Zahnpflegeprodukte",
-    "path": [
-      "Mund Zahnpflegeprodukte"
-    ]
-  },
   "mundduschen": {
     "root": "Drogerie",
     "title": "Mundduschen",
     "path": [
       "Mundduschen"
-    ]
-  },
-  "musik": {
-    "root": "Filme",
-    "title": "Musik",
-    "path": [
-      "Musik"
     ]
   },
   "musikinstrumente": {
@@ -2742,13 +1288,6 @@
     "path": [
       "Musikinstrumente Pro Audio",
       "Musikinstrumente"
-    ]
-  },
-  "mystery": {
-    "root": "Filme",
-    "title": "Mystery",
-    "path": [
-      "Mystery"
     ]
   },
   "nas systeme": {
@@ -2760,20 +1299,6 @@
       "Nas Systeme"
     ]
   },
-  "nass trockensauger zubehoer": {
-    "root": "Garten & Baumarkt",
-    "title": "Nass Trockensauger Zubehoer",
-    "path": [
-      "Nass Trockensauger Zubehoer"
-    ]
-  },
-  "nassrasierer": {
-    "root": "Drogerie",
-    "title": "Nassrasierer",
-    "path": [
-      "Nassrasierer"
-    ]
-  },
   "natur": {
     "root": "Filme",
     "title": "Natur",
@@ -2782,27 +1307,6 @@
       "Dvd Filme",
       "Dvd Tv Dokumentationen",
       "Natur"
-    ]
-  },
-  "nespresso maschinen": {
-    "root": "Haushalt & Küche",
-    "title": "Nespresso Maschinen",
-    "path": [
-      "Nespresso Maschinen"
-    ]
-  },
-  "netzwerk player receiver": {
-    "root": "HiFi & Audio",
-    "title": "Netzwerk Player Receiver",
-    "path": [
-      "Netzwerk Player Receiver"
-    ]
-  },
-  "netzwerkkarten": {
-    "root": "Computer & Zubehör",
-    "title": "Netzwerkkarten",
-    "path": [
-      "Netzwerkkarten"
     ]
   },
   "netzwerktechnik": {
@@ -2856,13 +1360,6 @@
       "Nintendo Switch Games"
     ]
   },
-  "nintendo switch konsolen": {
-    "root": "Videogames",
-    "title": "Nintendo Switch Konsolen",
-    "path": [
-      "Nintendo Switch Konsolen"
-    ]
-  },
   "notebooks": {
     "root": "Computer & Zubehör",
     "title": "Notebooks",
@@ -2881,13 +1378,6 @@
       "Ebook Reader"
     ]
   },
-  "oberfraesen": {
-    "root": "Garten & Baumarkt",
-    "title": "Oberfraesen",
-    "path": [
-      "Oberfraesen"
-    ]
-  },
   "oberschalen cover": {
     "root": "Smartphones & Mobiltelefone",
     "title": "Oberschalen Cover",
@@ -2901,34 +1391,6 @@
     "path": [
       "Foto",
       "Objektive"
-    ]
-  },
-  "offroad suv ganzjahresreifen": {
-    "root": "Auto & Motorrad",
-    "title": "Offroad Suv Ganzjahresreifen",
-    "path": [
-      "Offroad Suv Ganzjahresreifen"
-    ]
-  },
-  "offroad suv sommerreifen": {
-    "root": "Auto & Motorrad",
-    "title": "Offroad Suv Sommerreifen",
-    "path": [
-      "Offroad Suv Sommerreifen"
-    ]
-  },
-  "offroad suv winterreifen": {
-    "root": "Auto & Motorrad",
-    "title": "Offroad Suv Winterreifen",
-    "path": [
-      "Offroad Suv Winterreifen"
-    ]
-  },
-  "oki toner": {
-    "root": "Computer & Zubehör",
-    "title": "Oki Toner",
-    "path": [
-      "Oki Toner"
     ]
   },
   "oneplus h2516": {
@@ -2966,27 +1428,6 @@
       "Outdoor Spielzeug"
     ]
   },
-  "pa lautsprecher": {
-    "root": "HiFi & Audio",
-    "title": "Pa Lautsprecher",
-    "path": [
-      "Pa Lautsprecher"
-    ]
-  },
-  "paarvibratoren": {
-    "root": "Drogerie",
-    "title": "Paarvibratoren",
-    "path": [
-      "Paarvibratoren"
-    ]
-  },
-  "panini": {
-    "root": "Spielwaren",
-    "title": "Panini",
-    "path": [
-      "Panini"
-    ]
-  },
   "pantasy": {
     "root": "Spielwaren",
     "title": "Pantasy",
@@ -3008,21 +1449,7 @@
     "path": [
       "Drogerie",
       "Parfuemerie",
-      "Damenduefte"
-    ]
-  },
-  "parfum": {
-    "root": "Drogerie",
-    "title": "Parfum",
-    "path": [
-      "Parfum"
-    ]
-  },
-  "pc gehaeuse": {
-    "root": "Computer & Zubehör",
-    "title": "Pc Gehaeuse",
-    "path": [
-      "Pc Gehaeuse"
+      "Unisexduefte"
     ]
   },
   "pc komponenten": {
@@ -3034,39 +1461,11 @@
       "Festplatten Ssd"
     ]
   },
-  "pc lautsprechersysteme": {
-    "root": "HiFi & Audio",
-    "title": "Pc Lautsprechersysteme",
-    "path": [
-      "Pc Lautsprechersysteme"
-    ]
-  },
-  "pc netzteile": {
-    "root": "Computer & Zubehör",
-    "title": "Pc Netzteile",
-    "path": [
-      "Pc Netzteile"
-    ]
-  },
   "pedale": {
     "root": "Videogames",
     "title": "Pedale",
     "path": [
       "Pedale"
-    ]
-  },
-  "pedale effektgeraete": {
-    "root": "HiFi & Audio",
-    "title": "Pedale Effektgeraete",
-    "path": [
-      "Pedale Effektgeraete"
-    ]
-  },
-  "penisringe": {
-    "root": "Drogerie",
-    "title": "Penisringe",
-    "path": [
-      "Penisringe"
     ]
   },
   "peripheriegeraete": {
@@ -3079,55 +1478,11 @@
       "Verbrauchsmaterial Fuer Drucker"
     ]
   },
-  "pfannen": {
-    "root": "Haushalt & Küche",
-    "title": "Pfannen",
-    "path": [
-      "Pfannen"
-    ]
-  },
   "pfannensets": {
     "root": "Haushalt & Küche",
     "title": "Pfannensets",
     "path": [
       "Pfannensets"
-    ]
-  },
-  "pflegemittel fluessig": {
-    "root": "Drogerie",
-    "title": "Pflegemittel Fluessig",
-    "path": [
-      "Pflegemittel Fluessig"
-    ]
-  },
-  "pinsel": {
-    "root": "Haushalt & Küche",
-    "title": "Pinsel",
-    "path": [
-      "Pinsel"
-    ]
-  },
-  "pkw ganzjahresreifen": {
-    "root": "Auto & Motorrad",
-    "title": "Pkw Ganzjahresreifen",
-    "path": [
-      "Pkw Ganzjahresreifen"
-    ]
-  },
-  "pkw sommerreifen": {
-    "root": "Auto & Motorrad",
-    "title": "Pkw Sommerreifen",
-    "path": [
-      "Auto Motorrad",
-      "Pneus",
-      "Pkw Sommerreifen"
-    ]
-  },
-  "pkw winterreifen": {
-    "root": "Auto & Motorrad",
-    "title": "Pkw Winterreifen",
-    "path": [
-      "Pkw Winterreifen"
     ]
   },
   "plattenspieler": {
@@ -3137,13 +1492,6 @@
       "Hifi Audio",
       "Hifi Einzelkomponenten",
       "Plattenspieler"
-    ]
-  },
-  "playmobil knights": {
-    "root": "Spielwaren",
-    "title": "Playmobil Knights",
-    "path": [
-      "Playmobil Knights"
     ]
   },
   "playstation 4": {
@@ -3164,35 +1512,6 @@
       "Ps5 Games"
     ]
   },
-  "playstation vr hardware": {
-    "root": "Videogames",
-    "title": "Playstation Vr Hardware",
-    "path": [
-      "Playstation Vr Hardware"
-    ]
-  },
-  "playstation vr2 hardware": {
-    "root": "Videogames",
-    "title": "Playstation Vr2 Hardware",
-    "path": [
-      "Playstation Vr2 Hardware"
-    ]
-  },
-  "pneus": {
-    "root": "Auto & Motorrad",
-    "title": "Pneus",
-    "path": [
-      "Auto Motorrad",
-      "Pneus"
-    ]
-  },
-  "pools": {
-    "root": "Garten & Baumarkt",
-    "title": "Pools",
-    "path": [
-      "Pools"
-    ]
-  },
   "portable lautsprecher": {
     "root": "HiFi & Audio",
     "title": "Portable Lautsprecher",
@@ -3211,33 +1530,12 @@
       "Portable Lautsprecher"
     ]
   },
-  "powerline adapter": {
-    "root": "Computer & Zubehör",
-    "title": "Powerline Adapter",
-    "path": [
-      "Powerline Adapter"
-    ]
-  },
-  "praesentation": {
-    "root": "Bürobedarf & Schreibwaren",
-    "title": "Praesentation",
-    "path": [
-      "Praesentation"
-    ]
-  },
   "professional audio djing": {
     "root": "HiFi & Audio",
     "title": "Professional Audio Djing",
     "path": [
       "Musikinstrumente Pro Audio",
       "Professional Audio Djing"
-    ]
-  },
-  "prostatavibratoren": {
-    "root": "Drogerie",
-    "title": "Prostatavibratoren",
-    "path": [
-      "Prostatavibratoren"
     ]
   },
   "prozessoren": {
@@ -3247,13 +1545,6 @@
       "Computer Zubehoer",
       "Pc Komponenten",
       "Prozessoren"
-    ]
-  },
-  "prozessorkuehler": {
-    "root": "Computer & Zubehör",
-    "title": "Prozessorkuehler",
-    "path": [
-      "Prozessorkuehler"
     ]
   },
   "ps4 games": {
@@ -3274,41 +1565,6 @@
       "Ps5 Games"
     ]
   },
-  "ps5 konsolen": {
-    "root": "Videogames",
-    "title": "Ps5 Konsolen",
-    "path": [
-      "Ps5 Konsolen"
-    ]
-  },
-  "pumpen": {
-    "root": "Sport & Freizeit",
-    "title": "Pumpen",
-    "path": [
-      "Pumpen"
-    ]
-  },
-  "rabbit vibratoren": {
-    "root": "Drogerie",
-    "title": "Rabbit Vibratoren",
-    "path": [
-      "Rabbit Vibratoren"
-    ]
-  },
-  "raclette wok tischgrill": {
-    "root": "Haushalt & Küche",
-    "title": "Raclette Wok Tischgrill",
-    "path": [
-      "Raclette Wok Tischgrill"
-    ]
-  },
-  "radar": {
-    "root": "Sport & Freizeit",
-    "title": "Radar",
-    "path": [
-      "Radar"
-    ]
-  },
   "radios radio recorder": {
     "root": "HiFi & Audio",
     "title": "Radios Radio Recorder",
@@ -3318,57 +1574,12 @@
       "Radios Radio Recorder"
     ]
   },
-  "radiowecker": {
-    "root": "HiFi & Audio",
-    "title": "Radiowecker",
-    "path": [
-      "Radiowecker"
-    ]
-  },
-  "rasenpflege": {
-    "root": "Garten & Baumarkt",
-    "title": "Rasenpflege",
-    "path": [
-      "Rasenpflege"
-    ]
-  },
-  "rasierschaum rasiergel": {
-    "root": "Drogerie",
-    "title": "Rasierschaum Rasiergel",
-    "path": [
-      "Rasierschaum Rasiergel"
-    ]
-  },
-  "rasur enthaarung": {
-    "root": "Drogerie",
-    "title": "Rasur Enthaarung",
-    "path": [
-      "Drogerie",
-      "Rasur Haarpflege",
-      "Rasur Enthaarung",
-      "Elektrorasierer"
-    ]
-  },
   "rasur haarpflege": {
     "root": "Drogerie",
     "title": "Rasur Haarpflege",
     "path": [
       "Drogerie",
       "Rasur Haarpflege"
-    ]
-  },
-  "ratgeber": {
-    "root": "Filme",
-    "title": "Ratgeber",
-    "path": [
-      "Ratgeber"
-    ]
-  },
-  "raumduft": {
-    "root": "Garten & Baumarkt",
-    "title": "Raumduft",
-    "path": [
-      "Raumduft"
     ]
   },
   "rc modelle": {
@@ -3388,13 +1599,6 @@
       "Receiver"
     ]
   },
-  "reiben": {
-    "root": "Haushalt & Küche",
-    "title": "Reiben",
-    "path": [
-      "Reiben"
-    ]
-  },
   "reifen": {
     "root": "Auto & Motorrad",
     "title": "Reifen",
@@ -3403,46 +1607,24 @@
       "Reifen"
     ]
   },
-  "reise": {
-    "root": "Filme",
-    "title": "Reise",
-    "path": [
-      "Reise"
-    ]
-  },
   "rennspiele": {
     "root": "Videogames",
     "title": "Rennspiele",
     "path": [
+      "Videogames",
+      "Nintendo Switch 2",
+      "Nintendo Switch 2 Games",
       "Rennspiele"
-    ]
-  },
-  "reobrix": {
-    "root": "Spielwaren",
-    "title": "Reobrix",
-    "path": [
-      "Reobrix"
-    ]
-  },
-  "ricoh toner": {
-    "root": "Computer & Zubehör",
-    "title": "Ricoh Toner",
-    "path": [
-      "Ricoh Toner"
     ]
   },
   "rollenspiele adventures": {
     "root": "Videogames",
     "title": "Rollenspiele Adventures",
     "path": [
+      "Videogames",
+      "Nintendo Switch 2",
+      "Nintendo Switch 2 Games",
       "Rollenspiele Adventures"
-    ]
-  },
-  "rollentrainer": {
-    "root": "Sport & Freizeit",
-    "title": "Rollentrainer",
-    "path": [
-      "Rollentrainer"
     ]
   },
   "romantische komoedie": {
@@ -3453,20 +1635,6 @@
       "Dvd Filme",
       "Dvd Komoedie Drama",
       "Romantische Komoedie"
-    ]
-  },
-  "router modems": {
-    "root": "Computer & Zubehör",
-    "title": "Router Modems",
-    "path": [
-      "Router Modems"
-    ]
-  },
-  "rucksaecke": {
-    "root": "Sport & Freizeit",
-    "title": "Rucksaecke",
-    "path": [
-      "Rucksaecke"
     ]
   },
   "saegen fraesen": {
@@ -3486,39 +1654,11 @@
       "Samsung H1"
     ]
   },
-  "sandwichtoaster waffeleisen": {
-    "root": "Haushalt & Küche",
-    "title": "Sandwichtoaster Waffeleisen",
-    "path": [
-      "Sandwichtoaster Waffeleisen"
-    ]
-  },
-  "saucenloeffel": {
-    "root": "Haushalt & Küche",
-    "title": "Saucenloeffel",
-    "path": [
-      "Saucenloeffel"
-    ]
-  },
   "saug und wischroboter": {
     "root": "Haushalt & Küche",
     "title": "Saug Und Wischroboter",
     "path": [
       "Saug Und Wischroboter"
-    ]
-  },
-  "scanner": {
-    "root": "Computer & Zubehör",
-    "title": "Scanner",
-    "path": [
-      "Scanner"
-    ]
-  },
-  "schaeler": {
-    "root": "Haushalt & Küche",
-    "title": "Schaeler",
-    "path": [
-      "Schaeler"
     ]
   },
   "scheren": {
@@ -3535,32 +1675,11 @@
       "Schleifen Wetzen"
     ]
   },
-  "schneidegeraete": {
-    "root": "Bürobedarf & Schreibwaren",
-    "title": "Schneidegeraete",
-    "path": [
-      "Schneidegeraete"
-    ]
-  },
-  "schneideplotter": {
-    "root": "Computer & Zubehör",
-    "title": "Schneideplotter",
-    "path": [
-      "Schneideplotter"
-    ]
-  },
   "schneidunterlagen": {
     "root": "Haushalt & Küche",
     "title": "Schneidunterlagen",
     "path": [
       "Schneidunterlagen"
-    ]
-  },
-  "schoepfloeffel": {
-    "root": "Haushalt & Küche",
-    "title": "Schoepfloeffel",
-    "path": [
-      "Schoepfloeffel"
     ]
   },
   "schreibmaterial": {
@@ -3572,18 +1691,11 @@
     ]
   },
   "schuhe": {
-    "root": "Drogerie",
+    "root": "Garten & Baumarkt",
     "title": "Schuhe",
     "path": [
       "Bekleidung Accessoires",
       "Schuhe"
-    ]
-  },
-  "schwingschleifer": {
-    "root": "Garten & Baumarkt",
-    "title": "Schwingschleifer",
-    "path": [
-      "Schwingschleifer"
     ]
   },
   "science fiction": {
@@ -3597,17 +1709,10 @@
     ]
   },
   "sd speicherkarten": {
-    "root": "Foto & Video",
+    "root": "TV & Video",
     "title": "Sd Speicherkarten",
     "path": [
       "Sd Speicherkarten"
-    ]
-  },
-  "seife": {
-    "root": "Drogerie",
-    "title": "Seife",
-    "path": [
-      "Seife"
     ]
   },
   "sensoren melder": {
@@ -3617,25 +1722,11 @@
       "Sensoren Melder"
     ]
   },
-  "service": {
-    "root": "Haushalt & Küche",
-    "title": "Service",
-    "path": [
-      "Service"
-    ]
-  },
   "sicherheit ueberwachung": {
     "root": "Garten & Baumarkt",
     "title": "Sicherheit Ueberwachung",
     "path": [
       "Sicherheit Ueberwachung"
-    ]
-  },
-  "siebtraegermaschinen": {
-    "root": "Haushalt & Küche",
-    "title": "Siebtraegermaschinen",
-    "path": [
-      "Siebtraegermaschinen"
     ]
   },
   "sim racing flying": {
@@ -3657,28 +1748,10 @@
     "root": "Videogames",
     "title": "Simulationen",
     "path": [
+      "Videogames",
+      "Nintendo Switch 2",
+      "Nintendo Switch 2 Games",
       "Simulationen"
-    ]
-  },
-  "skihelme": {
-    "root": "Sport & Freizeit",
-    "title": "Skihelme",
-    "path": [
-      "Skihelme"
-    ]
-  },
-  "slapstick komoedie": {
-    "root": "Filme",
-    "title": "Slapstick Komoedie",
-    "path": [
-      "Slapstick Komoedie"
-    ]
-  },
-  "slip vibratoren": {
-    "root": "Drogerie",
-    "title": "Slip Vibratoren",
-    "path": [
-      "Slip Vibratoren"
     ]
   },
   "smart home": {
@@ -3696,19 +1769,13 @@
       "Smart Speaker"
     ]
   },
-  "smarte brillen": {
-    "root": "Smartphones & Mobiltelefone",
-    "title": "Smarte Brillen",
-    "path": [
-      "Smarte Brillen"
-    ]
-  },
   "smartphones": {
     "root": "Smartphones & Mobiltelefone",
     "title": "Smartphones",
     "path": [
       "Smartphones Mobiltelefone",
-      "Smartphones"
+      "Smartphones",
+      "Fairphone H3048"
     ]
   },
   "smartwatches": {
@@ -3728,162 +1795,11 @@
       "Sofortbildkameras"
     ]
   },
-  "software pakete microsoft": {
-    "root": "Computer & Zubehör",
-    "title": "Software Pakete Microsoft",
-    "path": [
-      "Software Pakete Microsoft"
-    ]
-  },
-  "solar ladegeraete": {
-    "root": "Garten & Baumarkt",
-    "title": "Solar Ladegeraete",
-    "path": [
-      "Solar Ladegeraete"
-    ]
-  },
-  "solid state drives ssd": {
-    "root": "Computer & Zubehör",
-    "title": "Solid State Drives Ssd",
-    "path": [
-      "Computer Zubehoer",
-      "Pc Komponenten",
-      "Festplatten Ssd",
-      "Solid State Drives Ssd"
-    ]
-  },
-  "sonnenbrillen": {
-    "root": "Sport & Freizeit",
-    "title": "Sonnenbrillen",
-    "path": [
-      "Sonnenbrillen"
-    ]
-  },
-  "sonstige akkus": {
-    "root": "Garten & Baumarkt",
-    "title": "Sonstige Akkus",
-    "path": [
-      "Sonstige Akkus"
-    ]
-  },
-  "sonstige camping outdoorprodukte": {
-    "root": "Sport & Freizeit",
-    "title": "Sonstige Camping Outdoorprodukte",
-    "path": [
-      "Sonstige Camping Outdoorprodukte"
-    ]
-  },
-  "sonstige einzelkomponenten": {
-    "root": "HiFi & Audio",
-    "title": "Sonstige Einzelkomponenten",
-    "path": [
-      "Sonstige Einzelkomponenten"
-    ]
-  },
-  "sonstige gartengeraete": {
-    "root": "Garten & Baumarkt",
-    "title": "Sonstige Gartengeraete",
-    "path": [
-      "Sonstige Gartengeraete"
-    ]
-  },
-  "sonstige gps navigations geraete": {
-    "root": "Computer & Zubehör",
-    "title": "Sonstige Gps Navigations Geraete",
-    "path": [
-      "Sonstige Gps Navigations Geraete"
-    ]
-  },
-  "sonstige handheld konsolen": {
-    "root": "Videogames",
-    "title": "Sonstige Handheld Konsolen",
-    "path": [
-      "Sonstige Handheld Konsolen"
-    ]
-  },
-  "sonstige haushaltsgeraete": {
-    "root": "Haushalt & Küche",
-    "title": "Sonstige Haushaltsgeraete",
-    "path": [
-      "Sonstige Haushaltsgeraete"
-    ]
-  },
-  "sonstige kaffeemaschinen": {
-    "root": "Haushalt & Küche",
-    "title": "Sonstige Kaffeemaschinen",
-    "path": [
-      "Sonstige Kaffeemaschinen"
-    ]
-  },
-  "sonstige kuechengeraete": {
-    "root": "Haushalt & Küche",
-    "title": "Sonstige Kuechengeraete",
-    "path": [
-      "Sonstige Kuechengeraete"
-    ]
-  },
-  "sonstige musikinstrumente": {
-    "root": "HiFi & Audio",
-    "title": "Sonstige Musikinstrumente",
-    "path": [
-      "Sonstige Musikinstrumente"
-    ]
-  },
-  "sonstige rennbahnen": {
-    "root": "Spielwaren",
-    "title": "Sonstige Rennbahnen",
-    "path": [
-      "Sonstige Rennbahnen"
-    ]
-  },
-  "sonstige saegen fraesen": {
-    "root": "Garten & Baumarkt",
-    "title": "Sonstige Saegen Fraesen",
-    "path": [
-      "Sonstige Saegen Fraesen"
-    ]
-  },
-  "sonstige spielekonsolen": {
-    "root": "Videogames",
-    "title": "Sonstige Spielekonsolen",
-    "path": [
-      "Videogames",
-      "Sonstige Spielekonsolen"
-    ]
-  },
   "sonstiges": {
-    "root": "Garten & Baumarkt",
+    "root": "Smartphones & Mobiltelefone",
     "title": "Sonstiges",
     "path": [
       "Sonstiges"
-    ]
-  },
-  "sonstiges elektronisches spielzeug": {
-    "root": "Spielwaren",
-    "title": "Sonstiges Elektronisches Spielzeug",
-    "path": [
-      "Sonstiges Elektronisches Spielzeug"
-    ]
-  },
-  "sonstiges gaming zubehoer": {
-    "root": "Videogames",
-    "title": "Sonstiges Gaming Zubehoer",
-    "path": [
-      "Sonstiges Gaming Zubehoer"
-    ]
-  },
-  "sonstiges outdoor spielzeug": {
-    "root": "Spielwaren",
-    "title": "Sonstiges Outdoor Spielzeug",
-    "path": [
-      "Sonstiges Outdoor Spielzeug"
-    ]
-  },
-  "sonstiges zubehoer": {
-    "root": "Foto & Video",
-    "title": "Sonstiges Zubehoer",
-    "path": [
-      "Sonstiges Zubehoer"
     ]
   },
   "sonstiges zubehoer fuer iphone": {
@@ -3910,20 +1826,6 @@
       "Speicherkarten"
     ]
   },
-  "spiele fuer sonstige konsolen": {
-    "root": "Videogames",
-    "title": "Spiele Fuer Sonstige Konsolen",
-    "path": [
-      "Spiele Fuer Sonstige Konsolen"
-    ]
-  },
-  "spielesammlungen": {
-    "root": "Videogames",
-    "title": "Spielesammlungen",
-    "path": [
-      "Spielesammlungen"
-    ]
-  },
   "spielzeugfiguren roboter": {
     "root": "Spielwaren",
     "title": "Spielzeugfiguren Roboter",
@@ -3942,13 +1844,6 @@
       "Spielzeugroboter"
     ]
   },
-  "spin master": {
-    "root": "Spielwaren",
-    "title": "Spin Master",
-    "path": [
-      "Spin Master"
-    ]
-  },
   "spirituosen": {
     "root": "Haushalt & Küche",
     "title": "Spirituosen",
@@ -3957,25 +1852,11 @@
       "Spirituosen"
     ]
   },
-  "sport": {
-    "root": "Filme",
-    "title": "Sport",
-    "path": [
-      "Sport"
-    ]
-  },
   "sport pulsuhren": {
     "root": "Sport & Freizeit",
     "title": "Sport Pulsuhren",
     "path": [
       "Sport Pulsuhren"
-    ]
-  },
-  "sportbrillen goggles": {
-    "root": "Sport & Freizeit",
-    "title": "Sportbrillen Goggles",
-    "path": [
-      "Sportbrillen Goggles"
     ]
   },
   "sportgeraete": {
@@ -3992,8 +1873,8 @@
     "title": "Sportspiele",
     "path": [
       "Videogames",
-      "Xbox Series X S",
-      "Xbox Series X S Games",
+      "Nintendo Switch 2",
+      "Nintendo Switch 2 Games",
       "Sportspiele"
     ]
   },
@@ -4015,13 +1896,6 @@
       "Stative"
     ]
   },
-  "stativkoepfe": {
-    "root": "Foto & Video",
-    "title": "Stativkoepfe",
-    "path": [
-      "Stativkoepfe"
-    ]
-  },
   "staubsauger": {
     "root": "Haushalt & Küche",
     "title": "Staubsauger",
@@ -4031,26 +1905,12 @@
       "Staubsauger"
     ]
   },
-  "steckdosenleisten": {
-    "root": "Garten & Baumarkt",
-    "title": "Steckdosenleisten",
-    "path": [
-      "Steckdosenleisten"
-    ]
-  },
   "stempeln": {
     "root": "Bürobedarf & Schreibwaren",
     "title": "Stempeln",
     "path": [
       "Buerobedarf Schreibwaren",
       "Stempeln"
-    ]
-  },
-  "stichsaegen": {
-    "root": "Garten & Baumarkt",
-    "title": "Stichsaegen",
-    "path": [
-      "Stichsaegen"
     ]
   },
   "strategie rollenspiele": {
@@ -4062,81 +1922,11 @@
       "Strategie Rollenspiele"
     ]
   },
-  "strategiespiele": {
-    "root": "Videogames",
-    "title": "Strategiespiele",
-    "path": [
-      "Strategiespiele"
-    ]
-  },
-  "streaming server clients": {
-    "root": "HiFi & Audio",
-    "title": "Streaming Server Clients",
-    "path": [
-      "Streaming Server Clients"
-    ]
-  },
-  "stromspeicher": {
-    "root": "Garten & Baumarkt",
-    "title": "Stromspeicher",
-    "path": [
-      "Stromspeicher"
-    ]
-  },
-  "studio mikrofone": {
-    "root": "HiFi & Audio",
-    "title": "Studio Mikrofone",
-    "path": [
-      "Studio Mikrofone"
-    ]
-  },
-  "studio monitorboxen": {
-    "root": "HiFi & Audio",
-    "title": "Studio Monitorboxen",
-    "path": [
-      "Studio Monitorboxen"
-    ]
-  },
   "subwoofer": {
-    "root": "Auto & Motorrad",
+    "root": "HiFi & Audio",
     "title": "Subwoofer",
     "path": [
       "Subwoofer"
-    ]
-  },
-  "surroundsysteme": {
-    "root": "HiFi & Audio",
-    "title": "Surroundsysteme",
-    "path": [
-      "Surroundsysteme"
-    ]
-  },
-  "switches 10 gbit": {
-    "root": "Computer & Zubehör",
-    "title": "Switches 10 Gbit",
-    "path": [
-      "Switches 10 Gbit"
-    ]
-  },
-  "switches 1000 mbit": {
-    "root": "Computer & Zubehör",
-    "title": "Switches 1000 Mbit",
-    "path": [
-      "Switches 1000 Mbit"
-    ]
-  },
-  "switches 2 5 gbit": {
-    "root": "Computer & Zubehör",
-    "title": "Switches 2 5 Gbit",
-    "path": [
-      "Switches 2 5 Gbit"
-    ]
-  },
-  "synthesizer": {
-    "root": "HiFi & Audio",
-    "title": "Synthesizer",
-    "path": [
-      "Synthesizer"
     ]
   },
   "tablets": {
@@ -4148,20 +1938,6 @@
       "Tablets"
     ]
   },
-  "tageslinsen": {
-    "root": "Drogerie",
-    "title": "Tageslinsen",
-    "path": [
-      "Tageslinsen"
-    ]
-  },
-  "tamper": {
-    "root": "Haushalt & Küche",
-    "title": "Tamper",
-    "path": [
-      "Tamper"
-    ]
-  },
   "taschen cover fuer iphone": {
     "root": "Smartphones & Mobiltelefone",
     "title": "Taschen Cover Fuer Iphone",
@@ -4169,13 +1945,6 @@
       "Smartphones Mobiltelefone",
       "Zubehoer Fuer Mobiltelefone",
       "Taschen Cover Fuer Iphone"
-    ]
-  },
-  "taschenlampen": {
-    "root": "Garten & Baumarkt",
-    "title": "Taschenlampen",
-    "path": [
-      "Taschenlampen"
     ]
   },
   "taschenmesser tools": {
@@ -4195,37 +1964,6 @@
       "Taschenrechner"
     ]
   },
-  "tassen": {
-    "root": "Haushalt & Küche",
-    "title": "Tassen",
-    "path": [
-      "Tassen"
-    ]
-  },
-  "tastaturen": {
-    "root": "Computer & Zubehör",
-    "title": "Tastaturen",
-    "path": [
-      "Tastaturen"
-    ]
-  },
-  "tasteninstrumente": {
-    "root": "HiFi & Audio",
-    "title": "Tasteninstrumente",
-    "path": [
-      "Musikinstrumente Pro Audio",
-      "Musikinstrumente",
-      "Tasteninstrumente",
-      "E Pianos"
-    ]
-  },
-  "terrassenreiniger": {
-    "root": "Garten & Baumarkt",
-    "title": "Terrassenreiniger",
-    "path": [
-      "Terrassenreiniger"
-    ]
-  },
   "textilien": {
     "root": "Haushalt & Küche",
     "title": "Textilien",
@@ -4240,13 +1978,6 @@
       "Thermometer"
     ]
   },
-  "thermoskannen bidons": {
-    "root": "Haushalt & Küche",
-    "title": "Thermoskannen Bidons",
-    "path": [
-      "Thermoskannen Bidons"
-    ]
-  },
   "thriller": {
     "root": "Filme",
     "title": "Thriller",
@@ -4257,13 +1988,6 @@
       "Thriller"
     ]
   },
-  "tisch accessoires": {
-    "root": "Haushalt & Küche",
-    "title": "Tisch Accessoires",
-    "path": [
-      "Tisch Accessoires"
-    ]
-  },
   "tmc receiver": {
     "root": "Computer & Zubehör",
     "title": "Tmc Receiver",
@@ -4271,25 +1995,11 @@
       "Tmc Receiver"
     ]
   },
-  "toaster": {
-    "root": "Haushalt & Küche",
-    "title": "Toaster",
-    "path": [
-      "Toaster"
-    ]
-  },
   "toepfe": {
     "root": "Haushalt & Küche",
     "title": "Toepfe",
     "path": [
       "Toepfe"
-    ]
-  },
-  "tonabnehmer": {
-    "root": "HiFi & Audio",
-    "title": "Tonabnehmer",
-    "path": [
-      "Tonabnehmer"
     ]
   },
   "topfdeckel": {
@@ -4304,27 +2014,6 @@
     "title": "Topfsets",
     "path": [
       "Topfsets"
-    ]
-  },
-  "torische kontaktlinsen": {
-    "root": "Drogerie",
-    "title": "Torische Kontaktlinsen",
-    "path": [
-      "Torische Kontaktlinsen"
-    ]
-  },
-  "transceiver konverter": {
-    "root": "Computer & Zubehör",
-    "title": "Transceiver Konverter",
-    "path": [
-      "Transceiver Konverter"
-    ]
-  },
-  "trockner": {
-    "root": "Haushalt & Küche",
-    "title": "Trockner",
-    "path": [
-      "Trockner"
     ]
   },
   "tuner": {
@@ -4359,27 +2048,6 @@
       "Tv Receiver"
     ]
   },
-  "tv serien": {
-    "root": "Filme",
-    "title": "Tv Serien",
-    "path": [
-      "Tv Serien"
-    ]
-  },
-  "uebersetzer": {
-    "root": "Bürobedarf & Schreibwaren",
-    "title": "Uebersetzer",
-    "path": [
-      "Uebersetzer"
-    ]
-  },
-  "ueberwachungskameras": {
-    "root": "Garten & Baumarkt",
-    "title": "Ueberwachungskameras",
-    "path": [
-      "Ueberwachungskameras"
-    ]
-  },
   "unisexduefte": {
     "root": "Drogerie",
     "title": "Unisexduefte",
@@ -4387,28 +2055,6 @@
       "Drogerie",
       "Parfuemerie",
       "Unisexduefte"
-    ]
-  },
-  "veloanhaenger": {
-    "root": "Sport & Freizeit",
-    "title": "Veloanhaenger",
-    "path": [
-      "Veloanhaenger"
-    ]
-  },
-  "velofahren": {
-    "root": "Sport & Freizeit",
-    "title": "Velofahren",
-    "path": [
-      "Sport Freizeit",
-      "Velofahren"
-    ]
-  },
-  "velohelme": {
-    "root": "Sport & Freizeit",
-    "title": "Velohelme",
-    "path": [
-      "Velohelme"
     ]
   },
   "velos": {
@@ -4460,27 +2106,6 @@
       "Verstaerker"
     ]
   },
-  "vibro eier": {
-    "root": "Drogerie",
-    "title": "Vibro Eier",
-    "path": [
-      "Vibro Eier"
-    ]
-  },
-  "videobearbeitung": {
-    "root": "TV & Video",
-    "title": "Videobearbeitung",
-    "path": [
-      "Videobearbeitung"
-    ]
-  },
-  "videosysteme": {
-    "root": "Garten & Baumarkt",
-    "title": "Videosysteme",
-    "path": [
-      "Videosysteme"
-    ]
-  },
   "voice over ip voip": {
     "root": "Smartphones & Mobiltelefone",
     "title": "Voice Over Ip Voip",
@@ -4488,13 +2113,6 @@
       "Telefon Voip",
       "Voice Over Ip Voip",
       "Voip Telefone"
-    ]
-  },
-  "voip adapter": {
-    "root": "Smartphones & Mobiltelefone",
-    "title": "Voip Adapter",
-    "path": [
-      "Voip Adapter"
     ]
   },
   "voip router": {
@@ -4506,13 +2124,6 @@
       "Voip Router"
     ]
   },
-  "voip sonstiges": {
-    "root": "Smartphones & Mobiltelefone",
-    "title": "Voip Sonstiges",
-    "path": [
-      "Voip Sonstiges"
-    ]
-  },
   "voip telefone": {
     "root": "Smartphones & Mobiltelefone",
     "title": "Voip Telefone",
@@ -4520,20 +2131,6 @@
       "Telefon Voip",
       "Voice Over Ip Voip",
       "Voip Telefone"
-    ]
-  },
-  "vollautomaten": {
-    "root": "Haushalt & Küche",
-    "title": "Vollautomaten",
-    "path": [
-      "Vollautomaten"
-    ]
-  },
-  "vorverstaerker": {
-    "root": "HiFi & Audio",
-    "title": "Vorverstaerker",
-    "path": [
-      "Vorverstaerker"
     ]
   },
   "vr brillen": {
@@ -4545,61 +2142,12 @@
       "Vr Brillen"
     ]
   },
-  "vtech": {
-    "root": "Spielwaren",
-    "title": "Vtech",
-    "path": [
-      "Vtech"
-    ]
-  },
-  "wasch nass trockensauger": {
-    "root": "Haushalt & Küche",
-    "title": "Wasch Nass Trockensauger",
-    "path": [
-      "Wasch Nass Trockensauger"
-    ]
-  },
-  "waschmaschinen": {
-    "root": "Haushalt & Küche",
-    "title": "Waschmaschinen",
-    "path": [
-      "Waschmaschinen"
-    ]
-  },
-  "wasserkocher": {
-    "root": "Haushalt & Küche",
-    "title": "Wasserkocher",
-    "path": [
-      "Wasserkocher"
-    ]
-  },
   "wein": {
     "root": "Haushalt & Küche",
     "title": "Wein",
     "path": [
       "Wein Spirituosen",
       "Wein"
-    ]
-  },
-  "weinkuehlschraenke": {
-    "root": "Haushalt & Küche",
-    "title": "Weinkuehlschraenke",
-    "path": [
-      "Weinkuehlschraenke"
-    ]
-  },
-  "wellness zubehoer": {
-    "root": "Garten & Baumarkt",
-    "title": "Wellness Zubehoer",
-    "path": [
-      "Wellness Zubehoer"
-    ]
-  },
-  "werkzeugkoffer sets": {
-    "root": "Garten & Baumarkt",
-    "title": "Werkzeugkoffer Sets",
-    "path": [
-      "Werkzeugkoffer Sets"
     ]
   },
   "western": {
@@ -4609,46 +2157,11 @@
       "Western"
     ]
   },
-  "wetterstationen": {
-    "root": "Garten & Baumarkt",
-    "title": "Wetterstationen",
-    "path": [
-      "Wetterstationen"
-    ]
-  },
   "wheelbases": {
     "root": "Videogames",
     "title": "Wheelbases",
     "path": [
       "Wheelbases"
-    ]
-  },
-  "winkelschleifer": {
-    "root": "Garten & Baumarkt",
-    "title": "Winkelschleifer",
-    "path": [
-      "Winkelschleifer"
-    ]
-  },
-  "wirtschaftssimulationen": {
-    "root": "Videogames",
-    "title": "Wirtschaftssimulationen",
-    "path": [
-      "Wirtschaftssimulationen"
-    ]
-  },
-  "wissenschaftliche taschenrechner": {
-    "root": "Bürobedarf & Schreibwaren",
-    "title": "Wissenschaftliche Taschenrechner",
-    "path": [
-      "Wissenschaftliche Taschenrechner"
-    ]
-  },
-  "wlan adapter": {
-    "root": "Computer & Zubehör",
-    "title": "Wlan Adapter",
-    "path": [
-      "Wlan Adapter"
     ]
   },
   "wohnen": {
@@ -4659,45 +2172,11 @@
       "Wohnen"
     ]
   },
-  "woofer": {
-    "root": "Auto & Motorrad",
-    "title": "Woofer",
-    "path": [
-      "Woofer"
-    ]
-  },
   "wuerzen": {
     "root": "Haushalt & Küche",
     "title": "Wuerzen",
     "path": [
       "Wuerzen"
-    ]
-  },
-  "wurf sportspiele": {
-    "root": "Spielwaren",
-    "title": "Wurf Sportspiele",
-    "path": [
-      "Wurf Sportspiele"
-    ]
-  },
-  "xbox one": {
-    "root": "Videogames",
-    "title": "Xbox One",
-    "path": [
-      "Videogames",
-      "Xbox One",
-      "Xbox One Games",
-      "Spielesammlungen"
-    ]
-  },
-  "xbox one games": {
-    "root": "Videogames",
-    "title": "Xbox One Games",
-    "path": [
-      "Videogames",
-      "Xbox One",
-      "Xbox One Games",
-      "Spielesammlungen"
     ]
   },
   "xbox series x": {
@@ -4718,33 +2197,6 @@
       "Xbox Series X Games"
     ]
   },
-  "xbox series x s": {
-    "root": "Videogames",
-    "title": "Xbox Series X S",
-    "path": [
-      "Videogames",
-      "Xbox Series X S",
-      "Xbox Series X S Games",
-      "Sportspiele"
-    ]
-  },
-  "xbox series x s games": {
-    "root": "Videogames",
-    "title": "Xbox Series X S Games",
-    "path": [
-      "Videogames",
-      "Xbox Series X S",
-      "Xbox Series X S Games",
-      "Sportspiele"
-    ]
-  },
-  "xbox series x s konsolen": {
-    "root": "Videogames",
-    "title": "Xbox Series X S Konsolen",
-    "path": [
-      "Xbox Series X S Konsolen"
-    ]
-  },
   "xiaomi h2460": {
     "root": "Smartphones & Mobiltelefone",
     "title": "Xiaomi H2460",
@@ -4755,24 +2207,10 @@
     ]
   },
   "xqd cfexpress speicherkarten": {
-    "root": "Foto & Video",
+    "root": "TV & Video",
     "title": "Xqd Cfexpress Speicherkarten",
     "path": [
       "Xqd Cfexpress Speicherkarten"
-    ]
-  },
-  "zangen": {
-    "root": "Garten & Baumarkt",
-    "title": "Zangen",
-    "path": [
-      "Zangen"
-    ]
-  },
-  "zelte": {
-    "root": "Sport & Freizeit",
-    "title": "Zelte",
-    "path": [
-      "Zelte"
     ]
   },
   "zentralen starter kits": {
@@ -4780,34 +2218,6 @@
     "title": "Zentralen Starter Kits",
     "path": [
       "Zentralen Starter Kits"
-    ]
-  },
-  "zubehoer": {
-    "root": "Garten & Baumarkt",
-    "title": "Zubehoer",
-    "path": [
-      "Zubehoer"
-    ]
-  },
-  "zubehoer fuer 3d drucker": {
-    "root": "Computer & Zubehör",
-    "title": "Zubehoer Fuer 3d Drucker",
-    "path": [
-      "Zubehoer Fuer 3d Drucker"
-    ]
-  },
-  "zubehoer fuer blitzgeraete": {
-    "root": "Foto & Video",
-    "title": "Zubehoer Fuer Blitzgeraete",
-    "path": [
-      "Zubehoer Fuer Blitzgeraete"
-    ]
-  },
-  "zubehoer fuer car hifi": {
-    "root": "Auto & Motorrad",
-    "title": "Zubehoer Fuer Car Hifi",
-    "path": [
-      "Zubehoer Fuer Car Hifi"
     ]
   },
   "zubehoer fuer festnetz telefone": {
@@ -4824,102 +2234,11 @@
       "Zubehoer Fuer Funkgeraete"
     ]
   },
-  "zubehoer fuer gardena": {
-    "root": "Garten & Baumarkt",
-    "title": "Zubehoer Fuer Gardena",
-    "path": [
-      "Zubehoer Fuer Gardena"
-    ]
-  },
-  "zubehoer fuer gartengeraete": {
-    "root": "Garten & Baumarkt",
-    "title": "Zubehoer Fuer Gartengeraete",
-    "path": [
-      "Zubehoer Fuer Gartengeraete"
-    ]
-  },
-  "zubehoer fuer getraenkezubereitung": {
-    "root": "Haushalt & Küche",
-    "title": "Zubehoer Fuer Getraenkezubereitung",
-    "path": [
-      "Zubehoer Fuer Getraenkezubereitung"
-    ]
-  },
-  "zubehoer fuer grafikkarten": {
-    "root": "Computer & Zubehör",
-    "title": "Zubehoer Fuer Grafikkarten",
-    "path": [
-      "Zubehoer Fuer Grafikkarten"
-    ]
-  },
-  "zubehoer fuer haarpflege": {
-    "root": "Drogerie",
-    "title": "Zubehoer Fuer Haarpflege",
-    "path": [
-      "Zubehoer Fuer Haarpflege"
-    ]
-  },
-  "zubehoer fuer haus sicherheitstechnik": {
-    "root": "Garten & Baumarkt",
-    "title": "Zubehoer Fuer Haus Sicherheitstechnik",
-    "path": [
-      "Zubehoer Fuer Haus Sicherheitstechnik"
-    ]
-  },
-  "zubehoer fuer haushaltsgeraete": {
-    "root": "Haushalt & Küche",
-    "title": "Zubehoer Fuer Haushaltsgeraete",
-    "path": [
-      "Zubehoer Fuer Haushaltsgeraete"
-    ]
-  },
-  "zubehoer fuer kaffeemaschinen": {
-    "root": "Haushalt & Küche",
-    "title": "Zubehoer Fuer Kaffeemaschinen",
-    "path": [
-      "Zubehoer Fuer Kaffeemaschinen"
-    ]
-  },
-  "zubehoer fuer kindersitze": {
-    "root": "Auto & Motorrad",
-    "title": "Zubehoer Fuer Kindersitze",
-    "path": [
-      "Zubehoer Fuer Kindersitze"
-    ]
-  },
   "zubehoer fuer kochgeschirr": {
     "root": "Haushalt & Küche",
     "title": "Zubehoer Fuer Kochgeschirr",
     "path": [
       "Zubehoer Fuer Kochgeschirr"
-    ]
-  },
-  "zubehoer fuer kontaktlinsen": {
-    "root": "Drogerie",
-    "title": "Zubehoer Fuer Kontaktlinsen",
-    "path": [
-      "Zubehoer Fuer Kontaktlinsen"
-    ]
-  },
-  "zubehoer fuer kuechengeraete": {
-    "root": "Haushalt & Küche",
-    "title": "Zubehoer Fuer Kuechengeraete",
-    "path": [
-      "Zubehoer Fuer Kuechengeraete"
-    ]
-  },
-  "zubehoer fuer lampen leuchtmittel": {
-    "root": "Garten & Baumarkt",
-    "title": "Zubehoer Fuer Lampen Leuchtmittel",
-    "path": [
-      "Zubehoer Fuer Lampen Leuchtmittel"
-    ]
-  },
-  "zubehoer fuer lampen reflektoren": {
-    "root": "Foto & Video",
-    "title": "Zubehoer Fuer Lampen Reflektoren",
-    "path": [
-      "Zubehoer Fuer Lampen Reflektoren"
     ]
   },
   "zubehoer fuer mobiltelefone": {
@@ -4929,13 +2248,6 @@
       "Smartphones Mobiltelefone",
       "Zubehoer Fuer Mobiltelefone",
       "Taschen Cover Fuer Iphone"
-    ]
-  },
-  "zubehoer fuer nas systeme": {
-    "root": "Computer & Zubehör",
-    "title": "Zubehoer Fuer Nas Systeme",
-    "path": [
-      "Zubehoer Fuer Nas Systeme"
     ]
   },
   "zubehoer fuer nintendo switch": {
@@ -4952,27 +2264,6 @@
       "Zubehoer Fuer Nintendo Switch 2"
     ]
   },
-  "zubehoer fuer professional audio": {
-    "root": "HiFi & Audio",
-    "title": "Zubehoer Fuer Professional Audio",
-    "path": [
-      "Zubehoer Fuer Professional Audio"
-    ]
-  },
-  "zubehoer fuer ps5": {
-    "root": "Videogames",
-    "title": "Zubehoer Fuer Ps5",
-    "path": [
-      "Zubehoer Fuer Ps5"
-    ]
-  },
-  "zubehoer fuer rasur enthaarung": {
-    "root": "Drogerie",
-    "title": "Zubehoer Fuer Rasur Enthaarung",
-    "path": [
-      "Zubehoer Fuer Rasur Enthaarung"
-    ]
-  },
   "zubehoer fuer rc modelle": {
     "root": "Spielwaren",
     "title": "Zubehoer Fuer Rc Modelle",
@@ -4980,81 +2271,11 @@
       "Zubehoer Fuer Rc Modelle"
     ]
   },
-  "zubehoer fuer saegen fraesen": {
-    "root": "Garten & Baumarkt",
-    "title": "Zubehoer Fuer Saegen Fraesen",
-    "path": [
-      "Zubehoer Fuer Saegen Fraesen"
-    ]
-  },
-  "zubehoer fuer sonstige konsolen": {
-    "root": "Videogames",
-    "title": "Zubehoer Fuer Sonstige Konsolen",
-    "path": [
-      "Zubehoer Fuer Sonstige Konsolen"
-    ]
-  },
   "zubehoer fuer sportgeraete": {
     "root": "Sport & Freizeit",
     "title": "Zubehoer Fuer Sportgeraete",
     "path": [
       "Zubehoer Fuer Sportgeraete"
-    ]
-  },
-  "zubehoer fuer stative": {
-    "root": "Foto & Video",
-    "title": "Zubehoer Fuer Stative",
-    "path": [
-      "Zubehoer Fuer Stative"
-    ]
-  },
-  "zubehoer fuer staubsauger": {
-    "root": "Haushalt & Küche",
-    "title": "Zubehoer Fuer Staubsauger",
-    "path": [
-      "Zubehoer Fuer Staubsauger"
-    ]
-  },
-  "zubehoer fuer wasseraufbereiter": {
-    "root": "Haushalt & Küche",
-    "title": "Zubehoer Fuer Wasseraufbereiter",
-    "path": [
-      "Zubehoer Fuer Wasseraufbereiter"
-    ]
-  },
-  "zubehoer fuer xbox series x s": {
-    "root": "Videogames",
-    "title": "Zubehoer Fuer Xbox Series X S",
-    "path": [
-      "Zubehoer Fuer Xbox Series X S"
-    ]
-  },
-  "zubehoer masturbatoren": {
-    "root": "Drogerie",
-    "title": "Zubehoer Masturbatoren",
-    "path": [
-      "Zubehoer Masturbatoren"
-    ]
-  },
-  "zubehoer vibratoren": {
-    "root": "Drogerie",
-    "title": "Zubehoer Vibratoren",
-    "path": [
-      "Zubehoer Vibratoren"
-    ]
-  },
-  "zubehoer zu voip": {
-    "root": "Smartphones & Mobiltelefone",
-    "title": "Zubehoer Zu Voip",
-    "path": [
-      "Zubehoer Zu Voip"
-    ]
-  },
-  "zubehoer zum grillieren": {
-    "root": "Garten & Baumarkt",
-    "title": "Zubehoer Zum Grillieren",
-    "path": [
-      "Zubehoer Zum Grillieren"
     ]
   }
 }

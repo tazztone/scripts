@@ -8,13 +8,13 @@ Requires Violentmonkey (or a compatible userscript manager):
 - [Firefox](https://addons.mozilla.org/en-US/firefox/addon/violentmonkey/)
 - [Chrome / Brave](https://chromewebstore.google.com/detail/violentmonkey/jinjaccalgkegednnccohejagnlnfdag)
 
-### 👉 [**CLICK HERE TO INSTALL USERSCRIPT (v2.8.9)**](https://raw.githubusercontent.com/tazztone/scripts/main/userscripts/toppreise/toppreise.user.js)
+### 👉 [**CLICK HERE TO INSTALL USERSCRIPT (v2.8.12)**](https://raw.githubusercontent.com/tazztone/scripts/main/userscripts/toppreise/toppreise.user.js)
 
 ---
 
 ## ⚡ Features
 
-1. **📁 Hierarchical Category Tree Engine & Zero-Orphan Resolution**: Multi-level resolution algorithm (`Root` $\rightarrow$ `Sub-Group` $\rightarrow$ `Sub-Sub-Group` $\rightarrow$ `Leaf`) with word-prefix matching, brand rules (*Lego*, *Playmobil*, *Cobi*, *Schleich*, *Barbie*, *Hot Wheels* $\rightarrow$ 🧸 **Spielwaren**), and keyword fallback routing (*Fensterreinigungsroboter* $\rightarrow$ ☕ **Haushalt & Küche**, *Crosstrainer* $\rightarrow$ ⚽ **Sport & Freizeit**, *Duschpflege* $\rightarrow$ 🧴 **Drogerie**, *Dachboxen* $\rightarrow$ 🚗 **Auto & Motorrad**, *Aktenvernichter* $\rightarrow$ 💻 **Computer & Zubehör**, *Simulationen* $\rightarrow$ 🎮 **Videogames**). Eliminates orphan categories in `Sonstiges`.
+1. **📁 Hierarchical Category Tree Engine & Zero-Orphan Resolution**: Multi-level resolution algorithm (`Root` $\rightarrow$ `Sub-Group` $\rightarrow$ `Sub-Sub-Group` $\rightarrow$ `Leaf`) with direct card URL path parsing (`/preisvergleich/<RootSlug>/...`), word-prefix matching, brand rules (*Lego*, *Playmobil*, *Cobi*, *Schleich*, *Barbie*, *Hot Wheels*, *CaDA*, *Amiibo* $\rightarrow$ 🧸 **Spielwaren** / 🎮 **Videogames**), and keyword fallback routing (*Fensterreinigungsroboter*, *Heissluftfritteusen*, *Vollautomaten* $\rightarrow$ ☕ **Haushalt & Küche**, *Crosstrainer*, *Skihelme*, *GPS* $\rightarrow$ ⚽ **Sport & Freizeit**, *Haarglaetter*, *Duschpflege*, *Parfum* $\rightarrow$ 🧴 **Drogerie**, *Dachboxen*, *Reifen* $\rightarrow$ 🚗 **Auto & Motorrad**, *Aktenvernichter*, *SSD*, *USB SpeicherSticks* $\rightarrow$ 💻 **Computer & Zubehör**). Eliminates orphan categories in `Sonstiges`.
 2. **💬 Multi-Level Exclusion & Single-Click Group Toggling**: Group pills feature custom category emojis (🎬, 🧸, 💻, 🎮, 🎧, 📱, ☕, ⚽, 🚗, ⌚, etc.).
    - **1-Click Title Toggle**: Click a group pill title to toggle the **entire main group** ON/OFF (`GROUP:<Name>`) instantly.
    - **Chevron `▼` Dropdown**: Click the chevron to open a floating glassmorphic popover dropdown for granular sub-branch toggling.
@@ -31,19 +31,24 @@ Requires Violentmonkey (or a compatible userscript manager):
 
 ---
 
-## 🛠️ Multi-Threaded Category Hierarchy Generator Tool
+## 🛠️ Multi-Threaded Category Hierarchy Generator Tool & Verification
 
-The repository includes an automated 2-level deep crawler and category map generator in the `tools/` subfolder:
+The repository includes an automated category map crawler and verification tools in `tools/`:
 
-- **Location**: [`tools/generate_category_map.py`](file:///home/tazztone/_coding/scripts/userscripts/toppreise/tools/generate_category_map.py)
-- **Outputs**: 
-  - `tools/category_map.json`: Full category hierarchy JSON.
+- **Crawler & Injector**: [`tools/generate_category_map.py`](file:///home/tazztone/_coding/scripts/userscripts/toppreise/tools/generate_category_map.py)
+  - `tools/category_map.json`: Detailed category taxonomy map.
   - `tools/category_lookup_generated.js`: Generated JS lookup dictionary.
-- **Auto-Injection**: Automatically embeds the generated `CATEGORY_LOOKUP` table directly into `toppreise.user.js`.
+  - **Auto-Injection**: Automatically updates `CATEGORY_LOOKUP` in `toppreise.user.js`.
+- **Verification Tool**: [`tools/verify_category_map.py`](file:///home/tazztone/_coding/scripts/userscripts/toppreise/tools/verify_category_map.py)
+  - Benchmarks mapping coverage against standard site subcategories.
 
-### Running the Generator Tool
+### Running Tools
 ```bash
+# Crawl site & generate category lookup map
 python3 userscripts/toppreise/tools/generate_category_map.py
+
+# Verify category lookup accuracy
+python3 userscripts/toppreise/tools/verify_category_map.py
 ```
 The generator uses multi-threaded parallel requests across 23 root trees and 200+ subcategory pages to build complete category mappings.
 
