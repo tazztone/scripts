@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Toppreise Full Category Hierarchy Generator Tool
-Extracts category mappings from Toppreise.ch with deterministic key sorting and seed protection.
+Crawls ALL category pages on Toppreise.ch to build a comprehensive subcategory->root lookup.
+No manual SEED_LOOKUP guessing — everything comes from the site's actual URL taxonomy.
 """
 
 import urllib.request
@@ -16,7 +17,7 @@ HEADERS = {
     'Accept-Language': 'de-CH,de;q=0.9,en;q=0.8',
 }
 
-# Root categories on Toppreise
+# Root categories on Toppreise (slug -> canonical display group)
 ROOT_CATEGORIES = [
     ("Auto-Motorrad-c651", "Auto & Motorrad"),
     ("Bekleidung-Schuhe-c655", "Bekleidung & Schuhe"),
@@ -43,276 +44,292 @@ ROOT_CATEGORIES = [
     ("Werkzeuge-Werkstatt-c772", "Garten & Baumarkt")
 ]
 
-CANONICAL_GROUPS = {
-    'auto motorrad': 'Auto & Motorrad',
-    'bekleidung schuhe': 'Bekleidung & Schuhe',
-    'buerobedarf schreibwaren': 'Bürobedarf & Schreibwaren',
-    'computer zubehoer': 'Computer & Zubehör',
-    'drogerie': 'Drogerie',
-    'filme': 'Filme',
-    'foto': 'Foto & Video',
-    'haus garten': 'Garten & Baumarkt',
-    'haushalt kueche': 'Haushalt & Küche',
-    'hifi audio': 'HiFi & Audio',
-    'smartphones mobiltelefone': 'Smartphones & Mobiltelefone',
-    'spielwaren': 'Spielwaren',
-    'sport freizeit': 'Sport & Freizeit',
-    'tv video': 'TV & Video',
-    'uhren': 'Uhren',
-    'videogames': 'Videogames'
-}
+# Build root slug -> canonical group lookup
+ROOT_SLUG_MAP = {}
+for slug, name in ROOT_CATEGORIES:
+    clean = slug.split('-c')[0].lower()
+    ROOT_SLUG_MAP[clean] = name
+    ROOT_SLUG_MAP[clean.replace('-', ' ')] = name
 
-# Standard Offline Seed Dictionary with Protected Primary Root Mappings
-SEED_LOOKUP = {
-    # Bekleidung & Schuhe
-    "schuhe": "Bekleidung & Schuhe",
-    "bekleidung accessoires": "Bekleidung & Schuhe",
-    "bekleidung-accessoires": "Bekleidung & Schuhe",
-    "sonnenbrillen": "Bekleidung & Schuhe",
-    "kleidung": "Bekleidung & Schuhe",
-    
-    # Filme
-    "abenteuer": "Filme", "krimi": "Filme", "anime": "Filme", "mehr komoedie": "Filme",
-    "tv serien": "Filme", "fantasy": "Filme", "mehr drama": "Filme", "thriller": "Filme",
-    "dvd filme": "Filme", "blu ray filme": "Filme", "dvd kinder familie": "Filme",
-    "science fiction": "Filme", "klassisches drama": "Filme", "biografie": "Filme", "horror": "Filme",
-    "slapstick komoedie": "Filme", "slapstick komoediten": "Filme",
-    
-    # Computer & Zubehör
-    "komplettsysteme": "Computer & Zubehör", "grafikkarten": "Computer & Zubehör", 
-    "tablets": "Computer & Zubehör", "maeuse": "Computer & Zubehör", 
-    "pc gehaeuse": "Computer & Zubehör", "notebooks": "Computer & Zubehör",
-    "gehaeuseluefter": "Computer & Zubehör", "sd speicherkarten": "Computer & Zubehör",
-    "externe festplatten hdd": "Computer & Zubehör", "monitore": "Computer & Zubehör",
-    "prozessorkuehler": "Computer & Zubehör", "headsets mikrofone": "Computer & Zubehör",
-    "multifunktionsgeraete": "Computer & Zubehör", "mausmatten": "Computer & Zubehör",
-    "lenkraeder": "Computer & Zubehör", "lenkraeder pedale": "Computer & Zubehör",
-    
-    # Spielwaren
-    "lego architecture": "Spielwaren", "schleich": "Spielwaren", "action figuren": "Spielwaren",
-    "kinderspiele": "Spielwaren", "hot wheels": "Spielwaren", "disney": "Spielwaren",
-    "puzzles": "Spielwaren", "barbie": "Spielwaren", "cobi": "Spielwaren",
-    "playmobil wiltopia": "Spielwaren", "tabletop spiele": "Spielwaren",
-    "playmobil action": "Spielwaren", "playmobil novelmore": "Spielwaren", "lego": "Spielwaren",
-    "playmobil my life": "Spielwaren", "playmobil asterix": "Spielwaren", "lego duplo": "Spielwaren",
-    "lego city": "Spielwaren", "vtech": "Spielwaren", "fischertechnik": "Spielwaren",
-    "experimentierkaesten": "Spielwaren", "kartenspiele": "Spielwaren", "mega construx": "Spielwaren",
-    "familienspiele": "Spielwaren", "basteln malen": "Spielwaren", "komplett sets": "Spielwaren",
-    "zubehoer fuer rc modelle": "Spielwaren", "lego marvel": "Spielwaren", "evolution autos": "Spielwaren",
-    "playmobil": "Spielwaren", "nerf": "Spielwaren", "funko": "Spielwaren", "cada": "Spielwaren",
-    
-    # Videogames
-    "strategie rollenspiele": "Videogames", "zubehoer fuer nintendo switch": "Videogames",
-    "jump n run geschicklichkeit": "Videogames", "actionspiele": "Videogames",
-    "rollenspiele adventures": "Videogames", "action": "Videogames", "nintendo switch games": "Videogames",
-    "sonstige handheld konsolen": "Videogames", "ps5 konsolen": "Videogames", "playstation 5": "Videogames",
-    "simulationen": "Videogames", "rennspiel": "Videogames", "amiibo": "Videogames",
-    
-    # HiFi & Audio / TV & Video
-    "kopfhoerer": "HiFi & Audio", "plattenspieler": "HiFi & Audio", "bluetooth lautsprecher": "HiFi & Audio",
-    "lautsprecher": "HiFi & Audio", "smart speaker": "HiFi & Audio", "home cinema av receiver": "HiFi & Audio",
-    "tv geraete": "TV & Video", "beamer": "TV & Video", "actionkameras": "TV & Video",
-    
-    # Drogerie
-    "eau de parfum": "Drogerie", "eau de toilette": "Drogerie", "elektrozahnbuersten": "Drogerie",
-    "hautpflege": "Drogerie", "lockenstaebe buersten": "Drogerie", "ersatzbuersten": "Drogerie",
-    "koerperpflege": "Drogerie", "haartrockner": "Drogerie", "health wellness": "Drogerie",
-    "haarpflege": "Drogerie", "epilierer haarentferner": "Drogerie", "duschpflege": "Drogerie",
-    "duschgel": "Drogerie", "shampoo": "Drogerie", "geschenksets": "Drogerie",
-    "haarglaetter": "Drogerie", "haar bartschneider": "Drogerie", "parfum": "Drogerie",
-    
-    # Haushalt & Küche
-    "saug und wischroboter": "Haushalt & Küche", "abfallsysteme": "Haushalt & Küche",
-    "zubehoer fuer haushaltsgeraete": "Haushalt & Küche", "thermoskannen bidons": "Haushalt & Küche",
-    "kaffee espressomaschinen": "Haushalt & Küche", "kaffeemuehlen": "Haushalt & Küche",
-    "staubsauger": "Haushalt & Küche", "klimageraete": "Haushalt & Küche", "raumduft": "Haushalt & Küche",
-    "senseo maschinen": "Haushalt & Küche", "sonstige kuechengeraete": "Haushalt & Küche",
-    "heizung klima": "Haushalt & Küche", "fensterreinigungsroboter": "Haushalt & Küche",
-    "saugroboter": "Haushalt & Küche", "wischroboter": "Haushalt & Küche",
-    "heissluftfritteusen": "Haushalt & Küche", "vollautomaten": "Haushalt & Küche",
-    "zubehoer fuer kuechengeraete": "Haushalt & Küche",
-    
-    # Sport & Freizeit
-    "skihelme": "Sport & Freizeit", "koffer": "Sport & Freizeit", "ventilatoren heizgeraete": "Sport & Freizeit",
-    "einkaufstrolleys taschen": "Sport & Freizeit", "sportbrillen goggles": "Sport & Freizeit",
-    "velotaschen": "Sport & Freizeit", "rucksaecke": "Sport & Freizeit", "inline skates rollschuhe": "Sport & Freizeit",
-    "ski lawinenrucksaecke airbags": "Sport & Freizeit", "reise sporttaschen": "Sport & Freizeit",
-    "zubehoer fuer sportgeraete": "Sport & Freizeit", "veloanhaengerzubehoer": "Sport & Freizeit",
-    "pedale": "Sport & Freizeit", "taschenlampen": "Sport & Freizeit", "skibrillen": "Sport & Freizeit",
-    "protektoren": "Sport & Freizeit", "activity tracker smartwatches": "Sport & Freizeit", "velofahren": "Sport & Freizeit",
-    "fitness krafttraining": "Sport & Freizeit", "fitness-krafttraining": "Sport & Freizeit",
-    "velohelme": "Sport & Freizeit", "saettel": "Sport & Freizeit", "crosstrainer": "Sport & Freizeit",
-    "laufbaender": "Sport & Freizeit", "laufbänder": "Sport & Freizeit", "ergometer": "Sport & Freizeit",
-    "gps navigations geraete": "Sport & Freizeit",
-    
-    # Garten & Baumarkt
-    "schwingschleifer": "Garten & Baumarkt", "schalter taster": "Garten & Baumarkt",
-    
-    # Smartphones & Mobiltelefone / Auto / Uhren / Computer
-    "huellen": "Smartphones & Mobiltelefone", "oberschalen cover": "Smartphones & Mobiltelefone",
-    "taschen cover fuer iphone": "Smartphones & Mobiltelefone", "smartphones": "Smartphones & Mobiltelefone",
-    "smartringe": "Smartphones & Mobiltelefone", "webcams": "Computer & Zubehör", "naehmaschinen": "Haushalt & Küche",
-    "reifen": "Auto & Motorrad", "autos": "Auto & Motorrad", "uhren": "Uhren",
-    "pneus": "Auto & Motorrad", "pkw sommerreifen": "Auto & Motorrad", "pkw-sommerreifen": "Auto & Motorrad",
-    "dachboxen": "Auto & Motorrad", "dachtraeger": "Auto & Motorrad", "aktenvernichter": "Computer & Zubehör",
-    "usb speichersticks": "Computer & Zubehör", "externe solid state drives ssd": "Computer & Zubehör",
-    "ladegeraete netzadapter": "Computer & Zubehör"
-}
 
 def format_title(slug):
+    """Convert URL slug like 'Lego-City' or 'Lego-City-c927' to 'Lego City'."""
     if not slug:
         return ""
-    clean = slug.split('-c')[0].replace('-', ' ').strip()
-    return ' '.join(w.capitalize() for w in clean.split())
+    clean = slug.split('-c')[0]
+    # Split on hyphens, capitalize each word
+    words = clean.replace('-', ' ').strip().split()
+    return ' '.join(w.capitalize() for w in words)
+
+
+def slug_to_key(slug):
+    """Convert URL slug to normalized lookup key: lowercase, hyphens to spaces, strip -cNNN."""
+    if not slug:
+        return ""
+    return slug.split('-c')[0].lower().replace('-', ' ').strip()
+
+
+def expand_key_variants(key):
+    """Generate all lookup key variants: original, umlaut-expanded, umlaut-collapsed, no-spaces."""
+    variants = {key}
+    # ue->ü, ae->ä, oe->ö
+    u_map = key.replace('ue', 'ü').replace('ae', 'ä').replace('oe', 'ö')
+    variants.add(u_map)
+    # ü->ue, ä->ae, ö->oe
+    a_map = key.replace('ü', 'ue').replace('ä', 'ae').replace('ö', 'oe')
+    variants.add(a_map)
+    # no-space slug
+    variants.add(key.replace(' ', ''))
+    variants.add(u_map.replace(' ', ''))
+    variants.add(a_map.replace(' ', ''))
+    return variants
+
 
 def fetch_url(url):
     try:
         req = urllib.request.Request(url, headers=HEADERS)
-        with urllib.request.urlopen(req, timeout=8) as resp:
+        with urllib.request.urlopen(req, timeout=12) as resp:
             return url, resp.read().decode('utf-8', errors='ignore')
-    except Exception:
+    except Exception as e:
         return url, ""
 
-def expand_umlaut_keys(key):
-    keys = {key}
-    u_map = key.replace('ue', 'ü').replace('ae', 'ä').replace('oe', 'ö')
-    keys.add(u_map)
-    a_map = key.replace('ü', 'ue').replace('ä', 'ae').replace('ö', 'oe')
-    keys.add(a_map)
-    return keys
 
-def generate_deep_map(max_workers=32):
-    print("🚀 Starting Deterministic Category Crawl of Toppreise.ch...", flush=True)
+def resolve_root_from_url(url):
+    """Extract the canonical root group from a /produktsuche/ or /preisvergleich/ URL."""
+    match = re.search(r'/(?:produktsuche|preisvergleich)/([^/?]+)', url)
+    if not match:
+        return None
+    first_seg = match.group(1).split('-c')[0].lower()
+    return ROOT_SLUG_MAP.get(first_seg) or ROOT_SLUG_MAP.get(first_seg.replace('-', ' '))
+
+
+def extract_subcategories_from_html(html, page_root_group):
+    """Extract all subcategory slugs from a page's HTML, mapped to page_root_group."""
+    results = {}  # key -> root_group
+    detailed = {}  # key -> {root, title, path}
+
+    # 1. Extract from /produktsuche/ navigation links
+    ps_matches = re.findall(r'href=["\'](/produktsuche/[^"\'?#]+)', html)
+    for href in ps_matches:
+        parts = href.strip('/').split('/')
+        if len(parts) < 2 or parts[0] != 'produktsuche':
+            continue
+
+        segments = parts[1:]  # everything after 'produktsuche'
+        # Determine root from first segment
+        root_key = slug_to_key(segments[0])
+        root_group = ROOT_SLUG_MAP.get(root_key, page_root_group)
+
+        # Map every non-root segment as a subcategory
+        for seg in segments[1:]:
+            if not seg or seg.startswith('?'):
+                continue
+            key = slug_to_key(seg)
+            title = format_title(seg)
+            if not key or len(key) < 2:
+                continue
+            # Skip if it's just a numeric ID
+            if key.replace(' ', '').isdigit():
+                continue
+
+            for variant in expand_key_variants(key):
+                results[variant] = root_group
+            
+            detailed[key] = {
+                "root": root_group,
+                "title": title,
+                "path": [format_title(s) for s in segments]
+            }
+
+    # 2. Extract from /preisvergleich/ product links
+    pv_matches = re.findall(r'href=["\'](/preisvergleich/[^"\'?#]+)', html)
+    for href in pv_matches:
+        parts = href.strip('/').split('/')
+        if len(parts) < 3 or parts[0] != 'preisvergleich':
+            continue
+
+        # Last segment is the product slug (contains -pNNNN), skip it
+        segments = parts[1:-1]
+        if not segments:
+            continue
+
+        root_key = slug_to_key(segments[0])
+        known_root = ROOT_SLUG_MAP.get(root_key)
+
+        if known_root:
+            # First segment is a known root — map the rest as subcategories
+            root_group = known_root
+            subcat_segments = segments[1:]
+        else:
+            # First segment is NOT a known root — it's a subcategory itself
+            # Use the page's root context as the root group
+            root_group = page_root_group
+            subcat_segments = segments  # all segments are subcategories
+
+        for seg in subcat_segments:
+            if not seg:
+                continue
+            key = slug_to_key(seg)
+            title = format_title(seg)
+            if not key or len(key) < 2:
+                continue
+            if key.replace(' ', '').isdigit():
+                continue
+
+            for variant in expand_key_variants(key):
+                results[variant] = root_group
+
+            if key not in detailed:
+                detailed[key] = {
+                    "root": root_group,
+                    "title": title,
+                    "path": [format_title(s) for s in segments]
+                }
+
+    return results, detailed
+
+
+def discover_subcat_urls(html, current_url):
+    """Find subcategory page URLs and pagination URLs to crawl deeper."""
+    urls = set()
+    matches = re.findall(r'href=["\'](/produktsuche/[^"\'#]+)', html)
+    for href in matches:
+        clean = href.split('?')[0]
+        query = href.split('?')[1] if '?' in href else ''
+        # Follow subcategory links (have -cNNN)
+        if '-c' in clean.split('/')[-1]:
+            urls.add(f"https://www.toppreise.ch{clean}")
     
+    # Also follow pagination links (?p=N) on current page to get more product URLs
+    base_url = current_url.split('?')[0]
+    page_matches = re.findall(r'[?&]p=(\d+)', html)
+    for p in set(page_matches):
+        page_num = int(p)
+        if 0 < page_num <= 10:  # cap pagination crawl at 10 pages
+            urls.add(f"{base_url}?p={page_num}")
+    
+    return urls
+
+
+def generate_comprehensive_map(max_workers=24, max_depth=5):
+    print("🚀 Comprehensive Category Crawl of Toppreise.ch...", flush=True)
+    print(f"   Max depth: {max_depth}, Workers: {max_workers}", flush=True)
+
     lookup_map = {}
-    for k, v in SEED_LOOKUP.items():
-        for variant in expand_umlaut_keys(k):
-            lookup_map[variant] = v
-
     detailed_map = {}
-    
-    root_slug_to_name = {slug.split('-c')[0].lower(): name for slug, name in ROOT_CATEGORIES}
-    
     visited_urls = set()
-    to_visit = set(f"https://www.toppreise.ch/produktsuche/{slug}" for slug, name in ROOT_CATEGORIES)
     
-    depth_round = 0
-    while to_visit and depth_round < 4:
-        depth_round += 1
-        current_urls = sorted(list(to_visit - visited_urls))
-        if not current_urls:
+    # Seed with root category pages
+    to_visit = set()
+    for slug, name in ROOT_CATEGORIES:
+        to_visit.add(f"https://www.toppreise.ch/produktsuche/{slug}")
+
+    depth = 0
+    while to_visit and depth < max_depth:
+        depth += 1
+        current_batch = sorted(to_visit - visited_urls)
+        if not current_batch:
             break
-        
-        visited_urls.update(current_urls)
-        print(f"📡 Crawl Round {depth_round}: Processing {len(current_urls)} category pages...", flush=True)
-        
-        next_urls = set()
-        
+
+        visited_urls.update(current_batch)
+        print(f"📡 Depth {depth}: Crawling {len(current_batch)} pages...", flush=True)
+
+        next_batch = set()
+
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {executor.submit(fetch_url, url): url for url in current_urls}
+            futures = {executor.submit(fetch_url, url): url for url in current_batch}
             for future in as_completed(futures):
                 url, html = future.result()
                 if not html:
                     continue
-                
-                # Parse produktsuche links
-                ps_matches = re.findall(r'href=["\'](/produktsuche/[^"\']+)["\']', html)
-                for m in ps_matches:
-                    clean_path = m.split('?')[0]
-                    parts = clean_path.strip('/').split('/')
-                    if len(parts) >= 2 and parts[0] == 'produktsuche':
-                        if '-c' in parts[-1] and depth_round < 3:
-                            full_url = f"https://www.toppreise.ch{clean_path}"
-                            if full_url not in visited_urls:
-                                next_urls.add(full_url)
-                        
-                        segments = parts[1:]
-                        cur_root_slug = segments[0].split('-c')[0].lower()
-                        cur_root_title = root_slug_to_name.get(cur_root_slug, CANONICAL_GROUPS.get(cur_root_slug.replace('-', ' '), format_title(segments[0])))
-                        
-                        for seg in segments[1:]:
-                            leaf_title = format_title(seg)
-                            leaf_key = leaf_title.lower()
-                            slug_key = seg.split('-c')[0].lower().replace('-', ' ')
-                            raw_slug = seg.split('-c')[0].lower()
-                            
-                            for k in (leaf_key, slug_key, raw_slug):
-                                for variant in expand_umlaut_keys(k):
-                                    if variant not in SEED_LOOKUP:
-                                        lookup_map[variant] = cur_root_title
-                            
-                            detailed_map[slug_key] = {
-                                "root": cur_root_title,
-                                "title": leaf_title,
-                                "path": [format_title(s) for s in segments]
-                            }
 
-                # Parse preisvergleich links for category paths
-                pv_matches = re.findall(r'href=["\'](/preisvergleich/[^"\']+)["\']', html)
-                for m in pv_matches:
-                    clean_path = m.split('?')[0]
-                    parts = clean_path.strip('/').split('/')
-                    if len(parts) >= 3 and parts[0] == 'preisvergleich':
-                        segments = parts[1:-1] # exclude product slug
-                        if segments:
-                            cur_root_slug = segments[0].split('-c')[0].lower()
-                            cur_root_title = root_slug_to_name.get(cur_root_slug, CANONICAL_GROUPS.get(cur_root_slug.replace('-', ' '), format_title(segments[0])))
-                            for seg in segments[1:]:
-                                leaf_title = format_title(seg)
-                                leaf_key = leaf_title.lower()
-                                slug_key = seg.replace('-', ' ').lower()
-                                raw_slug = seg.lower()
+                page_root = resolve_root_from_url(url)
+                if not page_root:
+                    continue
 
-                                for k in (leaf_key, slug_key, raw_slug):
-                                    for variant in expand_umlaut_keys(k):
-                                        if variant not in SEED_LOOKUP:
-                                            lookup_map[variant] = cur_root_title
+                # Extract subcategories from this page
+                page_lookup, page_detailed = extract_subcategories_from_html(html, page_root)
+                lookup_map.update(page_lookup)
+                detailed_map.update(page_detailed)
 
-    # Sort lookup map alphabetically for 100% deterministic git diff stability
-    sorted_lookup_map = dict(sorted(lookup_map.items()))
-    sorted_detailed_map = dict(sorted(detailed_map.items()))
+                # Discover deeper subcategory pages to crawl
+                sub_urls = discover_subcat_urls(html, url)
+                for sub_url in sub_urls:
+                    if sub_url not in visited_urls:
+                        next_batch.add(sub_url)
 
-    print(f"✅ Deterministic Crawl Complete! Visited {len(visited_urls)} pages and generated {len(sorted_lookup_map)} sorted mappings.", flush=True)
-    return sorted_lookup_map, sorted_detailed_map
+        to_visit = next_batch
+
+    # Also add root slugs themselves as mappings
+    for slug, name in ROOT_CATEGORIES:
+        key = slug_to_key(slug)
+        for variant in expand_key_variants(key):
+            lookup_map[variant] = name
+
+    # Sort for deterministic output
+    sorted_lookup = dict(sorted(lookup_map.items()))
+    sorted_detailed = dict(sorted(detailed_map.items()))
+
+    print(f"✅ Crawl Complete!", flush=True)
+    print(f"   Pages visited: {len(visited_urls)}", flush=True)
+    print(f"   Lookup entries: {len(sorted_lookup)}", flush=True)
+    print(f"   Detailed subcategories: {len(sorted_detailed)}", flush=True)
+
+    return sorted_lookup, sorted_detailed
+
 
 def main():
     tools_dir = os.path.dirname(os.path.abspath(__file__))
     json_out_path = os.path.join(tools_dir, "category_map.json")
     js_out_path = os.path.join(tools_dir, "category_lookup_generated.js")
     user_js_path = os.path.abspath(os.path.join(tools_dir, "..", "toppreise.user.js"))
-    
-    lookup_map, detailed_map = generate_deep_map()
-    
+
+    lookup_map, detailed_map = generate_comprehensive_map()
+
+    # Save detailed JSON
     with open(json_out_path, "w", encoding="utf-8") as f:
         json.dump(detailed_map, f, ensure_ascii=False, indent=2)
-    print(f"💾 Saved category JSON map to: {json_out_path}", flush=True)
-    
+    print(f"💾 Saved detailed category map: {json_out_path}", flush=True)
+
+    # Save JS lookup
     with open(js_out_path, "w", encoding="utf-8") as f:
         f.write("// Auto-generated Toppreise Category Lookup Table\n")
         f.write("const GENERATED_CATEGORY_LOOKUP = ")
         json.dump(lookup_map, f, ensure_ascii=False, indent=2)
         f.write(";\n")
-    print(f"💾 Saved JS lookup code to: {js_out_path}", flush=True)
-    
-    # Auto-inject into toppreise.user.js if present
+    print(f"💾 Saved JS lookup: {js_out_path}", flush=True)
+
+    # Print per-group summary
+    group_counts = {}
+    for k, v in detailed_map.items():
+        root = v["root"]
+        group_counts[root] = group_counts.get(root, 0) + 1
+    print("\n📊 Subcategories per group:")
+    for group in sorted(group_counts, key=group_counts.get, reverse=True):
+        print(f"   {group}: {group_counts[group]}")
+
+    # Auto-inject into toppreise.user.js
     if os.path.exists(user_js_path):
-        print(f"💉 Injecting updated CATEGORY_LOOKUP into {user_js_path}...", flush=True)
+        print(f"\n💉 Injecting into {user_js_path}...", flush=True)
         with open(user_js_path, "r", encoding="utf-8") as f:
             content = f.read()
-            
+
         json_str = json.dumps(lookup_map, ensure_ascii=False, indent=4)
         replacement = f"const CATEGORY_LOOKUP = {json_str};"
-        
-        updated_content = re.sub(
+
+        updated = re.sub(
             r'const CATEGORY_LOOKUP = \{[\s\S]*?\};',
             replacement,
             content,
             count=1
         )
-        
+
         with open(user_js_path, "w", encoding="utf-8") as f:
-            f.write(updated_content)
-        print("🎉 Successfully injected CATEGORY_LOOKUP into toppreise.user.js!", flush=True)
+            f.write(updated)
+        print("🎉 Injected CATEGORY_LOOKUP into toppreise.user.js!", flush=True)
+    else:
+        print(f"⚠️  {user_js_path} not found, skipping injection", flush=True)
+
 
 if __name__ == "__main__":
     main()
