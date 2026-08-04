@@ -230,3 +230,14 @@ If installation or browser startup fails, report the exact blocked command. An i
 - ScriptCat background/cron: inspect the manager's run log.
 - Raw GitHub CDN caches for ~5 minutes. To force a fresh version: bump `@version`, append a query parameter (`?v=1.0.1`), force-reload the raw URL, or remove the old manager entry before reinstalling.
 - When consolidating: verify the replacement before deleting legacy files, and tell users how to disable already-installed legacy copies.
+
+## Standard README Structure
+
+All userscript package `README.md` files must follow the unified repository layout (modeled on `toppreise/README.md` and template `example_readme.md`):
+
+1. **Title & Tagline**: `# <Script Title>: <Subtitle / Tagline>` followed by a concise 1-2 sentence description.
+2. **🚀 Installation**: Direct Violentmonkey links and prominent `CLICK HERE TO INSTALL USERSCRIPT` raw link with version tag.
+3. **⚡ Features**: Numbered list detailing core capabilities.
+4. **🚀 Instant Auto-Installer Tool & Auto-Updates**: Instructions for direct installation and `@updateURL` background auto-updates.
+5. **⚙️ Configuration & Persistence**: Guide on setting values via settings panels or `GM_registerMenuCommand` menu items, ending with a standard `[!NOTE]` callout regarding `GM_setValue` persistence.
+

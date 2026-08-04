@@ -117,3 +117,5 @@ Completion criterion: syntax checks pass, tests pass or have an explicit blocker
 - Metadata, DOM heuristics, storage, observers, Playwright patterns: [REFERENCE.md](references/REFERENCE.md)
 - Reference foreground script: [example.user.js](references/example.user.js)
 - Research-log template: [example_research_log.md](references/example_research_log.md)
+- Standard README template: [example_readme.md](references/example_readme.md)
+
