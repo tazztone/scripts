@@ -23,7 +23,6 @@ Every userscript resides in its own subdirectory and adheres to the standard wor
 
 | Directory | Description |
 | :--- | :--- |
-| [**`fastlog-watcher`**](./fastlog-watcher) | Watches Fastlog Gebraucht & Geprüft category for new products and sends notifications via Telegram, Discord, or Browser. |
 | [**`perplexity`**](./perplexity) | Keeps a preferred Perplexity model active, automates action-card approvals, and enables the GitHub connector. |
 | [**`topp-alarm`**](./topp-alarm) | Streamlines setting price alarms on Toppreise.ch directly from item views. |
 | [**`userscript-development`**](./userscript-development) | Specialized workflow guidelines, architectural standards, and reference templates used to generate and maintain these scripts. |
