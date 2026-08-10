@@ -1,6 +1,6 @@
 # Hugging Face Heart SVG & Date Filter - Research Log
 
-This document details the DOM structure, selection strategies, API endpoints, and client-side date range filtering mechanisms used on the Hugging Face models page (`https://huggingface.co/models`).
+This document details the DOM structure, selection strategies, API endpoints, and client-side date range filtering mechanisms used on Hugging Face model listing pages (`https://huggingface.co/models` and user/org pages like `https://huggingface.co/*/models`).
 
 ---
 

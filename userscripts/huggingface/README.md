@@ -1,6 +1,6 @@
 # Hugging Face Yellow Hearts & Model Date Range Filter
 
-A feature-rich userscript for Hugging Face (`https://huggingface.co/models`) that adds client-side **Date Range Slider filtering**, highlights unliked models with a glowing green border and yellow outline heart, shows native red hearts for liked models, and enables direct inline model liking from list cards.
+A feature-rich userscript for Hugging Face (`https://huggingface.co/models` and user/organization model lists like `https://huggingface.co/lightx2v/models`) that adds client-side **Date Range Slider filtering**, highlights unliked models with a glowing green border and yellow outline heart, shows native red hearts for liked models, and enables direct inline model liking from list cards.
 
 ![Hugging Face Unliked Model Highlighter & Inline Liking](Screenshot.webp)
 

@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         Hugging Face Yellow Hearts & Unliked Model Highlighter
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.3.1
+// @version      1.4.1
 // @description  Make heart icons larger/yellow, highlight unliked models with a green border, like models directly from list cards, and filter models by date range slider.
 // @author       tazztone
-// @match        https://huggingface.co/models*
+// @match        https://huggingface.co/*
 // @run-at       document-start
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -520,31 +520,43 @@ const MODAL_STYLES = `
   async function initUserLikes() {
     try {
       let username = null;
-      const propsElements = document.querySelectorAll('[data-props]');
-      for (const el of propsElements) {
-        try {
-          const parsed = JSON.parse(el.getAttribute('data-props'));
-          if (parsed && (parsed.user || parsed.authLight?.u?.username)) {
-            username = parsed.user || parsed.authLight?.u?.username;
-            break;
-          }
-        } catch (e) {}
+
+      // 1. Fetch /api/whoami for the most authoritative logged-in user session
+      try {
+        const res = await fetch('/api/whoami');
+        if (res.ok) {
+          const data = await res.json();
+          username = data.name || data.username;
+        }
+      } catch (e) {}
+
+      // 2. Check authLight or explicit logged-in user props in DOM
+      if (!username) {
+        const propsElements = document.querySelectorAll('[data-props]');
+        for (const el of propsElements) {
+          try {
+            const parsed = JSON.parse(el.getAttribute('data-props'));
+            if (parsed) {
+              if (parsed.authLight?.u?.username) {
+                username = parsed.authLight.u.username;
+                break;
+              }
+              if (parsed.currentUser?.username || parsed.currentUser?.name) {
+                username = parsed.currentUser.username || parsed.currentUser.name;
+                break;
+              }
+            }
+          } catch (e) {}
+        }
       }
 
+      // 3. Check settings link (only present for logged-in user in header menu)
       if (!username) {
         const settingsLink = document.querySelector('a[href^="/settings/"]');
         if (settingsLink) {
           const href = settingsLink.getAttribute('href');
           const parts = href.split('/').filter(Boolean);
           if (parts.length >= 2) username = parts[1];
-        }
-      }
-
-      if (!username) {
-        const res = await fetch('/api/whoami');
-        if (res.ok) {
-          const data = await res.json();
-          username = data.name || data.username;
         }
       }
 
@@ -581,7 +593,7 @@ const MODAL_STYLES = `
   }
 
   const RESERVED_PREFIXES = new Set([
-    'models', 'datasets', 'spaces', 'docs', 'posts', 'papers', 'settings', 'login', 'logout', 'join', 'pricing', 'notifications', 'search'
+    'models', 'datasets', 'spaces', 'docs', 'posts', 'papers', 'settings', 'login', 'logout', 'join', 'pricing', 'notifications', 'search', 'tasks', 'tags', 'organizations', 'collections', 'chat', 'blog', 'brands', 'discussions'
   ]);
 
   function getModelIdFromCard(card) {
@@ -604,7 +616,15 @@ const MODAL_STYLES = `
       const path = svg.querySelector('path');
       if (!path) continue;
       const d = path.getAttribute('d') || '';
-      if (d.includes('22.5') || d.includes('22.45') || (d.startsWith('M22.') && d.includes('29')) || (d.includes('M16') && d.includes('29'))) {
+      if (
+        d.includes('22.5') ||
+        d.includes('22.45') ||
+        (d.startsWith('M22.') && d.includes('29')) ||
+        (d.includes('M16') && d.includes('29')) ||
+        d.includes('M12 21.35') ||
+        d.includes('M20.84 4.61') ||
+        svg.closest('[title*="like" i], [aria-label*="like" i], .hf-inline-like-btn')
+      ) {
         return svg;
       }
     }
@@ -829,7 +849,7 @@ const MODAL_STYLES = `
     const headers = Array.from(document.querySelectorAll('h3, h4, div, span'));
     for (const h of headers) {
       const text = h.textContent.trim();
-      if (text === 'Parameters' || text === 'Tasks' || text === 'Libraries') {
+      if (text === 'Parameters' || text === 'Tasks' || text === 'Libraries' || text === 'Filter by name' || text === 'Sort') {
         const form = h.closest('form');
         if (form) return form;
         const aside = h.closest('aside');
@@ -838,7 +858,13 @@ const MODAL_STYLES = `
         if (parentDiv && parentDiv.children.length > 1) return parentDiv;
       }
     }
-    return document.querySelector('form') || document.querySelector('aside') || document.querySelector('.grid > div');
+    const searchForm = document.querySelector('form[action*="/models"]') || document.querySelector('form');
+    if (searchForm) {
+      const aside = searchForm.closest('aside');
+      if (aside) return aside;
+      return searchForm.parentElement || searchForm;
+    }
+    return document.querySelector('aside') || document.querySelector('main section') || document.querySelector('.grid > div');
   }
 
   function setupSidebarWidget() {
