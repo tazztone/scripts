@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Hugging Face Yellow Hearts & Unliked Model Highlighter
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.4.3
+// @version      1.4.4
 // @description  Make heart icons larger/yellow, highlight unliked models with a green border, like models directly from list cards, and filter models by date range slider.
 // @author       tazztone
 // @match        https://huggingface.co/*
@@ -354,18 +354,26 @@ const MODAL_STYLES = `
 (() => {
   'use strict';
 
-  const getValue = (key, fallback) => {
-    try {
-      if (typeof GM_getValue !== 'undefined') return GM_getValue(key, fallback);
-    } catch (e) {}
-    try {
-      const value = localStorage.getItem(`hf_heart_${key}`);
-      return value === null ? fallback : JSON.parse(value);
-    } catch (e) {}
-    return fallback;
+  const loadConfig = () => {
+    const config = { ...DEFAULTS };
+    for (const key of Object.keys(DEFAULTS)) {
+      try {
+        let stored = null;
+        if (typeof GM_getValue !== 'undefined') {
+          stored = GM_getValue(key, null);
+        }
+        if (stored === null) {
+          const local = localStorage.getItem(`hf_heart_${key}`);
+          if (local !== null) stored = JSON.parse(local);
+        }
+        if (stored !== null) config[key] = stored;
+      } catch (e) {}
+    }
+    return config;
   };
 
-  const setValue = (key, value) => {
+  const saveConfig = (key, value) => {
+    CONFIG[key] = value;
     try {
       if (typeof GM_setValue !== 'undefined') {
         GM_setValue(key, value);
@@ -377,32 +385,13 @@ const MODAL_STYLES = `
     } catch (e) {}
   };
 
-  const CONFIG = {
-    get ENABLED() { return getValue('ENABLED', DEFAULTS.ENABLED); },
-    set ENABLED(value) { setValue('ENABLED', value); },
-    get COLOR_IDLE() { return getValue('COLOR_IDLE', DEFAULTS.COLOR_IDLE); },
-    set COLOR_IDLE(value) { setValue('COLOR_IDLE', value); },
-    get COLOR_HOVER() { return getValue('COLOR_HOVER', DEFAULTS.COLOR_HOVER); },
-    set COLOR_HOVER(value) { setValue('COLOR_HOVER', value); },
-    get SCALE_IDLE() { return parseFloat(getValue('SCALE_IDLE', DEFAULTS.SCALE_IDLE)); },
-    set SCALE_IDLE(value) { setValue('SCALE_IDLE', parseFloat(value)); },
-    get SCALE_HOVER() { return parseFloat(getValue('SCALE_HOVER', DEFAULTS.SCALE_HOVER)); },
-    set SCALE_HOVER(value) { setValue('SCALE_HOVER', parseFloat(value)); },
-    get BORDER_UNLIKED_ENABLED() { return getValue('BORDER_UNLIKED_ENABLED', DEFAULTS.BORDER_UNLIKED_ENABLED); },
-    set BORDER_UNLIKED_ENABLED(value) { setValue('BORDER_UNLIKED_ENABLED', value); },
-    get BORDER_UNLIKED_COLOR() { return getValue('BORDER_UNLIKED_COLOR', DEFAULTS.BORDER_UNLIKED_COLOR); },
-    set BORDER_UNLIKED_COLOR(value) { setValue('BORDER_UNLIKED_COLOR', value); },
-    get BORDER_UNLIKED_GLOW() { return getValue('BORDER_UNLIKED_GLOW', DEFAULTS.BORDER_UNLIKED_GLOW); },
-    set BORDER_UNLIKED_GLOW(value) { setValue('BORDER_UNLIKED_GLOW', value); },
-    get DATE_FILTER_ENABLED() { return getValue('DATE_FILTER_ENABLED', DEFAULTS.DATE_FILTER_ENABLED); },
-    set DATE_FILTER_ENABLED(value) { setValue('DATE_FILTER_ENABLED', value); },
-    get DATE_MIN_DAYS() { return parseInt(getValue('DATE_MIN_DAYS', DEFAULTS.DATE_MIN_DAYS), 10); },
-    set DATE_MIN_DAYS(value) { setValue('DATE_MIN_DAYS', Math.max(0, parseInt(value, 10) || 0)); },
-    get DATE_MAX_DAYS() { return parseInt(getValue('DATE_MAX_DAYS', DEFAULTS.DATE_MAX_DAYS), 10); },
-    set DATE_MAX_DAYS(value) { setValue('DATE_MAX_DAYS', Math.max(0, parseInt(value, 10) || 0)); },
-    get DATE_PRESET() { return getValue('DATE_PRESET', DEFAULTS.DATE_PRESET); },
-    set DATE_PRESET(value) { setValue('DATE_PRESET', value); }
+  const saveAllConfig = () => {
+    for (const [key, val] of Object.entries(CONFIG)) {
+      saveConfig(key, val);
+    }
   };
+
+  const CONFIG = loadConfig();
 
   let currentUser = null;
   const likedModelIds = new Set();
@@ -475,32 +464,11 @@ const MODAL_STYLES = `
     const timeEl = card.querySelector('time');
     if (!timeEl) return null;
 
-    const dtAttr = timeEl.getAttribute('datetime');
+    const dtAttr = timeEl.getAttribute('datetime') || timeEl.getAttribute('title');
     if (dtAttr) {
       const parsed = Date.parse(dtAttr);
       if (!isNaN(parsed)) return parsed;
     }
-
-    const titleAttr = timeEl.getAttribute('title');
-    if (titleAttr) {
-      const parsed = Date.parse(titleAttr);
-      if (!isNaN(parsed)) return parsed;
-    }
-
-    const text = timeEl.textContent.trim().toLowerCase();
-    const now = Date.now();
-
-    const hourMatch = text.match(/^(\d+)\s*hours?\s*ago/);
-    if (hourMatch) return now - parseInt(hourMatch[1], 10) * 3600 * 1000;
-
-    const dayMatch = text.match(/^(\d+)\s*days?\s*ago/);
-    if (dayMatch) return now - parseInt(dayMatch[1], 10) * 86400 * 1000;
-
-    const monthMatch = text.match(/^(\d+)\s*months?\s*ago/);
-    if (monthMatch) return now - parseInt(monthMatch[1], 10) * 30 * 86400 * 1000;
-
-    const yearMatch = text.match(/^(\d+)\s*years?\s*ago/);
-    if (yearMatch) return now - parseInt(yearMatch[1], 10) * 365 * 86400 * 1000;
 
     return null;
   }
@@ -521,53 +489,14 @@ const MODAL_STYLES = `
   // ─── USER LIKES & CARDS ──────────────────────────────────────────────────────
   async function initUserLikes() {
     try {
-      let username = null;
-
-      // 1. Fetch /api/whoami for the most authoritative logged-in user session
-      try {
-        const res = await fetch('/api/whoami');
-        if (res.ok) {
-          const data = await res.json();
-          username = data.name || data.username;
-        }
-      } catch (e) {}
-
-      // 2. Check authLight or explicit logged-in user props in DOM
-      if (!username) {
-        const propsElements = document.querySelectorAll('[data-props]');
-        for (const el of propsElements) {
-          try {
-            const parsed = JSON.parse(el.getAttribute('data-props'));
-            if (parsed) {
-              if (parsed.authLight?.u?.username) {
-                username = parsed.authLight.u.username;
-                break;
-              }
-              if (parsed.currentUser?.username || parsed.currentUser?.name) {
-                username = parsed.currentUser.username || parsed.currentUser.name;
-                break;
-              }
-            }
-          } catch (e) {}
-        }
-      }
-
-      // 3. Check settings link (only present for logged-in user in header menu)
-      if (!username) {
-        const settingsLink = document.querySelector('a[href^="/settings/"]');
-        if (settingsLink) {
-          const href = settingsLink.getAttribute('href');
-          const parts = href.split('/').filter(Boolean);
-          if (parts.length >= 2) username = parts[1];
-        }
-      }
-
-      if (username) {
-        currentUser = username;
-        await refreshLikesList();
+      const res = await fetch('/api/whoami');
+      if (res.ok) {
+        const data = await res.json();
+        currentUser = data.name || data.username || null;
+        if (currentUser) await refreshLikesList();
       }
     } catch (e) {
-      console.warn('[HF Hearts] Could not detect user session:', e);
+      console.warn('[HF Hearts] Could not detect user session via /api/whoami:', e);
     }
   }
 
@@ -587,7 +516,7 @@ const MODAL_STYLES = `
               repo = item.repo?.name || item.repo?.id || (typeof item.repo === 'string' ? item.repo : null) || item.repoName || item.name || item.id || item._id;
             }
             if (repo && typeof repo === 'string') {
-              likedModelIds.add(repo);
+              likedModelIds.add(repo.toLowerCase());
             }
           });
         }
@@ -619,39 +548,17 @@ const MODAL_STYLES = `
   }
 
   function findHeartSvg(container) {
-    const svgs = container.querySelectorAll('svg');
-    for (const svg of svgs) {
-      const path = svg.querySelector('path');
-      if (!path) continue;
-      const d = path.getAttribute('d') || '';
-      if (
-        d.includes('22.5') ||
-        d.includes('22.45') ||
-        (d.startsWith('M22.') && d.includes('29')) ||
-        (d.includes('M16') && d.includes('29')) ||
-        d.includes('M12 21.35') ||
-        d.includes('M20.84 4.61') ||
-        svg.closest('[title*="like" i], [aria-label*="like" i], .hf-inline-like-btn')
-      ) {
-        return svg;
-      }
-    }
-    return null;
+    return container.querySelector('button[aria-label*="like" i] svg, [title*="like" i] svg, svg.text-red-500, svg.text-gray-400, svg.hf-heart-icon') ||
+           container.querySelector('svg');
   }
 
   function isModelLiked(card, modelId) {
     if (!modelId) return false;
     const lower = modelId.toLowerCase();
 
-    // 1. Check likedModelIds set (case-insensitive)
-    for (const id of likedModelIds) {
-      if (id.toLowerCase() === lower) return true;
-    }
-
-    // 2. Check if already recorded as native liked
+    if (likedModelIds.has(lower)) return true;
     if (card.dataset.hfNativeLiked === 'true') return true;
 
-    // 3. Inspect native HF heart SVG before applying custom styles
     const heartSvg = findHeartSvg(card);
     if (heartSvg && !heartSvg.dataset.hfProcessed) {
       const classListStr = (heartSvg.className?.baseVal || heartSvg.className || '').toString();
@@ -669,7 +576,7 @@ const MODAL_STYLES = `
 
       if (isRed) {
         card.dataset.hfNativeLiked = 'true';
-        likedModelIds.add(modelId);
+        likedModelIds.add(lower);
         return true;
       }
     }
@@ -810,7 +717,8 @@ const MODAL_STYLES = `
       e.stopPropagation();
       if (e.stopImmediatePropagation) e.stopImmediatePropagation();
 
-      const isCurrentlyLiked = likedModelIds.has(modelId);
+      const lowerId = modelId.toLowerCase();
+      const isCurrentlyLiked = likedModelIds.has(lowerId);
       const nextLikedState = !isCurrentlyLiked;
       const endpoint = `/api/models/${modelId}/like`;
       const method = nextLikedState ? 'POST' : 'DELETE';
@@ -818,15 +726,11 @@ const MODAL_STYLES = `
       console.log(`[HF Yellow Hearts] Toggling like for ${modelId}: ${isCurrentlyLiked} -> ${nextLikedState}`);
 
       if (nextLikedState) {
-        likedModelIds.add(modelId);
+        likedModelIds.add(lowerId);
         card.dataset.hfNativeLiked = 'true';
       } else {
         delete card.dataset.hfNativeLiked;
-        for (const id of Array.from(likedModelIds)) {
-          if (id.toLowerCase() === modelId.toLowerCase()) {
-            likedModelIds.delete(id);
-          }
-        }
+        likedModelIds.delete(lowerId);
       }
 
       updateCardVisual(card, modelId);
@@ -863,10 +767,11 @@ const MODAL_STYLES = `
   }
 
   function revertLikeState(card, modelId, wasLiked, container) {
+    const lower = modelId.toLowerCase();
     if (wasLiked) {
-      likedModelIds.add(modelId);
+      likedModelIds.add(lower);
     } else {
-      likedModelIds.delete(modelId);
+      likedModelIds.delete(lower);
     }
     updateCardVisual(card, modelId);
     updateLikeCountText(container, wasLiked);
@@ -1025,31 +930,31 @@ const MODAL_STYLES = `
     const presetsContainer = document.getElementById('hf-df-presets-container');
 
     toggle?.addEventListener('change', (e) => {
-      CONFIG.DATE_FILTER_ENABLED = e.target.checked;
+      saveConfig('DATE_FILTER_ENABLED', e.target.checked);
       syncWidgetUI();
       processModelCards();
     });
 
     sliderMax?.addEventListener('input', (e) => {
       const val = parseInt(e.target.value, 10);
-      CONFIG.DATE_MAX_DAYS = val;
-      CONFIG.DATE_PRESET = 'custom';
+      saveConfig('DATE_MAX_DAYS', val);
+      saveConfig('DATE_PRESET', 'custom');
       syncWidgetUI();
       processModelCards();
     });
 
     minInput?.addEventListener('change', (e) => {
       const val = Math.max(0, parseInt(e.target.value, 10) || 0);
-      CONFIG.DATE_MIN_DAYS = val;
-      CONFIG.DATE_PRESET = 'custom';
+      saveConfig('DATE_MIN_DAYS', val);
+      saveConfig('DATE_PRESET', 'custom');
       syncWidgetUI();
       processModelCards();
     });
 
     maxInput?.addEventListener('change', (e) => {
       const val = Math.max(CONFIG.DATE_MIN_DAYS, parseInt(e.target.value, 10) || 0);
-      CONFIG.DATE_MAX_DAYS = val;
-      CONFIG.DATE_PRESET = 'custom';
+      saveConfig('DATE_MAX_DAYS', val);
+      saveConfig('DATE_PRESET', 'custom');
       syncWidgetUI();
       processModelCards();
     });
@@ -1062,14 +967,10 @@ const MODAL_STYLES = `
       const preset = PRESETS.find(p => p.id === presetId);
       if (!preset) return;
 
-      CONFIG.DATE_PRESET = presetId;
-      CONFIG.DATE_MIN_DAYS = preset.min;
-      CONFIG.DATE_MAX_DAYS = preset.max;
-      if (presetId !== 'all') {
-        CONFIG.DATE_FILTER_ENABLED = true;
-      } else {
-        CONFIG.DATE_FILTER_ENABLED = false;
-      }
+      saveConfig('DATE_PRESET', presetId);
+      saveConfig('DATE_MIN_DAYS', preset.min);
+      saveConfig('DATE_MAX_DAYS', preset.max);
+      saveConfig('DATE_FILTER_ENABLED', presetId !== 'all');
 
       syncWidgetUI();
       processModelCards();
@@ -1146,35 +1047,8 @@ const MODAL_STYLES = `
         <div id="hf-settings-modal" role="dialog" aria-modal="true" aria-labelledby="hf-settings-title">
           <h3 id="hf-settings-title">Hugging Face Enhancements</h3>
 
-          <!-- DATE FILTER SECTION -->
-          <div style="font-size: 14px; font-weight: 700; color: #fbbf24; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px;">
-            Date Range Filter
-          </div>
-          <div class="hf-settings-group hf-switch-container">
-            <label for="hf-df-modal-enabled">Enable Date Filter</label>
-            <label class="hf-switch">
-              <input id="hf-df-modal-enabled" type="checkbox">
-              <span class="hf-slider"></span>
-            </label>
-          </div>
-          <div class="hf-settings-group">
-            <label for="hf-df-modal-preset">Quick Preset</label>
-            <select id="hf-df-modal-preset">
-              ${PRESETS.map(p => `<option value="${p.id}">${p.label}</option>`).join('')}
-              <option value="custom">Custom</option>
-            </select>
-          </div>
-          <div class="hf-settings-group">
-            <label for="hf-df-modal-min-days">Min Days Ago</label>
-            <input id="hf-df-modal-min-days" type="number" min="0" max="3650">
-          </div>
-          <div class="hf-settings-group">
-            <label for="hf-df-modal-max-days">Max Days Ago</label>
-            <input id="hf-df-modal-max-days" type="number" min="0" max="3650">
-          </div>
-
           <!-- HEART STYLING SECTION -->
-          <div style="font-size: 14px; font-weight: 700; color: #fbbf24; margin: 20px 0 12px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px;">
+          <div style="font-size: 14px; font-weight: 700; color: #fbbf24; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px;">
             Heart Styling & Highlighting
           </div>
           <div class="hf-settings-group hf-switch-container">
@@ -1229,8 +1103,6 @@ const MODAL_STYLES = `
     document.body.appendChild(container);
 
     const fab = document.getElementById('hf-settings-fab');
-    fab.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>';
-
     const backdrop = document.getElementById('hf-settings-modal-backdrop');
     const enabled = document.getElementById('hf-enabled');
     const colorIdle = document.getElementById('hf-color-idle');
@@ -1241,11 +1113,6 @@ const MODAL_STYLES = `
     const borderUnlikedColor = document.getElementById('hf-border-unliked-color');
     const borderUnlikedGlow = document.getElementById('hf-border-unliked-glow');
 
-    const dfModalEnabled = document.getElementById('hf-df-modal-enabled');
-    const dfModalPreset = document.getElementById('hf-df-modal-preset');
-    const dfModalMinDays = document.getElementById('hf-df-modal-min-days');
-    const dfModalMaxDays = document.getElementById('hf-df-modal-max-days');
-
     const syncFields = () => {
       enabled.checked = CONFIG.ENABLED;
       colorIdle.value = CONFIG.COLOR_IDLE;
@@ -1255,20 +1122,7 @@ const MODAL_STYLES = `
       borderUnlikedEnabled.checked = CONFIG.BORDER_UNLIKED_ENABLED;
       borderUnlikedColor.value = CONFIG.BORDER_UNLIKED_COLOR;
       borderUnlikedGlow.checked = CONFIG.BORDER_UNLIKED_GLOW;
-
-      dfModalEnabled.checked = CONFIG.DATE_FILTER_ENABLED;
-      dfModalPreset.value = CONFIG.DATE_PRESET;
-      dfModalMinDays.value = CONFIG.DATE_MIN_DAYS;
-      dfModalMaxDays.value = CONFIG.DATE_MAX_DAYS;
     };
-
-    dfModalPreset.addEventListener('change', (e) => {
-      const p = PRESETS.find(pr => pr.id === e.target.value);
-      if (p) {
-        dfModalMinDays.value = p.min;
-        dfModalMaxDays.value = p.max;
-      }
-    });
 
     const close = () => backdrop.classList.remove('open');
     fab.addEventListener('click', () => {
@@ -1289,10 +1143,7 @@ const MODAL_STYLES = `
       CONFIG.BORDER_UNLIKED_COLOR = borderUnlikedColor.value;
       CONFIG.BORDER_UNLIKED_GLOW = borderUnlikedGlow.checked;
 
-      CONFIG.DATE_FILTER_ENABLED = dfModalEnabled.checked;
-      CONFIG.DATE_PRESET = dfModalPreset.value;
-      CONFIG.DATE_MIN_DAYS = Math.max(0, parseInt(dfModalMinDays.value, 10) || 0);
-      CONFIG.DATE_MAX_DAYS = Math.max(CONFIG.DATE_MIN_DAYS, parseInt(dfModalMaxDays.value, 10) || 0);
+      saveAllConfig();
 
       injectStyles();
       syncWidgetUI();

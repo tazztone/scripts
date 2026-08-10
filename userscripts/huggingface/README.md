@@ -42,7 +42,7 @@ Violentmonkey will detect the `.user.js` file and show an install dialog automat
 
 ## Configuration
 
-You can customize date filtering, scaling, colors, and behaviors using the floating gear icon in the bottom right corner or the left sidebar widget, or by editing the `CONFIG` object at the top of the script:
+You can customize date filtering directly via the left sidebar widget, and configure heart styling, colors, scaling, and highlight borders using the floating gear icon in the bottom right corner (FAB):
 
 | Key | Default Value | Description |
 | :--- | :--- | :--- |
