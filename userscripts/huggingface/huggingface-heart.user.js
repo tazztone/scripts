@@ -1,10 +1,12 @@
 // ==UserScript==
 // @name         Hugging Face Unliked Model Highlighter & Date Filter
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.7.1
+// @version      1.7.2
 // @description  Highlight unliked models with a green border and filter models by date range slider.
 // @author       tazztone
 // @match        https://huggingface.co/*
+// @updateURL    https://raw.githubusercontent.com/tazztone/scripts/main/userscripts/huggingface/huggingface-heart.user.js
+// @downloadURL  https://raw.githubusercontent.com/tazztone/scripts/main/userscripts/huggingface/huggingface-heart.user.js
 // @run-at       document-start
 // @grant        GM_getValue
 // @grant        GM_setValue
