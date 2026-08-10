@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Hugging Face Unliked Model Highlighter & Date Filter
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.5.2
+// @version      1.6.1
 // @description  Highlight unliked models with a green border and filter models by date range slider.
 // @author       tazztone
 // @match        https://huggingface.co/*
@@ -380,10 +380,6 @@ const MODAL_STYLES = `
 
   const CONFIG = loadConfig();
 
-  let currentUser = null;
-  const likedModelIds = new Set();
-  let isFetchingLikes = false;
-
   const buildStyle = () => `
     article.overview-card-wrapper.hf-is-unliked {
       border: 2px solid ${CONFIG.BORDER_UNLIKED_COLOR} !important;
@@ -440,104 +436,44 @@ const MODAL_STYLES = `
     return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
-  // ─── USER LIKES & CARDS ──────────────────────────────────────────────────────
-  async function initUserLikes() {
-    try {
-      const res = await fetch('/api/whoami');
-      if (res.ok) {
-        const data = await res.json();
-        currentUser = data.name || data.username || null;
-        if (currentUser) await refreshLikesList();
-      }
-    } catch (e) {
-      console.warn('[HF Highlighter] Could not detect user session via /api/whoami:', e);
-    }
-  }
+  // ─── DOM CARD LIKED STATE INSPECTION ──────────────────────────────────────────
+  function isModelLiked(card) {
+    if (card.dataset.hfNativeLiked === 'true') return true;
 
-  async function refreshLikesList() {
-    if (!currentUser || isFetchingLikes) return;
-    isFetchingLikes = true;
-    try {
-      const res = await fetch(`/api/users/${encodeURIComponent(currentUser)}/likes`);
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          data.forEach(item => {
-            let repo = null;
-            if (typeof item === 'string') {
-              repo = item;
-            } else if (item && typeof item === 'object') {
-              repo = item.repo?.name || item.repo?.id || (typeof item.repo === 'string' ? item.repo : null) || item.repoName || item.name || item.id || item._id;
-            }
-            if (repo && typeof repo === 'string') {
-              const cleanRepo = repo.replace(/^(models|datasets|spaces)\//, '').toLowerCase();
-              likedModelIds.add(cleanRepo);
-            }
-          });
-        }
-        processModelCards();
-      }
-    } catch (e) {
-      console.warn('[HF Highlighter] Error fetching likes:', e);
-    } finally {
-      isFetchingLikes = false;
-    }
-  }
-
-  const RESERVED_PREFIXES = new Set([
-    'models', 'datasets', 'spaces', 'docs', 'posts', 'papers', 'settings', 'login', 'logout', 'join', 'pricing', 'notifications', 'search', 'tasks', 'tags', 'organizations', 'collections', 'chat', 'blog', 'brands', 'discussions'
-  ]);
-
-  function getModelIdFromCard(card) {
-    const anchors = card.querySelectorAll('a[href^="/"]');
-    for (const anchor of anchors) {
-      const href = anchor.getAttribute('href');
-      if (!href) continue;
-      const cleanPath = href.split('?')[0].split('#')[0].replace(/^\//, '');
-      const parts = cleanPath.split('/');
-      if (parts.length === 2 && parts[0] && parts[1] && !RESERVED_PREFIXES.has(parts[0])) {
-        return cleanPath;
-      }
-    }
-    return null;
-  }
-
-  function findHeartSvg(card) {
+    // 1. Find heart icon inside container or card
     const heartContainer = card.querySelector('[title*="like" i], [aria-label*="like" i], [class*="like" i]');
-    if (heartContainer) {
-      const svg = heartContainer.querySelector('svg') || (heartContainer.tagName?.toLowerCase() === 'svg' ? heartContainer : null);
-      if (svg) return svg;
-    }
+    let heartSvg = heartContainer ? (heartContainer.querySelector('svg') || (heartContainer.tagName?.toLowerCase() === 'svg' ? heartContainer : null)) : null;
 
-    const svgs = card.querySelectorAll('svg');
-    for (const svg of svgs) {
-      const classStr = (svg.className?.baseVal || svg.className || '').toString();
-      const parentClass = (svg.parentElement?.className || '').toString();
-      const path = svg.querySelector('path');
-      const d = path ? (path.getAttribute('d') || '') : '';
+    if (!heartSvg) {
+      const svgs = card.querySelectorAll('svg');
+      for (const svg of svgs) {
+        const classStr = (svg.className?.baseVal || svg.className || '').toString();
+        const parentClass = (svg.parentElement?.className || '').toString();
+        const path = svg.querySelector('path');
+        const d = path ? (path.getAttribute('d') || '') : '';
 
-      if (
-        classStr.includes('red') || parentClass.includes('red') ||
-        classStr.includes('rose') || parentClass.includes('rose') ||
-        classStr.includes('heart') || parentClass.includes('heart') ||
-        d.includes('22.5') || d.includes('22.4') || d.includes('M12 21') || d.includes('M20.8') || d.includes('M16') ||
-        svg.closest('[title*="like" i], [aria-label*="like" i]')
-      ) {
-        return svg;
+        if (
+          classStr.includes('red') || parentClass.includes('red') ||
+          classStr.includes('rose') || parentClass.includes('rose') ||
+          classStr.includes('heart') || parentClass.includes('heart') ||
+          d.includes('22.5') || d.includes('22.4') || d.includes('M12 21') || d.includes('M20.8') || d.includes('M16')
+        ) {
+          heartSvg = svg;
+          break;
+        }
       }
     }
-    return null;
-  }
 
-  function isHeartLiked(heartSvg) {
     if (!heartSvg) return false;
 
+    // 2. Inspect classes and SVG fill
     const classListStr = (heartSvg.className?.baseVal || heartSvg.className || '').toString();
     const parentClassStr = (heartSvg.parentElement?.className || '').toString();
     const grandParentClassStr = (heartSvg.parentElement?.parentElement?.className || '').toString();
     const combined = `${classListStr} ${parentClassStr} ${grandParentClassStr}`;
 
     if (/(text|fill)-(red|rose|pink)-\d+/i.test(combined) || /text-red/i.test(combined)) {
+      card.dataset.hfNativeLiked = 'true';
       return true;
     }
 
@@ -545,10 +481,12 @@ const MODAL_STYLES = `
     const colorStyle = heartSvg.style.color || '';
 
     if (fillAttr === '#ef4444' || fillAttr === '#e11d48' || fillAttr === '#f43f5e' || fillAttr === 'red') {
+      card.dataset.hfNativeLiked = 'true';
       return true;
     }
 
     if (colorStyle.includes('239, 68, 68') || colorStyle.includes('225, 29, 72') || colorStyle.includes('244, 63, 94')) {
+      card.dataset.hfNativeLiked = 'true';
       return true;
     }
 
@@ -557,6 +495,7 @@ const MODAL_STYLES = `
       const pathFill = path.getAttribute('fill');
       if (pathFill && pathFill !== 'none' && pathFill !== 'transparent') {
         if (!/(text|fill)-(gray|slate|neutral|zinc|stone)-\d+/i.test(combined)) {
+          card.dataset.hfNativeLiked = 'true';
           return true;
         }
       }
@@ -565,32 +504,13 @@ const MODAL_STYLES = `
     return false;
   }
 
-  function isModelLiked(card, modelId) {
-    if (!modelId) return false;
-    const lower = modelId.toLowerCase().replace(/^(models|datasets|spaces)\//, '');
-
-    if (likedModelIds.has(lower)) return true;
-    if (card.dataset.hfNativeLiked === 'true') return true;
-
-    const heartSvg = findHeartSvg(card);
-    if (heartSvg) {
-      if (isHeartLiked(heartSvg)) {
-        card.dataset.hfNativeLiked = 'true';
-        likedModelIds.add(lower);
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  function updateCardVisual(card, modelId) {
+  function updateCardVisual(card) {
     if (!CONFIG.BORDER_UNLIKED_ENABLED) {
       card.classList.remove('hf-is-unliked', 'hf-is-liked');
       return;
     }
 
-    const isLiked = isModelLiked(card, modelId);
+    const isLiked = isModelLiked(card);
     if (isLiked) {
       card.classList.remove('hf-is-unliked');
       card.classList.add('hf-is-liked');
@@ -610,8 +530,6 @@ const MODAL_STYLES = `
     const maxDays = CONFIG.DATE_MAX_DAYS;
 
     cards.forEach(card => {
-      const modelId = getModelIdFromCard(card);
-
       if (isDateFilterActive) {
         const timestamp = getModelDate(card);
         if (timestamp !== null) {
@@ -631,9 +549,7 @@ const MODAL_STYLES = `
         visibleCards++;
       }
 
-      if (modelId) {
-        updateCardVisual(card, modelId);
-      }
+      updateCardVisual(card);
     });
 
     updateWidgetStats(visibleCards, totalCards);
@@ -972,11 +888,10 @@ const MODAL_STYLES = `
 
   injectStyles();
 
-  const init = async () => {
+  const init = () => {
     setupUI();
     setupSidebarWidget();
     observeCards();
-    await initUserLikes();
     processModelCards();
   };
 
