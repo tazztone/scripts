@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Hugging Face Unliked Model Highlighter & Date Filter
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.5.1
+// @version      1.5.2
 // @description  Highlight unliked models with a green border and filter models by date range slider.
 // @author       tazztone
 // @match        https://huggingface.co/*
@@ -470,7 +470,8 @@ const MODAL_STYLES = `
               repo = item.repo?.name || item.repo?.id || (typeof item.repo === 'string' ? item.repo : null) || item.repoName || item.name || item.id || item._id;
             }
             if (repo && typeof repo === 'string') {
-              likedModelIds.add(repo.toLowerCase());
+              const cleanRepo = repo.replace(/^(models|datasets|spaces)\//, '').toLowerCase();
+              likedModelIds.add(cleanRepo);
             }
           });
         }
@@ -501,29 +502,79 @@ const MODAL_STYLES = `
     return null;
   }
 
+  function findHeartSvg(card) {
+    const heartContainer = card.querySelector('[title*="like" i], [aria-label*="like" i], [class*="like" i]');
+    if (heartContainer) {
+      const svg = heartContainer.querySelector('svg') || (heartContainer.tagName?.toLowerCase() === 'svg' ? heartContainer : null);
+      if (svg) return svg;
+    }
+
+    const svgs = card.querySelectorAll('svg');
+    for (const svg of svgs) {
+      const classStr = (svg.className?.baseVal || svg.className || '').toString();
+      const parentClass = (svg.parentElement?.className || '').toString();
+      const path = svg.querySelector('path');
+      const d = path ? (path.getAttribute('d') || '') : '';
+
+      if (
+        classStr.includes('red') || parentClass.includes('red') ||
+        classStr.includes('rose') || parentClass.includes('rose') ||
+        classStr.includes('heart') || parentClass.includes('heart') ||
+        d.includes('22.5') || d.includes('22.4') || d.includes('M12 21') || d.includes('M20.8') || d.includes('M16') ||
+        svg.closest('[title*="like" i], [aria-label*="like" i]')
+      ) {
+        return svg;
+      }
+    }
+    return null;
+  }
+
+  function isHeartLiked(heartSvg) {
+    if (!heartSvg) return false;
+
+    const classListStr = (heartSvg.className?.baseVal || heartSvg.className || '').toString();
+    const parentClassStr = (heartSvg.parentElement?.className || '').toString();
+    const grandParentClassStr = (heartSvg.parentElement?.parentElement?.className || '').toString();
+    const combined = `${classListStr} ${parentClassStr} ${grandParentClassStr}`;
+
+    if (/(text|fill)-(red|rose|pink)-\d+/i.test(combined) || /text-red/i.test(combined)) {
+      return true;
+    }
+
+    const fillAttr = heartSvg.getAttribute('fill') || heartSvg.querySelector('path')?.getAttribute('fill') || '';
+    const colorStyle = heartSvg.style.color || '';
+
+    if (fillAttr === '#ef4444' || fillAttr === '#e11d48' || fillAttr === '#f43f5e' || fillAttr === 'red') {
+      return true;
+    }
+
+    if (colorStyle.includes('239, 68, 68') || colorStyle.includes('225, 29, 72') || colorStyle.includes('244, 63, 94')) {
+      return true;
+    }
+
+    const path = heartSvg.querySelector('path');
+    if (path) {
+      const pathFill = path.getAttribute('fill');
+      if (pathFill && pathFill !== 'none' && pathFill !== 'transparent') {
+        if (!/(text|fill)-(gray|slate|neutral|zinc|stone)-\d+/i.test(combined)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
   function isModelLiked(card, modelId) {
     if (!modelId) return false;
-    const lower = modelId.toLowerCase();
+    const lower = modelId.toLowerCase().replace(/^(models|datasets|spaces)\//, '');
 
     if (likedModelIds.has(lower)) return true;
     if (card.dataset.hfNativeLiked === 'true') return true;
 
-    const heartSvg = card.querySelector('button[aria-label*="like" i] svg, [title*="like" i] svg, svg.text-red-500, svg.text-gray-400');
-    if (heartSvg && !heartSvg.dataset.hfProcessed) {
-      const classListStr = (heartSvg.className?.baseVal || heartSvg.className || '').toString();
-      const parentClassStr = (heartSvg.parentElement?.className || '').toString();
-      const fillAttr = heartSvg.getAttribute('fill') || '';
-      const colorStyle = heartSvg.style.color || '';
-
-      const isRed = (
-        classListStr.includes('text-red') ||
-        parentClassStr.includes('text-red') ||
-        fillAttr === '#ef4444' ||
-        colorStyle === 'rgb(239, 68, 68)' ||
-        colorStyle === '#ef4444'
-      );
-
-      if (isRed) {
+    const heartSvg = findHeartSvg(card);
+    if (heartSvg) {
+      if (isHeartLiked(heartSvg)) {
         card.dataset.hfNativeLiked = 'true';
         likedModelIds.add(lower);
         return true;
