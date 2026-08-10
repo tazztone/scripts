@@ -91,3 +91,13 @@ This document details the DOM structure, selection strategies, API endpoints, an
 ## 6. Lifecycle & SPA Observation
 
 Hugging Face uses Svelte / client-side routing (SPA). A `MutationObserver` monitors DOM mutations on `document.body` with 200ms debouncing to automatically tag and date-filter new model cards loaded via lazy loading or infinite scrolling.
+
+---
+
+## 7. Code Audit & Robustness Hardenings (v1.7.7)
+
+1. **MutationObserver Target Node Safety**: Resolved `const targetEl = target.nodeType === 1 ? target : target.parentElement;` before invoking `.closest('#hf-date-filter-widget')` to prevent `TypeError` exceptions when DOM mutations occur on text nodes (`Node.TEXT_NODE`).
+2. **Multi-Path Heart SVG Inspection**: Updated `isModelLiked()` to iterate through all `<path>` elements via `querySelectorAll('path')` instead of querying only the first child path.
+3. **SPA Detached Element Handling**: Added `!document.body.contains(noticeEl)` check inside `updateEmptyNotice()` to ensure empty notice re-injection after SPA page transitions.
+4. **Min/Max Days Input Range Synchronization**: Enforced `DATE_MAX_DAYS >= DATE_MIN_DAYS` auto-adjustment when user increases `minInput`.
+

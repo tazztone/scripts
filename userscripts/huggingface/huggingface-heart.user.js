@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Hugging Face Unliked Model Highlighter & Date Filter
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.7.6
+// @version      1.7.8
 // @description  Highlight unliked models with a green border and filter models by date range slider.
 // @author       tazztone
 // @match        https://huggingface.co/*
@@ -465,8 +465,8 @@ const WIDGET_STYLES = `
     // 4. Inspect path d signatures:
     // Solid heart path (liked): starts with M22.5,4 or M22.5 4
     // Outline heart path (unliked): starts with M22.45,6 or contains m0-2
-    const path = heartSvg.querySelector('path');
-    if (path) {
+    const paths = heartSvg.querySelectorAll('path');
+    for (const path of paths) {
       const d = path.getAttribute('d') || '';
 
       if (d.includes('M22.5,4') || d.includes('M22.5 4')) {
@@ -546,7 +546,7 @@ const WIDGET_STYLES = `
   function updateEmptyNotice(visibleCount, totalCount, isActive) {
     let noticeEl = document.getElementById('hf-df-empty-notice');
     if (isActive && totalCount > 0 && visibleCount === 0) {
-      if (!noticeEl) {
+      if (!noticeEl || !document.body.contains(noticeEl)) {
         noticeEl = document.createElement('div');
         noticeEl.id = 'hf-df-empty-notice';
         const main = document.querySelector('main') || document.querySelector('article')?.parentElement || document.body;
@@ -565,7 +565,9 @@ const WIDGET_STYLES = `
       const isInternalOnly = mutations.every(m => {
         const target = m.target;
         if (!target) return false;
-        if (target.id === 'hf-date-filter-widget' || target.id === 'hf-df-empty-notice' || target.closest('#hf-date-filter-widget')) {
+        const targetEl = target.nodeType === 1 ? target : target.parentElement;
+        if (!targetEl) return false;
+        if (targetEl.id === 'hf-date-filter-widget' || targetEl.id === 'hf-df-empty-notice' || targetEl.closest('#hf-date-filter-widget')) {
           return true;
         }
         if (m.type === 'childList') {
@@ -770,6 +772,9 @@ const WIDGET_STYLES = `
     minInput?.addEventListener('change', (e) => {
       const val = Math.max(0, parseInt(e.target.value, 10) || 0);
       saveConfig('DATE_MIN_DAYS', val);
+      if (CONFIG.DATE_MAX_DAYS < val) {
+        saveConfig('DATE_MAX_DAYS', val);
+      }
       saveConfig('DATE_PRESET', 'custom');
       syncWidgetUI();
       processModelCards();
