@@ -9,8 +9,12 @@ This document details the DOM structure, selection strategies, API endpoints, an
 **Goal**: Identify the heart icon SVGs on Hugging Face pages and apply custom CSS styles to make them larger and stand out in yellow.
 
 **Target Path Signatures**:
-- Detail Page Heart: `d="M22.45,6a5.47,5.47,0,0,1,3.91,1.64..."` (`path[d^="M22.45"]`)
-- Model List Card Heart: `d="M22.5,4c-2,0-3.9,0.8-5.3,2.2L16,7.4..."` (`path[d^="M22.5,4"]`)
+- **Unliked Model List Card Heart (Outline `♡`)**: `d="M22.45,6a5.47,5.47,0,0,1,3.91,1.64...m0-2..."` (`d.includes('22.45')` or `d.includes('m0-2')`).
+- **Liked Model List Card Heart (Solid `♥`)**: `d="M22.5,4c-2,0-3.9,0.8-5.3,2.2L16,7.4..."` (`d.includes('M22.5,4')` / `d.includes('M22.5 4')`) or styled with `text-red-500` / `fill-red-500`.
+- **Detail Page Heart**: `d="M22.45,6a5.47,5.47,0,0,1,3.91,1.64..."` (`path[d^="M22.45"]`)
+
+> [!NOTE]
+> Hugging Face uses `<svg fill="currentColor">` for both outline and solid heart icons on model list cards. Therefore, checking `fill !== 'none'` alone is insufficient; path `d` signatures (`M22.45` vs `M22.5,4`) and red/pink CSS class inspection (`text-red-500`) are required to accurately distinguish unliked vs liked state.
 
 ---
 
@@ -50,8 +54,9 @@ This document details the DOM structure, selection strategies, API endpoints, an
 1. **User Detection**: Detect current logged-in user via `data-props` attributes, header profile links, or `/api/whoami`.
 2. **Likes Synchronization**: Fetch the user's liked model set from `/api/users/${username}/likes`.
 3. **Card Tagging & Solid vs Outline Heart Inspection**:
-   - Locate heart SVG via container attributes/classes (`[title*="like"]`, `[class*="heart"]`), SVG path `d` signatures (`M22.5`, `M22.4`, `M12 21`, `M20.84`, `M16`), or card footer proximity.
-   - Inspect SVG paths for solid vs outline fill (`fill="none"` vs `fill="currentColor"`/specified fill) alongside red/pink color styling. Solid hearts (`♥`) indicate liked models and receive `.hf-is-liked`, while outline hearts (`♡`) receive `.hf-is-unliked`.
+   - Locate heart SVG via container attributes/classes (`[title*="like"]`, `[class*="heart"]`), SVG path `d` signatures (`M22.5,4`, `22.45`, `21.35`, `20.84`), or card footer proximity.
+   - Differentiate liked models (`.hf-is-liked`) by detecting red/pink color classes (`text-red-500`) or solid heart path signature (`M22.5,4`).
+   - Differentiate unliked models (`.hf-is-unliked`) by detecting outline heart path signature (`M22.45` / `m0-2`) or gray styling (`text-gray-400`).
 4. **Green Border Styling**:
    ```css
    article.overview-card-wrapper.hf-is-unliked {
