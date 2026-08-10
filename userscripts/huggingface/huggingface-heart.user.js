@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Hugging Face Yellow Hearts & Unliked Model Highlighter
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.4.2
+// @version      1.4.3
 // @description  Make heart icons larger/yellow, highlight unliked models with a green border, like models directly from list cards, and filter models by date range slider.
 // @author       tazztone
 // @match        https://huggingface.co/*
@@ -578,11 +578,17 @@ const MODAL_STYLES = `
       const res = await fetch(`/api/users/${encodeURIComponent(currentUser)}/likes`);
       if (res.ok) {
         const data = await res.json();
-        likedModelIds.clear();
         if (Array.isArray(data)) {
           data.forEach(item => {
-            const repo = item.repo?.name || item.repoName || item.name;
-            if (repo) likedModelIds.add(repo);
+            let repo = null;
+            if (typeof item === 'string') {
+              repo = item;
+            } else if (item && typeof item === 'object') {
+              repo = item.repo?.name || item.repo?.id || (typeof item.repo === 'string' ? item.repo : null) || item.repoName || item.name || item.id || item._id;
+            }
+            if (repo && typeof repo === 'string') {
+              likedModelIds.add(repo);
+            }
           });
         }
         processModelCards();
@@ -633,8 +639,47 @@ const MODAL_STYLES = `
     return null;
   }
 
+  function isModelLiked(card, modelId) {
+    if (!modelId) return false;
+    const lower = modelId.toLowerCase();
+
+    // 1. Check likedModelIds set (case-insensitive)
+    for (const id of likedModelIds) {
+      if (id.toLowerCase() === lower) return true;
+    }
+
+    // 2. Check if already recorded as native liked
+    if (card.dataset.hfNativeLiked === 'true') return true;
+
+    // 3. Inspect native HF heart SVG before applying custom styles
+    const heartSvg = findHeartSvg(card);
+    if (heartSvg && !heartSvg.dataset.hfProcessed) {
+      const classListStr = (heartSvg.className?.baseVal || heartSvg.className || '').toString();
+      const parentClassStr = (heartSvg.parentElement?.className || '').toString();
+      const fillAttr = heartSvg.getAttribute('fill') || '';
+      const colorStyle = heartSvg.style.color || '';
+
+      const isRed = (
+        classListStr.includes('text-red') ||
+        parentClassStr.includes('text-red') ||
+        fillAttr === '#ef4444' ||
+        colorStyle === 'rgb(239, 68, 68)' ||
+        colorStyle === '#ef4444'
+      );
+
+      if (isRed) {
+        card.dataset.hfNativeLiked = 'true';
+        likedModelIds.add(modelId);
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   function updateCardVisual(card, modelId) {
-    const isLiked = likedModelIds.has(modelId);
+    const isLiked = isModelLiked(card, modelId);
+    const heartSvg = findHeartSvg(card);
 
     if (CONFIG.ENABLED && CONFIG.BORDER_UNLIKED_ENABLED) {
       if (isLiked) {
@@ -648,7 +693,6 @@ const MODAL_STYLES = `
       card.classList.remove('hf-is-unliked', 'hf-is-liked');
     }
 
-    const heartSvg = findHeartSvg(card);
     if (heartSvg) {
       const path = heartSvg.querySelector('path');
 
@@ -676,6 +720,8 @@ const MODAL_STYLES = `
           path.style.setProperty('stroke-width', '2', 'important');
         }
       }
+
+      heartSvg.dataset.hfProcessed = 'true';
     }
   }
 
@@ -773,8 +819,14 @@ const MODAL_STYLES = `
 
       if (nextLikedState) {
         likedModelIds.add(modelId);
+        card.dataset.hfNativeLiked = 'true';
       } else {
-        likedModelIds.delete(modelId);
+        delete card.dataset.hfNativeLiked;
+        for (const id of Array.from(likedModelIds)) {
+          if (id.toLowerCase() === modelId.toLowerCase()) {
+            likedModelIds.delete(id);
+          }
+        }
       }
 
       updateCardVisual(card, modelId);
