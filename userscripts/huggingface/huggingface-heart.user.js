@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Hugging Face Unliked Model Highlighter & Date Filter
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.7.3
+// @version      1.7.5
 // @description  Highlight unliked models with a green border and filter models by date range slider.
 // @author       tazztone
 // @match        https://huggingface.co/*
@@ -383,57 +383,103 @@ const WIDGET_STYLES = `
   }
 
   // ─── DOM CARD LIKED STATE INSPECTION ──────────────────────────────────────────
-  function isModelLiked(card) {
-    // 1. Look for explicit like button/link by title/aria-label inside card
-    const likeBtn = card.querySelector('[title*="like" i], [aria-label*="like" i]');
-    if (likeBtn) {
-      const ariaPressed = likeBtn.getAttribute('aria-pressed');
-      if (ariaPressed === 'true') return true;
-
-      const combinedClasses = `${likeBtn.className?.baseVal || likeBtn.className || ''} ${likeBtn.parentElement?.className || ''}`;
-      if (/(text|fill)-(red|rose|pink)-\d+/i.test(combinedClasses) || /text-red/i.test(combinedClasses)) {
-        return true;
-      }
-
-      const svg = likeBtn.querySelector('svg') || (likeBtn.tagName?.toLowerCase() === 'svg' ? likeBtn : null);
-      if (svg) {
-        const fillAttr = svg.getAttribute('fill') || svg.querySelector('path')?.getAttribute('fill') || '';
-        if (['#ef4444', '#e11d48', '#f43f5e', 'red'].includes(fillAttr.toLowerCase())) {
-          return true;
-        }
-        const colorStyle = svg.style.color || '';
-        if (colorStyle.includes('239, 68, 68') || colorStyle.includes('225, 29, 72') || colorStyle.includes('244, 63, 94')) {
-          return true;
-        }
-      }
+  function findHeartSvg(card) {
+    // 1. Explicit like button/link or container with like/heart in attributes or class
+    const likeContainer = card.querySelector('[title*="like" i], [aria-label*="like" i], [class*="like" i], [class*="heart" i]');
+    if (likeContainer) {
+      const svg = likeContainer.querySelector('svg') || (likeContainer.tagName?.toLowerCase() === 'svg' ? likeContainer : null);
+      if (svg) return svg;
     }
 
-    // 2. Fallback: inspect SVGs inside card for red/pink styling or explicit heart paths
+    // 2. Search all SVGs inside card for class or path d matching heart patterns
     const svgs = card.querySelectorAll('svg');
     for (const svg of svgs) {
       const classStr = (svg.className?.baseVal || svg.className || '').toString();
       const parentClass = (svg.parentElement?.className || '').toString();
       const combined = `${classStr} ${parentClass}`;
 
-      if (/(text|fill)-(red|rose|pink)-\d+/i.test(combined)) {
-        return true;
+      if (/(heart|like|red|rose|pink)/i.test(combined)) {
+        return svg;
       }
 
-      const path = svg.querySelector('path');
-      const d = path ? (path.getAttribute('d') || '') : '';
-
-      // Match precise heart SVG paths used by HF (e.g. M12 21.35, M20.84 4.61, M12 21, M21 8.25)
-      if (d.includes('21.35') || d.includes('20.84') || d.includes('M12 21') || d.includes('M21 8.25') || d.includes('M12 4.5')) {
-        const fill = path.getAttribute('fill') || svg.getAttribute('fill') || '';
-        if (fill && fill !== 'none' && fill !== 'transparent') {
-          if (!/(text|fill)-(gray|slate|neutral|zinc|stone)-\d+/i.test(combined)) {
-            return true;
-          }
+      const paths = svg.querySelectorAll('path');
+      for (const path of paths) {
+        const d = path.getAttribute('d') || '';
+        if (
+          d.includes('22.5') || d.includes('22.4') || d.includes('21.35') ||
+          d.includes('20.84') || d.includes('M12 21') || d.includes('M21 8.25') ||
+          d.includes('M12 4.5') || d.includes('M16') || d.includes('4.318') ||
+          d.includes('3.172') || d.includes('14c1.49') || d.includes('21.174') ||
+          d.includes('20.91') || d.includes('M12 4')
+        ) {
+          return svg;
         }
       }
     }
 
-    return false;
+    // 3. Fallback for card footers: check SVGs near numbers (like count)
+    for (const svg of Array.from(svgs).reverse()) {
+      const parentText = svg.parentElement?.textContent || '';
+      if (/[\d\.]+[kM]?/i.test(parentText)) {
+        const d = svg.querySelector('path')?.getAttribute('d') || '';
+        if (!d.includes('M4 16') && !d.includes('M3 15') && !d.includes('M13 10') && !d.includes('M13 2') && !d.includes('M12 8')) {
+          return svg;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  function isModelLiked(card) {
+    // 1. Look for explicit aria-pressed on button/container
+    const likeBtn = card.querySelector('[title*="like" i], [aria-label*="like" i]');
+    if (likeBtn) {
+      const ariaPressed = likeBtn.getAttribute('aria-pressed');
+      if (ariaPressed === 'true') return true;
+    }
+
+    // 2. Find heart SVG inside card
+    const heartSvg = findHeartSvg(card);
+    if (!heartSvg) return false;
+
+    // 3. Check for explicit red/rose/pink color styling
+    const classListStr = (heartSvg.className?.baseVal || heartSvg.className || '').toString();
+    const parentClassStr = (heartSvg.parentElement?.className || '').toString();
+    const grandParentClassStr = (heartSvg.parentElement?.parentElement?.className || '').toString();
+    const combined = `${classListStr} ${parentClassStr} ${grandParentClassStr}`;
+
+    if (/(text|fill)-(red|rose|pink)-\d+/i.test(combined) || /text-red/i.test(combined)) {
+      return true;
+    }
+
+    const fillAttr = (heartSvg.getAttribute('fill') || '').toLowerCase();
+    const colorStyle = (heartSvg.style.color || '').toLowerCase();
+
+    if (['#ef4444', '#e11d48', '#f43f5e', 'red', '#dc2626', '#b91c1c'].includes(fillAttr)) {
+      return true;
+    }
+    if (colorStyle.includes('239, 68, 68') || colorStyle.includes('225, 29, 72') || colorStyle.includes('244, 63, 94')) {
+      return true;
+    }
+
+    // 4. Inspect paths inside the heart SVG for solid vs outline fill
+    const paths = heartSvg.querySelectorAll('path');
+    if (paths.length > 0) {
+      for (const path of paths) {
+        const pathFill = (path.getAttribute('fill') || heartSvg.getAttribute('fill') || '').toLowerCase();
+        const styleFill = (path.style.fill || heartSvg.style.fill || '').toLowerCase();
+
+        // An outline heart explicitly sets fill="none" or fill="transparent" or style="fill: none"
+        if (pathFill === 'none' || pathFill === 'transparent' || styleFill === 'none' || styleFill === 'transparent') {
+          return false;
+        }
+      }
+      // If none of the paths have fill="none", the heart shape is solid/filled (liked)
+      return true;
+    }
+
+    return fillAttr !== 'none' && fillAttr !== 'transparent';
   }
 
   function updateCardVisual(card) {

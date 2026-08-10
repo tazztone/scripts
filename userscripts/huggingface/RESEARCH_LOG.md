@@ -49,7 +49,9 @@ This document details the DOM structure, selection strategies, API endpoints, an
 
 1. **User Detection**: Detect current logged-in user via `data-props` attributes, header profile links, or `/api/whoami`.
 2. **Likes Synchronization**: Fetch the user's liked model set from `/api/users/${username}/likes`.
-3. **Card Tagging**: Tag each `article.overview-card-wrapper` as `.hf-is-liked` or `.hf-is-unliked`.
+3. **Card Tagging & Solid vs Outline Heart Inspection**:
+   - Locate heart SVG via container attributes/classes (`[title*="like"]`, `[class*="heart"]`), SVG path `d` signatures (`M22.5`, `M22.4`, `M12 21`, `M20.84`, `M16`), or card footer proximity.
+   - Inspect SVG paths for solid vs outline fill (`fill="none"` vs `fill="currentColor"`/specified fill) alongside red/pink color styling. Solid hearts (`♥`) indicate liked models and receive `.hf-is-liked`, while outline hearts (`♡`) receive `.hf-is-unliked`.
 4. **Green Border Styling**:
    ```css
    article.overview-card-wrapper.hf-is-unliked {
