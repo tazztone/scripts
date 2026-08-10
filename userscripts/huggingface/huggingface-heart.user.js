@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Hugging Face Unliked Model Highlighter & Date Filter
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.7.5
+// @version      1.7.6
 // @description  Highlight unliked models with a green border and filter models by date range slider.
 // @author       tazztone
 // @match        https://huggingface.co/*
@@ -384,21 +384,21 @@ const WIDGET_STYLES = `
 
   // ─── DOM CARD LIKED STATE INSPECTION ──────────────────────────────────────────
   function findHeartSvg(card) {
-    // 1. Explicit like button/link or container with like/heart in attributes or class
+    // 1. Explicit like container or button
     const likeContainer = card.querySelector('[title*="like" i], [aria-label*="like" i], [class*="like" i], [class*="heart" i]');
     if (likeContainer) {
       const svg = likeContainer.querySelector('svg') || (likeContainer.tagName?.toLowerCase() === 'svg' ? likeContainer : null);
       if (svg) return svg;
     }
 
-    // 2. Search all SVGs inside card for class or path d matching heart patterns
+    // 2. Search SVGs inside card for specific heart path signatures
     const svgs = card.querySelectorAll('svg');
     for (const svg of svgs) {
       const classStr = (svg.className?.baseVal || svg.className || '').toString();
       const parentClass = (svg.parentElement?.className || '').toString();
       const combined = `${classStr} ${parentClass}`;
 
-      if (/(heart|like|red|rose|pink)/i.test(combined)) {
+      if (/(heart|like)/i.test(combined)) {
         return svg;
       }
 
@@ -406,23 +406,22 @@ const WIDGET_STYLES = `
       for (const path of paths) {
         const d = path.getAttribute('d') || '';
         if (
-          d.includes('22.5') || d.includes('22.4') || d.includes('21.35') ||
-          d.includes('20.84') || d.includes('M12 21') || d.includes('M21 8.25') ||
-          d.includes('M12 4.5') || d.includes('M16') || d.includes('4.318') ||
-          d.includes('3.172') || d.includes('14c1.49') || d.includes('21.174') ||
-          d.includes('20.91') || d.includes('M12 4')
+          d.includes('22.45') || d.includes('22.5,4') || d.includes('22.5 4') ||
+          d.includes('21.35') || d.includes('20.84') || d.includes('4.318') ||
+          d.includes('20.364') || d.includes('14c1.49') || d.includes('7.78l') ||
+          d.includes('21.23') || d.includes('20.91') || d.includes('21.174')
         ) {
           return svg;
         }
       }
     }
 
-    // 3. Fallback for card footers: check SVGs near numbers (like count)
+    // 3. Fallback: inspect SVGs from footer/bottom of card (heart icon is near likes count)
     for (const svg of Array.from(svgs).reverse()) {
       const parentText = svg.parentElement?.textContent || '';
       if (/[\d\.]+[kM]?/i.test(parentText)) {
         const d = svg.querySelector('path')?.getAttribute('d') || '';
-        if (!d.includes('M4 16') && !d.includes('M3 15') && !d.includes('M13 10') && !d.includes('M13 2') && !d.includes('M12 8')) {
+        if (!d.includes('M26 24') && !d.includes('M10 10H8.4') && !d.includes('M11 15H6') && !d.includes('M4 16') && !d.includes('M13 10')) {
           return svg;
         }
       }
@@ -443,7 +442,7 @@ const WIDGET_STYLES = `
     const heartSvg = findHeartSvg(card);
     if (!heartSvg) return false;
 
-    // 3. Check for explicit red/rose/pink color styling
+    // 3. Check for explicit red/rose/pink color styling (Liked)
     const classListStr = (heartSvg.className?.baseVal || heartSvg.className || '').toString();
     const parentClassStr = (heartSvg.parentElement?.className || '').toString();
     const grandParentClassStr = (heartSvg.parentElement?.parentElement?.className || '').toString();
@@ -453,33 +452,43 @@ const WIDGET_STYLES = `
       return true;
     }
 
-    const fillAttr = (heartSvg.getAttribute('fill') || '').toLowerCase();
+    const svgFill = (heartSvg.getAttribute('fill') || '').toLowerCase();
     const colorStyle = (heartSvg.style.color || '').toLowerCase();
 
-    if (['#ef4444', '#e11d48', '#f43f5e', 'red', '#dc2626', '#b91c1c'].includes(fillAttr)) {
+    if (['#ef4444', '#e11d48', '#f43f5e', 'red', '#dc2626', '#b91c1c'].includes(svgFill)) {
       return true;
     }
     if (colorStyle.includes('239, 68, 68') || colorStyle.includes('225, 29, 72') || colorStyle.includes('244, 63, 94')) {
       return true;
     }
 
-    // 4. Inspect paths inside the heart SVG for solid vs outline fill
-    const paths = heartSvg.querySelectorAll('path');
-    if (paths.length > 0) {
-      for (const path of paths) {
-        const pathFill = (path.getAttribute('fill') || heartSvg.getAttribute('fill') || '').toLowerCase();
-        const styleFill = (path.style.fill || heartSvg.style.fill || '').toLowerCase();
+    // 4. Inspect path d signatures:
+    // Solid heart path (liked): starts with M22.5,4 or M22.5 4
+    // Outline heart path (unliked): starts with M22.45,6 or contains m0-2
+    const path = heartSvg.querySelector('path');
+    if (path) {
+      const d = path.getAttribute('d') || '';
 
-        // An outline heart explicitly sets fill="none" or fill="transparent" or style="fill: none"
-        if (pathFill === 'none' || pathFill === 'transparent' || styleFill === 'none' || styleFill === 'transparent') {
-          return false;
-        }
+      if (d.includes('M22.5,4') || d.includes('M22.5 4')) {
+        return true;
       }
-      // If none of the paths have fill="none", the heart shape is solid/filled (liked)
-      return true;
+
+      if (d.includes('22.45') || d.includes('m0-2') || d.includes('26.13')) {
+        return false;
+      }
+
+      const pathFill = (path.getAttribute('fill') || '').toLowerCase();
+      if (pathFill === 'none' || pathFill === 'transparent') {
+        return false;
+      }
     }
 
-    return fillAttr !== 'none' && fillAttr !== 'transparent';
+    // 5. Default fallback: if heart icon is gray, model is unliked
+    if (/(text|fill)-(gray|slate|neutral|zinc|stone)-\d+/i.test(combined)) {
+      return false;
+    }
+
+    return false;
   }
 
   function updateCardVisual(card) {
