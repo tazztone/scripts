@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Hugging Face Unliked Model Highlighter & Date Filter
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.6.1
+// @version      1.7.1
 // @description  Highlight unliked models with a green border and filter models by date range slider.
 // @author       tazztone
 // @match        https://huggingface.co/*
@@ -9,7 +9,7 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @noframes
-// ==/UserScript==
+// ==UserScript==
 
 // ─── CONFIG DEFAULT VALUES ───────────────────────────────────────────────────
 const DEFAULTS = {
@@ -35,170 +35,22 @@ const PRESETS = [
   { id: 'all', label: 'All', min: 0, max: 99999 }
 ];
 
-const MODAL_STYLES = `
-  #hf-settings-fab {
-    position: fixed;
-    bottom: 2px;
-    right: 2px;
-    width: 50px;
-    height: 50px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 50%;
-    background: rgba(30, 41, 59, 0.8);
-    color: #f1f5f9;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    cursor: pointer;
-    z-index: 99999;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.3s ease;
+const WIDGET_STYLES = `
+  /* Card highlighting */
+  article.overview-card-wrapper.hf-is-unliked {
+    border: 2px solid VAR_COLOR !important;
+    border-radius: 12px !important;
+    VAR_GLOW
+    transition: border 0.3s ease, box-shadow 0.3s ease !important;
   }
-  #hf-settings-fab svg {
-    display: block;
-    width: 24px;
-    height: 24px;
+  article.overview-card-wrapper.hf-is-liked {
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
   }
-  #hf-settings-fab:hover {
-    background: rgba(245, 158, 11, 0.9);
-    box-shadow: 0 0 15px rgba(245, 158, 11, 0.5);
-    transform: scale(1.1);
-  }
-  #hf-settings-modal-backdrop {
-    position: fixed;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(15, 23, 42, 0.5);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    z-index: 99998;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.3s ease;
-  }
-  #hf-settings-modal-backdrop.open {
-    opacity: 1;
-    pointer-events: auto;
-  }
-  #hf-settings-modal {
-    width: 90%;
-    max-width: 520px;
-    max-height: 85vh;
-    overflow-y: auto;
-    padding: 24px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 16px;
-    background: rgba(30, 41, 59, 0.95);
-    color: #f8fafc;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    transform: scale(0.95) translateY(10px);
-    transition: transform 0.3s ease;
-  }
-  #hf-settings-modal-backdrop.open #hf-settings-modal {
-    transform: scale(1) translateY(0);
-  }
-  #hf-settings-modal h3 {
-    margin: 0 0 20px;
-    color: #fbbf24;
-    font-size: 18px;
-  }
-  .hf-settings-group {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-bottom: 18px;
-  }
-  .hf-settings-group label {
-    color: #cbd5e1;
-    font-size: 13px;
-    font-weight: 600;
-  }
-  .hf-settings-group input[type="color"] {
-    box-sizing: border-box;
-    width: 100%;
-    min-height: 34px;
-    padding: 3px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 6px;
-    background: rgba(15, 23, 42, 0.6);
-    color: #fff;
-    font-size: 13px;
-  }
-  .hf-switch-container {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .hf-switch {
-    width: 44px;
-    height: 24px;
-    position: relative;
-    display: inline-block;
-  }
-  .hf-switch input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-  }
-  .hf-slider {
-    position: absolute;
-    inset: 0;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 24px;
-    background: rgba(15, 23, 42, 0.6);
-    cursor: pointer;
-  }
-  .hf-slider::before {
-    content: "";
-    position: absolute;
-    left: 3px;
-    bottom: 3px;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: #94a3b8;
-    transition: transform 0.3s ease;
-  }
-  .hf-switch input:checked + .hf-slider {
-    background: #f59e0b;
-  }
-  .hf-switch input:checked + .hf-slider::before {
-    transform: translateX(20px);
-    background: #fff;
-  }
-  .hf-modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-    margin-top: 24px;
-  }
-  .hf-btn {
-    padding: 10px 18px;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .hf-btn-secondary {
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: transparent;
-    color: #94a3b8;
-  }
-  .hf-btn-primary {
-    border: 0;
-    background: linear-gradient(135deg, #fbbf24, #f59e0b);
-    color: #451a03;
-  }
-
-  /* ─── SIDEBAR DATE FILTER WIDGET STYLES ───────────────────────────────── */
   article.overview-card-wrapper.hf-date-filtered-out {
     display: none !important;
   }
 
+  /* Sidebar Date Filter Widget Styles */
   #hf-date-filter-widget {
     box-sizing: border-box;
     width: 100%;
@@ -326,6 +178,92 @@ const MODAL_STYLES = `
     color: #34d399;
     font-weight: 600;
   }
+
+  /* Toggle Switches */
+  .hf-switch {
+    width: 40px;
+    height: 22px;
+    position: relative;
+    display: inline-block;
+  }
+  .hf-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+  .hf-slider {
+    position: absolute;
+    inset: 0;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 22px;
+    background: rgba(15, 23, 42, 0.6);
+    cursor: pointer;
+  }
+  .hf-slider::before {
+    content: "";
+    position: absolute;
+    left: 3px;
+    bottom: 3px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #94a3b8;
+    transition: transform 0.3s ease;
+  }
+  .hf-switch input:checked + .hf-slider {
+    background: #f59e0b;
+  }
+  .hf-switch input:checked + .hf-slider::before {
+    transform: translateX(18px);
+    background: #fff;
+  }
+
+  /* Settings Accordion Panel */
+  .hf-df-settings-toggle {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0;
+    margin-top: 12px;
+    transition: color 0.2s ease;
+  }
+  .hf-df-settings-toggle:hover {
+    color: #fbbf24;
+  }
+  .hf-df-settings-panel {
+    display: none;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    gap: 10px;
+    flex-direction: column;
+  }
+  .hf-df-settings-panel.open {
+    display: flex;
+  }
+  .hf-settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    color: #cbd5e1;
+  }
+  .hf-settings-row input[type="color"] {
+    width: 32px;
+    height: 24px;
+    padding: 1px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    background: transparent;
+    cursor: pointer;
+  }
+
   #hf-df-empty-notice {
     margin: 16px 0;
     padding: 14px 16px;
@@ -372,25 +310,16 @@ const MODAL_STYLES = `
     } catch (e) {}
   };
 
-  const saveAllConfig = () => {
-    for (const [key, val] of Object.entries(CONFIG)) {
-      saveConfig(key, val);
-    }
-  };
-
   const CONFIG = loadConfig();
 
-  const buildStyle = () => `
-    article.overview-card-wrapper.hf-is-unliked {
-      border: 2px solid ${CONFIG.BORDER_UNLIKED_COLOR} !important;
-      border-radius: 12px !important;
-      ${CONFIG.BORDER_UNLIKED_GLOW ? `box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15) !important;` : ''}
-      transition: border 0.3s ease, box-shadow 0.3s ease !important;
-    }
-    article.overview-card-wrapper.hf-is-liked {
-      border: 1px solid rgba(255, 255, 255, 0.05) !important;
-    }
-  `;
+  const buildStyle = () => {
+    const glowCss = CONFIG.BORDER_UNLIKED_GLOW
+      ? `box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15) !important;`
+      : '';
+    return WIDGET_STYLES
+      .replace('VAR_COLOR', CONFIG.BORDER_UNLIKED_COLOR)
+      .replace('VAR_GLOW', glowCss);
+  };
 
   function injectStyles() {
     let styleEl = document.getElementById('hf-heart-style');
@@ -400,13 +329,6 @@ const MODAL_STYLES = `
       (document.head || document.documentElement).appendChild(styleEl);
     }
     styleEl.textContent = buildStyle();
-
-    if (!document.getElementById('hf-settings-style')) {
-      const modalStyle = document.createElement('style');
-      modalStyle.id = 'hf-settings-style';
-      modalStyle.textContent = MODAL_STYLES;
-      (document.head || document.documentElement).appendChild(modalStyle);
-    }
   }
 
   // ─── DATE HELPERS ────────────────────────────────────────────────────────────
@@ -418,6 +340,28 @@ const MODAL_STYLES = `
     if (dtAttr) {
       const parsed = Date.parse(dtAttr);
       if (!isNaN(parsed)) return parsed;
+    }
+
+    const text = timeEl.textContent.trim();
+    if (text) {
+      const parsedText = Date.parse(text);
+      if (!isNaN(parsedText)) return parsedText;
+
+      const match = text.match(/(\d+)\s+(minute|hour|day|week|month|year)s?\s+ago/i);
+      if (match) {
+        const amount = parseInt(match[1], 10);
+        const unit = match[2].toLowerCase();
+        const now = Date.now();
+        const multipliers = {
+          minute: 60 * 1000,
+          hour: 3600 * 1000,
+          day: 86400 * 1000,
+          week: 7 * 86400 * 1000,
+          month: 30 * 86400 * 1000,
+          year: 365 * 86400 * 1000
+        };
+        return now - (amount * (multipliers[unit] || 86400 * 1000));
+      }
     }
 
     return null;
@@ -438,65 +382,51 @@ const MODAL_STYLES = `
 
   // ─── DOM CARD LIKED STATE INSPECTION ──────────────────────────────────────────
   function isModelLiked(card) {
-    if (card.dataset.hfNativeLiked === 'true') return true;
+    // 1. Look for explicit like button/link by title/aria-label inside card
+    const likeBtn = card.querySelector('[title*="like" i], [aria-label*="like" i]');
+    if (likeBtn) {
+      const ariaPressed = likeBtn.getAttribute('aria-pressed');
+      if (ariaPressed === 'true') return true;
 
-    // 1. Find heart icon inside container or card
-    const heartContainer = card.querySelector('[title*="like" i], [aria-label*="like" i], [class*="like" i]');
-    let heartSvg = heartContainer ? (heartContainer.querySelector('svg') || (heartContainer.tagName?.toLowerCase() === 'svg' ? heartContainer : null)) : null;
+      const combinedClasses = `${likeBtn.className?.baseVal || likeBtn.className || ''} ${likeBtn.parentElement?.className || ''}`;
+      if (/(text|fill)-(red|rose|pink)-\d+/i.test(combinedClasses) || /text-red/i.test(combinedClasses)) {
+        return true;
+      }
 
-    if (!heartSvg) {
-      const svgs = card.querySelectorAll('svg');
-      for (const svg of svgs) {
-        const classStr = (svg.className?.baseVal || svg.className || '').toString();
-        const parentClass = (svg.parentElement?.className || '').toString();
-        const path = svg.querySelector('path');
-        const d = path ? (path.getAttribute('d') || '') : '';
-
-        if (
-          classStr.includes('red') || parentClass.includes('red') ||
-          classStr.includes('rose') || parentClass.includes('rose') ||
-          classStr.includes('heart') || parentClass.includes('heart') ||
-          d.includes('22.5') || d.includes('22.4') || d.includes('M12 21') || d.includes('M20.8') || d.includes('M16')
-        ) {
-          heartSvg = svg;
-          break;
+      const svg = likeBtn.querySelector('svg') || (likeBtn.tagName?.toLowerCase() === 'svg' ? likeBtn : null);
+      if (svg) {
+        const fillAttr = svg.getAttribute('fill') || svg.querySelector('path')?.getAttribute('fill') || '';
+        if (['#ef4444', '#e11d48', '#f43f5e', 'red'].includes(fillAttr.toLowerCase())) {
+          return true;
+        }
+        const colorStyle = svg.style.color || '';
+        if (colorStyle.includes('239, 68, 68') || colorStyle.includes('225, 29, 72') || colorStyle.includes('244, 63, 94')) {
+          return true;
         }
       }
     }
 
-    if (!heartSvg) return false;
+    // 2. Fallback: inspect SVGs inside card for red/pink styling or explicit heart paths
+    const svgs = card.querySelectorAll('svg');
+    for (const svg of svgs) {
+      const classStr = (svg.className?.baseVal || svg.className || '').toString();
+      const parentClass = (svg.parentElement?.className || '').toString();
+      const combined = `${classStr} ${parentClass}`;
 
-    // 2. Inspect classes and SVG fill
-    const classListStr = (heartSvg.className?.baseVal || heartSvg.className || '').toString();
-    const parentClassStr = (heartSvg.parentElement?.className || '').toString();
-    const grandParentClassStr = (heartSvg.parentElement?.parentElement?.className || '').toString();
-    const combined = `${classListStr} ${parentClassStr} ${grandParentClassStr}`;
+      if (/(text|fill)-(red|rose|pink)-\d+/i.test(combined)) {
+        return true;
+      }
 
-    if (/(text|fill)-(red|rose|pink)-\d+/i.test(combined) || /text-red/i.test(combined)) {
-      card.dataset.hfNativeLiked = 'true';
-      return true;
-    }
+      const path = svg.querySelector('path');
+      const d = path ? (path.getAttribute('d') || '') : '';
 
-    const fillAttr = heartSvg.getAttribute('fill') || heartSvg.querySelector('path')?.getAttribute('fill') || '';
-    const colorStyle = heartSvg.style.color || '';
-
-    if (fillAttr === '#ef4444' || fillAttr === '#e11d48' || fillAttr === '#f43f5e' || fillAttr === 'red') {
-      card.dataset.hfNativeLiked = 'true';
-      return true;
-    }
-
-    if (colorStyle.includes('239, 68, 68') || colorStyle.includes('225, 29, 72') || colorStyle.includes('244, 63, 94')) {
-      card.dataset.hfNativeLiked = 'true';
-      return true;
-    }
-
-    const path = heartSvg.querySelector('path');
-    if (path) {
-      const pathFill = path.getAttribute('fill');
-      if (pathFill && pathFill !== 'none' && pathFill !== 'transparent') {
-        if (!/(text|fill)-(gray|slate|neutral|zinc|stone)-\d+/i.test(combined)) {
-          card.dataset.hfNativeLiked = 'true';
-          return true;
+      // Match precise heart SVG paths used by HF (e.g. M12 21.35, M20.84 4.61, M12 21, M21 8.25)
+      if (d.includes('21.35') || d.includes('20.84') || d.includes('M12 21') || d.includes('M21 8.25') || d.includes('M12 4.5')) {
+        const fill = path.getAttribute('fill') || svg.getAttribute('fill') || '';
+        if (fill && fill !== 'none' && fill !== 'transparent') {
+          if (!/(text|fill)-(gray|slate|neutral|zinc|stone)-\d+/i.test(combined)) {
+            return true;
+          }
         }
       }
     }
@@ -574,13 +504,30 @@ const MODAL_STYLES = `
 
   let observerTimer = null;
   function observeCards() {
-    const observer = new MutationObserver(() => {
+    const observer = new MutationObserver((mutations) => {
+      const isInternalOnly = mutations.every(m => {
+        const target = m.target;
+        if (!target) return false;
+        if (target.id === 'hf-date-filter-widget' || target.id === 'hf-df-empty-notice' || target.closest('#hf-date-filter-widget')) {
+          return true;
+        }
+        if (m.type === 'childList') {
+          const addedInternal = Array.from(m.addedNodes).every(n => n.id === 'hf-date-filter-widget' || n.id === 'hf-df-empty-notice');
+          const removedInternal = Array.from(m.removedNodes).every(n => n.id === 'hf-date-filter-widget' || n.id === 'hf-df-empty-notice');
+          if (addedInternal && removedInternal) return true;
+        }
+        return false;
+      });
+
+      if (isInternalOnly) return;
+
       if (observerTimer) clearTimeout(observerTimer);
       observerTimer = setTimeout(() => {
         setupSidebarWidget();
         processModelCards();
       }, 200);
     });
+
     observer.observe(document.body, { childList: true, subtree: true });
   }
 
@@ -588,7 +535,7 @@ const MODAL_STYLES = `
   function findWidgetTarget() {
     const sidebars = document.querySelectorAll('aside, [class*="sidebar"]');
     for (const sb of sidebars) {
-      if (sb.closest('header, nav, #hf-settings-modal')) continue;
+      if (sb.closest('header, nav')) continue;
       const text = sb.textContent;
       if (text.includes('Tasks') || text.includes('Libraries') || text.includes('Languages') || text.includes('Licenses') || text.includes('Parameters')) {
         return { element: sb, method: 'prepend' };
@@ -597,7 +544,7 @@ const MODAL_STYLES = `
 
     const forms = document.querySelectorAll('form');
     for (const f of forms) {
-      if (f.closest('header, nav, #hf-settings-modal')) continue;
+      if (f.closest('header, nav')) continue;
       if (f.querySelector('input[placeholder*="Search models, datasets"]')) continue;
       const aside = f.closest('aside');
       if (aside && !aside.closest('header, nav')) return { element: aside, method: 'prepend' };
@@ -631,7 +578,7 @@ const MODAL_STYLES = `
     if (existingWidget) {
       if (existingWidget.closest('header, nav')) {
         existingWidget.remove();
-      } else {
+      } else if (document.body.contains(existingWidget)) {
         return;
       }
     }
@@ -650,7 +597,7 @@ const MODAL_STYLES = `
           </svg>
           Date Range
         </div>
-        <label class="hf-switch">
+        <label class="hf-switch" title="Toggle date range filter">
           <input id="hf-df-toggle" type="checkbox">
           <span class="hf-slider"></span>
         </label>
@@ -686,6 +633,34 @@ const MODAL_STYLES = `
           <span class="hf-df-badge" id="hf-df-badge">All shown</span>
         </div>
       </div>
+
+      <button type="button" class="hf-df-settings-toggle" id="hf-df-settings-toggle">
+        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+        </svg>
+        Highlighter Options
+      </button>
+
+      <div class="hf-df-settings-panel" id="hf-df-settings-panel">
+        <div class="hf-settings-row">
+          <label for="hf-border-unliked-enabled">Highlight unliked models</label>
+          <label class="hf-switch">
+            <input id="hf-border-unliked-enabled" type="checkbox">
+            <span class="hf-slider"></span>
+          </label>
+        </div>
+        <div class="hf-settings-row">
+          <label for="hf-border-unliked-glow">Enable border glow</label>
+          <label class="hf-switch">
+            <input id="hf-border-unliked-glow" type="checkbox">
+            <span class="hf-slider"></span>
+          </label>
+        </div>
+        <div class="hf-settings-row">
+          <label for="hf-border-unliked-color">Border color</label>
+          <input id="hf-border-unliked-color" type="color">
+        </div>
+      </div>
     `;
 
     if (target.method === 'before' && target.element.parentNode) {
@@ -705,6 +680,16 @@ const MODAL_STYLES = `
     const maxInput = document.getElementById('hf-df-max-input');
     const presetsContainer = document.getElementById('hf-df-presets-container');
 
+    const highlightToggle = document.getElementById('hf-border-unliked-enabled');
+    const glowToggle = document.getElementById('hf-border-unliked-glow');
+    const colorInput = document.getElementById('hf-border-unliked-color');
+    const settingsToggleBtn = document.getElementById('hf-df-settings-toggle');
+    const settingsPanel = document.getElementById('hf-df-settings-panel');
+
+    settingsToggleBtn?.addEventListener('click', () => {
+      settingsPanel?.classList.toggle('open');
+    });
+
     toggle?.addEventListener('change', (e) => {
       saveConfig('DATE_FILTER_ENABLED', e.target.checked);
       syncWidgetUI();
@@ -713,10 +698,16 @@ const MODAL_STYLES = `
 
     sliderMax?.addEventListener('input', (e) => {
       const val = parseInt(e.target.value, 10);
-      saveConfig('DATE_MAX_DAYS', val);
-      saveConfig('DATE_PRESET', 'custom');
+      CONFIG.DATE_MAX_DAYS = val;
+      CONFIG.DATE_PRESET = 'custom';
       syncWidgetUI();
       processModelCards();
+    });
+
+    sliderMax?.addEventListener('change', (e) => {
+      const val = parseInt(e.target.value, 10);
+      saveConfig('DATE_MAX_DAYS', val);
+      saveConfig('DATE_PRESET', 'custom');
     });
 
     minInput?.addEventListener('change', (e) => {
@@ -751,6 +742,22 @@ const MODAL_STYLES = `
       syncWidgetUI();
       processModelCards();
     });
+
+    highlightToggle?.addEventListener('change', (e) => {
+      saveConfig('BORDER_UNLIKED_ENABLED', e.target.checked);
+      processModelCards();
+    });
+
+    glowToggle?.addEventListener('change', (e) => {
+      saveConfig('BORDER_UNLIKED_GLOW', e.target.checked);
+      injectStyles();
+      processModelCards();
+    });
+
+    colorInput?.addEventListener('change', (e) => {
+      saveConfig('BORDER_UNLIKED_COLOR', e.target.value);
+      injectStyles();
+    });
   }
 
   function syncWidgetUI() {
@@ -761,10 +768,18 @@ const MODAL_STYLES = `
     const rangeLabel = document.getElementById('hf-df-range-label');
     const presetBtns = document.querySelectorAll('.hf-df-preset-btn');
 
+    const highlightToggle = document.getElementById('hf-border-unliked-enabled');
+    const glowToggle = document.getElementById('hf-border-unliked-glow');
+    const colorInput = document.getElementById('hf-border-unliked-color');
+
     if (toggle) toggle.checked = CONFIG.DATE_FILTER_ENABLED;
     if (minInput) minInput.value = CONFIG.DATE_MIN_DAYS;
     if (maxInput) maxInput.value = CONFIG.DATE_MAX_DAYS;
     if (sliderMax) sliderMax.value = Math.min(365, CONFIG.DATE_MAX_DAYS);
+
+    if (highlightToggle) highlightToggle.checked = CONFIG.BORDER_UNLIKED_ENABLED;
+    if (glowToggle) glowToggle.checked = CONFIG.BORDER_UNLIKED_GLOW;
+    if (colorInput) colorInput.value = CONFIG.BORDER_UNLIKED_COLOR;
 
     presetBtns.forEach(btn => {
       if (btn.dataset.preset === CONFIG.DATE_PRESET) {
@@ -807,89 +822,9 @@ const MODAL_STYLES = `
     }
   }
 
-  // ─── FAB SETTINGS MODAL ─────────────────────────────────────────────────────
-  function setupUI() {
-    if (document.getElementById('hf-settings-fab')) return;
-
-    const container = document.createElement('div');
-    container.innerHTML = `
-      <button id="hf-settings-fab" type="button" title="Configure Hugging Face highlighter" aria-label="Configure Hugging Face highlighter">
-        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-        </svg>
-      </button>
-      <div id="hf-settings-modal-backdrop">
-        <div id="hf-settings-modal" role="dialog" aria-modal="true" aria-labelledby="hf-settings-title">
-          <h3 id="hf-settings-title">Hugging Face Highlighter Settings</h3>
-
-          <div class="hf-settings-group hf-switch-container">
-            <label for="hf-border-unliked-enabled">Highlight unliked models</label>
-            <label class="hf-switch">
-              <input id="hf-border-unliked-enabled" type="checkbox">
-              <span class="hf-slider"></span>
-            </label>
-          </div>
-          <div class="hf-settings-group">
-            <label for="hf-border-unliked-color">Unliked border color</label>
-            <input id="hf-border-unliked-color" type="color">
-          </div>
-          <div class="hf-settings-group hf-switch-container">
-            <label for="hf-border-unliked-glow">Enable border glow</label>
-            <label class="hf-switch">
-              <input id="hf-border-unliked-glow" type="checkbox">
-              <span class="hf-slider"></span>
-            </label>
-          </div>
-
-          <div class="hf-modal-actions">
-            <button type="button" class="hf-btn hf-btn-secondary" id="hf-btn-close">Cancel</button>
-            <button type="button" class="hf-btn hf-btn-primary" id="hf-btn-save">Save Settings</button>
-          </div>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(container);
-
-    const fab = document.getElementById('hf-settings-fab');
-    const backdrop = document.getElementById('hf-settings-modal-backdrop');
-    const borderUnlikedEnabled = document.getElementById('hf-border-unliked-enabled');
-    const borderUnlikedColor = document.getElementById('hf-border-unliked-color');
-    const borderUnlikedGlow = document.getElementById('hf-border-unliked-glow');
-
-    const syncFields = () => {
-      borderUnlikedEnabled.checked = CONFIG.BORDER_UNLIKED_ENABLED;
-      borderUnlikedColor.value = CONFIG.BORDER_UNLIKED_COLOR;
-      borderUnlikedGlow.checked = CONFIG.BORDER_UNLIKED_GLOW;
-    };
-
-    const close = () => backdrop.classList.remove('open');
-    fab.addEventListener('click', () => {
-      syncFields();
-      backdrop.classList.add('open');
-    });
-    document.getElementById('hf-btn-close').addEventListener('click', close);
-    backdrop.addEventListener('click', event => {
-      if (event.target === backdrop) close();
-    });
-    document.getElementById('hf-btn-save').addEventListener('click', () => {
-      CONFIG.BORDER_UNLIKED_ENABLED = borderUnlikedEnabled.checked;
-      CONFIG.BORDER_UNLIKED_COLOR = borderUnlikedColor.value;
-      CONFIG.BORDER_UNLIKED_GLOW = borderUnlikedGlow.checked;
-
-      saveAllConfig();
-
-      injectStyles();
-      syncWidgetUI();
-      processModelCards();
-      close();
-    });
-  }
-
   injectStyles();
 
   const init = () => {
-    setupUI();
     setupSidebarWidget();
     observeCards();
     processModelCards();

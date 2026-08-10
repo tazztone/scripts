@@ -1,16 +1,16 @@
 # Hugging Face Unliked Model Highlighter & Date Filter
 
-A clean userscript for Hugging Face (`https://huggingface.co/models` and user/organization model lists like `https://huggingface.co/lightx2v/models`) that highlights unliked models with a glowing green border and adds client-side **Date Range Slider filtering**.
+A clean, high-performance userscript for Hugging Face (`https://huggingface.co/models` and user/organization model lists like `https://huggingface.co/lightx2v/models`) that highlights unliked models with a glowing green border and adds client-side **Date Range Slider filtering**.
 
 ![Hugging Face Unliked Model Highlighter & Date Filter](Screenshot.webp)
 
 ## Features
 
 - **Unliked Model Highlighter**: Adds a distinct emerald green border (`#10b981`) with soft glow around unliked models in search and listing cards.
+- **Dynamic Liked State Detection**: Real-time heart detection that updates immediately when you like or unlike models without needing page reloads.
 - **Date Range Slider Filter**: Restrict models by update age using interactive sliders, numeric min/max day inputs, and quick presets (`24h`, `3d`, `7d`, `14d`, `30d`, `60d`, `90d`, `180d`, `1y`, `All`).
-- **Sidebar Widget & Live Status**: Injects a native-styled filter widget into the left sidebar showing exact date range labels and live model counters (`Showing X / Y models`).
-- **Configurable Floating FAB**: Interactive settings modal (FAB at bottom-right) allows customizing border color, toggling glow on/off, and enabling/disabling highlighting.
-- **Single Page Application Resiliency**: Uses debounced MutationObservers and CSS rules to handle dynamic page transitions and infinite scroll seamlessly.
+- **Unified Sidebar Widget**: Injects a native-styled filter widget into the left sidebar showing exact date range labels, live model counters (`Showing X / Y models`), and expandable **Highlighter Options** (color picker, glow toggle, highlight switch).
+- **Performance Optimized**: MutationObserver feedback shielding and debounced storage IO for zero lag during slider dragging and infinite scroll.
 
 ## Requirements
 
@@ -38,7 +38,7 @@ Violentmonkey will detect the `.user.js` file and show an install dialog automat
 
 ## Configuration
 
-You can customize date filtering directly via the left sidebar widget, and configure highlight border settings using the floating gear icon in the bottom right corner (FAB):
+You can customize both date filtering and highlighter options directly inside the left sidebar widget under **Highlighter Options**:
 
 | Key | Default Value | Description |
 | :--- | :--- | :--- |
