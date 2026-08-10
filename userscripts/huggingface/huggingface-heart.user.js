@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Hugging Face Yellow Hearts & Unliked Model Highlighter
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.4.1
+// @version      1.4.2
 // @description  Make heart icons larger/yellow, highlight unliked models with a green border, like models directly from list cards, and filter models by date range slider.
 // @author       tazztone
 // @match        https://huggingface.co/*
@@ -213,6 +213,8 @@ const MODAL_STYLES = `
   }
 
   #hf-date-filter-widget {
+    box-sizing: border-box;
+    width: 100%;
     margin-bottom: 24px;
     padding: 14px 16px;
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -844,34 +846,65 @@ const MODAL_STYLES = `
     observer.observe(document.body, { childList: true, subtree: true });
   }
 
-  // ─── SIDEBAR WIDGET ─────────────────────────────────────────────────────────
-  function findSidebarParent() {
-    const headers = Array.from(document.querySelectorAll('h3, h4, div, span'));
-    for (const h of headers) {
-      const text = h.textContent.trim();
-      if (text === 'Parameters' || text === 'Tasks' || text === 'Libraries' || text === 'Filter by name' || text === 'Sort') {
-        const form = h.closest('form');
-        if (form) return form;
-        const aside = h.closest('aside');
-        if (aside) return aside;
-        const parentDiv = h.parentElement?.parentElement;
-        if (parentDiv && parentDiv.children.length > 1) return parentDiv;
+  // ─── SIDEBAR / CONTAINER WIDGET ──────────────────────────────────────────────
+  function findWidgetTarget() {
+    // 1. Look for true filter sidebar (e.g. on /models page)
+    const sidebars = document.querySelectorAll('aside, [class*="sidebar"]');
+    for (const sb of sidebars) {
+      if (sb.closest('header, nav, #hf-settings-modal')) continue;
+      const text = sb.textContent;
+      if (text.includes('Tasks') || text.includes('Libraries') || text.includes('Languages') || text.includes('Licenses') || text.includes('Parameters')) {
+        return { element: sb, method: 'prepend' };
       }
     }
-    const searchForm = document.querySelector('form[action*="/models"]') || document.querySelector('form');
-    if (searchForm) {
-      const aside = searchForm.closest('aside');
-      if (aside) return aside;
-      return searchForm.parentElement || searchForm;
+
+    // 2. Check sidebar filter forms that are NOT in header/nav
+    const forms = document.querySelectorAll('form');
+    for (const f of forms) {
+      if (f.closest('header, nav, #hf-settings-modal')) continue;
+      if (f.querySelector('input[placeholder*="Search models, datasets"]')) continue;
+      const aside = f.closest('aside');
+      if (aside && !aside.closest('header, nav')) return { element: aside, method: 'prepend' };
+      const text = f.textContent;
+      if (text.includes('Tasks') || text.includes('Libraries') || text.includes('Languages') || text.includes('Licenses')) {
+        return { element: f, method: 'prepend' };
+      }
     }
-    return document.querySelector('aside') || document.querySelector('main section') || document.querySelector('.grid > div');
+
+    // 3. Page without left sidebar (e.g. /lightx2v/models or user profile pages):
+    // Find the grid container holding the model cards or main section
+    const card = document.querySelector('article.overview-card-wrapper');
+    if (card) {
+      const grid = card.closest('.grid, [class*="grid"], [class*="gap-"]');
+      if (grid && !grid.closest('header, nav')) {
+        return { element: grid, method: 'before' };
+      }
+      if (card.parentElement && !card.parentElement.closest('header, nav')) {
+        return { element: card.parentElement, method: 'before' };
+      }
+    }
+
+    // 4. Fallback for main content area (never in header/nav)
+    const mainSection = document.querySelector('main section, main');
+    if (mainSection && !mainSection.closest('header, nav')) {
+      return { element: mainSection, method: 'prepend' };
+    }
+
+    return null;
   }
 
   function setupSidebarWidget() {
-    if (document.getElementById('hf-date-filter-widget')) return;
+    const existingWidget = document.getElementById('hf-date-filter-widget');
+    if (existingWidget) {
+      if (existingWidget.closest('header, nav')) {
+        existingWidget.remove();
+      } else {
+        return;
+      }
+    }
 
-    const targetParent = findSidebarParent();
-    if (!targetParent) return;
+    const target = findWidgetTarget();
+    if (!target || !target.element) return;
 
     const widget = document.createElement('div');
     widget.id = 'hf-date-filter-widget';
@@ -922,7 +955,12 @@ const MODAL_STYLES = `
       </div>
     `;
 
-    targetParent.insertBefore(widget, targetParent.firstChild);
+    if (target.method === 'before' && target.element.parentNode) {
+      target.element.parentNode.insertBefore(widget, target.element);
+    } else {
+      target.element.insertBefore(widget, target.element.firstChild);
+    }
+
     bindWidgetEvents();
     syncWidgetUI();
   }
