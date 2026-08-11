@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Hugging Face Unliked Model Highlighter & Date Filter
+// @name         Hugging Face Inline Liking, Unliked Model Highlighter & Date Filter
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.7.8
-// @description  Highlight unliked models with a green border and filter models by date range slider.
+// @version      1.8.1
+// @description  Like or unlike model cards inline, highlight unliked models, and filter models by date range slider.
 // @author       tazztone
 // @match        https://huggingface.co/*
 // @updateURL    https://raw.githubusercontent.com/tazztone/scripts/main/userscripts/huggingface/huggingface-heart.user.js
@@ -36,6 +36,18 @@ const PRESETS = [
   { id: '1y', label: '1y', min: 0, max: 365 },
   { id: 'all', label: 'All', min: 0, max: 99999 }
 ];
+
+const RESERVED_MODEL_PREFIXES = new Set([
+  'models', 'datasets', 'spaces', 'docs', 'posts', 'papers', 'settings', 'login',
+  'logout', 'join', 'pricing', 'notifications', 'search', 'tasks', 'tags',
+  'organizations', 'collections', 'chat', 'blog', 'brands', 'discussions'
+]);
+
+const HEART_PATH_SIGNATURES = [
+  '22.45', 'm0-2', 'M22.5,4', 'M22.5 4'
+];
+
+const NON_HEART_PATH_SIGNATURES = ['4.318', '14c1.49', '20.91'];
 
 const WIDGET_STYLES = `
   /* Card highlighting */
@@ -313,6 +325,8 @@ const WIDGET_STYLES = `
   };
 
   const CONFIG = loadConfig();
+  const inlineLikeStates = new Map();
+  const inlineLikePending = new WeakSet();
 
   const buildStyle = () => {
     const glowCss = CONFIG.BORDER_UNLIKED_GLOW
@@ -382,60 +396,91 @@ const WIDGET_STYLES = `
     return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
-  // ─── DOM CARD LIKED STATE INSPECTION ──────────────────────────────────────────
+  // ─── DOM CARD LIKED STATE INSPECTION & INLINE LIKING ─────────────────────────
+  function normalizeModelId(modelId) {
+    return modelId ? modelId.toLowerCase() : '';
+  }
+
+  function getLikeEndpoint(modelId) {
+    const encodedParts = modelId.split('/').map(part => encodeURIComponent(part));
+    return `/api/models/${encodedParts.join('/')}/like`;
+  }
+
+  function getModelIdFromCard(card) {
+    const anchors = card.querySelectorAll('a[href^="/"]');
+    for (const anchor of anchors) {
+      const href = anchor.getAttribute('href');
+      if (!href) continue;
+
+      const cleanPath = href.split('?')[0].split('#')[0].replace(/^\//, '');
+      const parts = cleanPath.split('/');
+      if (parts.length === 2 && parts[0] && parts[1] && !RESERVED_MODEL_PREFIXES.has(parts[0].toLowerCase())) {
+        return cleanPath;
+      }
+    }
+    return null;
+  }
+
+  function hasHeartPath(svg) {
+    const paths = svg.querySelectorAll('path');
+    let hasHeartSignature = false;
+
+    for (const path of paths) {
+      const d = path.getAttribute('d') || '';
+      if (NON_HEART_PATH_SIGNATURES.some(signature => d.includes(signature))) continue;
+      if (HEART_PATH_SIGNATURES.some(signature => d.includes(signature))) {
+        hasHeartSignature = true;
+      }
+    }
+
+    return hasHeartSignature;
+  }
+
+  function isHeartSvg(svg) {
+    if (!svg) return false;
+
+    const classStr = (svg.className?.baseVal || svg.className || '').toString();
+    const parentClass = (svg.parentElement?.className || '').toString();
+    const combined = `${classStr} ${parentClass}`;
+    if (/(heart|like)/i.test(combined)) return true;
+
+    return hasHeartPath(svg);
+  }
+
   function findHeartSvg(card) {
-    // 1. Explicit like container or button
-    const likeContainer = card.querySelector('[title*="like" i], [aria-label*="like" i], [class*="like" i], [class*="heart" i]');
-    if (likeContainer) {
-      const svg = likeContainer.querySelector('svg') || (likeContainer.tagName?.toLowerCase() === 'svg' ? likeContainer : null);
-      if (svg) return svg;
+    const markedContainer = card.querySelector('[title*="like" i], [aria-label*="like" i], [class*="heart" i], [class*="like" i]');
+    if (markedContainer) {
+      const markedSvg = markedContainer.tagName?.toLowerCase() === 'svg'
+        ? markedContainer
+        : markedContainer.querySelector('svg');
+      if (markedSvg && isHeartSvg(markedSvg)) return markedSvg;
     }
 
-    // 2. Search SVGs inside card for specific heart path signatures
-    const svgs = card.querySelectorAll('svg');
-    for (const svg of svgs) {
-      const classStr = (svg.className?.baseVal || svg.className || '').toString();
-      const parentClass = (svg.parentElement?.className || '').toString();
-      const combined = `${classStr} ${parentClass}`;
-
-      if (/(heart|like)/i.test(combined)) {
-        return svg;
-      }
-
-      const paths = svg.querySelectorAll('path');
-      for (const path of paths) {
-        const d = path.getAttribute('d') || '';
-        if (
-          d.includes('22.45') || d.includes('22.5,4') || d.includes('22.5 4') ||
-          d.includes('21.35') || d.includes('20.84') || d.includes('4.318') ||
-          d.includes('20.364') || d.includes('14c1.49') || d.includes('7.78l') ||
-          d.includes('21.23') || d.includes('20.91') || d.includes('21.174')
-        ) {
-          return svg;
-        }
-      }
+    const footerContainers = Array.from(card.querySelectorAll('div.mr-1.flex.items-center')).reverse();
+    for (const container of footerContainers) {
+      const svg = container.querySelector('svg');
+      if (svg && isHeartSvg(svg)) return svg;
     }
 
-    // 3. Fallback: inspect SVGs from footer/bottom of card (heart icon is near likes count)
-    for (const svg of Array.from(svgs).reverse()) {
-      const parentText = svg.parentElement?.textContent || '';
-      if (/[\d\.]+[kM]?/i.test(parentText)) {
-        const d = svg.querySelector('path')?.getAttribute('d') || '';
-        if (!d.includes('M26 24') && !d.includes('M10 10H8.4') && !d.includes('M11 15H6') && !d.includes('M4 16') && !d.includes('M13 10')) {
-          return svg;
-        }
-      }
+    for (const svg of card.querySelectorAll('svg')) {
+      if (isHeartSvg(svg)) return svg;
     }
 
     return null;
   }
 
-  function isModelLiked(card) {
+  function isModelLiked(card, modelId) {
+    const stateKey = normalizeModelId(modelId);
+    if (stateKey && inlineLikeStates.has(stateKey)) {
+      return inlineLikeStates.get(stateKey);
+    }
+
     // 1. Look for explicit aria-pressed on button/container
     const likeBtn = card.querySelector('[title*="like" i], [aria-label*="like" i]');
     if (likeBtn) {
       const ariaPressed = likeBtn.getAttribute('aria-pressed');
       if (ariaPressed === 'true') return true;
+      if (ariaPressed === 'false') return false;
     }
 
     // 2. Find heart SVG inside card
@@ -491,20 +536,205 @@ const WIDGET_STYLES = `
     return false;
   }
 
-  function updateCardVisual(card) {
-    if (!CONFIG.BORDER_UNLIKED_ENABLED) {
-      card.classList.remove('hf-is-unliked', 'hf-is-liked');
-      return;
+  function setAttributeOrRemove(element, name, value) {
+    if (value === null) {
+      element.removeAttribute(name);
+    } else {
+      element.setAttribute(name, value);
+    }
+  }
+
+  function updateNativeHeartVisual(heartSvg, isLiked) {
+    if (!heartSvg) return;
+
+    if (isLiked) {
+      heartSvg.classList.add('text-red-500');
+      heartSvg.classList.remove('text-gray-400');
+    } else {
+      heartSvg.classList.remove('text-red-500');
+      heartSvg.classList.add('text-gray-400');
     }
 
-    const isLiked = isModelLiked(card);
+    for (const path of heartSvg.querySelectorAll('path')) {
+      path.setAttribute('fill', isLiked ? 'currentColor' : 'none');
+    }
+  }
+
+  function getHeartContainer(heartSvg) {
+    if (!heartSvg) return null;
+
+    const knownContainer = heartSvg.closest('div.mr-1.flex.items-center, button, [role="button"]');
+    if (knownContainer) return knownContainer;
+
+    const parent = heartSvg.parentElement;
+    return parent && parent.tagName.toLowerCase() !== 'a' ? parent : heartSvg;
+  }
+
+  function updateInlineAccessibility(container, modelId, isLiked) {
+    if (!container) return;
+
+    container.setAttribute('role', 'button');
+    container.tabIndex = 0;
+    container.setAttribute('aria-pressed', String(isLiked));
+    container.setAttribute('aria-label', `${isLiked ? 'Unlike' : 'Like'} ${modelId} inline`);
+  }
+
+  function findLikeCountNode(container) {
+    if (!container) return null;
+
+    const textNode = Array.from(container.childNodes).find(node =>
+      node.nodeType === Node.TEXT_NODE && /^\s*\d+\s*$/.test(node.textContent || '')
+    );
+    if (textNode) return textNode;
+
+    return Array.from(container.children).find(element =>
+      !element.querySelector('svg') && /^\s*\d+\s*$/.test(element.textContent || '')
+    ) || null;
+  }
+
+  function updateLikeCountText(container, isNowLiked) {
+    const countNode = findLikeCountNode(container);
+    if (!countNode) return;
+
+    const currentText = countNode.textContent.trim();
+    const currentValue = parseInt(currentText, 10);
+    const nextValue = isNowLiked ? currentValue + 1 : Math.max(0, currentValue - 1);
+    countNode.textContent = countNode.nodeType === Node.TEXT_NODE ? ` ${nextValue}` : String(nextValue);
+  }
+
+  function captureInlineVisual(container, heartSvg) {
+    return {
+      heartClass: heartSvg?.getAttribute('class') ?? null,
+      pathFills: heartSvg ? Array.from(heartSvg.querySelectorAll('path')).map(path => path.getAttribute('fill')) : [],
+      ariaPressed: container?.getAttribute('aria-pressed') ?? null,
+      ariaLabel: container?.getAttribute('aria-label') ?? null,
+      countNode: findLikeCountNode(container),
+      countText: findLikeCountNode(container)?.textContent ?? null
+    };
+  }
+
+  function restoreInlineVisual(container, heartSvg, snapshot) {
+    if (heartSvg) {
+      setAttributeOrRemove(heartSvg, 'class', snapshot.heartClass);
+      Array.from(heartSvg.querySelectorAll('path')).forEach((path, index) => {
+        setAttributeOrRemove(path, 'fill', snapshot.pathFills[index] ?? null);
+      });
+    }
+
+    if (container) {
+      setAttributeOrRemove(container, 'aria-pressed', snapshot.ariaPressed);
+      setAttributeOrRemove(container, 'aria-label', snapshot.ariaLabel);
+      if (snapshot.countNode && snapshot.countText !== null) {
+        snapshot.countNode.textContent = snapshot.countText;
+      }
+    }
+  }
+
+  function updateCardVisual(card, modelId) {
+    const isLiked = isModelLiked(card, modelId);
     if (isLiked) {
       card.classList.remove('hf-is-unliked');
-      card.classList.add('hf-is-liked');
+      if (CONFIG.BORDER_UNLIKED_ENABLED) card.classList.add('hf-is-liked');
     } else {
       card.classList.remove('hf-is-liked');
-      card.classList.add('hf-is-unliked');
+      if (CONFIG.BORDER_UNLIKED_ENABLED) card.classList.add('hf-is-unliked');
     }
+
+    if (!CONFIG.BORDER_UNLIKED_ENABLED) {
+      card.classList.remove('hf-is-unliked', 'hf-is-liked');
+    }
+
+    if (modelId && inlineLikeStates.has(normalizeModelId(modelId))) {
+      const heartSvg = findHeartSvg(card);
+      const container = getHeartContainer(heartSvg);
+      updateNativeHeartVisual(heartSvg, isLiked);
+      updateInlineAccessibility(container, modelId, isLiked);
+    }
+  }
+
+  async function toggleInlineLike(card, modelId, container) {
+    if (inlineLikePending.has(container)) return;
+
+    const stateKey = normalizeModelId(modelId);
+    const wasLiked = isModelLiked(card, modelId);
+    const hadOverride = inlineLikeStates.has(stateKey);
+    const previousOverride = inlineLikeStates.get(stateKey);
+    const heartSvg = findHeartSvg(card);
+    const snapshot = captureInlineVisual(container, heartSvg);
+    const nextLiked = !wasLiked;
+
+    inlineLikePending.add(container);
+    inlineLikeStates.set(stateKey, nextLiked);
+    updateCardVisual(card, modelId);
+    updateLikeCountText(container, nextLiked);
+
+    try {
+      let failure = null;
+      let requiresLogin = false;
+      try {
+        const response = await fetch(getLikeEndpoint(modelId), {
+          method: nextLiked ? 'POST' : 'DELETE',
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json' }
+        });
+
+        if (response.status === 401 || response.status === 403) {
+          requiresLogin = true;
+          failure = new Error(`Like request rejected with HTTP ${response.status}`);
+        } else if (!response.ok) {
+          failure = new Error(`Like request failed with HTTP ${response.status}`);
+        }
+      } catch (error) {
+        failure = error;
+      }
+
+      if (failure) {
+        if (hadOverride) {
+          inlineLikeStates.set(stateKey, previousOverride);
+        } else {
+          inlineLikeStates.delete(stateKey);
+        }
+        restoreInlineVisual(container, heartSvg, snapshot);
+        updateCardVisual(card, modelId);
+
+        if (requiresLogin) {
+          alert('Please log in to Hugging Face to like models directly.');
+        } else {
+          console.error('[HF Inline Like] Failed to update like status:', failure);
+        }
+      }
+    } finally {
+      inlineLikePending.delete(container);
+    }
+  }
+
+  function setupHeartButton(card, modelId) {
+    const heartSvg = findHeartSvg(card);
+    if (!heartSvg) return;
+
+    const container = getHeartContainer(heartSvg);
+    if (!container || container.dataset.hfInlineBound === modelId) return;
+
+    container.dataset.hfInlineBound = modelId;
+    container.classList.add('hf-inline-like-btn');
+    container.style.cursor = 'pointer';
+    updateInlineAccessibility(container, modelId, isModelLiked(card, modelId));
+
+    container.addEventListener('mousedown', event => event.stopPropagation(), true);
+    container.addEventListener('mouseup', event => event.stopPropagation(), true);
+    container.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+      toggleInlineLike(card, modelId, container);
+    }, true);
+    container.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+      toggleInlineLike(card, modelId, container);
+    }, true);
   }
 
   function processModelCards() {
@@ -517,6 +747,8 @@ const WIDGET_STYLES = `
     const maxDays = CONFIG.DATE_MAX_DAYS;
 
     cards.forEach(card => {
+      const modelId = getModelIdFromCard(card);
+
       if (isDateFilterActive) {
         const timestamp = getModelDate(card);
         if (timestamp !== null) {
@@ -536,7 +768,8 @@ const WIDGET_STYLES = `
         visibleCards++;
       }
 
-      updateCardVisual(card);
+      updateCardVisual(card, modelId);
+      if (modelId) setupHeartButton(card, modelId);
     });
 
     updateWidgetStats(visibleCards, totalCards);

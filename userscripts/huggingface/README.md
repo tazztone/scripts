@@ -1,8 +1,8 @@
-# Hugging Face Unliked Model Highlighter & Date Filter: Client-Side Model Filtering & Visual Highlighter
+# Hugging Face Inline Liking, Unliked Model Highlighter & Date Filter
 
-A clean, high-performance userscript for Hugging Face (`https://huggingface.co/models` and user/organization model lists like `https://huggingface.co/lightx2v/models`) that highlights unliked models with a glowing green border and adds client-side **Date Range Slider filtering**.
+A clean, high-performance userscript for Hugging Face (`https://huggingface.co/models` and user/organization model lists like `https://huggingface.co/lightx2v/models`) that lets you like or unlike model cards inline, highlights unliked models with a glowing green border, and adds client-side **Date Range Slider filtering**.
 
-![Hugging Face Unliked Model Highlighter & Date Filter](Screenshot.webp)
+![Hugging Face inline liking, unliked model highlighter, and date filter](Screenshot.webp)
 
 ## 🚀 Installation
 
@@ -10,17 +10,21 @@ Requires Violentmonkey (or a compatible userscript manager):
 - [Firefox](https://addons.mozilla.org/en-US/firefox/addon/violentmonkey/)
 - [Chrome / Brave](https://chromewebstore.google.com/detail/violentmonkey/jinjaccalgkegednnccohejagnlnfdag)
 
-### 👉 [**CLICK HERE TO INSTALL USERSCRIPT (v1.7.8)**](https://raw.githubusercontent.com/tazztone/scripts/main/userscripts/huggingface/huggingface-heart.user.js?v=1.7.8)
+### 👉 [**CLICK HERE TO INSTALL USERSCRIPT (v1.8.1)**](https://raw.githubusercontent.com/tazztone/scripts/main/userscripts/huggingface/huggingface-heart.user.js?v=1.8.1)
 
 ---
 
 ## ⚡ Features
 
 1. **💚 Unliked Model Highlighter**: Adds a distinct emerald green border (`#10b981`) with soft glow around unliked models in search and listing cards.
-2. **❤️ Dynamic Liked State Detection**: Real-time heart detection that updates immediately when you like or unlike models without requiring page reloads.
-3. **📅 Date Range Slider Filter**: Restrict models by update age using interactive sliders, numeric min/max day inputs, and quick presets (`24h`, `3d`, `7d`, `14d`, `30d`, `60d`, `90d`, `180d`, `1y`, `All`).
-4. **📊 Unified Sidebar Widget**: Injects a native-styled filter widget into the left sidebar showing exact date range labels, live model counters (`Showing X / Y models`), and expandable **Highlighter Options** (color picker, glow toggle, highlight switch).
-5. **⚡ Performance Optimized**: MutationObserver feedback shielding and debounced storage IO for zero lag during slider dragging and infinite scroll.
+2. **❤️ Inline Model Liking**: Click or keyboard-activate the heart/count area on a model card to like or unlike it without opening the model page. The native Hugging Face heart appearance is preserved and failed requests roll back immediately.
+3. **🔎 Dynamic Liked State Detection**: Detects native outline and filled heart states and updates the green card border as cards load or change.
+4. **📅 Date Range Slider Filter**: Restrict models by update age using interactive sliders, numeric min/max day inputs, and quick presets (`24h`, `3d`, `7d`, `14d`, `30d`, `60d`, `90d`, `180d`, `1y`, `All`).
+5. **📊 Unified Sidebar Widget**: Injects a native-styled filter widget into the left sidebar showing exact date range labels, live model counters (`Showing X / Y models`), and expandable **Highlighter Options** (color picker, glow toggle, highlight switch).
+6. **⚡ Performance Optimized**: MutationObserver feedback shielding and debounced storage IO for zero lag during slider dragging and infinite scroll.
+
+> [!NOTE]
+> The former yellow heart styling was retired before the green-border highlighter. Hearts now keep Hugging Face’s native appearance; inline liking is the restored behavior.
 
 ---
 
@@ -50,3 +54,19 @@ You can customize both date filtering and highlighter options directly inside th
 
 > [!NOTE]
 > All settings and configuration options are saved **permanently** via `GM_setValue` / `GM_getValue` in userscript storage and persist indefinitely across browser sessions and site reloads.
+
+## 🧪 Development Checks
+
+From `userscripts/huggingface/`:
+
+```bash
+node --check huggingface-heart.user.js
+pytest tests/test_userscript.py
+```
+
+Install the test dependencies and Chromium once before the browser tests:
+
+```bash
+python -m pip install -r tests/requirements.txt
+python -m playwright install chromium
+```

@@ -1,12 +1,12 @@
-# Hugging Face Heart SVG & Date Filter - Research Log
+# Hugging Face Heart SVG, Inline Liking & Date Filter - Research Log
 
-This document details the DOM structure, selection strategies, API endpoints, and client-side date range filtering mechanisms used on Hugging Face model listing pages (`https://huggingface.co/models` and user/org pages like `https://huggingface.co/*/models`).
+This document details the DOM structure, selection strategies, API endpoints, inline liking behavior, and client-side date range filtering mechanisms used on Hugging Face model listing pages (`https://huggingface.co/models` and user/org pages like `https://huggingface.co/*/models`).
 
 ---
 
 ## 1. Trigger & Target Elements
 
-**Goal**: Identify the heart icon SVGs on Hugging Face pages and apply custom CSS styles to make them larger and stand out in yellow.
+**Goal**: Identify native heart icon SVGs on Hugging Face model cards, restore inline like/unlike actions, highlight unliked cards, and apply client-side date filtering.
 
 **Target Path Signatures**:
 - **Unliked Model List Card Heart (Outline `♡`)**: `d="M22.45,6a5.47,5.47,0,0,1,3.91,1.64...m0-2..."` (`d.includes('22.45')` or `d.includes('m0-2')`).
@@ -35,9 +35,8 @@ This document details the DOM structure, selection strategies, API endpoints, an
 
 ## 3. Hugging Face REST APIs for Liking
 
-### User Likes List
-- **Endpoint**: `GET /api/users/${username}/likes`
-- **Returns**: Array of liked objects containing `repo.name` (e.g., `"thinkingmachines/Inkling"`).
+### User Likes Synchronization
+- The inline feature intentionally does not fetch the user’s complete liked-model list. Initial state comes from the card’s native heart; optimistic state is kept in memory until the page reloads.
 
 ### Like Model
 - **Endpoint**: `POST /api/models/${modelId}/like`
@@ -51,13 +50,12 @@ This document details the DOM structure, selection strategies, API endpoints, an
 
 ## 4. Unliked Models Highlight & Inline Liking Strategy
 
-1. **User Detection**: Detect current logged-in user via `data-props` attributes, header profile links, or `/api/whoami`.
-2. **Likes Synchronization**: Fetch the user's liked model set from `/api/users/${username}/likes`.
-3. **Card Tagging & Solid vs Outline Heart Inspection**:
-   - Locate heart SVG via container attributes/classes (`[title*="like"]`, `[class*="heart"]`), SVG path `d` signatures (`M22.5,4`, `22.45`, `21.35`, `20.84`), or card footer proximity.
+1. **Card Tagging & Solid vs Outline Heart Inspection**:
+   - Locate heart SVG via container attributes/classes (`[title*="like"]`, `[class*="heart"]`), exact SVG path `d` signatures (`M22.5,4`, `22.45`, `m0-2`), or the documented card-footer container.
    - Differentiate liked models (`.hf-is-liked`) by detecting red/pink color classes (`text-red-500`) or solid heart path signature (`M22.5,4`).
    - Differentiate unliked models (`.hf-is-unliked`) by detecting outline heart path signature (`M22.45` / `m0-2`) or gray styling (`text-gray-400`).
-4. **Green Border Styling**:
+   - Do not use generic task/stat path fragments (`4.318`, `14c1.49`, `20.91`) as heart evidence.
+2. **Green Border Styling**:
    ```css
    article.overview-card-wrapper.hf-is-unliked {
      border: 2px solid #10b981 !important;
@@ -66,10 +64,11 @@ This document details the DOM structure, selection strategies, API endpoints, an
      transition: border 0.3s ease, box-shadow 0.3s ease !important;
    }
    ```
-5. **Inline Liking Event & Card Identification**:
+3. **Inline Liking Event & Card Identification**:
    - **Model ID Resolution**: Cards contain multiple `<a>` tags (e.g. org avatar `/google` before model link `/google/gemma-7b`). Using `querySelectorAll('a[href^="/"]')` and filtering for 2-segment non-system routes guarantees accurate `modelId` resolution across all list styles.
-   - **Click Interception**: Attach capture-phase listeners (`mousedown`, `mouseup`, `click`) to heart containers with `e.preventDefault()`, `e.stopPropagation()`, and `e.stopImmediatePropagation()`. This prevents the parent `<a>` anchor tag from triggering page navigation.
-   - **Session Independence**: Rest requests to `POST /api/models/${modelId}/like` and `DELETE /api/models/${modelId}/like` rely on standard HTTP session cookies and operate independently of username detection. 401/403 responses gracefully prompt for login if unauthenticated.
+   - **Click Interception**: Attach capture-phase listeners to the heart/count container. `mousedown` and `mouseup` stop propagation only; `click` prevents the parent `<a>` navigation. Enter and Space provide keyboard activation.
+   - **Session Independence**: Requests to `POST /api/models/${modelId}/like` and `DELETE /api/models/${modelId}/like` use same-origin session cookies and operate independently of username detection. 401/403 responses prompt for login and restore the prior state.
+   - **Native Appearance**: The retired yellow styling is not restored. Successful optimistic updates use Hugging Face’s native red/filled and gray/outline heart states.
 
 ---
 
@@ -100,4 +99,3 @@ Hugging Face uses Svelte / client-side routing (SPA). A `MutationObserver` monit
 2. **Multi-Path Heart SVG Inspection**: Updated `isModelLiked()` to iterate through all `<path>` elements via `querySelectorAll('path')` instead of querying only the first child path.
 3. **SPA Detached Element Handling**: Added `!document.body.contains(noticeEl)` check inside `updateEmptyNotice()` to ensure empty notice re-injection after SPA page transitions.
 4. **Min/Max Days Input Range Synchronization**: Enforced `DATE_MAX_DAYS >= DATE_MIN_DAYS` auto-adjustment when user increases `minInput`.
-

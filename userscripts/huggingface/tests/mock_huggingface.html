@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Hugging Face model card mock</title>
+  <style>
+    body { font: 14px sans-serif; background: #111827; color: #f8fafc; padding: 24px; }
+    .grid { display: grid; gap: 16px; }
+    article { width: 520px; border: 1px solid #374151; border-radius: 8px; }
+    article > a { display: block; padding: 16px; color: inherit; text-decoration: none; }
+    .metadata { display: flex; align-items: center; gap: 12px; margin-top: 18px; color: #9ca3af; }
+    .task-badge, .mr-1.flex.items-center { display: inline-flex; align-items: center; gap: 4px; }
+    .task-badge svg, .mr-1.flex.items-center svg { width: 16px; height: 16px; }
+    .mr-1.flex.items-center { margin-left: auto; }
+  </style>
+</head>
+<body>
+  <main>
+    <div id="model-grid" class="grid">
+      <article id="card-unliked" class="overview-card-wrapper">
+        <a class="model-link" href="/owner/model">
+          <div class="title">owner/model</div>
+          <div class="metadata">
+            <div class="task-badge" id="task-icon">
+              <svg viewBox="0 0 24 24"><path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>
+              <span>Image-Text-to-Text</span>
+            </div>
+            <time datetime="2026-08-10T09:00:00Z">1 day ago</time>
+            <div id="unliked-like" class="mr-1 flex items-center">
+              <svg viewBox="0 0 30 30" fill="currentColor"><path d="M22.45,6a5.47,5.47,0,0,1,3.91,1.64m0-2"></path></svg>
+              <span>33</span>
+            </div>
+          </div>
+        </a>
+      </article>
+
+      <article id="card-liked" class="overview-card-wrapper">
+        <a class="model-link" href="/owner/liked-model">
+          <div class="title">owner/liked-model</div>
+          <div class="metadata">
+            <div class="task-badge">
+              <svg viewBox="0 0 24 24"><path d="M14c1.49 0 2.7 1.21 2.7 2.7"></path></svg>
+              <span>Text Generation</span>
+            </div>
+            <time datetime="2026-08-09T09:00:00Z">2 days ago</time>
+            <div id="liked-like" class="mr-1 flex items-center">
+              <svg viewBox="0 0 30 30" fill="currentColor"><path d="M22.5,4c-2,0-3.9,0.8-5.3,2.2L16,7.4"></path></svg>
+              <span>7</span>
+            </div>
+          </div>
+        </a>
+      </article>
+    </div>
+  </main>
+
+  <script>
+    window.navigationAttempts = 0;
+    window.likeRequests = [];
+    window.fetchMode = 'ok';
+    window.alertMessages = [];
+    window.alert = message => window.alertMessages.push(message);
+
+    document.querySelectorAll('article > a').forEach(anchor => {
+      anchor.addEventListener('click', event => {
+        window.navigationAttempts += 1;
+        event.preventDefault();
+      });
+    });
+
+    window.fetch = async (url, options = {}) => {
+      window.likeRequests.push({ url, method: options.method || 'GET' });
+      if (window.fetchMode === 'reject') throw new Error('network failure');
+      if (window.fetchMode === 'unauthorized') return { status: 401, ok: false };
+      return { status: 200, ok: true };
+    };
+  </script>
+</body>
+</html>
