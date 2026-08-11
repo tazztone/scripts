@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Hugging Face Inline Liking, Unliked Model Highlighter & Date Filter
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.8.1
+// @version      1.8.2
 // @description  Like or unlike model cards inline, highlight unliked models, and filter models by date range slider.
 // @author       tazztone
 // @match        https://huggingface.co/*
@@ -475,8 +475,11 @@ const WIDGET_STYLES = `
       return inlineLikeStates.get(stateKey);
     }
 
-    // 1. Look for explicit aria-pressed on button/container
-    const likeBtn = card.querySelector('[title*="like" i], [aria-label*="like" i]');
+    // 1. Look for native aria-pressed on an unbound button/container. The
+    // userscript writes aria-pressed for accessibility after binding, so its
+    // value must not override later native heart SVG updates.
+    const likeBtn = Array.from(card.querySelectorAll('[title*="like" i], [aria-label*="like" i]'))
+      .find(element => !element.hasAttribute('data-hf-inline-bound'));
     if (likeBtn) {
       const ariaPressed = likeBtn.getAttribute('aria-pressed');
       if (ariaPressed === 'true') return true;
@@ -644,11 +647,13 @@ const WIDGET_STYLES = `
       card.classList.remove('hf-is-unliked', 'hf-is-liked');
     }
 
-    if (modelId && inlineLikeStates.has(normalizeModelId(modelId))) {
-      const heartSvg = findHeartSvg(card);
-      const container = getHeartContainer(heartSvg);
-      updateNativeHeartVisual(heartSvg, isLiked);
+    const heartSvg = findHeartSvg(card);
+    const container = getHeartContainer(heartSvg);
+    if (container?.dataset.hfInlineBound === modelId) {
       updateInlineAccessibility(container, modelId, isLiked);
+    }
+    if (modelId && inlineLikeStates.has(normalizeModelId(modelId))) {
+      updateNativeHeartVisual(heartSvg, isLiked);
     }
   }
 
@@ -820,7 +825,15 @@ const WIDGET_STYLES = `
       }, 200);
     });
 
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      // Hugging Face hydrates existing cards by changing the heart path.
+      // Observe only this native state signal to avoid loops from our own
+      // class, fill, and accessibility updates.
+      attributes: true,
+      attributeFilter: ['d']
+    });
   }
 
   // ─── SIDEBAR / CONTAINER WIDGET ──────────────────────────────────────────────

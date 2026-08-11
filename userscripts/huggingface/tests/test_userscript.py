@@ -50,6 +50,9 @@ def test_inline_like_and_unlike_stay_on_the_card(page: Page):
 
 
 def test_liked_card_uses_delete_and_task_icon_does_not_bind(page: Page):
+    assert 'hf-is-liked' in (page.locator('#card-liked').get_attribute('class') or '')
+    assert 'hf-is-unliked' not in (page.locator('#card-liked').get_attribute('class') or '')
+
     page.click('#liked-like')
     page.wait_for_function('window.likeRequests.length === 1')
 
@@ -60,6 +63,24 @@ def test_liked_card_uses_delete_and_task_icon_does_not_bind(page: Page):
     page.click('#task-icon')
     assert page.evaluate('window.navigationAttempts') == 1
     assert len(requests(page)) == 1
+
+
+def test_hydrated_liked_card_clears_unliked_border(page: Page):
+    assert 'hf-is-unliked' in (page.locator('#card-unliked').get_attribute('class') or '')
+
+    page.locator('#unliked-like svg').evaluate("""svg => {
+      svg.classList.add('text-red-500');
+      svg.querySelector('path').setAttribute('d', 'M22.5,4c-2,0-3.9,0.8-5.3,2.2L16,7.4');
+    }""")
+    page.wait_for_timeout(350)
+
+    classes = page.locator('#card-unliked').get_attribute('class') or ''
+    assert 'hf-is-liked' in classes
+    assert 'hf-is-unliked' not in classes
+    assert page.locator('#unliked-like').get_attribute('aria-pressed') == 'true'
+    assert page.locator('#card-unliked').evaluate(
+        "card => getComputedStyle(card).borderTopColor"
+    ) != 'rgb(16, 185, 129)'
 
 
 @pytest.mark.parametrize('fetch_mode,expected_alert', [
