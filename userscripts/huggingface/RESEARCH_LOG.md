@@ -100,3 +100,4 @@ Hugging Face uses Svelte / client-side routing (SPA). A `MutationObserver` monit
 3. **SPA Detached Element Handling**: Added `!document.body.contains(noticeEl)` check inside `updateEmptyNotice()` to ensure empty notice re-injection after SPA page transitions.
 4. **Min/Max Days Input Range Synchronization**: Enforced `DATE_MAX_DAYS >= DATE_MIN_DAYS` auto-adjustment when user increases `minInput`.
 5. **Hydrated Like State Precedence**: Ignore userscript-owned `aria-pressed` values after binding and observe native heart-path attribute changes so hydrated liked cards lose the green unliked border.
+6. **Shared Footer SVG Selection**: Hugging Face footers can contain task, parameter, download, inference, and heart SVGs in one container. Heart selection must validate path signatures and scan all marked-container SVGs instead of trusting the first child or an ancestor class.

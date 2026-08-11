@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Hugging Face Inline Liking, Unliked Model Highlighter & Date Filter
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.8.2
+// @version      1.8.3
 // @description  Like or unlike model cards inline, highlight unliked models, and filter models by date range slider.
 // @author       tazztone
 // @match        https://huggingface.co/*
@@ -437,23 +437,17 @@ const WIDGET_STYLES = `
   }
 
   function isHeartSvg(svg) {
-    if (!svg) return false;
-
-    const classStr = (svg.className?.baseVal || svg.className || '').toString();
-    const parentClass = (svg.parentElement?.className || '').toString();
-    const combined = `${classStr} ${parentClass}`;
-    if (/(heart|like)/i.test(combined)) return true;
-
-    return hasHeartPath(svg);
+    return Boolean(svg && hasHeartPath(svg));
   }
 
   function findHeartSvg(card) {
     const markedContainer = card.querySelector('[title*="like" i], [aria-label*="like" i], [class*="heart" i], [class*="like" i]');
     if (markedContainer) {
-      const markedSvg = markedContainer.tagName?.toLowerCase() === 'svg'
+      const markedSvgs = markedContainer.tagName?.toLowerCase() === 'svg'
         ? markedContainer
-        : markedContainer.querySelector('svg');
-      if (markedSvg && isHeartSvg(markedSvg)) return markedSvg;
+        : markedContainer.querySelectorAll('svg');
+      const markedSvg = Array.from(markedSvgs).find(isHeartSvg);
+      if (markedSvg) return markedSvg;
     }
 
     const footerContainers = Array.from(card.querySelectorAll('div.mr-1.flex.items-center')).reverse();

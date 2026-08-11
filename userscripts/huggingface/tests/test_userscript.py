@@ -25,6 +25,22 @@ def page(browser, userscript_content):
     page.close()
 
 
+@pytest.fixture
+def shared_footer_page(browser, userscript_content):
+    page = browser.new_page()
+    page.goto(MOCK_HTML)
+    page.evaluate("""() => {
+      for (const [cardId, likeId] of [['card-unliked', 'unliked-like'], ['card-liked', 'liked-like']]) {
+        const card = document.querySelector(`#${cardId}`);
+        document.querySelector(`#${likeId}`).prepend(card.querySelector('.task-badge svg'));
+      }
+    }""")
+    page.evaluate(userscript_content)
+    page.wait_for_selector('#unliked-like[data-hf-inline-bound]')
+    yield page
+    page.close()
+
+
 def requests(page: Page):
     return page.evaluate('window.likeRequests')
 
@@ -81,6 +97,24 @@ def test_hydrated_liked_card_clears_unliked_border(page: Page):
     assert page.locator('#card-unliked').evaluate(
         "card => getComputedStyle(card).borderTopColor"
     ) != 'rgb(16, 185, 129)'
+
+
+def test_shared_footer_rescan_preserves_liked_state(shared_footer_page: Page):
+    initial = shared_footer_page.evaluate("""() => [
+      document.querySelector('#card-unliked').className,
+      document.querySelector('#card-liked').className
+    ]""")
+    shared_footer_page.evaluate("document.body.append(document.createElement('span'))")
+    shared_footer_page.wait_for_timeout(350)
+    final = shared_footer_page.evaluate("""() => [
+      document.querySelector('#card-unliked').className,
+      document.querySelector('#card-liked').className
+    ]""")
+
+    assert 'hf-is-unliked' in initial[0]
+    assert 'hf-is-liked' in initial[1]
+    assert 'hf-is-unliked' in final[0]
+    assert 'hf-is-liked' in final[1]
 
 
 @pytest.mark.parametrize('fetch_mode,expected_alert', [
