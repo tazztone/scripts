@@ -12,12 +12,15 @@ else
   exec sudo bash "$0" "$@"
 fi
 
+REAL_USER="${SUDO_USER:-$USER}"
+REAL_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
+
 log() { printf '%s\n' "$*"; }
 
 log "1. Cleaning up duplicate installation (using install2.sh)..."
-if [ -f "/home/tazztone/Downloads/install2.sh" ]; then
-  /home/tazztone/Downloads/install2.sh --uninstall || log "Warning: Uninstaller returned an error, proceeding with manual cleanup."
-  rm -f "/home/tazztone/Downloads/install2.sh"
+if [ -f "$REAL_HOME/Downloads/install2.sh" ]; then
+  "$REAL_HOME/Downloads/install2.sh" --uninstall || log "Warning: Uninstaller returned an error, proceeding with manual cleanup."
+  rm -f "$REAL_HOME/Downloads/install2.sh"
 else
   log "install2.sh not found, running manual cleanup of second install files..."
   rm -rf /opt/antigravity2 /opt/antigravity-ide2
@@ -46,14 +49,17 @@ EOF
 chmod +x /usr/local/bin/antigravity-ide-profile2
 
 # CLI app wrapper
-if [ -f "/home/tazztone/.local/bin/agy" ]; then
-  cat > /usr/local/bin/agy2 <<'EOF'
+AGY_BIN="$REAL_HOME/.local/bin/agy"
+ACCOUNT2_HOME="$REAL_HOME/.antigravity-cli-account2"
+
+if [ -f "$AGY_BIN" ]; then
+  cat > /usr/local/bin/agy2 <<EOF
 #!/usr/bin/env bash
 # Run original Antigravity CLI with Profile 2 configuration (no global API key, isolated keyring)
-exec env HOME="/home/tazztone/.antigravity-cli-account2" \
-         DBUS_SESSION_BUS_ADDRESS="unix:path=/dev/null" \
-         GOOGLE_API_KEY="" \
-         "/home/tazztone/.local/bin/agy" "$@"
+exec env HOME="$ACCOUNT2_HOME" \\
+         DBUS_SESSION_BUS_ADDRESS="unix:path=/dev/null" \\
+         GOOGLE_API_KEY="" \\
+         "$AGY_BIN" "\$@"
 EOF
   chmod +x /usr/local/bin/agy2
 fi
