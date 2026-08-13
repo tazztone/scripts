@@ -18,7 +18,7 @@ DO_STATUS=0
 DO_PRINT_DOWNLOADS=0
 FORCE=0
 YES=0
-INSTALLER_URL="${ANTIGRAVITY_LINUX_INSTALLER_URL:-}"
+INSTALLER_URL="${ANTIGRAVITY_LINUX_INSTALLER_URL:-https://raw.githubusercontent.com/opensnap/antigravity/main/install.sh}"
 TMPDIR_PATH=""
 
 cleanup() {
@@ -63,7 +63,7 @@ Options:
 
 Recommended GitHub Pages one-liner:
   INSTALLER_URL="https://YOUR_GITHUB_USERNAME.github.io/antigravity-linux/install.sh"; \
-  curl -fsSL "$INSTALLER_URL" | sudo -E env ANTIGRAVITY_LINUX_INSTALLER_URL="$INSTALLER_URL" bash -s -- --all
+  curl -fsSL "$INSTALLER_URL" | sudo env ANTIGRAVITY_LINUX_INSTALLER_URL="$INSTALLER_URL" bash -s -- --all
 
 Update after install:
   sudo antigravity-linux update --all
@@ -110,9 +110,9 @@ require_root_or_reexec() {
     return 0
   fi
   if command -v sudo >/dev/null 2>&1 && [ -n "${BASH_SOURCE[0]:-}" ] && [ -r "${BASH_SOURCE[0]}" ] && [ "${BASH_SOURCE[0]}" != "bash" ] && [ "${BASH_SOURCE[0]}" != "sh" ]; then
-    exec sudo -E env "ANTIGRAVITY_LINUX_INSTALLER_URL=$INSTALLER_URL" bash "${BASH_SOURCE[0]}" "${ORIGINAL_ARGS[@]}"
+    exec sudo env "ANTIGRAVITY_LINUX_INSTALLER_URL=$INSTALLER_URL" bash "${BASH_SOURCE[0]}" "${ORIGINAL_ARGS[@]}"
   fi
-  err "System-wide install needs root. Use: curl -fsSL <installer-url> | sudo -E env ANTIGRAVITY_LINUX_INSTALLER_URL=<installer-url> bash"
+  err "System-wide install needs root. Use: curl -fsSL <installer-url> | sudo env ANTIGRAVITY_LINUX_INSTALLER_URL=<installer-url> bash"
 }
 
 install_deps_debian() {
@@ -454,19 +454,59 @@ PY
 
 install_manager_command() {
   local installer_url="$INSTALLER_URL"
+  mkdir -p /usr/local/share/antigravity-linux
+  if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
+    cp -f "${BASH_SOURCE[0]}" /usr/local/share/antigravity-linux/install.sh
+    chmod +x /usr/local/share/antigravity-linux/install.sh
+  elif [ -n "$installer_url" ]; then
+    curl -fsSL "$installer_url" -o /usr/local/share/antigravity-linux/install.sh || true
+    chmod +x /usr/local/share/antigravity-linux/install.sh || true
+  fi
+
   cat > /usr/local/bin/antigravity-linux <<SH
 #!/usr/bin/env bash
 set -euo pipefail
 SCRIPT_URL="$installer_url"
-if [ -z "\$SCRIPT_URL" ]; then
-  echo "No installer URL was stored." >&2
+LOCAL_SCRIPT="/usr/local/share/antigravity-linux/install.sh"
+
+run_installer() {
+  local script="\$1"
+  shift
+  if [ "\$(id -u)" -eq 0 ]; then
+    bash "\$script" "\$@"
+  else
+    if [ "\${1:-}" = "--status" ] || [ "\${1:-}" = "-h" ] || [ "\${1:-}" = "--help" ] || [ "\${1:-}" = "--print-downloads" ]; then
+      bash "\$script" "\$@"
+    else
+      sudo bash "\$script" "\$@"
+    fi
+  fi
+}
+
+run_remote() {
+  local url="\$1"
+  shift
+  if [ "\$(id -u)" -eq 0 ]; then
+    curl -fsSL "\$url" | env ANTIGRAVITY_LINUX_INSTALLER_URL="\$url" bash -s -- "\$@"
+  else
+    curl -fsSL "\$url" | sudo env ANTIGRAVITY_LINUX_INSTALLER_URL="\$url" bash -s -- "\$@"
+  fi
+}
+
+if [ -n "\$SCRIPT_URL" ]; then
+  if run_remote "\$SCRIPT_URL" "\$@"; then
+    exit 0
+  else
+    echo "Warning: Failed to fetch installer update from \$SCRIPT_URL. Falling back to local installer script..." >&2
+  fi
+fi
+
+if [ -f "\$LOCAL_SCRIPT" ]; then
+  run_installer "\$LOCAL_SCRIPT" "\$@"
+else
+  echo "Error: No installer URL was stored and local script not found at \$LOCAL_SCRIPT." >&2
   echo "Reinstall with ANTIGRAVITY_LINUX_INSTALLER_URL set, or run install.sh locally." >&2
   exit 1
-fi
-if [ "\$(id -u)" -eq 0 ]; then
-  curl -fsSL "\$SCRIPT_URL" | env ANTIGRAVITY_LINUX_INSTALLER_URL="\$SCRIPT_URL" bash -s -- "\$@"
-else
-  curl -fsSL "\$SCRIPT_URL" | sudo -E env ANTIGRAVITY_LINUX_INSTALLER_URL="\$SCRIPT_URL" bash -s -- "\$@"
 fi
 SH
   chmod +x /usr/local/bin/antigravity-linux
@@ -539,9 +579,12 @@ print_success_summary() {
   log "- Status:    antigravity-linux --status"
   log "- Update:    sudo antigravity-linux update --all"
   log "- Uninstall: sudo antigravity-linux --uninstall"
-  if [ -z "$INSTALLER_URL" ]; then
+  if [ -n "$INSTALLER_URL" ]; then
     log ""
-    log "Note: antigravity-linux was installed without a stored URL. Re-run this local script for updates or reinstall from a published URL."
+    log "Update source: $INSTALLER_URL"
+  else
+    log ""
+    log "Update source: local script (/usr/local/share/antigravity-linux/install.sh)"
   fi
   if [ "$INSTALL_IDE" -eq 1 ]; then
     log ""
@@ -551,7 +594,7 @@ print_success_summary() {
 
 uninstall_all() {
   require_root_or_reexec
-  rm -rf /opt/antigravity /opt/antigravity.new /opt/antigravity.previous /opt/antigravity-ide /opt/antigravity-ide.new /opt/antigravity-ide.previous
+  rm -rf /opt/antigravity /opt/antigravity.new /opt/antigravity.previous /opt/antigravity-ide /opt/antigravity-ide.new /opt/antigravity-ide.previous /usr/local/share/antigravity-linux
   rm -f /usr/local/bin/antigravity /usr/local/bin/antigravity-ide /usr/local/bin/update-antigravity /usr/local/bin/update-antigravity-ide /usr/local/bin/antigravity-linux
   rm -f /usr/share/applications/antigravity.desktop /usr/share/applications/antigravity-ide.desktop
   rm -f /usr/share/icons/hicolor/512x512/apps/antigravity.png /usr/share/icons/hicolor/512x512/apps/antigravity-ide.png
