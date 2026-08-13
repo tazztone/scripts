@@ -1,16 +1,8 @@
 # Antigravity Multi-Profile Management
 
-Based on [github.com/opensnap/antigravity](https://github.com/opensnap/antigravity).
+Based on [github.com/opensnap/antigravity](https://github.com/opensnap/antigravity) with local installer caching and multi-profile enhancements.
 
 This directory contains utility scripts to set up, configure, and manage multiple isolated user profiles/accounts for a single installation of Google Antigravity and Antigravity IDE on Linux.
-
----
-
-## Why Use Multiple Profiles?
-
-Instead of installing two completely separate copies of the application (which duplicates binaries, consumes excess disk space, and complicates updating), the recommended way to run two isolated user profiles/accounts side-by-side is to use command-line flags on the *original* installation.
-
-We use a helper script that automatically configures isolated wrapper scripts and desktop launchers for a second profile (**Profile 2**).
 
 ---
 
@@ -18,42 +10,71 @@ We use a helper script that automatically configures isolated wrapper scripts an
 
 | File | Description |
 | :--- | :--- |
-| **[install.sh](file:///home/tazztone/_coding/scripts/sh/antigravity2/install.sh)** | The original Antigravity Linux installer script from https://github.com/opensnap/antigravity. |
-| **[setup-profile2.sh](file:///home/tazztone/_coding/scripts/sh/antigravity2/setup-profile2.sh)** | Helper script that cleans up duplicate installations and configures wrapper launchers for Profile 2. |
+| **[install.sh](file:///home/tazztone/_coding/scripts/sh/antigravity2/install.sh)** | Enhanced Antigravity Linux installer script with local script caching, clean sudo execution, and offline fallback support. |
+| **[setup-profile2.sh](file:///home/tazztone/_coding/scripts/sh/antigravity2/setup-profile2.sh)** | Portable helper script that cleans up duplicate installations and configures isolated wrapper launchers for Profile 2. |
 
 ---
 
-## How it Works
+## 1. Installing & Updating Antigravity
 
-Both profiles use the same application binaries from the original installation. When you launch the second profile, they are invoked with command-line flags that redirect user data:
+Run `install.sh` to install or update Antigravity 2.0 Desktop and Antigravity IDE:
 
-* **Desktop App (Profile 2):** Launched with `--user-data-dir="$HOME/.config/antigravity-profile2"` to isolate all login sessions and application state.
-* **IDE App (Profile 2):** Launched with `--user-data-dir="$HOME/.config/Antigravity-IDE-profile2"`. By omitting the extensions directory flag, it shares all installed extensions with Profile 1 (stored in `~/.antigravity-ide/extensions`) while keeping settings, workspace states, and login sessions completely separate.
-* **CLI App (Profile 2):** Launched with `env HOME="/home/tazztone/.antigravity-cli-account2"`, with `DBUS_SESSION_BUS_ADDRESS` set to `unix:path=/dev/null` (disabling GNOME Keyring access by blocking D-Bus fallbacks, forcing token storage inside the isolated home folder) and `GOOGLE_API_KEY` cleared (forcing the OAuth flow).
+```bash
+./install.sh --all
+```
 
-This prevents configuration/login collisions and allows you to run both sessions simultaneously.
+### System Management Commands
+Once installed, helper commands are available system-wide:
+
+* **Check status:** `antigravity-linux --status`
+* **Update all components:** `sudo antigravity-linux update --all`
+* **Update desktop app only:** `sudo update-antigravity`
+* **Update IDE only:** `sudo update-antigravity-ide`
+* **Uninstall system files:** `sudo antigravity-linux --uninstall`
+
+*Note: The installer automatically caches a local copy at `/usr/local/share/antigravity-linux/install.sh`. This ensures `antigravity-linux update --all` can query https://antigravity.google/download directly for updates without requiring access to GitHub.*
 
 ---
 
-## How to Set It Up
+## 2. Why Use Multiple Profiles?
 
-To clean up duplicate installations and configure the launchers for Profile 2:
+Instead of installing two separate copies of the binary packages (which duplicates binaries, consumes excess disk space, and complicates updates), running two isolated user accounts side-by-side is best accomplished using command-line flags on the *original* installation.
 
-1. Open your terminal.
-2. Run the setup helper script with superuser permissions (required to write to `/usr/local/bin` and update the applications database):
+The `setup-profile2.sh` script configures wrapper launchers and desktop menu entries for **Profile 2**.
+
+---
+
+## 3. How Profile Isolation Works
+
+Both profiles share the core application binaries from the original installation. When launching Profile 2, the wrapper scripts pass parameters to isolate user data:
+
+* **Desktop App (Profile 2):** Launched with `--user-data-dir="$HOME/.config/antigravity-profile2"` to isolate login sessions and application state.
+* **IDE App (Profile 2):** Launched with `--user-data-dir="$HOME/.config/Antigravity-IDE-profile2"`. It shares installed extensions with Profile 1 (stored in `~/.antigravity-ide/extensions`) while keeping settings, workspace states, and auth sessions completely separate.
+* **CLI App (Profile 2):** Launched with `env HOME="$HOME/.antigravity-cli-account2"`, `DBUS_SESSION_BUS_ADDRESS="unix:path=/dev/null"` (disabling GNOME Keyring access by blocking D-Bus fallbacks, forcing token storage inside the isolated home folder), and `GOOGLE_API_KEY=""` (forcing the OAuth flow).
+
+This prevents configuration/login collisions and allows both sessions to run simultaneously.
+
+---
+
+## 4. Setting Up Profile 2
+
+To configure the launchers for Profile 2:
+
+1. Open terminal in this directory.
+2. Run the setup helper script:
    ```bash
-   sudo /home/tazztone/_coding/scripts/sh/antigravity2/setup-profile2.sh
+   sudo ./setup-profile2.sh
    ```
 
 ---
 
-## Launching the Second Profile
+## 5. Launching Profile 2
 
-Once the setup script completes, you can launch the second profile:
+Once setup is complete, you can launch Profile 2:
 
 * **From your Application Menu:**
   * Search for and click on **Antigravity (Profile 2)** or **Antigravity IDE (Profile 2)**.
 * **From the Command Line:**
-  * Run Desktop: `antigravity-profile2`
-  * Run IDE: `antigravity-ide-profile2`
-  * Run CLI: `agy2`
+  * Run Desktop (Profile 2): `antigravity-profile2`
+  * Run IDE (Profile 2): `antigravity-ide-profile2`
+  * Run CLI (Profile 2): `agy2`
