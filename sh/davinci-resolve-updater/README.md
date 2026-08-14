@@ -13,11 +13,12 @@ Additionally, the installer's dependency check fails on newer Ubuntu versions be
 
 ## The Solution
 The [update.sh](update.sh) script automates the entire installation and patching process:
-1. Validates that the necessary `unzip` tool is installed.
-2. Safely unzips the downloaded installer into a temporary subdirectory inside the ZIP file's parent folder (avoiding common `/tmp` size constraints on systems where `/tmp` is a small `tmpfs` RAM disk).
-3. Launches the installer using the `SKIP_PACKAGE_CHECK=1` environment variable to bypass legacy package checks.
-4. Automatically moves the conflicting bundled GLib/GObject libraries (`libglib`, `libgio`, `libgmodule`, and `libgobject`) to `/opt/resolve/libs/disabled-libs/`, forcing Resolve to use the system's newer, compatible versions.
-5. Cleans up all extraction artifacts securely.
+1. Requests `sudo` credentials upfront and maintains a background session keepalive throughout extraction so you can let it run unattended.
+2. Accepts both `.zip` archives and `.run` installer files directly, or automatically discovers the newest installer in `~/Downloads`.
+3. Safely extracts to a named cache folder and skips re-extraction if the installer was already unpacked from a previous run.
+4. Launches the installer using the `SKIP_PACKAGE_CHECK=1` environment variable to bypass legacy package checks.
+5. Automatically moves the conflicting bundled GLib/GObject libraries (`libglib`, `libgio`, `libgmodule`, and `libgobject`) to `/opt/resolve/libs/disabled-libs/`, forcing Resolve to use the system's newer, compatible versions.
+6. Automatically cleans up temporary extracted files only upon successful installation.
 
 ## Usage
 
@@ -27,13 +28,15 @@ chmod +x update.sh
 ```
 
 ### 1. Automatic Search (Recommended)
-By default, running the script with no arguments will automatically search for the newest `DaVinci_Resolve*_Linux.zip` file inside your `~/Downloads` directory:
+By default, running the script with no arguments will automatically search for the newest `DaVinci_Resolve*_Linux.zip` or `.run` file inside your `~/Downloads` directory:
 ```bash
 ./update.sh
 ```
 
-### 2. Manual Zip Target
-Alternatively, pass the direct path to the `.zip` archive:
+### 2. Manual Archive or Installer Target
+Alternatively, pass the direct path to either the `.zip` archive or the extracted `.run` installer:
 ```bash
-./update.sh ~/Downloads/DaVinci_Resolve_Studio_21.0.1_Linux.zip
+./update.sh ~/Downloads/DaVinci_Resolve_Studio_21.0.4_Linux.zip
+# or
+./update.sh ~/Downloads/DaVinci_Resolve_Studio_21.0.4_Linux.run
 ```
