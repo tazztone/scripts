@@ -86,20 +86,24 @@ elif [[ "$INPUT_PATH" == *.zip ]]; then
     # Use deterministic extraction folder based on ZIP filename to avoid re-extracting on rerun
     ZIP_BASENAME="$(basename "$ZIP_PATH" .zip)"
     TEMP_DIR="$(dirname "$ZIP_PATH")/resolve-extracted-${ZIP_BASENAME}"
-    mkdir -p "$TEMP_DIR"
 
-    MARKER_FILE="$TEMP_DIR/.extraction_complete"
+    # Check if an existing .run installer is in TEMP_DIR or in any previous resolve-* extraction folder
     EXISTING_RUN=$(find "$TEMP_DIR" -name "*Resolve*_Linux.run" -type f 2>/dev/null | head -n 1)
+    if [ -z "$EXISTING_RUN" ]; then
+        EXISTING_RUN=$(find "$(dirname "$ZIP_PATH")"/resolve-* -name "*Resolve*_Linux.run" -type f 2>/dev/null | head -n 1)
+        if [ -n "$EXISTING_RUN" ]; then
+            TEMP_DIR="$(dirname "$EXISTING_RUN")"
+        fi
+    fi
 
-    if [ -f "$MARKER_FILE" ] && [ -n "$EXISTING_RUN" ] && [ -f "$EXISTING_RUN" ]; then
+    if [ -n "$EXISTING_RUN" ] && [ -f "$EXISTING_RUN" ]; then
         info "Found already extracted installer: $(basename "$EXISTING_RUN") in $TEMP_DIR"
         info "Skipping extraction step."
         RUN_FILE="$EXISTING_RUN"
     else
+        mkdir -p "$TEMP_DIR"
         info "Extracting installer archive to $TEMP_DIR..."
-        rm -f "$MARKER_FILE"
         unzip -q -o "$ZIP_PATH" -d "$TEMP_DIR"
-        touch "$MARKER_FILE"
 
         RUN_FILE=$(find "$TEMP_DIR" -name "*Resolve*_Linux.run" -type f 2>/dev/null | head -n 1)
         if [ -z "$RUN_FILE" ]; then
