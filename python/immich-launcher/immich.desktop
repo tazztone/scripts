@@ -1,0 +1,24 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Immich
+Comment=Launch Immich Photo & Video Server and App
+Exec=/home/tazztone/.local/share/immich/launch-immich.sh
+Icon=/home/tazztone/.local/share/icons/hicolor/512x512/apps/brave-llgjbhgnegoenepjafbbonhhkdocfpck-Default.png
+Terminal=false
+StartupNotify=true
+Categories=Graphics;Photography;Network;
+StartupWMClass=crx_llgjbhgnegoenepjafbbonhhkdocfpck
+Actions=Albums;Map;Photos
+
+[Desktop Action Albums]
+Name=Albums
+Exec=/opt/brave.com/brave/brave-browser --profile-directory=Default --app-id=llgjbhgnegoenepjafbbonhhkdocfpck --app-launch-url-for-shortcuts-menu-item=http://localhost:2283/albums
+
+[Desktop Action Map]
+Name=Map
+Exec=/opt/brave.com/brave/brave-browser --profile-directory=Default --app-id=llgjbhgnegoenepjafbbonhhkdocfpck --app-launch-url-for-shortcuts-menu-item=http://localhost:2283/map
+
+[Desktop Action Photos]
+Name=Photos
+Exec=/opt/brave.com/brave/brave-browser --profile-directory=Default --app-id=llgjbhgnegoenepjafbbonhhkdocfpck --app-launch-url-for-shortcuts-menu-item=http://localhost:2283/photos
