@@ -11,7 +11,7 @@ A collection of Python automation scripts and CLI utilities interacting with the
 | [`timelapse_stacking.py`](timelapse_stacking.py) | [**`timelapse_stacking.md`**](timelapse_stacking.md) | Interactive terminal wizard to detect timelapse sequences, visually verify them in browser via temporary albums, and group them into Immich Stacks. |
 | [`create_album_from_log.py`](create_album_from_log.py) | [**`create_album_from_log.md`**](create_album_from_log.md) | Populates or updates an Immich album from a `timelapse_stacking_last_run.json` log in Index Mode (covers only) or Collection Mode (all frames). |
 | [`timelapse_unstack.py`](timelapse_unstack.py) | [**`timelapse_unstack.md`**](timelapse_unstack.md) | Lists and deletes Immich stacks by frame threshold (`MIN_FRAMES`) with dry-run support and interactive confirmation. |
-| [`album_date_expansion.py`](album_date_expansion.py) | [**`album_date_expansion.md`**](album_date_expansion.md) | Expands an existing album by searching for all photos taken on the same dates as existing album assets and batch-adding missing photos. |
+| [`album_date_expansion.py`](album_date_expansion.py) | [**`album_date_expansion.md`**](album_date_expansion.md) | Expands or updates an album with all photos matching existing asset dates (e.g. newly exported RAW edits, unlocated photos) with interactive album picker. |
 
 ---
 
