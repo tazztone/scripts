@@ -17,6 +17,7 @@ scripts/
 │   ├── imagemagick_toolbox.sh      # ImageMagick batch operations
 │   └── lossless_ops_toolbox.sh     # Lossless media conversion and processing
 ├── python/                         # Python utilities
+│   ├── compress_png_to_webp_and_keep_comfyui_workflow/  # ComfyUI PNG to WebP compressor with metadata preservation
 │   ├── google_drive_remove_duplicates/  # Google Drive duplicate file scanner + remover
 │   ├── lora_remove_te_weights/          # Strip TE (text encoder) weights from LoRA .safetensors
 │   └── put_files_into_folder_by_extension/  # Auto-organizer: sort files into folders by extension
@@ -36,6 +37,7 @@ scripts/
 - FFmpeg-based batch media processing wrappers
 
 ### `python/` — Python Utilities
+- **ComfyUI PNG to WebP Compressor** — parallel batch convert PNGs to WebP while mapping workflow and prompt graphs to EXIF tags
 - **Google Drive Dedup** — authenticate via OAuth, scan for duplicate files by hash, prompt for removal
 - **LoRA TE Weight Remover** — strip text encoder weights from `.safetensors` LoRA models (reduce file size for SDXL/FLUX)
 - **Extension-based File Organizer** — auto-sorts a flat directory into sub-folders by file extension
