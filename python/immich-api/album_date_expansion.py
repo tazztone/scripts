@@ -238,6 +238,11 @@ def main():
         help="Target album UUID directly",
     )
     parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Print all new asset filenames without truncating",
+    )
+    parser.add_argument(
         "-n", "--dry-run",
         action="store_true",
         help="Preview changes and stats without adding photos to the album",
@@ -291,13 +296,19 @@ def main():
 
     # Step 2: Search all photos on those dates
     all_found_ids = set()
+    all_found_assets = {}
     date_breakdown = []
 
     print("\nQuerying library...")
     for date_str in dates:
         date_assets = search_photos_on_date(date_str)
-        date_ids = {a["id"] for a in date_assets}
-        all_found_ids.update(date_ids)
+        date_ids = set()
+        for a in date_assets:
+            a_id = a.get("id")
+            if a_id:
+                date_ids.add(a_id)
+                all_found_ids.add(a_id)
+                all_found_assets[a_id] = a
 
         in_album_for_date = sum(
             1 for a_id, d in asset_date_map.items() if d == date_str
@@ -330,7 +341,38 @@ def main():
         print(f"\n✓ Album '{album_name}' is already completely up to date with all photos from these dates.")
         sys.exit(0)
 
-    print(f"\nFound {len(new_ids)} new photo(s) available to add to '{album_name}'.")
+    # Detailed list of new assets to add
+    new_assets = [all_found_assets[aid] for aid in new_ids if aid in all_found_assets]
+    new_assets.sort(key=lambda a: a.get("localDateTime") or a.get("fileCreatedAt") or "")
+
+    print(f"\nNew asset(s) to add ({len(new_assets)} total):")
+    new_by_date = {}
+    for a in new_assets:
+        d = (a.get("localDateTime") or a.get("fileCreatedAt") or "Unknown")[:10]
+        new_by_date.setdefault(d, []).append(a)
+
+    MAX_DISPLAY = len(new_assets) if args.verbose else 30
+    displayed_count = 0
+
+    for d in sorted(new_by_date.keys()):
+        if displayed_count >= MAX_DISPLAY and not args.verbose:
+            break
+        d_items = new_by_date[d]
+        print(f"\n  📅 {d} (+{len(d_items)} new):")
+        for a in d_items:
+            if displayed_count >= MAX_DISPLAY and not args.verbose:
+                break
+            filename = a.get("originalFileName") or "Unnamed"
+            asset_type = a.get("type", "IMAGE")
+            time_str = (a.get("localDateTime") or a.get("fileCreatedAt") or "")[11:19]
+            time_label = f" at {time_str}" if time_str else ""
+            photo_url = f"{BASE_URL}/photos/{a['id']}"
+            print(f"    • {filename:<25} [{asset_type:<5}]{time_label}  →  {photo_url}")
+            displayed_count += 1
+
+    if displayed_count < len(new_assets):
+        remaining = len(new_assets) - displayed_count
+        print(f"\n    ... and {remaining} more new asset(s) (pass -v / --verbose to view all)")
 
     if args.dry_run:
         print("\n[DRY RUN] No changes were made to the album. Run without -n/--dry-run to apply.")

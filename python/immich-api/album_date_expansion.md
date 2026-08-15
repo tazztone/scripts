@@ -137,7 +137,8 @@ python3 album_date_expansion.py --list
 | :--- | :--- | :--- |
 | `album` | Positional | Album name (fuzzy/exact match) or UUID. |
 | `--album-id` | `-a` | Explicit album UUID. |
-| `--dry-run` | `-n` | Preview matching photos and stats without modifying album. |
+| `--verbose` | `-v` | Display all new filenames and timestamps without truncating to 30. |
+| `--dry-run` | `-n` | Preview matching photos, breakdown table, and filenames without modifying album. |
 | `--yes` | `-y` | Automatically confirm and apply changes without prompt. |
 | `--list` | *(None)* | List all albums on the server and exit. |
 | `--help` | `-h` | Display command-line help and usage. |
