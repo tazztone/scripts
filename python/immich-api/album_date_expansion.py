@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import os
 import sys
 import argparse
@@ -73,7 +74,7 @@ def prompt_select_album(albums):
                 print(f"No albums matching '{choice}'. Try again.")
 
 
-def resolve_album(album_arg, albums):
+def resolve_album(album_arg, albums, auto_yes=False):
     """Resolve album by UUID, exact/fuzzy name match, or interactive selection."""
     if album_arg:
         # Match by ID
@@ -106,6 +107,8 @@ def resolve_album(album_arg, albums):
         matching = [a for a in albums if a["id"] == DEFAULT_ALBUM_ID]
         if matching:
             default_album = matching[0]
+            if auto_yes:
+                return default_album
             use_default = input(
                 f"Use default album from .env: '{default_album['albumName']}'? [Y/n/list]: "
             ).strip().lower()
@@ -123,6 +126,73 @@ def get_album_details(album_id):
         print(f"Error retrieving album details (HTTP {resp.status_code}): {resp.text}")
         sys.exit(1)
     return resp.json()
+
+
+def get_album_assets(album_id):
+    """
+    Retrieve album name, existing asset IDs, unique capture dates, and a mapping of asset_id -> date_str.
+    Supports both legacy Immich (album['assets']) and Immich v3+ timeline bucket API.
+    """
+    album_info = get_album_details(album_id)
+    album_name = album_info.get("albumName", "Untitled Album")
+    existing_ids = set()
+    asset_date_map = {}
+    unique_dates = set()
+
+    # 1. Check legacy format (direct 'assets' array)
+    if "assets" in album_info and isinstance(album_info["assets"], list) and len(album_info["assets"]) > 0:
+        for a in album_info["assets"]:
+            a_id = a.get("id")
+            if a_id:
+                existing_ids.add(a_id)
+                dt = a.get("localDateTime") or a.get("fileCreatedAt") or a.get("createdAt")
+                if dt:
+                    d_str = str(dt)[:10]
+                    asset_date_map[a_id] = d_str
+                    unique_dates.add(d_str)
+        return album_name, existing_ids, sorted(unique_dates), asset_date_map
+
+    # 2. Immich v3+ Timeline Bucket API
+    try:
+        buckets_resp = requests.get(
+            f"{BASE_URL}/api/timeline/buckets?albumId={album_id}",
+            headers=headers,
+        )
+        if buckets_resp.status_code == 200:
+            buckets = buckets_resp.json()
+            for b in buckets:
+                tb = b.get("timeBucket")
+                if not tb:
+                    continue
+                b_resp = requests.get(
+                    f"{BASE_URL}/api/timeline/bucket?albumId={album_id}&timeBucket={tb}",
+                    headers=headers,
+                )
+                if b_resp.status_code == 200:
+                    b_data = b_resp.json()
+                    if isinstance(b_data, dict):
+                        ids = b_data.get("id", [])
+                        created_ats = b_data.get("fileCreatedAt", []) or b_data.get("createdAt", [])
+                        for a_id, dt in zip(ids, created_ats):
+                            existing_ids.add(a_id)
+                            if dt:
+                                d_str = str(dt)[:10]
+                                asset_date_map[a_id] = d_str
+                                unique_dates.add(d_str)
+                    elif isinstance(b_data, list):
+                        for item in b_data:
+                            if isinstance(item, dict) and "id" in item:
+                                a_id = item["id"]
+                                existing_ids.add(a_id)
+                                dt = item.get("localDateTime") or item.get("fileCreatedAt") or item.get("createdAt")
+                                if dt:
+                                    d_str = str(dt)[:10]
+                                    asset_date_map[a_id] = d_str
+                                    unique_dates.add(d_str)
+    except Exception as e:
+        print(f"Warning: Timeline bucket query encountered an issue: {e}")
+
+    return album_name, existing_ids, sorted(unique_dates), asset_date_map
 
 
 def search_photos_on_date(date_str):
@@ -197,27 +267,19 @@ def main():
         sys.exit(0)
 
     target_album_ref = args.album_id_opt or args.album
-    selected_album = resolve_album(target_album_ref, albums)
+    selected_album = resolve_album(target_album_ref, albums, auto_yes=args.yes)
     album_id = selected_album["id"]
 
-    # Step 1: Get complete asset list of target album
+    # Step 1: Get complete asset list & dates of target album
     print(f"\nFetching assets for album: '{selected_album['albumName']}'...")
-    full_album = get_album_details(album_id)
-    existing_assets = full_album.get("assets", [])
-    album_name = full_album.get("albumName", "Untitled Album")
+    album_name, existing_ids, dates, asset_date_map = get_album_assets(album_id)
 
-    if not existing_assets:
+    if not existing_ids:
         print(f"\nAlbum '{album_name}' is currently empty.")
         print("Cannot expand dates because there are no existing assets to extract dates from.")
         sys.exit(0)
 
-    existing_ids = {a["id"] for a in existing_assets}
-    print(f"Found {len(existing_assets)} existing asset(s) in album '{album_name}'.")
-
-    # Step 2: Extract unique dates from existing assets
-    dates = sorted(
-        set(a["localDateTime"][:10] for a in existing_assets if a.get("localDateTime"))
-    )
+    print(f"Found {len(existing_ids)} existing asset(s) across {len(dates)} date(s) in album '{album_name}'.")
 
     if not dates:
         print("Could not extract capture dates from any assets in this album.")
@@ -227,7 +289,7 @@ def main():
     for d in dates:
         print(f"  - {d}")
 
-    # Step 3: Search all photos on those dates
+    # Step 2: Search all photos on those dates
     all_found_ids = set()
     date_breakdown = []
 
@@ -238,7 +300,7 @@ def main():
         all_found_ids.update(date_ids)
 
         in_album_for_date = sum(
-            1 for a in existing_assets if a.get("localDateTime", "").startswith(date_str)
+            1 for a_id, d in asset_date_map.items() if d == date_str
         )
         new_for_date = len(date_ids - existing_ids)
         date_breakdown.append({
@@ -248,7 +310,7 @@ def main():
             "new_to_add": new_for_date,
         })
 
-    # Step 4: Summary Table
+    # Step 3: Summary Table
     new_ids = list(all_found_ids - existing_ids)
 
     print("\n" + "─" * 60)
@@ -260,7 +322,7 @@ def main():
         )
     print("─" * 60)
     print(
-        f"{'TOTALS':<14} {len(all_found_ids):<16} {len(existing_assets):<14} +{len(new_ids):<12}"
+        f"{'TOTALS':<14} {len(all_found_ids):<16} {len(existing_ids):<14} +{len(new_ids):<12}"
     )
     print("─" * 60)
 
@@ -280,7 +342,7 @@ def main():
             print("Aborted. No changes made.")
             sys.exit(0)
 
-    # Step 5: Batch add assets in chunks of 500
+    # Step 4: Batch add assets in chunks of 500
     print(f"\nAdding {len(new_ids)} asset(s) to '{album_name}' in batches of 500...")
     total_added = 0
     total_failed = 0
