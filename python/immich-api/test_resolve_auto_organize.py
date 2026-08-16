@@ -1,8 +1,33 @@
 import unittest
 from pathlib import Path
-from resolve_auto_organize import classify_media_clip
+from resolve_auto_organize import classify_media_clip, get_strict_resolution_label, get_normalized_fps_label
 
 class TestResolveAutoOrganize(unittest.TestCase):
+
+    def test_strict_resolution_labels(self):
+        # 16:9 standards
+        self.assertEqual(get_strict_resolution_label(1920, 1080), "1080p_FHD")
+        self.assertEqual(get_strict_resolution_label(3840, 2160), "4K_UHD_3840x2160")
+        self.assertEqual(get_strict_resolution_label(5464, 3070), "5.4K_5464x3070")
+        self.assertEqual(get_strict_resolution_label(4096, 2160), "DCI_4K_4096x2160")
+        self.assertEqual(get_strict_resolution_label(1280, 720), "720p_HD")
+
+        # 4:3 Photo Sensor Ratios
+        self.assertEqual(get_strict_resolution_label(4032, 3024), "Photo_4x3_4032x3024")
+        self.assertEqual(get_strict_resolution_label(4000, 3000), "Photo_4x3_4000x3000")
+
+        # Vertical
+        self.assertEqual(get_strict_resolution_label(3024, 4032), "Vertical_3024x4032")
+        self.assertEqual(get_strict_resolution_label(1080, 1920), "Vertical_1080x1920")
+
+    def test_normalized_fps_labels(self):
+        self.assertEqual(get_normalized_fps_label(23.976), "24fps")
+        self.assertEqual(get_normalized_fps_label(25.0), "25fps")
+        self.assertEqual(get_normalized_fps_label(29.97), "30fps")
+        self.assertEqual(get_normalized_fps_label(50.0), "50fps_SlowMo")
+        self.assertEqual(get_normalized_fps_label(59.94), "60fps_SlowMo")
+        self.assertEqual(get_normalized_fps_label(100.0), "100fps_SlowMo")
+        self.assertEqual(get_normalized_fps_label(240.0), "240fps_SlowMo")
 
     def test_classify_dji_drone(self):
         meta = {
@@ -21,8 +46,8 @@ class TestResolveAutoOrganize(unittest.TestCase):
         cls = classify_media_clip(meta)
         self.assertEqual(cls["camera_type"], "DJI")
         self.assertEqual(cls["clip_color"], "Orange")
-        self.assertIn("4K_UHD", cls["resolution_category"])
-        self.assertIn("SlowMo_59fps", cls["resolution_category"])
+        self.assertEqual(cls["resolution_category"], "4K_UHD_3840x2160")
+        self.assertEqual(cls["fps_label"], "60fps_SlowMo")
         self.assertEqual(cls["cst_profile"], "DJI D-Cinelike -> Rec.709")
 
     def test_classify_sony_xavc_slowmo(self):
@@ -42,8 +67,8 @@ class TestResolveAutoOrganize(unittest.TestCase):
         cls = classify_media_clip(meta)
         self.assertEqual(cls["camera_type"], "Sony")
         self.assertEqual(cls["clip_color"], "Teal")
-        self.assertIn("1080p_FHD", cls["resolution_category"])
-        self.assertIn("SlowMo_100fps", cls["resolution_category"])
+        self.assertEqual(cls["resolution_category"], "1080p_FHD")
+        self.assertEqual(cls["fps_label"], "100fps_SlowMo")
 
     def test_classify_panasonic_s5_vlog(self):
         meta = {
@@ -81,7 +106,8 @@ class TestResolveAutoOrganize(unittest.TestCase):
         cls = classify_media_clip(meta)
         self.assertEqual(cls["camera_type"], "Timelapse")
         self.assertEqual(cls["clip_color"], "Blue")
-        self.assertIn("Vertical", cls["resolution_category"])
+        self.assertEqual(cls["resolution_category"], "Vertical_3024x4032")
+        self.assertEqual(cls["fps_label"], "30fps")
 
 if __name__ == "__main__":
     unittest.main()

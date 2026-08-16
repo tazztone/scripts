@@ -6,7 +6,7 @@ Connects to DaVinci Resolve Studio (or runs standalone in --scan-only mode),
 probes video files using a 3-tier deep metadata engine (container EXIF/ffprobe tags,
 stream properties, and codec signatures), organizes clips into structured Media Pool Bins,
 assigns distinct Clip Colors per camera, adds Color Space Transform (CST) starting grade
-marker annotations, and auto-generates dedicated Timelines per camera/resolution bucket.
+marker annotations, and auto-generates dedicated Timelines with STRICT resolution & framerate matching.
 """
 
 import argparse
@@ -148,11 +148,75 @@ def probe_file_metadata(file_path: Path) -> Dict[str, Any]:
     }
 
 
+def get_strict_resolution_label(width: int, height: int) -> str:
+    """
+    Returns strict, exact resolution labels to prevent mixing 16:9, 4:3, 5.4K, 4K, 1080p, or vertical videos.
+    """
+    if width == 0 or height == 0:
+        return "Unknown_Res"
+
+    # Vertical / Portrait Video
+    if height > width:
+        if width == 1080 and height == 1920:
+            return "Vertical_1080x1920"
+        elif width == 2160 and height == 3840:
+            return "Vertical_2160x3840"
+        else:
+            return f"Vertical_{width}x{height}"
+
+    # Strict Landscape Resolutions
+    if width == 5464 and height == 3070:
+        return "5.4K_5464x3070"
+    elif width == 4096 and height == 2160:
+        return "DCI_4K_4096x2160"
+    elif width == 3840 and height == 2160:
+        return "4K_UHD_3840x2160"
+    elif width == 2720 and height == 1530:
+        return "2.7K_2720x1530"
+    elif width == 1920 and height == 1080:
+        return "1080p_FHD"
+    elif width == 1280 and height == 720:
+        return "720p_HD"
+    else:
+        # Photo sensor ratios (e.g. 4:3 timelapses 4032x3024, 4000x3000)
+        ratio = round(width / height, 2)
+        if ratio == 1.33:
+            return f"Photo_4x3_{width}x{height}"
+        elif ratio == 1.78:
+            return f"16x9_{width}x{height}"
+        else:
+            return f"{width}x{height}"
+
+
+def get_normalized_fps_label(fps: float) -> str:
+    """Normalizes minor mobile VFR jitter while strictly segregating deliberate framerates."""
+    if fps <= 0:
+        return ""
+    if abs(fps - 23.976) < 0.2 or abs(fps - 24.0) < 0.2:
+        return "24fps"
+    elif abs(fps - 25.0) < 0.2:
+        return "25fps"
+    elif abs(fps - 29.97) < 0.5 or abs(fps - 30.0) < 0.5:
+        return "30fps"
+    elif abs(fps - 50.0) < 0.5:
+        return "50fps_SlowMo"
+    elif abs(fps - 59.94) < 0.5 or abs(fps - 60.0) < 0.5:
+        return "60fps_SlowMo"
+    elif abs(fps - 100.0) < 0.5:
+        return "100fps_SlowMo"
+    elif abs(fps - 119.88) < 0.5 or abs(fps - 120.0) < 0.5:
+        return "120fps_SlowMo"
+    elif abs(fps - 240.0) < 1.0:
+        return "240fps_SlowMo"
+    else:
+        return f"{int(round(fps))}fps"
+
+
 def classify_media_clip(meta: Dict[str, Any]) -> Dict[str, str]:
     """
     3-Tier Classification Engine:
-    Determines Camera Brand, Model, Resolution Category, Suggested Color Profile,
-    Clip Color, Target Bin Name, and CST (Color Space Transform) starting grade notes.
+    Determines Camera Brand, Model, Strict Resolution, Framerate Bucket, Suggested Color Profile,
+    Clip Color, Target Bin Name, and CST starting grade notes.
     """
     filename = meta["filename"]
     make = meta.get("make", "").lower()
@@ -209,7 +273,7 @@ def classify_media_clip(meta: Dict[str, Any]) -> Dict[str, str]:
     # Timelapses & Hyperlapses
     elif "hyperlapse" in filename.lower() or "__tl" in filename.lower() or "timelapse" in filename.lower():
         camera_type = "Timelapse"
-        camera_model_display = "Timelapse / Hyperlapse"
+        camera_model_display = "Timelapse"
         cst_profile = "Standard Rec.709"
 
     # Smartphone / Mobile
@@ -224,27 +288,18 @@ def classify_media_clip(meta: Dict[str, Any]) -> Dict[str, str]:
         camera_model_display = "Exported Render"
         cst_profile = "Master Rec.709"
 
-    # 2. Resolution & Aspect Ratio Categorization
-    if height > width and width > 0:
-        res_category = "Vertical_1080p" if height <= 1920 else "Vertical_4K"
-    elif width >= 3840:
-        res_category = "4K_UHD"
-    elif width >= 1920:
-        res_category = "1080p_FHD"
-    elif width > 0:
-        res_category = f"{width}x{height}"
-    else:
-        res_category = "Unknown_Res"
-
-    # High Frame Rate tag
-    fps_tag = f"{int(fps)}fps" if fps > 0 else ""
-    if fps >= 50:
-        res_category += f"_SlowMo_{fps_tag}"
+    # 2. Strict Resolution & FPS Tagging
+    res_category = get_strict_resolution_label(width, height)
+    fps_label = get_normalized_fps_label(fps)
 
     # 3. Bin Naming, Clip Color, and Starting Grade Annotations
     clip_color = CAMERA_COLOR_PALETTE.get(camera_type, "Olive")
-    bin_name = f"{camera_type}_{camera_model_display}_{res_category}".replace(" ", "_")
-    timeline_name = f"TL - {camera_type} {camera_model_display} ({res_category.replace('_', ' ')})"
+    
+    # Clean identifier without spaces or special symbols
+    safe_cam = camera_type.replace(" ", "_")
+    safe_model = camera_model_display.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_")
+    bin_name = f"{safe_cam}_{safe_model}_{res_category}_{fps_label}".strip("_").replace("__", "_")
+    timeline_name = f"TL - {camera_type} {camera_model_display} ({res_category} {fps_label})".replace("  ", " ").strip()
     
     starting_grade_note = (
         f"[CST Starting Grade]\n"
@@ -258,7 +313,7 @@ def classify_media_clip(meta: Dict[str, Any]) -> Dict[str, str]:
         "camera_type": camera_type,
         "camera_model": camera_model_display,
         "resolution_category": res_category,
-        "fps_tag": fps_tag,
+        "fps_label": fps_label,
         "bit_depth": f"{bit_depth}-bit",
         "clip_color": clip_color,
         "bin_name": bin_name,
@@ -286,29 +341,29 @@ def scan_and_classify_directory(video_dir: Path) -> List[Tuple[Dict[str, Any], D
 
 
 def print_metadata_breakdown_table(classified_items: List[Tuple[Dict[str, Any], Dict[str, str]]]) -> None:
-    """Prints a clear summary table of detected cameras, codecs, and starting grades."""
-    print("\n" + "=" * 95)
-    print(f"{'Camera / Device':<22} {'Resolution':<14} {'FPS':<8} {'Bit':<6} {'Clip Color':<12} {'Recommended CST Profile':<30}")
-    print("=" * 95)
+    """Prints a clear summary table of detected cameras, codecs, strict resolutions, and starting grades."""
+    print("\n" + "=" * 105)
+    print(f"{'Camera / Device':<22} {'Strict Resolution':<22} {'FPS':<14} {'Bit':<6} {'Color':<8} {'CST Profile':<20} {'Clips'}")
+    print("=" * 105)
 
-    buckets: Dict[str, List[Dict[str, Any]]] = {}
+    buckets: Dict[str, List[Tuple[Dict[str, Any], Dict[str, str]]]] = {}
     for meta, cls in classified_items:
-        key = f"{cls['camera_type']} - {cls['camera_model']} | {cls['resolution_category']}"
+        key = cls["bin_name"]
         buckets.setdefault(key, []).append((meta, cls))
 
     for key, items in sorted(buckets.items()):
         first_meta, first_cls = items[0]
-        res_str = f"{first_meta['width']}x{first_meta['height']}"
-        fps_str = f"{first_meta['fps']}fps"
-        count_label = f"({len(items)} clips)"
+        res_str = f"{first_cls['resolution_category']} ({first_meta['width']}x{first_meta['height']})"
+        fps_str = f"{first_cls['fps_label']} ({first_meta['fps']})"
+        count_label = f"{len(items)} clips"
         print(
-            f"{first_cls['camera_type']} {first_cls['camera_model']:<10} "
-            f"{res_str:<14} {fps_str:<8} {first_cls['bit_depth']:<6} "
-            f"{first_cls['clip_color']:<12} {first_cls['cst_profile']:<25} {count_label}"
+            f"{first_cls['camera_type']:<10} {first_cls['camera_model']:<11} "
+            f"{res_str:<22} {fps_str:<14} {first_cls['bit_depth']:<6} "
+            f"{first_cls['clip_color']:<8} {first_cls['cst_profile']:<20} {count_label}"
         )
-    print("=" * 95)
-    print(f"Total Video Clips Analyzed: {len(classified_items)}")
-    print("=" * 95)
+    print("=" * 105)
+    print(f"Total Video Clips Analyzed: {len(classified_items)} across {len(buckets)} strict buckets")
+    print("=" * 105)
 
 
 def organize_in_davinci_resolve(
@@ -318,7 +373,7 @@ def organize_in_davinci_resolve(
 ) -> bool:
     """
     Connects to DaVinci Resolve Studio, creates sub-bins, imports clips,
-    assigns clip colors, adds CST markers, and creates dedicated timelines.
+    assigns clip colors, adds CST markers, and creates dedicated timelines with zero resolution mixing.
     """
     resolve = connect_to_resolve()
     if not resolve:
@@ -345,12 +400,12 @@ def organize_in_davinci_resolve(
     if not staging_master_folder:
         staging_master_folder = media_pool.AddSubFolder(root_folder, "Staged_Clips_By_Camera")
 
-    # Group items by bin
+    # Group items by strict bin
     bin_groups: Dict[str, List[Tuple[Dict[str, Any], Dict[str, str]]]] = {}
     for meta, cls in classified_items:
         bin_groups.setdefault(cls["bin_name"], []).append((meta, cls))
 
-    print(f"\nCreating {len(bin_groups)} Media Pool Bins and importing media...")
+    print(f"\nCreating {len(bin_groups)} Media Pool Bins (Strict Unmixed Resolutions) and importing media...")
 
     for bin_name, items in sorted(bin_groups.items()):
         first_meta, first_cls = items[0]
@@ -384,7 +439,7 @@ def organize_in_davinci_resolve(
                     first_cls["starting_grade_note"],
                     1,
                 )
-            except Exception as e:
+            except Exception:
                 pass
 
         # Create dedicated timeline per bucket
@@ -414,7 +469,7 @@ def organize_in_davinci_resolve(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Automated DaVinci Resolve Media Pool Organizer, Clip Color Coder & Timeline Generator per Camera/Resolution."
+        description="Automated DaVinci Resolve Media Pool Organizer, Clip Color Coder & Timeline Generator with Strict Resolution Matching."
     )
     parser.add_argument(
         "--staging-dir",
