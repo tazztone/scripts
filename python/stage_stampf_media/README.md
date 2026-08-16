@@ -6,10 +6,21 @@ A high-performance utility to recursively scan multi-year photo/video archives, 
 
 ## 🎯 Purpose & Problem Solved
 
-When managing event media across many years (`2018`–`2026`), source folders are deeply nested across different camera subdirectories (e.g. `2020/2020-12-31_stampf/`, `2021/2021-01-01 stampf/videos/GoPro/`).
+### 🏔️ End-to-End Pipeline & User Story
+This tool is the second phase of a multi-stage archival workflow:
 
-* **In DaVinci Resolve**: Importing nested folders creates fragmented bins that cannot easily be dragged into a single continuous photo album or video timeline.
-* **This Tool**: Recursively extracts all RAW/DNG photos and video files from target event dates and stages them into **two flat staging directories**, preserving chronological sorting, preventing filename collisions, and requiring **zero extra disk space**.
+```mermaid
+flowchart LR
+    A["1. Immich GPS Search<br>(Find initial hut photos)"] --> B["2. Immich Date Expansion<br>(Harvest all unlocated shots on those days)"]
+    B --> C["3. Stampf Media Staging<br>(Flat NTFS hardlinks)"]
+    C --> D["4. DaVinci Resolve<br>(1-Click Timeline & Album Import)"]
+```
+
+> **The Story**:
+> When hired to deliver all historical photos and videos of an alpine mountain hut ("Stampf") across multi-year archives (`2018`–`2025`), the visit dates were initially isolated using GPS coordinates in Immich and expanded via [`album_date_expansion.py`](../immich-api/album_date_expansion.md) to gather all non-GPS DSLR, GoPro, and drone shots.
+> Because footage was scattered across deeply nested multi-year folders (`2020/2020-12-31_stampf/`, `2021/2021-01-01 stampf/videos/GoPro/`), importing them into DaVinci Resolve would create dozens of fragmented bins.
+> **This tool bridges that gap**: it extracts all RAW photos and videos for those exact dates into flat, chronologically-sorted hardlinks ready for 1-click import into DaVinci Resolve.
+
 
 ---
 
