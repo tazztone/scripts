@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-Recursively stages Stampf event media (RAW/DNG photos and video files)
-into flat staging folders for direct import into DaVinci Resolve timelines/albums.
+Recursively stages event media (RAW/DNG photos and video files)
+into flat staging folders for direct import into DaVinci Resolve, DxO PhotoLab,
+Lightroom, LosslessCut, and other NLEs/editors.
 
 Supports:
 - Cross-platform NTFS hardlinks (Linux and Windows 11), symlinks, and copies.
-- Direct date discovery from Immich albums via API (--immich-album).
+- Direct event date discovery from Immich albums via API (--immich-album).
 - Safe dry-runs, filename sanitization, and automated directory cleanup.
 """
 
@@ -74,7 +75,7 @@ ILLEGAL_NTFS_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
 
 def load_immich_env() -> tuple[str, str, str | None]:
-    """Loads Immich configuration from environment variables or .env files."""
+    """Loads Immich configuration from environment variables or local .env file."""
     base_url = os.getenv("IMMICH_BASE_URL", "").rstrip("/")
     api_key = os.getenv("IMMICH_API_KEY", "")
     album_id = os.getenv("IMMICH_ALBUM_ID")
@@ -82,7 +83,6 @@ def load_immich_env() -> tuple[str, str, str | None]:
     if not base_url or not api_key:
         possible_envs = [
             Path(__file__).parent / ".env",
-            Path(__file__).parent.parent / "immich-api" / ".env",
             Path.cwd() / ".env",
             Path.cwd() / "python" / "immich-api" / ".env",
         ]
@@ -118,7 +118,7 @@ def fetch_immich_album_dates(
     """
     if not api_key:
         raise ValueError(
-            "Immich API key not found. Please set IMMICH_API_KEY env var or configure python/immich-api/.env"
+            "Immich API key not found. Please set IMMICH_API_KEY env var or configure .env file."
         )
 
     headers = {
@@ -206,8 +206,8 @@ def resolve_default_paths() -> tuple[Path, Path]:
     Dynamically discovers default base and staging paths across Linux, Windows, and macOS.
     Checks environment variables, Windows drive letters, and Linux mount locations.
     """
-    env_base = os.getenv("STAMPF_BASE_DIR")
-    env_staging = os.getenv("STAMPF_STAGING_DIR")
+    env_base = os.getenv("STAMPF_BASE_DIR") or os.getenv("MEDIA_BASE_DIR")
+    env_staging = os.getenv("STAMPF_STAGING_DIR") or os.getenv("MEDIA_STAGING_DIR")
     if env_base and env_staging:
         return Path(env_base), Path(env_staging)
 
@@ -415,7 +415,7 @@ def stage_media(
     dry_run: bool = False,
     album_name: str | None = None,
 ) -> None:
-    """Recursively scans matched folders and creates flat staging folders for DaVinci Resolve."""
+    """Recursively scans matched folders and creates flat staging folders for editors and NLEs."""
     validate_staging_safety(base_dir, staging_dir)
 
     photos_dir = staging_dir / "photos_raw"
@@ -430,7 +430,7 @@ def stage_media(
             videos_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 65)
-    print(" DaVinci Resolve Flat Media Staging Tool (Cross-Platform)")
+    print(" Flat Media Staging Tool (Cross-Platform / Immich Integration)")
     print("=" * 65)
     print(f"Platform:              {platform.system()} ({platform.release()})")
     if album_name:
@@ -545,7 +545,7 @@ def main() -> None:
     immich_url_default, immich_key_default, immich_album_default = load_immich_env()
 
     parser = argparse.ArgumentParser(
-        description="Recursively stage Stampf media into flat folders for DaVinci Resolve albums/timelines."
+        description="Recursively stage event media into flat folders for DaVinci Resolve, DxO PhotoLab, and editors."
     )
     parser.add_argument(
         "--immich-album",
@@ -627,7 +627,6 @@ def main() -> None:
     album_display_name = None
     target_dates = args.dates
 
-    # If --immich-album is passed, fetch dates from Immich API
     if args.immich_album:
         target_ref = args.immich_album
         if target_ref == "__PROMPT__":

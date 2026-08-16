@@ -162,13 +162,12 @@ python3 album_date_expansion.py --list
 
 ---
 
-## 🎬 Next Step: Staging for DaVinci Resolve
+## 🎬 Next Step: Staging for DaVinci Resolve & Editors
 
-Once your Immich album is expanded and curated, you can stage all corresponding master RAW photos and high-bitrate video files directly on disk for **DaVinci Resolve** using [`stage_stampf_media.py`](../stage_stampf_media/README.md):
+Once your Immich album is expanded and curated, you can stage all corresponding master RAW photos and high-bitrate video files directly on disk for **DaVinci Resolve**, **DxO PhotoLab**, and other editors using [`stage_media.py`](stage_media.md):
 
 ```bash
-cd ../stage_stampf_media
-python3 stage_stampf_media.py --immich-album "Your Album Name" --clean --open
+python3 stage_media.py --immich-album "Your Album Name" --clean --open
 ```
 
 This creates instant, zero-storage **NTFS hardlinks** organized into flat `photos_raw/` and `videos/` folders for 1-click import into DaVinci Resolve on both Linux and Windows 11.

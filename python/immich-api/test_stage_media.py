@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
-from stage_stampf_media import (
+from stage_media import (
     sanitize_filename,
     generate_staged_name,
     validate_staging_safety,
@@ -14,7 +14,7 @@ from stage_stampf_media import (
     fetch_immich_album_dates,
 )
 
-class TestStageStampfMedia(unittest.TestCase):
+class TestStageMedia(unittest.TestCase):
 
     def test_sanitize_filename(self):
         self.assertEqual(sanitize_filename("2021-01-01:Event*Name?"), "2021-01-01_Event_Name_")
@@ -96,7 +96,6 @@ class TestStageStampfMedia(unittest.TestCase):
             ]
         }).encode("utf-8")
 
-        # mock first call for /api/albums, second for /api/albums/id
         mock_urlopen.side_effect = [
             MagicMock(__enter__=MagicMock(return_value=mock_albums_response)),
             MagicMock(__enter__=MagicMock(return_value=mock_album_details)),

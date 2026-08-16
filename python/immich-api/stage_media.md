@@ -1,36 +1,36 @@
-# Stampf Media Staging for DaVinci Resolve (Cross-Platform)
+# Cross-Platform Flat Media Staging
 
-A high-performance utility to recursively scan multi-year photo/video archives, discover event folders, and stage media files as flat **NTFS hardlinks** for streamlined import into **DaVinci Resolve** photo albums and video timelines on both **Linux** and **Windows 11**.
+A high-performance utility to recursively scan multi-year photo/video archives, discover event folders (or sync event dates directly from an Immich album), and stage media files as flat **NTFS hardlinks** for streamlined import into **DaVinci Resolve**, **DxO PhotoLab**, **Lightroom**, **LosslessCut**, and other editors on both **Linux** and **Windows 11**.
 
 ---
 
 ## 🎯 Purpose & Problem Solved
 
 ### 🏔️ End-to-End Pipeline & User Story
-This tool is the second phase of a multi-stage archival workflow:
+This tool is the bridge connecting your Immich library curation to professional desktop editing:
 
 ```mermaid
 flowchart LR
-    A["1. Immich GPS Search<br>(Find initial hut photos)"] --> B["2. Immich Date Expansion<br>(Harvest all unlocated shots on those days)"]
-    B --> C["3. Stampf Media Staging<br>(Flat NTFS hardlinks)"]
-    C --> D["4. DaVinci Resolve<br>(1-Click Timeline & Album Import)"]
+    A["1. Immich GPS Search<br>(Find initial photos)"] --> B["2. album_date_expansion.py<br>(Harvest all unlocated shots on those days)"]
+    B --> C["3. stage_media.py<br>(Flat NTFS hardlinks)"]
+    C --> D["4. Editors & NLEs<br>(DaVinci Resolve, DxO, LosslessCut)"]
 ```
 
 > **The Story**:
-> When hired to deliver all historical photos and videos of an alpine mountain hut ("Stampf") across multi-year archives (`2018`–`2025`), the visit dates were initially isolated using GPS coordinates in Immich and expanded via [`album_date_expansion.py`](../immich-api/album_date_expansion.md) to gather all non-GPS DSLR, GoPro, and drone shots.
-> Because footage was scattered across deeply nested multi-year folders (`2020/2020-12-31_stampf/`, `2021/2021-01-01 stampf/videos/GoPro/`), importing them into DaVinci Resolve would create dozens of fragmented bins.
-> **This tool bridges that gap**: it extracts all RAW photos and videos for those exact dates into flat, chronologically-sorted hardlinks ready for 1-click import into DaVinci Resolve.
+> When hired to deliver all historical photos and videos of an alpine mountain hut ("Stampf") across multi-year archives (`2018`–`2025`), the visit dates were initially isolated using GPS coordinates in Immich and expanded via [`album_date_expansion.py`](album_date_expansion.md) to gather all non-GPS DSLR, GoPro, and drone shots.
+> Because footage was scattered across deeply nested multi-year folders (`2020/2020-12-31_stampf/`, `2021/2021-01-01 stampf/videos/GoPro/`), importing them into DaVinci Resolve or DxO PhotoLab would create dozens of fragmented bins.
+> **This tool bridges that gap**: it queries the Immich album for event dates, extracts all master RAW photos and videos for those exact dates, and stages them into flat, chronologically-sorted hardlinks ready for 1-click import.
 
 ---
 
-## ⚡ Why Hardlinks? (Linux & Windows 11 Compatibility)
+## ⚡ Why Hardlinks? (Universal Editor & Cross-Platform Compatibility)
 
-Older versions used Linux symlinks, which broke when opening the drive on Windows 11 due to POSIX path structures (`/mnt/...`) and Unix symlink reparse tags.
+Instead of proprietary API imports (which only work in one specific editor and fail for photo tools), this utility uses **NTFS Hardlinks (`os.link`)**:
 
-This utility uses **NTFS Hardlinks (`os.link`)**:
+* 🌐 **Universal Filesystem Interface**: Works with **every** editor (DaVinci Resolve, DxO PhotoLab, Lightroom, LosslessCut, Topaz AI, CapCut, Premiere, VLC).
 * 🔗 **100% Cross-Platform Native**: Hardlinks are native NTFS MFT directory pointers. Windows 11 (File Explorer, DaVinci Resolve, media players) and Linux see them as standard, real files.
 * 💾 **Zero Storage Overhead**: Uses 0 additional bytes of disk space regardless of how many gigabytes or terabytes of footage are staged.
-* 🛡️ **Non-Destructive & Safe**: Deleting a staged hardlink (via `--clean` or manual deletion) only removes the directory reference; your original media files in `_MY PHOTOS and VIDEOS` remain 100% intact.
+* 🛡️ **Non-Destructive & Safe**: Deleting a staged hardlink (via `--clean` or manual deletion) only removes the directory reference; your original master media files in `_MY PHOTOS and VIDEOS` remain 100% intact.
 * 🚀 **Instant Staging**: Thousands of clips stage in less than a second.
 
 ---
@@ -41,19 +41,19 @@ The tool creates and populates two flat staging folders inside `_RESOLVE_IMPORT_
 
 | Staging Folder | Filtered File Types | Primary Use Case |
 | :--- | :--- | :--- |
-| **`photos_raw/`** | `.dng`, `.arw`, `.rw2`, `.cr2`, `.cr3`, `.nef`, `.orf`, `.raf`, `.tif`, `.tiff` *(+ optional `.jpg`/`.heic`)* | Drag-and-drop directly into a single **Photo Album** bin / timeline |
-| **`videos/`** | `.mp4`, `.mov`, `.mxf`, `.m4v`, `.insv`, `.braw`, `.avi`, `.mkv` | Drag-and-drop directly into your **Video Timeline** |
+| **`photos_raw/`** | `.dng`, `.arw`, `.rw2`, `.cr2`, `.cr3`, `.nef`, `.orf`, `.raf`, `.tif`, `.tiff` *(+ optional `.jpg`/`.heic`)* | Direct batch import into **DxO PhotoLab** or DaVinci Resolve **Photo Album** bin |
+| **`videos/`** | `.mp4`, `.mov`, `.mxf`, `.m4v`, `.insv`, `.braw`, `.avi`, `.mkv` | Direct import into **LosslessCut** or DaVinci Resolve **Video Timeline** |
 
 > [!NOTE]
-> **Ignored Files:** Sidecars and project files (`.xmp`, `.dop`, `.pp3`, `.rrdata`, `.prproj`, `.aep`, `.psd`, etc.) are automatically excluded.
+> **Ignored Files:** Sidecars and project files (`.xmp`, `.dop`, `.pp3`, `.rrdata`, `.prproj`, `.aep`, `.psd`, etc.) are automatically excluded during staging.
 
 ---
 
 ## ✨ Key Features
 
 1. **Direct Immich Album Sync (`--immich-album`)**
-   * Automatically queries your Immich server API to fetch all event dates directly from a curated album (e.g. `Stampf Alpine Hut`), eliminating manual date entry.
-   * Auto-detects `IMMICH_BASE_URL` and `IMMICH_API_KEY` from `python/immich-api/.env` or environment variables.
+   * Automatically queries your Immich server API to fetch all event dates directly from a curated album (e.g. `--immich-album "Stampf"`), eliminating manual date entry.
+   * Auto-detects `IMMICH_BASE_URL` and `IMMICH_API_KEY` from the local `.env` file or environment variables.
 
 2. **Dual-OS Auto-Discovery**
    * **On Windows 11**: Automatically scans drive letters (`D:`, `E:`, `F:`, etc.) for `_MY PHOTOS and VIDEOS` and `_RESOLVE_IMPORT_STAGING`.
@@ -73,7 +73,7 @@ The tool creates and populates two flat staging folders inside `_RESOLVE_IMPORT_
    * Generic camera filenames (`C0001.MP4`, `DSC05558.ARW`) are prefixed with their event folder:
      * `2019/2019-07-22/C0001.MP4` $\rightarrow$ `2019-07-22__C0001.MP4`
      * `2021/2021-01-01 stampf/videos/C0028.mov` $\rightarrow$ `2021-01-01 stampf__videos__C0028.mov`
-   * Sorting alphabetically in Resolve automatically arranges clips in chronological order.
+   * Sorting alphabetically in Resolve/DxO automatically arranges clips in chronological order.
 
 ---
 
@@ -81,19 +81,18 @@ The tool creates and populates two flat staging folders inside `_RESOLVE_IMPORT_
 
 ### 🐧 Linux / macOS / WSL
 ```bash
-cd /home/tazztone/_coding/scripts/python/stage_stampf_media
-./stage_stampf_media.sh
+./stage_media.sh
 ```
 
 ### 🪟 Windows 11 (Command Prompt / Explorer)
-Double-click `stage_stampf_media.bat` or run:
+Double-click `stage_media.bat` or run:
 ```cmd
-stage_stampf_media.bat
+stage_media.bat
 ```
 
 ### 💻 Windows 11 (PowerShell / Windows Terminal)
 ```powershell
-.\stage_stampf_media.ps1
+.\stage_media.ps1
 ```
 
 ---
@@ -101,14 +100,14 @@ stage_stampf_media.bat
 ## ⚙️ Command-Line Options
 
 ```bash
-usage: stage_stampf_media.py [-h] [--immich-album [NAME_OR_UUID]]
-                             [--immich-url IMMICH_URL] [--immich-key IMMICH_KEY]
-                             [--clean] [--force] [--open] [--include-jpg]
-                             [--mode {all,photos,videos}]
-                             [--link-type {hardlink,symlink,copy}]
-                             [-n] [--dates DATES [DATES ...]]
-                             [--staging-dir STAGING_DIR]
-                             [--base-dir BASE_DIR]
+usage: stage_media.py [-h] [--immich-album [NAME_OR_UUID]]
+                      [--immich-url IMMICH_URL] [--immich-key IMMICH_KEY]
+                      [--clean] [--force] [--open] [--include-jpg]
+                      [--mode {all,photos,videos}]
+                      [--link-type {hardlink,symlink,copy}]
+                      [-n] [--dates DATES [DATES ...]]
+                      [--staging-dir STAGING_DIR]
+                      [--base-dir BASE_DIR]
 ```
 
 | Flag | Description |
@@ -133,27 +132,27 @@ usage: stage_stampf_media.py [-h] [--immich-album [NAME_OR_UUID]]
 
 ### 1. Sync Directly from Immich Album & Open Folders
 ```bash
-python3 stage_stampf_media.py --immich-album "Stampf" --clean --open
+python3 stage_media.py --immich-album "Stampf" --clean --open
 ```
 
 ### 2. Standard Rebuild with Default Archive Dates
 ```bash
-python3 stage_stampf_media.py --clean --open
+python3 stage_media.py --clean --open
 ```
 
 ### 3. Preview Staging (Dry-Run)
 ```bash
-python3 stage_stampf_media.py --dry-run
+python3 stage_media.py --dry-run
 ```
 
 ### 4. Stage Videos Only
 ```bash
-python3 stage_stampf_media.py --mode videos --clean
+python3 stage_media.py --mode videos --clean
 ```
 
 ### 5. Stage Photos (Including JPEGs and HEIC)
 ```bash
-python3 stage_stampf_media.py --mode photos --include-jpg --clean
+python3 stage_media.py --mode photos --include-jpg --clean
 ```
 
 ---
@@ -174,11 +173,11 @@ In DaVinci Resolve's left panel, right-click **Smart Bins** $\rightarrow$ **Add 
 
 #### 🚁 1. Drone & Aerial Footage
 * **Rule**: `Clip Name` $\rightarrow$ `contains` $\rightarrow$ `DJI`
-* **Timeline Creation**: Right-click the Smart Bin $\rightarrow$ `Create Timeline Using Selected Clips` (e.g. *"Drone Highlights"*).
+* **Timeline Creation**: Right-click the Smart Bin $\rightarrow$ `Create Timeline Using Selected Clips` (*"Drone Highlights"*).
 
 #### ⏱️ 2. High FPS / Slow-Motion B-Roll
 * **Rule**: `FPS` $\rightarrow$ `is greater than or equal to` $\rightarrow$ `50`
-* **Timeline Creation**: Right-click $\rightarrow$ `Create Timeline Using Selected Clips` (e.g. *"Slow Motion Stash"*).
+* **Timeline Creation**: Right-click $\rightarrow$ `Create Timeline Using Selected Clips` (*"Slow Motion Stash"*).
 
 #### 🎬 3. Real-Time 4K / Main Camera
 * **Rule**: `Resolution` $\rightarrow$ `is` $\rightarrow$ `3840x2160` **AND** `FPS` $\rightarrow$ `is less than` $\rightarrow$ `50`
