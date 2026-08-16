@@ -3,10 +3,10 @@
 DaVinci Resolve Automated Media Organizer & Color Grading Prep Tool
 
 Connects to DaVinci Resolve Studio (or runs standalone in --scan-only mode),
-probes video files using a 3-tier deep metadata engine (container EXIF/ffprobe tags,
+probes video files using a fast parallel 3-tier deep metadata engine (container EXIF/ffprobe tags,
 stream properties, and codec signatures), organizes clips into structured Media Pool Bins,
 assigns distinct Clip Colors per camera, adds Color Space Transform (CST) starting grade
-marker annotations, and auto-generates dedicated Timelines with STRICT resolution & framerate matching.
+marker annotations, and auto-generates dedicated Timelines with custom native resolutions (no pillarboxing).
 """
 
 import argparse
@@ -16,6 +16,8 @@ import platform
 import re
 import subprocess
 import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -295,7 +297,6 @@ def classify_media_clip(meta: Dict[str, Any]) -> Dict[str, str]:
     # 3. Bin Naming, Clip Color, and Starting Grade Annotations
     clip_color = CAMERA_COLOR_PALETTE.get(camera_type, "Olive")
     
-    # Clean identifier without spaces or special symbols
     safe_cam = camera_type.replace(" ", "_")
     safe_model = camera_model_display.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_")
     bin_name = f"{safe_cam}_{safe_model}_{res_category}_{fps_label}".strip("_").replace("__", "_")
@@ -323,17 +324,20 @@ def classify_media_clip(meta: Dict[str, Any]) -> Dict[str, str]:
     }
 
 
-def scan_and_classify_directory(video_dir: Path) -> List[Tuple[Dict[str, Any], Dict[str, str]]]:
-    """Scans all video files in directory and classifies each clip."""
-    results = []
+def scan_and_classify_directory(video_dir: Path, max_workers: int = 12) -> List[Tuple[Dict[str, Any], Dict[str, str]]]:
+    """Scans all video files in parallel across CPU cores and classifies each clip."""
     if not video_dir.is_dir():
-        return results
+        return []
 
     video_exts = {".mp4", ".mov", ".mxf", ".m4v", ".insv", ".braw", ".avi", ".mkv"}
     files = sorted([p for p in video_dir.iterdir() if p.is_file() and p.suffix.lower() in video_exts])
 
-    for f in files:
-        meta = probe_file_metadata(f)
+    # Parallel ffprobe metadata extraction
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        metas = list(executor.map(probe_file_metadata, files))
+
+    results = []
+    for meta in metas:
         classification = classify_media_clip(meta)
         results.append((meta, classification))
 
@@ -372,8 +376,8 @@ def organize_in_davinci_resolve(
     switch_color_page: bool = True,
 ) -> bool:
     """
-    Connects to DaVinci Resolve Studio, creates sub-bins, imports clips,
-    assigns clip colors, adds CST markers, and creates dedicated timelines with zero resolution mixing.
+    Connects to DaVinci Resolve Studio, creates sub-bins, imports clips (idempotent),
+    assigns clip colors, adds CST markers, and creates dedicated timelines with native resolution settings.
     """
     resolve = connect_to_resolve()
     if not resolve:
@@ -391,6 +395,14 @@ def organize_in_davinci_resolve(
     media_pool = project.GetMediaPool()
     root_folder = media_pool.GetRootFolder()
 
+    # Collect existing timelines to prevent duplicate timeline creation
+    existing_tl_count = project.GetTimelineCount()
+    existing_tl_names = set()
+    for i in range(1, existing_tl_count + 1):
+        tl = project.GetTimelineByIndex(i)
+        if tl:
+            existing_tl_names.add(tl.GetName())
+
     # Create Master Staging Bin
     staging_master_folder = None
     for sub in root_folder.GetSubFolderList():
@@ -405,7 +417,7 @@ def organize_in_davinci_resolve(
     for meta, cls in classified_items:
         bin_groups.setdefault(cls["bin_name"], []).append((meta, cls))
 
-    print(f"\nCreating {len(bin_groups)} Media Pool Bins (Strict Unmixed Resolutions) and importing media...")
+    print(f"\nProcessing {len(bin_groups)} Media Pool Bins (Strict Unmixed Resolutions)...")
 
     for bin_name, items in sorted(bin_groups.items()):
         first_meta, first_cls = items[0]
@@ -422,14 +434,33 @@ def organize_in_davinci_resolve(
 
         media_pool.SetCurrentFolder(target_folder)
 
-        # Import media directly into target bin
-        file_paths = [str(meta["file_path"]) for meta, _ in items]
-        imported_clips = media_pool.ImportMedia(file_paths) or []
+        # Idempotency: Check which clips are already imported into this folder
+        existing_clips = target_folder.GetClipList() or []
+        existing_clip_paths = set()
+        for c in existing_clips:
+            try:
+                p = c.GetClipProperty("File Path")
+                if p:
+                    existing_clip_paths.add(str(Path(p).resolve()))
+            except Exception:
+                pass
 
-        print(f"   -> Imported {len(imported_clips)} clip(s) into '{bin_name}'")
+        files_to_import = []
+        for meta, _ in items:
+            p_resolved = str(Path(meta["file_path"]).resolve())
+            if p_resolved not in existing_clip_paths:
+                files_to_import.append(str(meta["file_path"]))
+
+        if files_to_import:
+            newly_imported = media_pool.ImportMedia(files_to_import) or []
+            print(f"   -> Imported {len(newly_imported)} new clip(s) into '{bin_name}'")
+            all_bin_clips = existing_clips + newly_imported
+        else:
+            print(f"   -> All {len(existing_clips)} clip(s) already imported in '{bin_name}' (skipping re-import)")
+            all_bin_clips = existing_clips
 
         # Color-code clips and add CST markers
-        for clip in imported_clips:
+        for clip in all_bin_clips:
             try:
                 clip.SetClipColor(first_cls["clip_color"])
                 clip.AddMarker(
@@ -442,16 +473,27 @@ def organize_in_davinci_resolve(
             except Exception:
                 pass
 
-        # Create dedicated timeline per bucket
-        if create_timelines and imported_clips:
+        # Create dedicated timeline per bucket if not already existing
+        if create_timelines and all_bin_clips:
             tl_name = first_cls["timeline_name"]
-            print(f"   -> Creating Timeline: '{tl_name}'...")
-            try:
-                timeline = media_pool.CreateTimelineFromClips(tl_name, imported_clips)
-                if timeline:
-                    print(f"      ✓ Timeline '{tl_name}' created successfully.")
-            except Exception as e:
-                print(f"      ⚠️ Timeline creation error: {e}")
+            if tl_name in existing_tl_names:
+                print(f"   -> Timeline '{tl_name}' already exists (skipping creation).")
+            else:
+                print(f"   -> Creating Timeline: '{tl_name}'...")
+                try:
+                    timeline = media_pool.CreateTimelineFromClips(tl_name, all_bin_clips)
+                    if timeline:
+                        # Configure native timeline resolution matching exact media pixel dimensions
+                        w = first_meta["width"]
+                        h = first_meta["height"]
+                        if w > 0 and h > 0:
+                            timeline.SetSetting("useCustomSettings", "1")
+                            timeline.SetSetting("timelineResolutionWidth", str(w))
+                            timeline.SetSetting("timelineResolutionHeight", str(h))
+                        print(f"      ✓ Timeline '{tl_name}' created ({w}x{h}).")
+                        existing_tl_names.add(tl_name)
+                except Exception as e:
+                    print(f"      ⚠️ Timeline creation error: {e}")
 
     # Switch to Color Page
     if switch_color_page:
@@ -493,6 +535,12 @@ def main() -> None:
         default=True,
         help="Automatically switch DaVinci Resolve to the Color page upon completion (default: True).",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=12,
+        help="Number of concurrent worker threads for metadata probing (default: 12).",
+    )
 
     args = parser.parse_args()
 
@@ -506,10 +554,14 @@ def main() -> None:
     print(f"Staging Directory: {args.staging_dir}")
     print(f"Scan Only:         {args.scan_only}")
     print(f"Create Timelines:  {not args.no_timelines}")
+    print(f"Parallel Workers:  {args.workers}")
     print("-" * 65)
 
-    print("Scanning and probing video metadata...")
-    classified_items = scan_and_classify_directory(args.staging_dir)
+    start_time = time.time()
+    print("Scanning and probing video metadata in parallel...")
+    classified_items = scan_and_classify_directory(args.staging_dir, max_workers=args.workers)
+    elapsed = time.time() - start_time
+    print(f"✓ Probed {len(classified_items)} clips in {elapsed:.2f}s ({len(classified_items)/max(elapsed, 0.001):.1f} clips/s)")
 
     if not classified_items:
         print("No video files found in the specified directory.")
