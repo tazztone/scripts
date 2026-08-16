@@ -6,10 +6,17 @@ A Python utility to expand or incrementally update an Immich album by automatica
 
 ## 🎯 Purpose & Problem Solved
 
+### 🏔️ Real-World Origin & User Story
+> **The Alpine Hut Archival Project**:
+> "I was hired to deliver a comprehensive photo and video collection of an alpine mountain hut we visited over multiple years. 
+> To collect everything, I first used GPS location metadata in Immich to tag all photos taken directly at the hut. From those GPS-tagged photos, I extracted the specific visit dates. Because many photos and videos (e.g. DSLR RAWs, drone shots, action cameras, or edited exports) lacked GPS metadata, I knew that *any photo or video captured on those same days* was also from that location.
+> `album_date_expansion.py` automated querying the entire multi-year Immich library for those dates and populating the album. From there, those same dates were fed into our DaVinci Resolve staging tool to assemble the final film and photo album."
+
 ### Common Scenarios
 1. **Adding Exported RAW Edits / Derivatives**: You edited photos in Lightroom/Capture One/Darktable and uploaded the exports to Immich. Because they retain the original capture dates in EXIF, this script detects the new edits and adds them to your existing album without duplicate effort.
 2. **Expanding Location-Based Albums**: When an album was originally built from location search or face tagging, photos taken on the same days without GPS metadata are often missed.
 3. **Multi-Camera Event Aggregation**: Bring together all shots from multiple devices across the event days.
+
 
 ### How It Works
 1. **Selects Target Album**: Via CLI argument, fuzzy name search, UUID, or interactive menu.
