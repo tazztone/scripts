@@ -159,3 +159,16 @@ python3 album_date_expansion.py --list
 - **`POST /api/search/metadata`** — Queries metadata search with pagination (`size: 1000`) for date bounds `takenAfter` and `takenBefore`.
 - **`PUT /api/albums/{id}/assets`** — Performs bulk additions in batches of 500 IDs.
 - **Idempotent & Non-Destructive**: Does not duplicate assets already in the album and never deletes or overwrites existing photos.
+
+---
+
+## 🎬 Next Step: Staging for DaVinci Resolve
+
+Once your Immich album is expanded and curated, you can stage all corresponding master RAW photos and high-bitrate video files directly on disk for **DaVinci Resolve** using [`stage_stampf_media.py`](../stage_stampf_media/README.md):
+
+```bash
+cd ../stage_stampf_media
+python3 stage_stampf_media.py --immich-album "Your Album Name" --clean --open
+```
+
+This creates instant, zero-storage **NTFS hardlinks** organized into flat `photos_raw/` and `videos/` folders for 1-click import into DaVinci Resolve on both Linux and Windows 11.
