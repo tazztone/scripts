@@ -1,8 +1,8 @@
 <#
 .SYNOPSIS
-    Cross-platform media staging launcher for DaVinci Resolve on Windows 11.
+    Cross-platform media staging launcher for DaVinci Resolve, DxO PhotoLab, and NLEs on Windows 11.
 .DESCRIPTION
-    Launches stage_stampf_media.py with --clean and --open by default,
+    Launches stage_media.py with --clean and --open by default,
     or forwards custom arguments to the Python script.
 #>
 
@@ -13,7 +13,7 @@ param(
 )
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$PythonScript = Join-Path $ScriptDir "stage_stampf_media.py"
+$PythonScript = Join-Path $ScriptDir "stage_media.py"
 
 # Locate Python
 $PythonExe = Get-Command "python" -ErrorAction SilentlyContinue
@@ -27,7 +27,7 @@ if (-not $PythonExe) {
 }
 
 Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host " DaVinci Resolve Media Staging Launcher (Windows 11)" -ForegroundColor Cyan
+Write-Host " Flat Media Staging Launcher (Windows 11)" -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
 if ($ScriptArgs.Count -eq 0) {
