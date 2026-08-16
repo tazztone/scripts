@@ -1,21 +1,33 @@
-# Stampf Media Staging for DaVinci Resolve
+# Stampf Media Staging for DaVinci Resolve (Cross-Platform)
 
-A high-performance utility to recursively scan multi-year photo/video archives, discover event folders, and stage media files as flat symlinks for streamlined import into **DaVinci Resolve** photo albums and video timelines.
+A high-performance utility to recursively scan multi-year photo/video archives, discover event folders, and stage media files as flat **NTFS hardlinks** for streamlined import into **DaVinci Resolve** photo albums and video timelines on both **Linux** and **Windows 11**.
 
 ---
 
 ## 🎯 Purpose & Problem Solved
 
-When managing event media across many years (`2018`–`2026`), folders are often deeply nested (e.g. `2020/2020-12-31_stampf/`, `2021/2021-01-01 stampf/videos/`).
+When managing event media across many years (`2018`–`2026`), source folders are deeply nested across different camera subdirectories (e.g. `2020/2020-12-31_stampf/`, `2021/2021-01-01 stampf/videos/GoPro/`).
 
-* **In DaVinci Resolve**, importing nested folders creates fragmented bins that cannot easily be dragged into a continuous photo album or video timeline.
-* **This tool** recursively extracts all RAW/DNG photos and video files from target event dates and symlinks them into **two flat staging directories**, preserving chronological order and preventing filename collisions.
+* **In DaVinci Resolve**: Importing nested folders creates fragmented bins that cannot easily be dragged into a single continuous photo album or video timeline.
+* **This Tool**: Recursively extracts all RAW/DNG photos and video files from target event dates and stages them into **two flat staging directories**, preserving chronological sorting, preventing filename collisions, and requiring **zero extra disk space**.
+
+---
+
+## ⚡ Why Hardlinks? (Linux & Windows 11 Compatibility)
+
+Older versions used Linux symlinks, which broke when opening the drive on Windows 11 due to POSIX path structures (`/mnt/...`) and Unix symlink reparse tags.
+
+This utility uses **NTFS Hardlinks (`os.link`)**:
+* 🔗 **100% Cross-Platform Native**: Hardlinks are native NTFS MFT directory pointers. Windows 11 (File Explorer, DaVinci Resolve, media players) and Linux see them as standard, real files.
+* 💾 **Zero Storage Overhead**: Uses 0 additional bytes of disk space regardless of how many gigabytes or terabytes of footage are staged.
+* 🛡️ **Non-Destructive & Safe**: Deleting a staged hardlink (via `--clean` or manual deletion) only removes the directory reference; your original media files in `_MY PHOTOS and VIDEOS` remain 100% intact.
+* 🚀 **Instant Staging**: Thousands of clips stage in less than a second.
 
 ---
 
 ## 📂 Staging Directories
 
-The tool creates and populates two flat staging folders inside `/mnt/wd14tb/_RESOLVE_IMPORT_STAGING/`:
+The tool creates and populates two flat staging folders inside `_RESOLVE_IMPORT_STAGING/`:
 
 | Staging Folder | Filtered File Types | Primary Use Case |
 | :--- | :--- | :--- |
@@ -29,37 +41,46 @@ The tool creates and populates two flat staging folders inside `/mnt/wd14tb/_RES
 
 ## ✨ Key Features
 
-1. **Zero Duplication (Symlink-Based)**
-   * Operations are instant and consume negligible disk space.
-   * Modifying metadata or exporting to source in Resolve resolves directly to the actual files on disk.
+1. **Dual-OS Auto-Discovery**
+   * **On Windows 11**: Automatically scans drive letters (`D:`, `E:`, `F:`, etc.) for `_MY PHOTOS and VIDEOS` and `_RESOLVE_IMPORT_STAGING`.
+   * **On Linux**: Auto-detects `/mnt/wd14tb` and `/media/$USER/*`.
+   * Also configurable via `STAMPF_BASE_DIR` and `STAMPF_STAGING_DIR` environment variables or CLI flags.
 
-2. **Collision Avoidance & Chronological Sorting**
-   * Generic camera filenames like `C0001.MP4` or `DSC05558.ARW` are prefixed with their source folder:
+2. **Windows NTFS Filename Sanitization**
+   * Automatically strips and sanitizes characters forbidden on Windows (`: * ? " < > |`) from event names and subpaths to guarantee valid Windows filenames.
+
+3. **Multi-Tier Safety Guardrails**
+   * Prevents accidental cleaning if staging and base directories overlap.
+   * `--clean` checks inode link count (`st_nlink > 1`) and only unlinks files inside `photos_raw` and `videos`, refusing to touch single-copy files.
+
+4. **Self-Healing & Idempotent**
+   * Automatically detects and removes old broken symlinks or stale links when re-staging.
+
+5. **Collision Avoidance & Chronological Sorting**
+   * Generic camera filenames (`C0001.MP4`, `DSC05558.ARW`) are prefixed with their event folder:
      * `2019/2019-07-22/C0001.MP4` $\rightarrow$ `2019-07-22__C0001.MP4`
-     * `2021/2021-01-01 stampf/videos/C0028 Render 1.mov` $\rightarrow$ `2021-01-01 stampf__videos__C0028 Render 1.mov`
-   * Sorting alphabetically in Resolve automatically sorts everything in perfect chronological order.
-
-3. **Year-Aware Discovery**
-   * Automatically resolves dates within year-partitioned directories (`/mnt/wd14tb/_MY PHOTOS and VIDEOS/<YYYY>/<date>*`) and handles naming suffixes (e.g. `_stampf`).
-
-4. **100% Non-Destructive**
-   * The source archive is strictly **read-only**.
-   * The `--clean` flag checks `item.is_symlink()` and only unlinks symlinks inside the staging directory.
+     * `2021/2021-01-01 stampf/videos/C0028.mov` $\rightarrow$ `2021-01-01 stampf__videos__C0028.mov`
+   * Sorting alphabetically in Resolve automatically arranges clips in chronological order.
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Quick Start Launchers
 
-### Option 1: Using the Bash Launcher (Recommended)
-Runs the Python script with `--clean` (removes old symlinks) and `--open` (opens staging folders in your file manager):
+### 🐧 Linux / macOS / WSL
 ```bash
 cd /home/tazztone/_coding/scripts/python/stage_stampf_media
 ./stage_stampf_media.sh
 ```
 
-### Option 2: Running via Python
-```bash
-python3 stage_stampf_media.py [OPTIONS]
+### 🪟 Windows 11 (Command Prompt / Explorer)
+Double-click `stage_stampf_media.bat` or run:
+```cmd
+stage_stampf_media.bat
+```
+
+### 💻 Windows 11 (PowerShell / Windows Terminal)
+```powershell
+.\stage_stampf_media.ps1
 ```
 
 ---
@@ -67,22 +88,26 @@ python3 stage_stampf_media.py [OPTIONS]
 ## ⚙️ Command-Line Options
 
 ```bash
-usage: stage_stampf_media.py [-h] [--clean] [--open] [--include-jpg]
-                            [--mode {all,photos,videos}]
-                            [--dates DATES [DATES ...]]
-                            [--staging-dir STAGING_DIR]
-                            [--base-dir BASE_DIR]
+usage: stage_stampf_media.py [-h] [--clean] [--force] [--open] [--include-jpg]
+                             [--mode {all,photos,videos}]
+                             [--link-type {hardlink,symlink,copy}]
+                             [-n] [--dates DATES [DATES ...]]
+                             [--staging-dir STAGING_DIR]
+                             [--base-dir BASE_DIR]
 ```
 
 | Flag | Description |
 | :--- | :--- |
-| `--clean` | Removes existing symlinks in staging folders before rebuilding. |
-| `--open` | Opens staging folders in the system file manager (`xdg-open` / `nautilus`). |
+| `--clean` | Safely removes existing staged links in `photos_raw` and `videos` before staging. |
+| `--force` | Forces `--clean` to remove files even if single-link files are detected. |
+| `--open` | Opens staging folders in the system file manager (`xdg-open` on Linux, `Explorer` on Windows). |
+| `--link-type` | Link strategy: `hardlink` (default), `symlink`, or `copy`. |
+| `-n`, `--dry-run` | Preview actions and count matching files without modifying disk. |
 | `--include-jpg` | Also stages `.jpg`, `.jpeg`, `.png`, and `.heic` alongside RAW files. |
-| `--mode {all,photos,videos}` | Select whether to stage both media types, photos only, or videos only (default: `all`). |
-| `--dates D1 D2 ...` | Provide a custom list of date strings (e.g. `--dates 2023-05-28 2024-03-29`). |
-| `--staging-dir PATH` | Custom target staging path (default: `/mnt/wd14tb/_RESOLVE_IMPORT_STAGING`). |
-| `--base-dir PATH` | Custom source archive path (default: `/mnt/wd14tb/_MY PHOTOS and VIDEOS`). |
+| `--mode` | Filter media: `all` (default), `photos`, or `videos`. |
+| `--dates` | Custom list of event dates (`YYYY-MM-DD`). |
+| `--staging-dir` | Custom target staging path (auto-detected by default). |
+| `--base-dir` | Custom source archive path (auto-detected by default). |
 
 ---
 
@@ -93,17 +118,22 @@ usage: stage_stampf_media.py [-h] [--clean] [--open] [--include-jpg]
 python3 stage_stampf_media.py --clean --open
 ```
 
-### 2. Stage Only Video Files
+### 2. Preview Staging (Dry-Run)
+```bash
+python3 stage_stampf_media.py --dry-run
+```
+
+### 3. Stage Videos Only
 ```bash
 python3 stage_stampf_media.py --mode videos --clean
 ```
 
-### 3. Stage Photos (Including JPEGs and HEIC)
+### 4. Stage Photos (Including JPEGs and HEIC)
 ```bash
 python3 stage_stampf_media.py --mode photos --include-jpg --clean
 ```
 
-### 4. Stage Specific Event Dates
+### 5. Stage Specific Event Dates
 ```bash
 python3 stage_stampf_media.py --dates 2023-05-28 2024-03-28 2024-03-29 2024-03-30 --clean
 ```
@@ -112,12 +142,9 @@ python3 stage_stampf_media.py --dates 2023-05-28 2024-03-28 2024-03-29 2024-03-3
 
 ## 🎬 DaVinci Resolve Import Workflow
 
-1. Open **DaVinci Resolve** $\rightarrow$ Navigate to the **Media** page.
-2. In the **Media Storage** panel on the left, locate:
-   ```
-   /mnt/wd14tb/_RESOLVE_IMPORT_STAGING
-   ```
-3. **For Photos**:
-   * Open `photos_raw/` $\rightarrow$ Select all files $\rightarrow$ Drag into your **Photo Album Bin** or Timeline.
-4. **For Videos**:
-   * Open `videos/` $\rightarrow$ Select all files $\rightarrow$ Drag into your **Video Bin** or Timeline.
+1. Open **DaVinci Resolve** (on Linux or Windows 11).
+2. Go to the **Media** page $\rightarrow$ in the **Media Storage** panel on the left, navigate to:
+   * **Linux**: `/mnt/wd14tb/_RESOLVE_IMPORT_STAGING/`
+   * **Windows 11**: `D:\_RESOLVE_IMPORT_STAGING\` (or your drive letter).
+3. **Photos**: Open `photos_raw/` $\rightarrow$ Select all files $\rightarrow$ Drag into your **Photo Album Bin** or Timeline.
+4. **Videos**: Open `videos/` $\rightarrow$ Select all files $\rightarrow$ Drag into your **Video Bin** or Timeline.
