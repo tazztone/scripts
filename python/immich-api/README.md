@@ -1,6 +1,6 @@
 # Immich API Utilities & Media Workflow Suite
 
-A collection of Python automation scripts and CLI utilities interacting with the [Immich REST API](https://immich.app/docs/api/) for album management, timelapse detection, stacking, bulk maintenance, and cross-platform flat media staging for **DaVinci Resolve**, **DxO PhotoLab**, and NLEs.
+A collection of Python automation scripts and CLI utilities interacting with the [Immich REST API](https://immich.app/docs/api/) for album management, timelapse detection, stacking, bulk maintenance, cross-platform flat media staging, and **DaVinci Resolve Studio** auto-organization and color grading prep.
 
 ---
 
@@ -8,6 +8,7 @@ A collection of Python automation scripts and CLI utilities interacting with the
 
 | Script | Documentation | Description |
 | :--- | :--- | :--- |
+| [`resolve_auto_organize.py`](resolve_auto_organize.py) | [**`resolve_auto_organize.md`**](resolve_auto_organize.md) | Probes staged video metadata via container EXIF tags, groups clips into Bins by `Camera_Resolution`, assigns Clip Colors, and auto-creates Timelines in DaVinci Resolve. |
 | [`stage_media.py`](stage_media.py) | [**`stage_media.md`**](stage_media.md) | Syncs event dates from an Immich album to stage master RAWs & videos as flat **NTFS hardlinks** for DaVinci Resolve, DxO PhotoLab, and NLEs. |
 | [`album_date_expansion.py`](album_date_expansion.py) | [**`album_date_expansion.md`**](album_date_expansion.md) | Expands or updates an album with all photos matching existing asset dates (e.g. newly exported RAW edits, unlocated photos) with interactive album picker. |
 | [`timelapse_stacking.py`](timelapse_stacking.py) | [**`timelapse_stacking.md`**](timelapse_stacking.md) | Interactive terminal wizard to detect timelapse sequences, visually verify them in browser via temporary albums, and group them into Immich Stacks. |
@@ -22,7 +23,8 @@ A collection of Python automation scripts and CLI utilities interacting with the
 flowchart LR
     A["1. Immich GPS Search<br>(Find initial location photos)"] --> B["2. album_date_expansion.py<br>(Harvest all unlocated shots on those days)"]
     B --> C["3. stage_media.py<br>(Sync dates & create flat NTFS hardlinks)"]
-    C --> D["4. Professional Editors<br>(DaVinci Resolve, DxO PhotoLab, LosslessCut)"]
+    C --> D["4. resolve_auto_organize.py<br>(Auto-bin, color-code, CST markers & timelines)"]
+    D --> E["5. DaVinci Resolve Color Page<br>(1-Click Group CST Starting Grades)"]
 ```
 
 ---
@@ -30,7 +32,7 @@ flowchart LR
 ## 📋 Prerequisites & Installation
 
 - Python 3.8+
-- Dependencies: `requests`, `python-dotenv` (Note: `stage_media.py` also works with zero dependencies using Python standard library)
+- Dependencies: `requests`, `python-dotenv` (Note: `stage_media.py` and `resolve_auto_organize.py` also work with standard library & `ffprobe`)
 
 Install requirements:
 
@@ -73,31 +75,41 @@ TIMELAPSE_FILTER_LOCATION=false
 
 ## 🚀 Quick Start
 
-### 1. Stage Media for DaVinci Resolve / DxO PhotoLab
+### 1. Auto-Organize DaVinci Resolve Project & Color Prep
+Inspect staged metadata:
+```bash
+python3 resolve_auto_organize.py --scan-only
+```
+With DaVinci Resolve Studio open, run:
+```bash
+python3 resolve_auto_organize.py
+```
+
+### 2. Stage Media for DaVinci Resolve / DxO PhotoLab
 Stage all master RAWs and videos from your Immich album in 0.5s:
 ```bash
 python3 stage_media.py --immich-album "Stampf" --clean --open
 ```
 
-### 2. Expand Album by Date
+### 3. Expand Album by Date
 Add missing photos from the same days to an album:
 ```bash
 python3 album_date_expansion.py
 ```
 
-### 3. Timelapse Stacking Wizard
+### 4. Timelapse Stacking Wizard
 Run the interactive wizard:
 ```bash
 python3 timelapse_stacking.py
 ```
 
-### 4. Generate Album from Stacking Log
+### 5. Generate Album from Stacking Log
 Build an index or collection album from a previous run:
 ```bash
 python3 create_album_from_log.py
 ```
 
-### 5. Remove / Prune Stacks
+### 6. Remove / Prune Stacks
 Inspect and delete large stacks:
 ```bash
 python3 timelapse_unstack.py
@@ -107,7 +119,7 @@ python3 timelapse_unstack.py
 
 ## 🛡️ Safety & Non-Destructive Design
 
-- **Dry-run flags**: Supported across scripts (`-n` / `--dry-run`) to verify operations before executing changes.
+- **Dry-run & Scan-only flags**: Supported across scripts (`-n` / `--dry-run` / `--scan-only`) to verify operations before executing changes.
 - **Zero Duplication**: `stage_media.py` uses native NTFS hardlinks (0 GB extra storage) and checks `st_nlink > 1` on cleanup.
 - **Media Preservation**: Stacking, unstacking, and album updates only alter metadata relationships in Immich; underlying photo assets are never deleted.
 - **Rollback Log**: `timelapse_stacking.py` generates `timelapse_stacking_last_run.json` to enable automated one-click rollback.
