@@ -21,7 +21,6 @@ flowchart LR
 > Because footage was scattered across deeply nested multi-year folders (`2020/2020-12-31_stampf/`, `2021/2021-01-01 stampf/videos/GoPro/`), importing them into DaVinci Resolve would create dozens of fragmented bins.
 > **This tool bridges that gap**: it extracts all RAW photos and videos for those exact dates into flat, chronologically-sorted hardlinks ready for 1-click import into DaVinci Resolve.
 
-
 ---
 
 ## ⚡ Why Hardlinks? (Linux & Windows 11 Compatibility)
@@ -52,22 +51,25 @@ The tool creates and populates two flat staging folders inside `_RESOLVE_IMPORT_
 
 ## ✨ Key Features
 
-1. **Dual-OS Auto-Discovery**
+1. **Direct Immich Album Sync (`--immich-album`)**
+   * Automatically queries your Immich server API to fetch all event dates directly from a curated album (e.g. `Stampf Alpine Hut`), eliminating manual date entry.
+   * Auto-detects `IMMICH_BASE_URL` and `IMMICH_API_KEY` from `python/immich-api/.env` or environment variables.
+
+2. **Dual-OS Auto-Discovery**
    * **On Windows 11**: Automatically scans drive letters (`D:`, `E:`, `F:`, etc.) for `_MY PHOTOS and VIDEOS` and `_RESOLVE_IMPORT_STAGING`.
    * **On Linux**: Auto-detects `/mnt/wd14tb` and `/media/$USER/*`.
-   * Also configurable via `STAMPF_BASE_DIR` and `STAMPF_STAGING_DIR` environment variables or CLI flags.
 
-2. **Windows NTFS Filename Sanitization**
+3. **Windows NTFS Filename Sanitization**
    * Automatically strips and sanitizes characters forbidden on Windows (`: * ? " < > |`) from event names and subpaths to guarantee valid Windows filenames.
 
-3. **Multi-Tier Safety Guardrails**
+4. **Multi-Tier Safety Guardrails**
    * Prevents accidental cleaning if staging and base directories overlap.
    * `--clean` checks inode link count (`st_nlink > 1`) and only unlinks files inside `photos_raw` and `videos`, refusing to touch single-copy files.
 
-4. **Self-Healing & Idempotent**
+5. **Self-Healing & Idempotent**
    * Automatically detects and removes old broken symlinks or stale links when re-staging.
 
-5. **Collision Avoidance & Chronological Sorting**
+6. **Collision Avoidance & Chronological Sorting**
    * Generic camera filenames (`C0001.MP4`, `DSC05558.ARW`) are prefixed with their event folder:
      * `2019/2019-07-22/C0001.MP4` $\rightarrow$ `2019-07-22__C0001.MP4`
      * `2021/2021-01-01 stampf/videos/C0028.mov` $\rightarrow$ `2021-01-01 stampf__videos__C0028.mov`
@@ -99,7 +101,9 @@ stage_stampf_media.bat
 ## ⚙️ Command-Line Options
 
 ```bash
-usage: stage_stampf_media.py [-h] [--clean] [--force] [--open] [--include-jpg]
+usage: stage_stampf_media.py [-h] [--immich-album [NAME_OR_UUID]]
+                             [--immich-url IMMICH_URL] [--immich-key IMMICH_KEY]
+                             [--clean] [--force] [--open] [--include-jpg]
                              [--mode {all,photos,videos}]
                              [--link-type {hardlink,symlink,copy}]
                              [-n] [--dates DATES [DATES ...]]
@@ -109,6 +113,9 @@ usage: stage_stampf_media.py [-h] [--clean] [--force] [--open] [--include-jpg]
 
 | Flag | Description |
 | :--- | :--- |
+| `--immich-album`, `-i` | Fetch event dates automatically from Immich album name or UUID (e.g. `--immich-album "Stampf"`). |
+| `--immich-url` | Immich server base URL (default: `http://localhost:2283` or from `.env`). |
+| `--immich-key` | Immich API Key (defaults to `IMMICH_API_KEY` from environment or `.env`). |
 | `--clean` | Safely removes existing staged links in `photos_raw` and `videos` before staging. |
 | `--force` | Forces `--clean` to remove files even if single-link files are detected. |
 | `--open` | Opens staging folders in the system file manager (`xdg-open` on Linux, `Explorer` on Windows). |
@@ -124,38 +131,62 @@ usage: stage_stampf_media.py [-h] [--clean] [--force] [--open] [--include-jpg]
 
 ## 💡 Usage Examples
 
-### 1. Standard Rebuild & Open
+### 1. Sync Directly from Immich Album & Open Folders
+```bash
+python3 stage_stampf_media.py --immich-album "Stampf" --clean --open
+```
+
+### 2. Standard Rebuild with Default Archive Dates
 ```bash
 python3 stage_stampf_media.py --clean --open
 ```
 
-### 2. Preview Staging (Dry-Run)
+### 3. Preview Staging (Dry-Run)
 ```bash
 python3 stage_stampf_media.py --dry-run
 ```
 
-### 3. Stage Videos Only
+### 4. Stage Videos Only
 ```bash
 python3 stage_stampf_media.py --mode videos --clean
 ```
 
-### 4. Stage Photos (Including JPEGs and HEIC)
+### 5. Stage Photos (Including JPEGs and HEIC)
 ```bash
 python3 stage_stampf_media.py --mode photos --include-jpg --clean
 ```
 
-### 5. Stage Specific Event Dates
-```bash
-python3 stage_stampf_media.py --dates 2023-05-28 2024-03-28 2024-03-29 2024-03-30 --clean
-```
+---
+
+## 🎬 DaVinci Resolve Import & Multi-Camera Smart Bins Workflow
+
+### Step 1: Ingest into DaVinci Resolve
+1. Open **DaVinci Resolve** $\rightarrow$ **Media** page.
+2. In the **Media Storage** panel on the left, navigate to `_RESOLVE_IMPORT_STAGING/`.
+3. Drag `videos/` and `photos_raw/` into your Master Bin.
 
 ---
 
-## 🎬 DaVinci Resolve Import Workflow
+### Step 2: Organize Mixed Media with Smart Bins
+Because multi-year projects mix different cameras (Sony, Panasonic, DJI Drone, GoPro, Phone) and frame rates (24/25/30fps vs 50/60/120fps slow-motion), use **DaVinci Resolve Smart Bins** to automatically bucket footage without manual folder sorting:
 
-1. Open **DaVinci Resolve** (on Linux or Windows 11).
-2. Go to the **Media** page $\rightarrow$ in the **Media Storage** panel on the left, navigate to:
-   * **Linux**: `/mnt/wd14tb/_RESOLVE_IMPORT_STAGING/`
-   * **Windows 11**: `D:\_RESOLVE_IMPORT_STAGING\` (or your drive letter).
-3. **Photos**: Open `photos_raw/` $\rightarrow$ Select all files $\rightarrow$ Drag into your **Photo Album Bin** or Timeline.
-4. **Videos**: Open `videos/` $\rightarrow$ Select all files $\rightarrow$ Drag into your **Video Bin** or Timeline.
+In DaVinci Resolve's left panel, right-click **Smart Bins** $\rightarrow$ **Add Smart Bin...**:
+
+#### 🚁 1. Drone & Aerial Footage
+* **Rule**: `Clip Name` $\rightarrow$ `contains` $\rightarrow$ `DJI`
+* **Timeline Creation**: Right-click the Smart Bin $\rightarrow$ `Create Timeline Using Selected Clips` (e.g. *"Drone Highlights"*).
+
+#### ⏱️ 2. High FPS / Slow-Motion B-Roll
+* **Rule**: `FPS` $\rightarrow$ `is greater than or equal to` $\rightarrow$ `50`
+* **Timeline Creation**: Right-click $\rightarrow$ `Create Timeline Using Selected Clips` (e.g. *"Slow Motion Stash"*).
+
+#### 🎬 3. Real-Time 4K / Main Camera
+* **Rule**: `Resolution` $\rightarrow$ `is` $\rightarrow$ `3840x2160` **AND** `FPS` $\rightarrow$ `is less than` $\rightarrow$ `50`
+* **Timeline Creation**: Main narrative timeline.
+
+#### 📱 4. Vertical Video / Shorts
+* **Rule**: `Video Resolution` / `Aspect Ratio` $\rightarrow$ `Portrait` (Height > Width).
+
+#### 📸 5. RAW Photo Sequences & Timelapses
+* **Rule**: `File Type` / `Format` $\rightarrow$ `contains` $\rightarrow$ `DNG` or `ARW`
+* **Timeline Creation**: Photo slideshow / timelapse compilation.

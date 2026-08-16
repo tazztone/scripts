@@ -1,7 +1,9 @@
+import json
 import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch, MagicMock
 from stage_stampf_media import (
     sanitize_filename,
     generate_staged_name,
@@ -9,6 +11,7 @@ from stage_stampf_media import (
     clean_staging_directory,
     create_staged_link,
     resolve_default_paths,
+    fetch_immich_album_dates,
 )
 
 class TestStageStampfMedia(unittest.TestCase):
@@ -32,14 +35,14 @@ class TestStageStampfMedia(unittest.TestCase):
             base.mkdir()
             staging.mkdir()
 
-            # Should not raise for valid disjoint dirs
+            # Disjoint paths should pass
             validate_staging_safety(base, staging)
 
-            # Should raise if base == staging
+            # Same paths should fail
             with self.assertRaises(ValueError):
                 validate_staging_safety(base, base)
 
-            # Should raise if staging is parent of base
+            # Staging being parent should fail
             with self.assertRaises(ValueError):
                 validate_staging_safety(base, Path(tmpdir))
 
@@ -56,25 +59,52 @@ class TestStageStampfMedia(unittest.TestCase):
 
             dst_link = staging_photos / "event__photo.dng"
 
-            # Test hardlink creation
+            # Hardlink creation
             success, action = create_staged_link(src_file, dst_link, link_type="hardlink")
             self.assertTrue(success)
             self.assertEqual(action, "hardlink")
             self.assertTrue(dst_link.exists())
             self.assertTrue(dst_link.samefile(src_file))
 
-            # Test idempotency
+            # Idempotency
             success2, action2 = create_staged_link(src_file, dst_link, link_type="hardlink")
             self.assertTrue(success2)
             self.assertEqual(action2, "already_staged")
 
-            # Test safe clean
+            # Safe clean
             removed = clean_staging_directory(staging_photos)
             self.assertEqual(removed, 1)
             self.assertFalse(dst_link.exists())
-            # Original file still exists intact
             self.assertTrue(src_file.exists())
             self.assertEqual(src_file.read_text(), "dummy photo data")
+
+    @patch("urllib.request.urlopen")
+    def test_fetch_immich_album_dates(self, mock_urlopen):
+        mock_albums_response = MagicMock()
+        mock_albums_response.read.return_value = json.dumps([
+            {"id": "album-uuid-1", "albumName": "Stampf Hut"}
+        ]).encode("utf-8")
+
+        mock_album_details = MagicMock()
+        mock_album_details.read.return_value = json.dumps({
+            "id": "album-uuid-1",
+            "albumName": "Stampf Hut",
+            "assets": [
+                {"id": "a1", "localDateTime": "2023-05-28T14:30:00.000Z"},
+                {"id": "a2", "localDateTime": "2023-05-28T16:45:00.000Z"},
+                {"id": "a3", "localDateTime": "2024-03-29T10:15:00.000Z"},
+            ]
+        }).encode("utf-8")
+
+        # mock first call for /api/albums, second for /api/albums/id
+        mock_urlopen.side_effect = [
+            MagicMock(__enter__=MagicMock(return_value=mock_albums_response)),
+            MagicMock(__enter__=MagicMock(return_value=mock_album_details)),
+        ]
+
+        name, dates = fetch_immich_album_dates("Stampf", "http://localhost:2283", "test-key")
+        self.assertEqual(name, "Stampf Hut")
+        self.assertEqual(dates, ["2023-05-28", "2024-03-29"])
 
 if __name__ == "__main__":
     unittest.main()

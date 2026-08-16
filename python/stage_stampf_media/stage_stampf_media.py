@@ -3,19 +3,25 @@
 Recursively stages Stampf event media (RAW/DNG photos and video files)
 into flat staging folders for direct import into DaVinci Resolve timelines/albums.
 
-Supports cross-platform NTFS hardlinks (Linux and Windows 11), symlinks, and copies.
+Supports:
+- Cross-platform NTFS hardlinks (Linux and Windows 11), symlinks, and copies.
+- Direct date discovery from Immich albums via API (--immich-album).
+- Safe dry-runs, filename sanitization, and automated directory cleanup.
 """
 
 import argparse
+import json
 import os
 import platform
 import re
 import string
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
 
-# Event dates to look for across the archive
+# Fallback event dates to look for across the archive when not using --immich-album
 DEFAULT_DATES = [
     "2018-04-13",
     "2019-07-22",
@@ -67,6 +73,134 @@ VIDEO_EXTENSIONS = {
 ILLEGAL_NTFS_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
 
+def load_immich_env() -> tuple[str, str, str | None]:
+    """Loads Immich configuration from environment variables or .env files."""
+    base_url = os.getenv("IMMICH_BASE_URL", "").rstrip("/")
+    api_key = os.getenv("IMMICH_API_KEY", "")
+    album_id = os.getenv("IMMICH_ALBUM_ID")
+
+    if not base_url or not api_key:
+        possible_envs = [
+            Path(__file__).parent / ".env",
+            Path(__file__).parent.parent / "immich-api" / ".env",
+            Path.cwd() / ".env",
+            Path.cwd() / "python" / "immich-api" / ".env",
+        ]
+        for env_file in possible_envs:
+            if env_file.is_file():
+                try:
+                    with open(env_file, "r", encoding="utf-8") as f:
+                        for line in f:
+                            line = line.strip()
+                            if "=" in line and not line.startswith("#"):
+                                k, v = line.split("=", 1)
+                                k, v = k.strip(), v.strip().strip("'\"")
+                                if k == "IMMICH_BASE_URL" and not base_url:
+                                    base_url = v.rstrip("/")
+                                elif k == "IMMICH_API_KEY" and not api_key:
+                                    api_key = v
+                                elif k == "IMMICH_ALBUM_ID" and not album_id:
+                                    album_id = v
+                except Exception:
+                    pass
+
+    return base_url or "http://localhost:2283", api_key, album_id
+
+
+def fetch_immich_album_dates(
+    album_ref: str,
+    base_url: str,
+    api_key: str,
+) -> tuple[str, list[str]]:
+    """
+    Queries Immich API for an album (by UUID or name) and extracts all unique capture dates (YYYY-MM-DD).
+    Returns (album_name: str, dates: list[str]).
+    """
+    if not api_key:
+        raise ValueError(
+            "Immich API key not found. Please set IMMICH_API_KEY env var or configure python/immich-api/.env"
+        )
+
+    headers = {
+        "x-api-key": api_key,
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    }
+
+    # 1. Fetch all albums to resolve UUID / Name
+    req = urllib.request.Request(f"{base_url}/api/albums", headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            albums = json.loads(resp.read().decode("utf-8"))
+    except Exception as e:
+        raise ConnectionError(f"Failed to connect to Immich at {base_url}/api/albums: {e}")
+
+    target_album = None
+    # Match by exact UUID
+    for a in albums:
+        if a.get("id", "").lower() == album_ref.lower():
+            target_album = a
+            break
+
+    # Match by name (exact or substring)
+    if not target_album:
+        for a in albums:
+            if a.get("albumName", "").lower() == album_ref.lower():
+                target_album = a
+                break
+    if not target_album:
+        for a in albums:
+            if album_ref.lower() in a.get("albumName", "").lower():
+                target_album = a
+                break
+
+    if not target_album:
+        raise ValueError(f"No album found in Immich matching '{album_ref}'")
+
+    album_id = target_album["id"]
+    album_name = target_album.get("albumName", "Untitled Album")
+    unique_dates = set()
+
+    # 2. Query album details
+    req_det = urllib.request.Request(f"{base_url}/api/albums/{album_id}", headers=headers)
+    with urllib.request.urlopen(req_det, timeout=10) as resp:
+        album_data = json.loads(resp.read().decode("utf-8"))
+
+    if "assets" in album_data and isinstance(album_data["assets"], list):
+        for asset in album_data["assets"]:
+            dt = asset.get("localDateTime") or asset.get("fileCreatedAt") or asset.get("createdAt")
+            if dt:
+                unique_dates.add(str(dt)[:10])
+
+    # 3. If timeline bucket format (Immich v3+)
+    if not unique_dates:
+        try:
+            req_buckets = urllib.request.Request(
+                f"{base_url}/api/timeline/buckets?albumId={album_id}", headers=headers
+            )
+            with urllib.request.urlopen(req_buckets, timeout=10) as resp:
+                buckets = json.loads(resp.read().decode("utf-8"))
+            for b in buckets:
+                tb = b.get("timeBucket")
+                if not tb:
+                    continue
+                req_b = urllib.request.Request(
+                    f"{base_url}/api/timeline/bucket?albumId={album_id}&timeBucket={tb}",
+                    headers=headers,
+                )
+                with urllib.request.urlopen(req_b, timeout=10) as resp:
+                    b_data = json.loads(resp.read().decode("utf-8"))
+                    created_ats = b_data.get("fileCreatedAt", []) or b_data.get("createdAt", [])
+                    for dt in created_ats:
+                        if dt:
+                            unique_dates.add(str(dt)[:10])
+        except Exception:
+            pass
+
+    sorted_dates = sorted(unique_dates)
+    return album_name, sorted_dates
+
+
 def resolve_default_paths() -> tuple[Path, Path]:
     """
     Dynamically discovers default base and staging paths across Linux, Windows, and macOS.
@@ -80,7 +214,6 @@ def resolve_default_paths() -> tuple[Path, Path]:
     system = platform.system()
 
     if system == "Windows":
-        # Scan available Windows drive letters
         for letter in string.ascii_uppercase:
             cand_base = Path(f"{letter}:/_MY PHOTOS and VIDEOS")
             cand_staging = Path(f"{letter}:/_RESOLVE_IMPORT_STAGING")
@@ -191,7 +324,6 @@ def clean_staging_directory(dir_path: Path, dry_run: bool = False, force: bool =
 
     removed = 0
     for item in list(dir_path.iterdir()):
-        # Never delete subdirectories
         if item.is_dir() and not item.is_symlink():
             continue
 
@@ -209,7 +341,6 @@ def clean_staging_directory(dir_path: Path, dry_run: bool = False, force: bool =
         elif is_file:
             try:
                 stat = item.stat()
-                # For hardlinks, st_nlink should be >= 2 because original exists in base_dir
                 if stat.st_nlink > 1 or force:
                     if not dry_run:
                         item.unlink()
@@ -235,7 +366,6 @@ def create_staged_link(
     if dry_run:
         return True, "dry_run"
 
-    # Check if destination already exists or is a broken symlink
     if dst.is_symlink() or dst.exists():
         try:
             if dst.exists() and dst.samefile(src):
@@ -243,7 +373,6 @@ def create_staged_link(
         except (OSError, ValueError):
             pass
 
-        # Target exists but is a broken symlink or points to a different file -> remove it
         try:
             dst.unlink()
         except OSError as e:
@@ -264,7 +393,6 @@ def create_staged_link(
         else:
             raise ValueError(f"Unsupported link_type: {link_type}")
     except OSError as e:
-        # Cross-device link error (EXDEV = 18)
         if link_type == "hardlink" and getattr(e, "errno", None) == 18:
             print(f"  ⚠️ Cross-device hardlink impossible for {src.name}. Falling back to symlink.")
             try:
@@ -285,6 +413,7 @@ def stage_media(
     mode: str = "all",
     link_type: str = "hardlink",
     dry_run: bool = False,
+    album_name: str | None = None,
 ) -> None:
     """Recursively scans matched folders and creates flat staging folders for DaVinci Resolve."""
     validate_staging_safety(base_dir, staging_dir)
@@ -304,8 +433,11 @@ def stage_media(
     print(" DaVinci Resolve Flat Media Staging Tool (Cross-Platform)")
     print("=" * 65)
     print(f"Platform:              {platform.system()} ({platform.release()})")
+    if album_name:
+        print(f"Immich Album Source:   {album_name}")
     print(f"Source Base Directory: {base_dir}")
     print(f"Staging Directory:     {staging_dir}")
+    print(f"Target Dates Count:    {len(dates)} dates")
     print(f"Mode:                  {mode}")
     print(f"Link Type:             {link_type}")
     print(f"Include JPG/HEIC:      {include_jpg}")
@@ -379,7 +511,7 @@ def stage_media(
     if link_type == "hardlink":
         print(f"💾 Storage Saved (Zero Duplication): {total_gb:.2f} GB")
     if missing_dates:
-        print(f"⚠️  Missing dates ({len(missing_dates)}): {', '.join(missing_dates)}")
+        print(f"⚠️  Missing dates on disk ({len(missing_dates)}): {', '.join(missing_dates)}")
     print("=" * 65)
 
 
@@ -410,9 +542,28 @@ def open_staging_folders(staging_dir: Path, mode: str) -> None:
 
 def main() -> None:
     default_base, default_staging = resolve_default_paths()
+    immich_url_default, immich_key_default, immich_album_default = load_immich_env()
 
     parser = argparse.ArgumentParser(
         description="Recursively stage Stampf media into flat folders for DaVinci Resolve albums/timelines."
+    )
+    parser.add_argument(
+        "--immich-album",
+        "-i",
+        dest="immich_album",
+        nargs="?",
+        const=immich_album_default or "__PROMPT__",
+        help="Fetch event dates directly from an Immich album name or UUID (e.g. 'Stampf' or '86e11802...').",
+    )
+    parser.add_argument(
+        "--immich-url",
+        default=immich_url_default,
+        help=f"Immich server base URL (default: {immich_url_default})",
+    )
+    parser.add_argument(
+        "--immich-key",
+        default=immich_key_default,
+        help="Immich API Key (defaults to IMMICH_API_KEY from environment or .env)",
     )
     parser.add_argument(
         "--clean",
@@ -455,8 +606,8 @@ def main() -> None:
     parser.add_argument(
         "--dates",
         nargs="+",
-        default=DEFAULT_DATES,
-        help="Custom list of dates (YYYY-MM-DD) to stage.",
+        default=None,
+        help="Custom list of dates (YYYY-MM-DD) to stage (overrides default dates).",
     )
     parser.add_argument(
         "--staging-dir",
@@ -473,8 +624,42 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    album_display_name = None
+    target_dates = args.dates
+
+    # If --immich-album is passed, fetch dates from Immich API
+    if args.immich_album:
+        target_ref = args.immich_album
+        if target_ref == "__PROMPT__":
+            target_ref = input("Enter Immich album name or UUID: ").strip()
+
+        if not target_ref:
+            print("Error: No Immich album specified.")
+            sys.exit(1)
+
+        print(f"Connecting to Immich at {args.immich_url} to fetch dates for album: '{target_ref}'...")
+        try:
+            album_display_name, fetched_dates = fetch_immich_album_dates(
+                target_ref, base_url=args.immich_url, api_key=args.immich_key
+            )
+            if not fetched_dates:
+                print(f"⚠️  Warning: No capture dates found in Immich album '{album_display_name}'.")
+                sys.exit(1)
+            print(f"✓ Found {len(fetched_dates)} event date(s) in Immich album '{album_display_name}':")
+            for d in fetched_dates:
+                print(f"   • {d}")
+            target_dates = fetched_dates
+        except Exception as e:
+            print(f"❌ Error fetching dates from Immich: {e}")
+            if not target_dates:
+                print(f"Falling back to default dates ({len(DEFAULT_DATES)} dates).")
+                target_dates = DEFAULT_DATES
+
+    if not target_dates:
+        target_dates = DEFAULT_DATES
+
     if args.clean:
-        print("Cleaning staging directories...")
+        print("\nCleaning staging directories...")
         validate_staging_safety(args.base_dir, args.staging_dir)
         r_photos = clean_staging_directory(
             args.staging_dir / "photos_raw", dry_run=args.dry_run, force=args.force
@@ -489,11 +674,12 @@ def main() -> None:
     stage_media(
         base_dir=args.base_dir,
         staging_dir=args.staging_dir,
-        dates=args.dates,
+        dates=target_dates,
         include_jpg=args.include_jpg,
         mode=args.mode,
         link_type=args.link_type,
         dry_run=args.dry_run,
+        album_name=album_display_name,
     )
 
     if args.open and not args.dry_run:
