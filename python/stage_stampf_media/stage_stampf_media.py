@@ -2,15 +2,18 @@
 """
 Recursively stages Stampf event media (RAW/DNG photos and video files)
 into flat staging folders for direct import into DaVinci Resolve timelines/albums.
+
+Supports cross-platform NTFS hardlinks (Linux and Windows 11), symlinks, and copies.
 """
 
 import argparse
+import os
+import platform
+import re
+import string
 import subprocess
 import sys
 from pathlib import Path
-
-BASE_DIR = Path("/mnt/wd14tb/_MY PHOTOS and VIDEOS")
-STAGING_DIR = Path("/mnt/wd14tb/_RESOLVE_IMPORT_STAGING")
 
 # Event dates to look for across the archive
 DEFAULT_DATES = [
@@ -61,6 +64,80 @@ VIDEO_EXTENSIONS = {
     ".mkv",
 }
 
+ILLEGAL_NTFS_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+
+
+def resolve_default_paths() -> tuple[Path, Path]:
+    """
+    Dynamically discovers default base and staging paths across Linux, Windows, and macOS.
+    Checks environment variables, Windows drive letters, and Linux mount locations.
+    """
+    env_base = os.getenv("STAMPF_BASE_DIR")
+    env_staging = os.getenv("STAMPF_STAGING_DIR")
+    if env_base and env_staging:
+        return Path(env_base), Path(env_staging)
+
+    system = platform.system()
+
+    if system == "Windows":
+        # Scan available Windows drive letters
+        for letter in string.ascii_uppercase:
+            cand_base = Path(f"{letter}:/_MY PHOTOS and VIDEOS")
+            cand_staging = Path(f"{letter}:/_RESOLVE_IMPORT_STAGING")
+            if cand_base.is_dir():
+                return cand_base, cand_staging
+        return Path("D:/_MY PHOTOS and VIDEOS"), Path("D:/_RESOLVE_IMPORT_STAGING")
+
+    # Linux / macOS / Unix detection
+    standard_base = Path("/mnt/wd14tb/_MY PHOTOS and VIDEOS")
+    standard_staging = Path("/mnt/wd14tb/_RESOLVE_IMPORT_STAGING")
+    if standard_base.is_dir():
+        return standard_base, standard_staging
+
+    for mount_root in [Path("/media"), Path("/mnt"), Path("/Volumes")]:
+        if mount_root.is_dir():
+            try:
+                for sub in mount_root.iterdir():
+                    cand_base = sub / "_MY PHOTOS and VIDEOS"
+                    cand_staging = sub / "_RESOLVE_IMPORT_STAGING"
+                    if cand_base.is_dir():
+                        return cand_base, cand_staging
+                    if sub.is_dir():
+                        for nested in sub.iterdir():
+                            c_base = nested / "_MY PHOTOS and VIDEOS"
+                            c_staging = nested / "_RESOLVE_IMPORT_STAGING"
+                            if c_base.is_dir():
+                                return c_base, c_staging
+            except PermissionError:
+                continue
+
+    return standard_base, standard_staging
+
+
+def sanitize_filename(name: str) -> str:
+    """Removes or replaces characters forbidden on Windows NTFS."""
+    sanitized = ILLEGAL_NTFS_CHARS.sub("_", name)
+    sanitized = sanitized.strip(". ")
+    return sanitized or "unnamed"
+
+
+def generate_staged_name(event_dir_name: str, file_path: Path, root_event_dir: Path) -> str:
+    """
+    Creates a unique, chronologically sortable staged filename compliant with Windows and Linux.
+    Format: <EventFolder>__<Subdir(if any)>__<Filename>
+    """
+    clean_event = sanitize_filename(event_dir_name)
+    clean_file_name = sanitize_filename(file_path.name)
+    try:
+        rel_path = file_path.relative_to(root_event_dir)
+        parts = rel_path.parts
+        if len(parts) > 1:
+            clean_sub = "__".join(sanitize_filename(p) for p in parts[:-1])
+            return f"{clean_event}__{clean_sub}__{clean_file_name}"
+    except ValueError:
+        pass
+    return f"{clean_event}__{clean_file_name}"
+
 
 def find_matching_event_directories(base_dir: Path, date_str: str) -> list[Path]:
     """Finds all matching directories for a given date in year folders or base folder."""
@@ -85,33 +162,119 @@ def find_matching_event_directories(base_dir: Path, date_str: str) -> list[Path]
     return matched
 
 
-def clean_staging_directory(dir_path: Path) -> int:
-    """Removes existing symlinks in the staging directory."""
+def validate_staging_safety(base_dir: Path, staging_dir: Path) -> None:
+    """Ensures staging directory is not base directory or parent/child."""
+    try:
+        b_res = base_dir.resolve()
+        s_res = staging_dir.resolve()
+    except Exception:
+        b_res = base_dir.absolute()
+        s_res = staging_dir.absolute()
+
+    if b_res == s_res:
+        raise ValueError(f"Safety Error: Staging directory cannot be identical to base directory ({b_res})")
+    if s_res in b_res.parents:
+        raise ValueError(f"Safety Error: Staging directory ({s_res}) is a parent of base directory ({b_res})")
+
+
+def clean_staging_directory(dir_path: Path, dry_run: bool = False, force: bool = False) -> int:
+    """
+    Safely removes staged files/hardlinks and symlinks in the staging directory.
+    Will never delete directories or single-link regular files unless forced.
+    """
     if not dir_path.exists():
         return 0
+
+    if dir_path.name not in ("photos_raw", "videos", "_RESOLVE_IMPORT_STAGING"):
+        print(f"⚠️  Safety Warning: Refusing to clean unexpected folder name: {dir_path}")
+        return 0
+
     removed = 0
-    for item in dir_path.iterdir():
-        if item.is_symlink():
-            item.unlink()
+    for item in list(dir_path.iterdir()):
+        # Never delete subdirectories
+        if item.is_dir() and not item.is_symlink():
+            continue
+
+        is_link = item.is_symlink()
+        is_file = item.is_file()
+
+        if is_link:
+            if not dry_run:
+                try:
+                    item.unlink()
+                except OSError as e:
+                    print(f"  ❌ Error unlinking symlink {item.name}: {e}")
+                    continue
             removed += 1
+        elif is_file:
+            try:
+                stat = item.stat()
+                # For hardlinks, st_nlink should be >= 2 because original exists in base_dir
+                if stat.st_nlink > 1 or force:
+                    if not dry_run:
+                        item.unlink()
+                    removed += 1
+                else:
+                    print(f"  ⚠️ Skipping potential single-copy file (nlink=1): {item.name}")
+            except OSError as e:
+                print(f"  ❌ Error stat/unlinking {item.name}: {e}")
+
     return removed
 
 
-def generate_symlink_name(event_dir_name: str, file_path: Path, root_event_dir: Path) -> str:
+def create_staged_link(
+    src: Path,
+    dst: Path,
+    link_type: str = "hardlink",
+    dry_run: bool = False,
+) -> tuple[bool, str]:
     """
-    Creates a unique, chronologically sortable symlink filename.
-    Format: <EventFolder>__<Subdir(if any)>__<Filename>
+    Creates a staged link (hardlink, symlink, or copy) with idempotency and self-healing.
+    Returns (success: bool, action: str).
     """
+    if dry_run:
+        return True, "dry_run"
+
+    # Check if destination already exists or is a broken symlink
+    if dst.is_symlink() or dst.exists():
+        try:
+            if dst.exists() and dst.samefile(src):
+                return True, "already_staged"
+        except (OSError, ValueError):
+            pass
+
+        # Target exists but is a broken symlink or points to a different file -> remove it
+        try:
+            dst.unlink()
+        except OSError as e:
+            print(f"  ❌ Error removing stale destination {dst.name}: {e}")
+            return False, "error"
+
     try:
-        rel_path = file_path.relative_to(root_event_dir)
-        parts = rel_path.parts
-        if len(parts) > 1:
-            # File is inside a subfolder, e.g. "videos/C0001.MP4"
-            prefix_sub = "__".join(parts[:-1])
-            return f"{event_dir_name}__{prefix_sub}__{file_path.name}"
-    except ValueError:
-        pass
-    return f"{event_dir_name}__{file_path.name}"
+        if link_type == "hardlink":
+            os.link(src, dst)
+            return True, "hardlink"
+        elif link_type == "symlink":
+            dst.symlink_to(src)
+            return True, "symlink"
+        elif link_type == "copy":
+            import shutil
+            shutil.copy2(src, dst)
+            return True, "copy"
+        else:
+            raise ValueError(f"Unsupported link_type: {link_type}")
+    except OSError as e:
+        # Cross-device link error (EXDEV = 18)
+        if link_type == "hardlink" and getattr(e, "errno", None) == 18:
+            print(f"  ⚠️ Cross-device hardlink impossible for {src.name}. Falling back to symlink.")
+            try:
+                dst.symlink_to(src)
+                return True, "symlink_fallback"
+            except Exception as sym_err:
+                print(f"  ❌ Symlink fallback failed for {src.name}: {sym_err}")
+                return False, "error"
+        print(f"  ❌ Error creating {link_type} for {src.name}: {e}")
+        return False, "error"
 
 
 def stage_media(
@@ -120,29 +283,39 @@ def stage_media(
     dates: list[str],
     include_jpg: bool = False,
     mode: str = "all",
+    link_type: str = "hardlink",
+    dry_run: bool = False,
 ) -> None:
-    """Recursively scans matched folders and creates flat symlink folders for Resolve."""
+    """Recursively scans matched folders and creates flat staging folders for DaVinci Resolve."""
+    validate_staging_safety(base_dir, staging_dir)
+
     photos_dir = staging_dir / "photos_raw"
     videos_dir = staging_dir / "videos"
 
     active_photo_exts = RAW_EXTENSIONS | (EXTRA_PHOTO_EXTENSIONS if include_jpg else set())
 
-    if mode in ("all", "photos"):
-        photos_dir.mkdir(parents=True, exist_ok=True)
-    if mode in ("all", "videos"):
-        videos_dir.mkdir(parents=True, exist_ok=True)
+    if not dry_run:
+        if mode in ("all", "photos"):
+            photos_dir.mkdir(parents=True, exist_ok=True)
+        if mode in ("all", "videos"):
+            videos_dir.mkdir(parents=True, exist_ok=True)
 
-    print("=" * 60)
-    print(" DaVinci Resolve Flat Media Staging Tool")
-    print("=" * 60)
+    print("=" * 65)
+    print(" DaVinci Resolve Flat Media Staging Tool (Cross-Platform)")
+    print("=" * 65)
+    print(f"Platform:              {platform.system()} ({platform.release()})")
     print(f"Source Base Directory: {base_dir}")
     print(f"Staging Directory:     {staging_dir}")
     print(f"Mode:                  {mode}")
+    print(f"Link Type:             {link_type}")
     print(f"Include JPG/HEIC:      {include_jpg}")
-    print("-" * 60)
+    print(f"Dry Run:               {dry_run}")
+    print("-" * 65)
 
     staged_photos = 0
     staged_videos = 0
+    total_photo_bytes = 0
+    total_video_bytes = 0
     missing_dates = []
 
     for date_str in dates:
@@ -156,7 +329,6 @@ def stage_media(
             event_photos = 0
             event_videos = 0
 
-            # Scan recursively for all files
             for file_path in sorted(event_dir.rglob("*")):
                 if not file_path.is_file():
                     continue
@@ -165,48 +337,54 @@ def stage_media(
 
                 # Photos (RAW/DNG + optional JPG)
                 if mode in ("all", "photos") and ext in active_photo_exts:
-                    link_name = generate_symlink_name(event_dir.name, file_path, event_dir)
-                    link_path = photos_dir / link_name
-                    if not link_path.exists() and not link_path.is_symlink():
-                        try:
-                            link_path.symlink_to(file_path)
-                            event_photos += 1
-                            staged_photos += 1
-                        except Exception as e:
-                            print(f"  ❌ Error symlinking photo {file_path.name}: {e}")
-                    else:
+                    link_name = generate_staged_name(event_dir.name, file_path, event_dir)
+                    dst_path = photos_dir / link_name
+                    success, action = create_staged_link(
+                        file_path, dst_path, link_type=link_type, dry_run=dry_run
+                    )
+                    if success:
                         event_photos += 1
+                        staged_photos += 1
+                        try:
+                            total_photo_bytes += file_path.stat().st_size
+                        except OSError:
+                            pass
 
                 # Videos
                 elif mode in ("all", "videos") and ext in VIDEO_EXTENSIONS:
-                    link_name = generate_symlink_name(event_dir.name, file_path, event_dir)
-                    link_path = videos_dir / link_name
-                    if not link_path.exists() and not link_path.is_symlink():
-                        try:
-                            link_path.symlink_to(file_path)
-                            event_videos += 1
-                            staged_videos += 1
-                        except Exception as e:
-                            print(f"  ❌ Error symlinking video {file_path.name}: {e}")
-                    else:
+                    link_name = generate_staged_name(event_dir.name, file_path, event_dir)
+                    dst_path = videos_dir / link_name
+                    success, action = create_staged_link(
+                        file_path, dst_path, link_type=link_type, dry_run=dry_run
+                    )
+                    if success:
                         event_videos += 1
+                        staged_videos += 1
+                        try:
+                            total_video_bytes += file_path.stat().st_size
+                        except OSError:
+                            pass
 
             print(f"   -> Photos: {event_photos} | Videos: {event_videos}")
 
-    print("\n" + "=" * 60)
+    total_gb = (total_photo_bytes + total_video_bytes) / (1024 ** 3)
+
+    print("\n" + "=" * 65)
     print(" Staging Summary")
-    print("=" * 60)
+    print("=" * 65)
     if mode in ("all", "photos"):
         print(f"📸 Total Photos Staged: {staged_photos} -> {photos_dir}")
     if mode in ("all", "videos"):
         print(f"🎬 Total Videos Staged: {staged_videos} -> {videos_dir}")
+    if link_type == "hardlink":
+        print(f"💾 Storage Saved (Zero Duplication): {total_gb:.2f} GB")
     if missing_dates:
         print(f"⚠️  Missing dates ({len(missing_dates)}): {', '.join(missing_dates)}")
-    print("=" * 60)
+    print("=" * 65)
 
 
 def open_staging_folders(staging_dir: Path, mode: str) -> None:
-    """Opens staging folders in the default file manager."""
+    """Opens staging folders in the default file manager across Linux, Windows, and macOS."""
     paths_to_open = []
     photos_dir = staging_dir / "photos_raw"
     videos_dir = staging_dir / "videos"
@@ -216,27 +394,40 @@ def open_staging_folders(staging_dir: Path, mode: str) -> None:
     if mode in ("all", "videos") and videos_dir.exists():
         paths_to_open.append(videos_dir)
 
+    system = platform.system()
     for path in paths_to_open:
         print(f"Opening {path} in file manager...")
         try:
-            subprocess.run(["xdg-open", str(path)], check=False)
+            if system == "Windows":
+                os.startfile(str(path))  # type: ignore[attr-defined]
+            elif system == "Darwin":
+                subprocess.run(["open", str(path)], check=False)
+            else:
+                subprocess.run(["xdg-open", str(path)], check=False)
         except Exception as e:
             print(f"Could not open file manager for {path}: {e}")
 
 
 def main() -> None:
+    default_base, default_staging = resolve_default_paths()
+
     parser = argparse.ArgumentParser(
         description="Recursively stage Stampf media into flat folders for DaVinci Resolve albums/timelines."
     )
     parser.add_argument(
         "--clean",
         action="store_true",
-        help="Remove existing symlinks in staging folders before staging.",
+        help="Remove existing staged links in staging folders before staging.",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force clean even if single-link files (nlink=1) are detected in staging folders.",
     )
     parser.add_argument(
         "--open",
         action="store_true",
-        help="Open staging folders in file manager after staging.",
+        help="Open staging folders in default file manager after staging.",
     )
     parser.add_argument(
         "--include-jpg",
@@ -250,6 +441,18 @@ def main() -> None:
         help="Filter which media to stage (default: all).",
     )
     parser.add_argument(
+        "--link-type",
+        choices=["hardlink", "symlink", "copy"],
+        default="hardlink",
+        help="Link creation strategy (default: hardlink for cross-platform Win11 & Linux compatibility).",
+    )
+    parser.add_argument(
+        "-n",
+        "--dry-run",
+        action="store_true",
+        help="Preview actions without modifying the filesystem.",
+    )
+    parser.add_argument(
         "--dates",
         nargs="+",
         default=DEFAULT_DATES,
@@ -258,24 +461,30 @@ def main() -> None:
     parser.add_argument(
         "--staging-dir",
         type=Path,
-        default=STAGING_DIR,
-        help=f"Target staging directory (default: {STAGING_DIR})",
+        default=default_staging,
+        help=f"Target staging directory (default: {default_staging})",
     )
     parser.add_argument(
         "--base-dir",
         type=Path,
-        default=BASE_DIR,
-        help=f"Photos base directory (default: {BASE_DIR})",
+        default=default_base,
+        help=f"Photos base directory (default: {default_base})",
     )
 
     args = parser.parse_args()
 
     if args.clean:
         print("Cleaning staging directories...")
-        r_photos = clean_staging_directory(args.staging_dir / "photos_raw")
-        r_videos = clean_staging_directory(args.staging_dir / "videos")
-        clean_staging_directory(args.staging_dir)
-        print(f"Removed {r_photos} photos symlinks and {r_videos} videos symlinks.\n")
+        validate_staging_safety(args.base_dir, args.staging_dir)
+        r_photos = clean_staging_directory(
+            args.staging_dir / "photos_raw", dry_run=args.dry_run, force=args.force
+        )
+        r_videos = clean_staging_directory(
+            args.staging_dir / "videos", dry_run=args.dry_run, force=args.force
+        )
+        clean_staging_directory(args.staging_dir, dry_run=args.dry_run, force=args.force)
+        prefix = "[Dry-Run] Would remove" if args.dry_run else "Removed"
+        print(f"{prefix} {r_photos} photos links and {r_videos} videos links.\n")
 
     stage_media(
         base_dir=args.base_dir,
@@ -283,9 +492,11 @@ def main() -> None:
         dates=args.dates,
         include_jpg=args.include_jpg,
         mode=args.mode,
+        link_type=args.link_type,
+        dry_run=args.dry_run,
     )
 
-    if args.open:
+    if args.open and not args.dry_run:
         open_staging_folders(args.staging_dir, args.mode)
 
 
