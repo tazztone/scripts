@@ -1,34 +1,15 @@
-# DaVinci Resolve Automated Media Organizer & Color Grading Prep
+# DaVinci Resolve Automated Media & Timelapse Ingestion Suite
 
-A standalone Python automation tool for **DaVinci Resolve Studio** to automatically probe staged video files using a 3-tier deep metadata engine (container EXIF tags, stream properties, hardware models, and codec signatures), organize clips into structured Media Pool Bins, assign distinct Clip Colors, add CST (Color Space Transform) starting grade markers, and auto-generate dedicated Timelines with **strict unmixed resolutions, native canvas geometry, and framerate segregation**.
+A pair of high-performance Python automation tools for **DaVinci Resolve Studio** to automatically probe, mathematically sequence, organize, and color-prep both **video footage** and **RAW photo timelapses/hyperlapses**.
 
----
-
-## 🎯 Purpose & Problem Solved
-
-When editing multi-year documentary, archival, or event projects, footage comes from dozens of different devices:
-* **DJI Drones** (4K 60fps / 10-bit D-Log M / D-Cinelike)
-* **Sony Alpha / FX** (4K 25fps real-time vs 100fps slow-motion XAVC)
-* **Panasonic Lumix** (10-bit V-Log)
-* **Smartphones & Mobile** (240fps slow-mo bursts & vertical reels)
-* **5.4K Drone Timelapses & 4:3 Photo Sensor Hyperlapses**
-
-Importing these mixed formats into a single timeline creates color management and framing chaos:
-* **Pillarboxing/Letterboxing**: Mixing 4:3 sensor timelapses or vertical 9:16 reels on a standard 16:9 timeline leaves black borders.
-* **Cadence Judder**: Mixing 100fps/240fps high-framerate bursts with 25fps real-time footage forces unwanted speed/interpolation conforming.
-* **Color Space Mismatches**: Log, Rec.709, and D-Cinelike profiles require completely different input color space transforms.
-
-**`resolve_auto_organize.py`** automates the entire ingestion and color prep pipeline:
-1. **⚡ Fast Parallel Metadata Engine**: Probes 250+ video containers in under 2 seconds across CPU cores.
-2. **📐 Strict Unmixed Resolution & Geometry**: Strictly separates 5.4K, 4K UHD, 1080p FHD, 720p HD, 4:3 photo-timelapses, and vertical reels into their own bins.
-3. **⏱️ Framerate Segregation**: Isolates 24/25/30fps real-time clips from 50/60/100/240fps slow-motion bursts.
-4. **🎨 Color Page Ready**: Color-codes clips (Orange for DJI, Teal for Sony, Yellow for Panasonic, Purple for Mobile, Blue for Timelapses) and embeds CST starting grade markers on Frame 0.
-5. **🎬 Dedicated Timelines with Native Settings**: Automatically creates timelines with native pixel dimensions (`useCustomSettings=1`) so vertical reels open vertically and 5.4K clips play at full raster.
-6. **🔄 Idempotent Re-runs**: Safely re-run anytime; skips already-imported assets and reuses existing timelines without creating duplicate `clip_1` files.
+1. **`resolve_auto_organize.py`**: Automated video organizer, CST color-coder, and timeline generator with strict unmixed resolutions and framerate segregation.
+2. **`resolve_timelapse_engine.py`**: Mathematical EXIF-driven timelapse/hyperlapse sequence detector, zero-copy CinemaDNG sequence stager, and native 4:3 canvas timeline generator.
 
 ---
 
-## 🔬 3-Tier Deep Metadata Engine
+## 🎯 1. Video Organization (`resolve_auto_organize.py`)
+
+### 🔬 3-Tier Deep Metadata Engine
 
 | Camera / Device | Hardware & Container Tags | Detected Profile / Bit-Depth | Clip Color | Target Media Pool Bin |
 | :--- | :--- | :--- | :--- | :--- |
@@ -36,65 +17,90 @@ Importing these mixed formats into a single timeline creates color management an
 | **Sony Alpha (XAVC)** | `Brand: XAVC`, `Model: ILCE-*` | S-Cinetone / S-Log3 (8/10-bit) | `Teal` | `📁 Sony_Alpha__FX_XAVC_{Res}_{FPS}` |
 | **Panasonic Lumix** | `Make: Panasonic`, `Handler: Static Metadata` | V-Log / Standard (10-bit) | `Yellow` | `📁 Panasonic_Lumix_{Res}_{FPS}` |
 | **Smartphone / Mobile** | `AndroidVersion`, `Apple iPhone` | Rec.709 / sRGB (8-bit, 240fps) | `Purple` | `📁 Mobile_Smartphone_{Res}_{FPS}` |
-| **Timelapses** | `*TL*`, `hyperlapse`, 5.4K, 4:3, Vertical | Rec.709 / sRGB (10-bit) | `Blue` | `📁 Timelapse_Timelapse_{Res}_{FPS}` |
+| **Timelapses (Video)** | `*TL*`, `hyperlapse`, 5.4K, 4:3, Vertical | Rec.709 / sRGB (10-bit) | `Blue` | `📁 Timelapse_Timelapse_{Res}_{FPS}` |
 | **Renders / Exports** | `Software: Adobe/DaVinci` | Master Rec.709 | `Navy` | `📁 Render_Exported_Render_{Res}_{FPS}` |
 
----
-
-## 🚀 Usage
-
-### 1. Preview Metadata in Standalone Mode (`--scan-only`)
-Inspect all video files in parallel and print a formatted technical breakdown table without connecting to Resolve:
+### 🚀 Video Usage
 
 ```bash
+# 1. Preview metadata in standalone mode
 python3 resolve_auto_organize.py --scan-only
-```
 
-### 2. Auto-Organize Active DaVinci Resolve Project
-With **DaVinci Resolve Studio** open and a project loaded:
-
-```bash
+# 2. Auto-organize active DaVinci Resolve Project
 python3 resolve_auto_organize.py
 ```
 
-This will:
-* Connect to your active Resolve project.
-* Import all staged clips into structured sub-bins under `Staged_Clips_By_Camera/`.
-* Assign Clip Colors and add CST starting grade markers to every clip.
-* Generate matching Timelines (e.g. `TL - DJI DJI Drone (4K_UHD_3840x2160 30fps)`, `TL - Sony Alpha / FX (XAVC) (1080p_FHD 100fps_SlowMo)`).
-* Configure native resolution settings on each timeline (`useCustomSettings=1`).
-* Automatically switch Resolve to the **Color Page**.
+---
 
-### 3. Custom Staging Directory
-```bash
-python3 resolve_auto_organize.py --staging-dir "/path/to/custom/staging/videos"
-```
+## 📸 2. RAW Timelapse & Hyperlapse Engine (`resolve_timelapse_engine.py`)
 
-### 4. Skip Timeline Creation (Bins & Colors Only)
-```bash
-python3 resolve_auto_organize.py --no-timelines
-```
+### 🧠 The Math: Cadence Regularity & Delta-T Clustering
 
-### 5. Adjust Parallel Workers
+Filenames and folder names are often inconsistent across cameras and editing tools. `resolve_timelapse_engine.py` inspects EXIF capture timestamps (`DateTimeOriginal` + sub-seconds) and applies mathematical sequence clustering:
+
+1. **Interval Clustering**: Groups consecutive shots within an interval window $\Delta t \in [0.5\text{s}, 60.0\text{s}]$.
+2. **Cadence Regularity (Coefficient of Variation)**:
+   $$\mu = \text{mean}(\Delta t_i), \quad \sigma = \text{std}(\Delta t_i), \quad CV = \frac{\sigma}{\mu}$$
+   Requires $CV \le 0.25$ to filter out erratic manual snaps and sports bursts while capturing true intervalometer shots.
+3. **Span Filtering**: Requires sequence length $\ge 5$ frames and total capture duration $\ge 5.0\text{s}$ (eliminating 0-second single-burst AEB brackets).
+4. **Dual-Stream Partitioning**: Separates base captures (`.DNG`) from Lightroom AI Denoised (`-Enhanced-NR.dng`) versions so both can be graded side-by-side.
+
+### ❓ Why CinemaDNG / DNG Only?
+
+* **NLE Sequence Limitation**: DaVinci Resolve's Image Sequence engine natively supports **CinemaDNG (`.dng`)**, TIFF, EXR, DPX, and JPEG/PNG sequences.
+* **Proprietary RAW Formats**: Proprietary raw files (Sony `.ARW`, Panasonic `.RW2`, Nikon `.NEF`, Canon `.CR3`) cannot be imported directly as NLE image sequences by Resolve and are treated as standalone still photos.
+* **Full RAW Control**: Ingesting CinemaDNG image sequences unlocks Resolve's dedicated **Camera RAW** palette in the Color page (ISO, Exposure, Color Temp, Tint, and Highlight Recovery).
+
+### 📐 Strict Aspect Ratio & Orientation Segregation
+
+When cameras/drones shoot portrait or vertical timelapses (e.g. `Orientation: Rotate 270 CW`), Resolve displays them as **Vertical 3:4 (3024x4032)** while landscape shots display as **Landscape 4:3 (4032x3024)**.
+The engine automatically detects orientation metadata and creates dedicated, unmixed bins and timelines:
+* **Landscape Bin**: `Timelapse_CinemaDNG_Landscape_4032x3024_25fps` $\rightarrow$ Timeline: **`TL - All Timelapses (Landscape 4032x3024 25fps)`**
+* **Vertical Bin**: `Timelapse_CinemaDNG_Vertical_3024x4032_25fps` $\rightarrow$ Timeline: **`TL - All Timelapses (Vertical 3024x4032 25fps)`**
+
+### 🚀 Timelapse Usage
+
 ```bash
-python3 resolve_auto_organize.py --workers 16
+# 1. Preview detected timelapses without modifying disk or Resolve
+python3 resolve_timelapse_engine.py --scan-only
+
+# 2. Dry-run staging simulation
+python3 resolve_timelapse_engine.py --dry-run
+
+# 3. Stage zero-copy hardlinks and import into active DaVinci Resolve Project
+python3 resolve_timelapse_engine.py
+
+# 4. Optional individual timelines per sequence (in addition to master timelines)
+python3 resolve_timelapse_engine.py --individual-timelines
+
+# 5. Custom interval or cadence settings
+python3 resolve_timelapse_engine.py --min-frames 10 --max-cv 0.20 --fps 25.0
+
+# 6. Re-scan and rebuild EXIF cache
+python3 resolve_timelapse_engine.py --clear-cache
 ```
 
 ---
 
 ## 🎨 Color Grading Workflow in DaVinci Resolve
 
-### Step 1: Filter by Clip Color in Color Page
-In DaVinci Resolve's **Color** page:
-1. Click the **Clips** filter dropdown in the top right $\rightarrow$ select **Clip Color**.
-2. Click **Orange** (DJI Drone), **Teal** (Sony Alpha), or **Yellow** (Panasonic Lumix).
+### For Video Clips (CST Group Grading)
+1. In the **Color** page, filter by **Clip Color** (Orange for DJI, Teal for Sony, Yellow for Panasonic).
+2. Right-click selected clips $\rightarrow$ **Add into Current Group**.
+3. In **Group Pre-Clip**, add a **Color Space Transform (CST)** node matching the Frame 0 marker note (e.g. `DJI D-Gamut / D-Log M` $\rightarrow$ `Rec.709 / Gamma 2.4`).
 
-### Step 2: Create a Color Group
-1. Select all clips of that color $\rightarrow$ Right-click $\rightarrow$ **Add into Current Group** (e.g. *"DJI Group"*).
-2. In the Node Graph dropdown, switch from **Clip** to **Group Pre-Clip**.
-3. Add a **Color Space Transform (CST)** node:
-   * **Input Color Space**: Set according to the clip marker note (e.g. `DJI D-Gamut` / `Panasonic V-Gamut` / `Sony S-Gamut3.Cine`).
-   * **Input Gamma**: `DJI D-Log M` / `Panasonic V-Log` / `Sony S-Log3`.
-   * **Output Color Space**: `Rec.709`.
-   * **Output Gamma**: `Gamma 2.4` (or your timeline working color space).
-4. **All clips from that camera across all timelines are now instantly normalized and graded!**
+### For CinemaDNG Timelapses (Camera RAW Photographic Grading)
+1. Select any **Blue** timelapse clip on the timeline.
+2. In the **Color Page**, click the **Camera RAW** icon (bottom-left palette next to Color Wheels).
+3. Set **Decode Using** $\rightarrow$ **Clip**.
+4. Configure Photographic Decode settings:
+   * **Color Space**: `sRGB` (or `Rec.709`)
+   * **Gamma**: `sRGB` (or `Gamma 2.2`)
+   * **White Balance**: `As Shot` (or adjust Color Temp / Tint to taste)
+   * **Highlight Recovery**: **Checked** (restores blown sky and cloud details from 12-bit/14-bit RAW sensor data)
+5. *(Optional CST Transformation)*: If working on a Rec.709 / Gamma 2.4 broadcast timeline, add a **Color Space Transform (CST)** node with:
+   * **Input Color Space**: `sRGB`
+   * **Input Gamma**: `sRGB` (or `Gamma 2.2`)
+   * **Output Color Space**: `Rec.709`
+   * **Output Gamma**: `Gamma 2.4` (or `Gamma 2.2` for web / YouTube / PC monitors).
+6. **Result**: Your timelapse photos will immediately have rich, natural contrast, accurate skin tones, and vibrant skies matching Lightroom / PhotoLab!

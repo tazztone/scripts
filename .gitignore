@@ -230,6 +230,7 @@ sh/testing/output/
 .vscode/settings.json
 .kiro/
 python/immich-api/timelapse_stacking_last_run.json
+python/immich-api/.exif_timelapse_cache.json
 python/remove_jpg_if_raw_exists/test_years.sh
 python/remove_jpg_if_raw_exists/cleanup_history.sh
 userscripts/topp-alarm/bell.png
