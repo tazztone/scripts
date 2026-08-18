@@ -22,6 +22,7 @@ scripts/
 │   ├── lora_remove_te_weights/          # Strip TE (text encoder) weights from LoRA .safetensors
 │   └── put_files_into_folder_by_extension/  # Auto-organizer: sort files into folders by extension
 └── userscripts/                    # Browser userscripts (Violentmonkey / Tampermonkey)
+    ├── huggingface/                # Hugging Face inline liking, unliked highlighter, date & negative filter
     └── perplexity/                 # Perplexity model lock, approvals, and GitHub enhancements
 ```
 
@@ -43,6 +44,7 @@ scripts/
 - **Extension-based File Organizer** — auto-sorts a flat directory into sub-folders by file extension
 
 ### `userscripts/` — Browser Userscripts
+- **Hugging Face Enhancements** — inline liking/unliking, unliked model card highlighter, date range slider filter, and negative text/regex keyword filter
 - **Perplexity Enhancements** — locks the preferred model, automates agent approvals, and enables the GitHub connector; uses `MutationObserver` for React SPA compatibility
 
 ## Usage
@@ -52,7 +54,7 @@ Each subdirectory contains its own `README.md` with specific requirements and us
 - Bash scripts: [`sh/README.md`](sh/README.md)
 - Python utilities: [`python/README.md`](python/README.md)
 - Windows Batch: [`bat/README.md`](bat/README.md)
-- Userscripts: [`userscripts/perplexity/README.md`](userscripts/perplexity/README.md)
+- Userscripts: [`userscripts/huggingface/README.md`](userscripts/huggingface/README.md), [`userscripts/perplexity/README.md`](userscripts/perplexity/README.md)
 
 ### Quick examples
 
