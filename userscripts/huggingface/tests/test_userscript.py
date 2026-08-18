@@ -164,3 +164,54 @@ def test_dynamic_cards_are_bound_once(page: Page):
 
     assert requests(page)[0]['url'] == '/api/models/owner/dynamic-model/like'
     assert requests(page)[0]['method'] == 'POST'
+
+
+def test_negative_text_filter_substring(page: Page):
+    page.fill('#hf-exclude-input', 'gguf')
+    page.wait_for_function("document.querySelector('#card-gguf').classList.contains('hf-filtered-out')")
+
+    assert 'hf-filtered-out' in (page.locator('#card-gguf').get_attribute('class') or '')
+    assert 'hf-filtered-out' not in (page.locator('#card-fp8').get_attribute('class') or '')
+    assert 'hf-filtered-out' not in (page.locator('#card-unliked').get_attribute('class') or '')
+    assert 'hf-filtered-out' not in (page.locator('#card-liked').get_attribute('class') or '')
+    assert 'Showing 3 / 4' in page.locator('#hf-df-badge').inner_text()
+
+
+def test_negative_text_filter_regex_and_multi_term(page: Page):
+    page.fill('#hf-exclude-input', '/(?:gguf|fp8)/i')
+    page.wait_for_function("document.querySelector('#card-gguf').classList.contains('hf-filtered-out') && document.querySelector('#card-fp8').classList.contains('hf-filtered-out')")
+
+    assert 'hf-filtered-out' in (page.locator('#card-gguf').get_attribute('class') or '')
+    assert 'hf-filtered-out' in (page.locator('#card-fp8').get_attribute('class') or '')
+    assert 'hf-filtered-out' not in (page.locator('#card-unliked').get_attribute('class') or '')
+    assert 'Showing 2 / 4' in page.locator('#hf-df-badge').inner_text()
+
+
+def test_negative_text_filter_clear_button(page: Page):
+    page.fill('#hf-exclude-input', 'gguf')
+    page.wait_for_function("document.querySelector('#card-gguf').classList.contains('hf-filtered-out')")
+
+    page.click('#hf-exclude-clear-btn')
+    page.wait_for_function("!document.querySelector('#card-gguf').classList.contains('hf-filtered-out')")
+
+    assert page.locator('#hf-exclude-input').input_value() == ''
+    assert 'hf-filtered-out' not in (page.locator('#card-gguf').get_attribute('class') or '')
+    assert 'All shown (4)' in page.locator('#hf-df-badge').inner_text()
+
+
+def test_negative_text_filter_toggle(page: Page):
+    page.fill('#hf-exclude-input', 'gguf')
+    page.wait_for_function("document.querySelector('#card-gguf').classList.contains('hf-filtered-out')")
+
+    # Disable toggle
+    page.click('#hf-exclude-toggle + .hf-slider')
+    page.wait_for_function("!document.querySelector('#card-gguf').classList.contains('hf-filtered-out')")
+
+    assert page.locator('#hf-exclude-input').input_value() == 'gguf'
+    assert 'hf-filtered-out' not in (page.locator('#card-gguf').get_attribute('class') or '')
+    assert 'hf-section-dimmed' in (page.locator('#hf-exclude-section-body').get_attribute('class') or '')
+
+    # Re-enable toggle
+    page.click('#hf-exclude-toggle + .hf-slider')
+    page.wait_for_function("document.querySelector('#card-gguf').classList.contains('hf-filtered-out')")
+    assert 'hf-filtered-out' in (page.locator('#card-gguf').get_attribute('class') or '')

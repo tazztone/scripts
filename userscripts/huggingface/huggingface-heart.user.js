@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Hugging Face Inline Liking, Unliked Model Highlighter & Date Filter
+// @name         Hugging Face Inline Liking, Unliked Model Highlighter, Date & Negative Filter
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.8.3
-// @description  Like or unlike model cards inline, highlight unliked models, and filter models by date range slider.
+// @version      1.9.0
+// @description  Like or unlike model cards inline, highlight unliked models, and filter models by date range slider and negative text keywords.
 // @author       tazztone
 // @match        https://huggingface.co/*
 // @updateURL    https://raw.githubusercontent.com/tazztone/scripts/main/userscripts/huggingface/huggingface-heart.user.js
@@ -21,7 +21,9 @@ const DEFAULTS = {
   DATE_FILTER_ENABLED: false,
   DATE_MIN_DAYS: 0,
   DATE_MAX_DAYS: 30,
-  DATE_PRESET: 'all'
+  DATE_PRESET: 'all',
+  FILTER_EXCLUDE_ENABLED: true,
+  FILTER_EXCLUDE_TERMS: ''
 };
 
 const PRESETS = [
@@ -60,11 +62,13 @@ const WIDGET_STYLES = `
   article.overview-card-wrapper.hf-is-liked {
     border: 1px solid rgba(255, 255, 255, 0.05) !important;
   }
-  article.overview-card-wrapper.hf-date-filtered-out {
+  article.overview-card-wrapper.hf-filtered-out,
+  article.overview-card-wrapper.hf-date-filtered-out,
+  article.overview-card-wrapper.hf-text-filtered-out {
     display: none !important;
   }
 
-  /* Sidebar Date Filter Widget Styles */
+  /* Sidebar Filter Widget Styles */
   #hf-date-filter-widget {
     box-sizing: border-box;
     width: 100%;
@@ -83,6 +87,8 @@ const WIDGET_STYLES = `
     align-items: center;
     justify-content: space-between;
     margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   }
   #hf-date-filter-widget .hf-df-title {
     font-size: 13px;
@@ -94,11 +100,97 @@ const WIDGET_STYLES = `
     align-items: center;
     gap: 6px;
   }
+
+  /* Filter Sections */
+  .hf-filter-section {
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .hf-filter-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .hf-filter-section-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #cbd5e1;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .hf-section-body {
+    transition: opacity 0.2s ease;
+  }
+  .hf-section-dimmed {
+    opacity: 0.4;
+    pointer-events: none;
+  }
+
+  /* Exclude Text Input */
+  .hf-exclude-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+  }
+  .hf-exclude-input {
+    box-sizing: border-box;
+    width: 100%;
+    height: 30px;
+    padding: 4px 26px 4px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    background: rgba(15, 23, 42, 0.8);
+    color: #f8fafc;
+    font-size: 12px;
+    font-family: inherit;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .hf-exclude-input:focus {
+    outline: none;
+    border-color: #f59e0b;
+    box-shadow: 0 0 0 1px #f59e0b;
+  }
+  .hf-clear-btn {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #94a3b8;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 3px;
+    display: none;
+  }
+  .hf-clear-btn.visible {
+    display: block;
+  }
+  .hf-clear-btn:hover {
+    color: #f87171;
+  }
+  .hf-exclude-hint {
+    font-size: 10px;
+    color: #64748b;
+    margin-top: 4px;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  /* Presets */
   #hf-date-filter-widget .hf-df-presets {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
   }
   .hf-df-preset-btn {
     padding: 3px 8px;
@@ -122,6 +214,7 @@ const WIDGET_STYLES = `
     border-color: #f59e0b;
     box-shadow: 0 0 8px rgba(245, 158, 11, 0.3);
   }
+
   .hf-df-controls {
     display: flex;
     flex-direction: column;
@@ -179,9 +272,14 @@ const WIDGET_STYLES = `
   }
   .hf-df-status {
     display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 4px;
+  }
+  .hf-df-status-main {
+    display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-top: 8px;
     font-size: 11px;
     color: #94a3b8;
   }
@@ -192,11 +290,17 @@ const WIDGET_STYLES = `
     color: #34d399;
     font-weight: 600;
   }
+  .hf-df-substatus {
+    font-size: 10px;
+    color: #94a3b8;
+    text-align: right;
+    min-height: 14px;
+  }
 
   /* Toggle Switches */
   .hf-switch {
-    width: 40px;
-    height: 22px;
+    width: 36px;
+    height: 20px;
     position: relative;
     display: inline-block;
   }
@@ -209,26 +313,26 @@ const WIDGET_STYLES = `
     position: absolute;
     inset: 0;
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 22px;
+    border-radius: 20px;
     background: rgba(15, 23, 42, 0.6);
     cursor: pointer;
   }
   .hf-slider::before {
     content: "";
     position: absolute;
-    left: 3px;
-    bottom: 3px;
+    left: 2px;
+    bottom: 2px;
     width: 14px;
     height: 14px;
     border-radius: 50%;
     background: #94a3b8;
-    transition: transform 0.3s ease;
+    transition: transform 0.25s ease;
   }
   .hf-switch input:checked + .hf-slider {
     background: #f59e0b;
   }
   .hf-switch input:checked + .hf-slider::before {
-    transform: translateX(18px);
+    transform: translateX(16px);
     background: #fff;
   }
 
@@ -244,7 +348,7 @@ const WIDGET_STYLES = `
     align-items: center;
     gap: 4px;
     padding: 0;
-    margin-top: 12px;
+    margin-top: 8px;
     transition: color 0.2s ease;
   }
   .hf-df-settings-toggle:hover {
@@ -287,6 +391,7 @@ const WIDGET_STYLES = `
     color: #fbbf24;
     font-size: 13px;
     text-align: center;
+    line-height: 1.4;
   }
 `;
 
@@ -345,6 +450,57 @@ const WIDGET_STYLES = `
       (document.head || document.documentElement).appendChild(styleEl);
     }
     styleEl.textContent = buildStyle();
+  }
+
+  // ─── NEGATIVE FILTER PARSER & MATCHER ─────────────────────────────────────────
+  function parseNegativeFilter(termsStr) {
+    if (!termsStr || typeof termsStr !== 'string') return [];
+    const rawTokens = termsStr.split(/[,\n]+/);
+    const matchers = [];
+
+    for (const raw of rawTokens) {
+      const token = raw.trim();
+      if (!token) continue;
+
+      // Detect /pattern/flags syntax
+      const regexMatch = token.match(/^\/(.+)\/([a-z]*)$/i);
+      if (regexMatch) {
+        try {
+          const pattern = regexMatch[1];
+          const flags = regexMatch[2] || 'i';
+          matchers.push({ type: 'regex', regex: new RegExp(pattern, flags), raw: token });
+          continue;
+        } catch (e) {
+          // If regex is invalid, safely fall through to literal substring match
+        }
+      }
+
+      matchers.push({ type: 'string', text: token.toLowerCase(), raw: token });
+    }
+
+    return matchers;
+  }
+
+  function isCardExcludedByText(card, modelId, matchers) {
+    if (!matchers || matchers.length === 0) return false;
+
+    const idText = (modelId || '').toLowerCase();
+    const titleEl = card.querySelector('h4, .title, header span');
+    const titleText = (titleEl?.textContent || '').trim().toLowerCase();
+
+    for (const m of matchers) {
+      if (m.type === 'regex') {
+        if (m.regex.test(modelId || '') || (titleEl && m.regex.test(titleEl.textContent || ''))) {
+          return true;
+        }
+      } else if (m.type === 'string') {
+        if (idText.includes(m.text) || titleText.includes(m.text)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
   }
 
   // ─── DATE HELPERS ────────────────────────────────────────────────────────────
@@ -469,9 +625,6 @@ const WIDGET_STYLES = `
       return inlineLikeStates.get(stateKey);
     }
 
-    // 1. Look for native aria-pressed on an unbound button/container. The
-    // userscript writes aria-pressed for accessibility after binding, so its
-    // value must not override later native heart SVG updates.
     const likeBtn = Array.from(card.querySelectorAll('[title*="like" i], [aria-label*="like" i]'))
       .find(element => !element.hasAttribute('data-hf-inline-bound'));
     if (likeBtn) {
@@ -480,11 +633,9 @@ const WIDGET_STYLES = `
       if (ariaPressed === 'false') return false;
     }
 
-    // 2. Find heart SVG inside card
     const heartSvg = findHeartSvg(card);
     if (!heartSvg) return false;
 
-    // 3. Check for explicit red/rose/pink color styling (Liked)
     const classListStr = (heartSvg.className?.baseVal || heartSvg.className || '').toString();
     const parentClassStr = (heartSvg.parentElement?.className || '').toString();
     const grandParentClassStr = (heartSvg.parentElement?.parentElement?.className || '').toString();
@@ -504,9 +655,6 @@ const WIDGET_STYLES = `
       return true;
     }
 
-    // 4. Inspect path d signatures:
-    // Solid heart path (liked): starts with M22.5,4 or M22.5 4
-    // Outline heart path (unliked): starts with M22.45,6 or contains m0-2
     const paths = heartSvg.querySelectorAll('path');
     for (const path of paths) {
       const d = path.getAttribute('d') || '';
@@ -525,7 +673,6 @@ const WIDGET_STYLES = `
       }
     }
 
-    // 5. Default fallback: if heart icon is gray, model is unliked
     if (/(text|fill)-(gray|slate|neutral|zinc|stone)-\d+/i.test(combined)) {
       return false;
     }
@@ -740,30 +887,56 @@ const WIDGET_STYLES = `
     const cards = document.querySelectorAll('article.overview-card-wrapper');
     let totalCards = cards.length;
     let visibleCards = 0;
+    let hiddenByDate = 0;
+    let hiddenByText = 0;
 
-    const isDateFilterActive = CONFIG.DATE_FILTER_ENABLED;
+    const isDateFilterActive = Boolean(CONFIG.DATE_FILTER_ENABLED);
     const minDays = CONFIG.DATE_MIN_DAYS;
     const maxDays = CONFIG.DATE_MAX_DAYS;
 
+    const isTextFilterActive = Boolean(CONFIG.FILTER_EXCLUDE_ENABLED && (CONFIG.FILTER_EXCLUDE_TERMS || '').trim());
+    const matchers = isTextFilterActive ? parseNegativeFilter(CONFIG.FILTER_EXCLUDE_TERMS) : [];
+
     cards.forEach(card => {
       const modelId = getModelIdFromCard(card);
+      let dateExcluded = false;
+      let textExcluded = false;
 
       if (isDateFilterActive) {
         const timestamp = getModelDate(card);
         if (timestamp !== null) {
           const daysAgo = getDaysAgo(timestamp);
           if (daysAgo !== null && (daysAgo < minDays || daysAgo > maxDays)) {
-            card.classList.add('hf-date-filtered-out');
-          } else {
-            card.classList.remove('hf-date-filtered-out');
-            visibleCards++;
+            dateExcluded = true;
           }
-        } else {
-          card.classList.remove('hf-date-filtered-out');
-          visibleCards++;
         }
+      }
+
+      if (isTextFilterActive && matchers.length > 0) {
+        if (isCardExcludedByText(card, modelId, matchers)) {
+          textExcluded = true;
+        }
+      }
+
+      if (dateExcluded) {
+        card.classList.add('hf-date-filtered-out');
+        hiddenByDate++;
       } else {
         card.classList.remove('hf-date-filtered-out');
+      }
+
+      if (textExcluded) {
+        card.classList.add('hf-text-filtered-out');
+        hiddenByText++;
+      } else {
+        card.classList.remove('hf-text-filtered-out');
+      }
+
+      const shouldHide = dateExcluded || textExcluded;
+      if (shouldHide) {
+        card.classList.add('hf-filtered-out');
+      } else {
+        card.classList.remove('hf-filtered-out');
         visibleCards++;
       }
 
@@ -771,20 +944,32 @@ const WIDGET_STYLES = `
       if (modelId) setupHeartButton(card, modelId);
     });
 
-    updateWidgetStats(visibleCards, totalCards);
-    updateEmptyNotice(visibleCards, totalCards, isDateFilterActive);
+    updateWidgetStats(visibleCards, totalCards, hiddenByDate, hiddenByText, isDateFilterActive, isTextFilterActive);
+    updateEmptyNotice(visibleCards, totalCards, isDateFilterActive, isTextFilterActive, hiddenByDate, hiddenByText);
   }
 
-  function updateEmptyNotice(visibleCount, totalCount, isActive) {
+  function updateEmptyNotice(visibleCount, totalCount, isDateActive, isTextActive, hiddenByDate, hiddenByText) {
     let noticeEl = document.getElementById('hf-df-empty-notice');
-    if (isActive && totalCount > 0 && visibleCount === 0) {
+    const isAnyFilterActive = isDateActive || isTextActive;
+
+    if (isAnyFilterActive && totalCount > 0 && visibleCount === 0) {
       if (!noticeEl || !document.body.contains(noticeEl)) {
         noticeEl = document.createElement('div');
         noticeEl.id = 'hf-df-empty-notice';
         const main = document.querySelector('main') || document.querySelector('article')?.parentElement || document.body;
         main.insertBefore(noticeEl, main.firstChild);
       }
-      noticeEl.textContent = `No models match the active date filter on the currently loaded list (${totalCount} models scanned). Scroll down to load more models or expand the date range slider.`;
+
+      let reason = '';
+      if (isDateActive && isTextActive) {
+        reason = `active date filter (${hiddenByDate} excluded) and negative text filter (${hiddenByText} excluded)`;
+      } else if (isTextActive) {
+        reason = `negative text filter (${hiddenByText} models matched excluded keywords)`;
+      } else {
+        reason = `active date range filter (${hiddenByDate} models out of range)`;
+      }
+
+      noticeEl.textContent = `No models match the ${reason} on the currently loaded list (${totalCount} models scanned). Scroll down to load more models, adjust the date slider, or update negative keywords.`;
       noticeEl.style.display = 'block';
     } else if (noticeEl) {
       noticeEl.style.display = 'none';
@@ -822,9 +1007,6 @@ const WIDGET_STYLES = `
     observer.observe(document.body, {
       childList: true,
       subtree: true,
-      // Hugging Face hydrates existing cards by changing the heart path.
-      // Observe only this native state signal to avoid loops from our own
-      // class, fill, and accessibility updates.
       attributes: true,
       attributeFilter: ['d']
     });
@@ -892,47 +1074,91 @@ const WIDGET_STYLES = `
       <div class="hf-df-header">
         <div class="hf-df-title">
           <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
           </svg>
-          Date Range
+          Model Filters
         </div>
-        <label class="hf-switch" title="Toggle date range filter">
-          <input id="hf-df-toggle" type="checkbox">
-          <span class="hf-slider"></span>
-        </label>
       </div>
 
-      <div class="hf-df-presets" id="hf-df-presets-container">
-        ${PRESETS.map(p => `<button type="button" class="hf-df-preset-btn" data-preset="${p.id}">${p.label}</button>`).join('')}
+      <!-- SECTION 1: Exclude Text Filter -->
+      <div class="hf-filter-section" id="hf-exclude-section">
+        <div class="hf-filter-section-header">
+          <div class="hf-filter-section-title">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+            </svg>
+            Exclude Keywords
+          </div>
+          <label class="hf-switch" title="Toggle negative text filter">
+            <input id="hf-exclude-toggle" type="checkbox">
+            <span class="hf-slider"></span>
+          </label>
+        </div>
+        <div class="hf-section-body" id="hf-exclude-section-body">
+          <div class="hf-exclude-input-wrapper">
+            <input type="text" id="hf-exclude-input" class="hf-exclude-input" placeholder="e.g. gguf, fp8, /test.*/i" autocomplete="off" spellcheck="false">
+            <button type="button" id="hf-exclude-clear-btn" class="hf-clear-btn" title="Clear filter terms">✕</button>
+          </div>
+          <div class="hf-exclude-hint">
+            <span>Comma-separated or /regex/</span>
+          </div>
+        </div>
       </div>
 
-      <div class="hf-df-controls">
-        <div class="hf-df-range-container">
-          <div class="hf-df-slider-row">
-            <input type="range" id="hf-df-slider-max" min="1" max="365" step="1" title="Max days ago (Updated recently)">
+      <!-- SECTION 2: Date Range Filter -->
+      <div class="hf-filter-section" id="hf-date-section">
+        <div class="hf-filter-section-header">
+          <div class="hf-filter-section-title">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            Date Range
           </div>
-          <div class="hf-df-inputs">
-            <div class="hf-df-input-group">
-              <label for="hf-df-min-input">Min Days</label>
-              <input type="number" id="hf-df-min-input" min="0" max="3650" placeholder="0">
+          <label class="hf-switch" title="Toggle date range filter">
+            <input id="hf-df-toggle" type="checkbox">
+            <span class="hf-slider"></span>
+          </label>
+        </div>
+
+        <div class="hf-section-body" id="hf-date-section-body">
+          <div class="hf-df-presets" id="hf-df-presets-container">
+            ${PRESETS.map(p => `<button type="button" class="hf-df-preset-btn" data-preset="${p.id}">${p.label}</button>`).join('')}
+          </div>
+
+          <div class="hf-df-controls">
+            <div class="hf-df-range-container">
+              <div class="hf-df-slider-row">
+                <input type="range" id="hf-df-slider-max" min="1" max="365" step="1" title="Max days ago (Updated recently)">
+              </div>
+              <div class="hf-df-inputs">
+                <div class="hf-df-input-group">
+                  <label for="hf-df-min-input">Min Days</label>
+                  <input type="number" id="hf-df-min-input" min="0" max="3650" placeholder="0">
+                </div>
+                <div class="hf-df-input-group">
+                  <label for="hf-df-max-input">Max Days</label>
+                  <input type="number" id="hf-df-max-input" min="0" max="3650" placeholder="30">
+                </div>
+              </div>
             </div>
-            <div class="hf-df-input-group">
-              <label for="hf-df-max-input">Max Days</label>
-              <input type="number" id="hf-df-max-input" min="0" max="3650" placeholder="30">
+
+            <div class="hf-df-range-label" id="hf-df-range-label">
+              Updated: Today – 30 days ago
             </div>
           </div>
         </div>
+      </div>
 
-        <div class="hf-df-range-label" id="hf-df-range-label">
-          Updated: Today – 30 days ago
-        </div>
-
-        <div class="hf-df-status">
+      <!-- STATUS BAR -->
+      <div class="hf-df-status">
+        <div class="hf-df-status-main">
           <span>Filter Status</span>
           <span class="hf-df-badge" id="hf-df-badge">All shown</span>
         </div>
+        <div class="hf-df-substatus" id="hf-df-substatus"></div>
       </div>
 
+      <!-- SECTION 3: Highlighter Options -->
       <button type="button" class="hf-df-settings-toggle" id="hf-df-settings-toggle">
         <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -973,7 +1199,11 @@ const WIDGET_STYLES = `
   }
 
   function bindWidgetEvents() {
-    const toggle = document.getElementById('hf-df-toggle');
+    const excludeToggle = document.getElementById('hf-exclude-toggle');
+    const excludeInput = document.getElementById('hf-exclude-input');
+    const clearBtn = document.getElementById('hf-exclude-clear-btn');
+
+    const dateToggle = document.getElementById('hf-df-toggle');
     const sliderMax = document.getElementById('hf-df-slider-max');
     const minInput = document.getElementById('hf-df-min-input');
     const maxInput = document.getElementById('hf-df-max-input');
@@ -989,7 +1219,54 @@ const WIDGET_STYLES = `
       settingsPanel?.classList.toggle('open');
     });
 
-    toggle?.addEventListener('change', (e) => {
+    // Exclude Filter Events
+    excludeToggle?.addEventListener('change', (e) => {
+      saveConfig('FILTER_EXCLUDE_ENABLED', e.target.checked);
+      syncWidgetUI();
+      processModelCards();
+    });
+
+    let textInputDebounceTimer = null;
+    let textSaveDebounceTimer = null;
+
+    excludeInput?.addEventListener('input', (e) => {
+      const val = e.target.value;
+      CONFIG.FILTER_EXCLUDE_TERMS = val;
+
+      if (clearBtn) {
+        clearBtn.classList.toggle('visible', Boolean(val));
+      }
+
+      if (textInputDebounceTimer) clearTimeout(textInputDebounceTimer);
+      textInputDebounceTimer = setTimeout(() => {
+        processModelCards();
+      }, 120);
+
+      if (textSaveDebounceTimer) clearTimeout(textSaveDebounceTimer);
+      textSaveDebounceTimer = setTimeout(() => {
+        saveConfig('FILTER_EXCLUDE_TERMS', val);
+      }, 350);
+    });
+
+    excludeInput?.addEventListener('change', (e) => {
+      if (textSaveDebounceTimer) clearTimeout(textSaveDebounceTimer);
+      saveConfig('FILTER_EXCLUDE_TERMS', e.target.value);
+    });
+
+    clearBtn?.addEventListener('click', () => {
+      if (excludeInput) {
+        excludeInput.value = '';
+        excludeInput.focus();
+      }
+      CONFIG.FILTER_EXCLUDE_TERMS = '';
+      if (clearBtn) clearBtn.classList.remove('visible');
+      if (textSaveDebounceTimer) clearTimeout(textSaveDebounceTimer);
+      saveConfig('FILTER_EXCLUDE_TERMS', '');
+      processModelCards();
+    });
+
+    // Date Range Events
+    dateToggle?.addEventListener('change', (e) => {
       saveConfig('DATE_FILTER_ENABLED', e.target.checked);
       syncWidgetUI();
       processModelCards();
@@ -1045,6 +1322,7 @@ const WIDGET_STYLES = `
       processModelCards();
     });
 
+    // Highlighter Options Events
     highlightToggle?.addEventListener('change', (e) => {
       saveConfig('BORDER_UNLIKED_ENABLED', e.target.checked);
       processModelCards();
@@ -1063,7 +1341,13 @@ const WIDGET_STYLES = `
   }
 
   function syncWidgetUI() {
-    const toggle = document.getElementById('hf-df-toggle');
+    const excludeToggle = document.getElementById('hf-exclude-toggle');
+    const excludeInput = document.getElementById('hf-exclude-input');
+    const clearBtn = document.getElementById('hf-exclude-clear-btn');
+    const excludeSectionBody = document.getElementById('hf-exclude-section-body');
+
+    const dateToggle = document.getElementById('hf-df-toggle');
+    const dateSectionBody = document.getElementById('hf-date-section-body');
     const sliderMax = document.getElementById('hf-df-slider-max');
     const minInput = document.getElementById('hf-df-min-input');
     const maxInput = document.getElementById('hf-df-max-input');
@@ -1074,13 +1358,27 @@ const WIDGET_STYLES = `
     const glowToggle = document.getElementById('hf-border-unliked-glow');
     const colorInput = document.getElementById('hf-border-unliked-color');
 
-    if (toggle) toggle.checked = CONFIG.DATE_FILTER_ENABLED;
+    if (excludeToggle) excludeToggle.checked = Boolean(CONFIG.FILTER_EXCLUDE_ENABLED);
+    if (excludeInput) {
+      excludeInput.value = CONFIG.FILTER_EXCLUDE_TERMS || '';
+      if (clearBtn) {
+        clearBtn.classList.toggle('visible', Boolean(CONFIG.FILTER_EXCLUDE_TERMS));
+      }
+    }
+    if (excludeSectionBody) {
+      excludeSectionBody.classList.toggle('hf-section-dimmed', !CONFIG.FILTER_EXCLUDE_ENABLED);
+    }
+
+    if (dateToggle) dateToggle.checked = Boolean(CONFIG.DATE_FILTER_ENABLED);
+    if (dateSectionBody) {
+      dateSectionBody.classList.toggle('hf-section-dimmed', !CONFIG.DATE_FILTER_ENABLED);
+    }
     if (minInput) minInput.value = CONFIG.DATE_MIN_DAYS;
     if (maxInput) maxInput.value = CONFIG.DATE_MAX_DAYS;
     if (sliderMax) sliderMax.value = Math.min(365, CONFIG.DATE_MAX_DAYS);
 
-    if (highlightToggle) highlightToggle.checked = CONFIG.BORDER_UNLIKED_ENABLED;
-    if (glowToggle) glowToggle.checked = CONFIG.BORDER_UNLIKED_GLOW;
+    if (highlightToggle) highlightToggle.checked = Boolean(CONFIG.BORDER_UNLIKED_ENABLED);
+    if (glowToggle) glowToggle.checked = Boolean(CONFIG.BORDER_UNLIKED_GLOW);
     if (colorInput) colorInput.value = CONFIG.BORDER_UNLIKED_COLOR;
 
     presetBtns.forEach(btn => {
@@ -1104,14 +1402,18 @@ const WIDGET_STYLES = `
     }
   }
 
-  function updateWidgetStats(visibleCount, totalCount) {
+  function updateWidgetStats(visibleCount, totalCount, hiddenByDate, hiddenByText, isDateActive, isTextActive) {
     const badge = document.getElementById('hf-df-badge');
+    const substatus = document.getElementById('hf-df-substatus');
     if (!badge) return;
 
-    if (!CONFIG.DATE_FILTER_ENABLED) {
+    const isAnyActive = isDateActive || isTextActive;
+
+    if (!isAnyActive) {
       badge.textContent = `All shown (${totalCount})`;
       badge.style.background = 'rgba(16, 185, 129, 0.15)';
       badge.style.color = '#34d399';
+      if (substatus) substatus.textContent = '';
     } else {
       badge.textContent = `Showing ${visibleCount} / ${totalCount}`;
       if (visibleCount === 0) {
@@ -1120,6 +1422,13 @@ const WIDGET_STYLES = `
       } else {
         badge.style.background = 'rgba(245, 158, 11, 0.2)';
         badge.style.color = '#fbbf24';
+      }
+
+      if (substatus) {
+        const details = [];
+        if (isTextActive && hiddenByText > 0) details.push(`${hiddenByText} hidden by text`);
+        if (isDateActive && hiddenByDate > 0) details.push(`${hiddenByDate} hidden by date`);
+        substatus.textContent = details.length > 0 ? details.join(' • ') : '';
       }
     }
   }

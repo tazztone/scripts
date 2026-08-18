@@ -1,12 +1,12 @@
-# Hugging Face Heart SVG, Inline Liking & Date Filter - Research Log
+# Hugging Face Heart SVG, Inline Liking, Date & Negative Text Filter - Research Log
 
-This document details the DOM structure, selection strategies, API endpoints, inline liking behavior, and client-side date range filtering mechanisms used on Hugging Face model listing pages (`https://huggingface.co/models` and user/org pages like `https://huggingface.co/*/models`).
+This document details the DOM structure, selection strategies, API endpoints, inline liking behavior, client-side date range filtering, and negative text filtering mechanisms used on Hugging Face model listing pages (`https://huggingface.co/models` and user/org pages like `https://huggingface.co/*/models`).
 
 ---
 
 ## 1. Trigger & Target Elements
 
-**Goal**: Identify native heart icon SVGs on Hugging Face model cards, restore inline like/unlike actions, highlight unliked cards, and apply client-side date filtering.
+**Goal**: Identify native heart icon SVGs on Hugging Face model cards, restore inline like/unlike actions, highlight unliked cards, apply client-side date filtering, and exclude models by negative keyword/regex matching.
 
 **Target Path Signatures**:
 - **Unliked Model List Card Heart (Outline `♡`)**: `d="M22.45,6a5.47,5.47,0,0,1,3.91,1.64...m0-2..."` (`d.includes('22.45')` or `d.includes('m0-2')`).
@@ -26,6 +26,7 @@ This document details the DOM structure, selection strategies, API endpoints, in
 - **Heart Container**: `div.mr-1.flex.items-center` inside card footer
 - **SVG Selector**: `article.overview-card-wrapper a div.mr-1.flex.items-center > svg`
 - **Date Tag**: `article.overview-card-wrapper time` (`datetime` attribute ISO timestamp e.g. `2026-07-23T09:16:19`)
+- **Card Title / Header**: `article.overview-card-wrapper h4, .title, header span`
 
 ### Repository Detail Pages (Models, Datasets, Spaces)
 - **SVG Selector (Unliked/Outline)**: `h1 button.hover:bg-linear-to-t.relative.flex > svg.left-1.5.absolute`
@@ -77,27 +78,33 @@ This document details the DOM structure, selection strategies, API endpoints, in
 1. **Date Parsing**: Read the ISO timestamp string from `card.querySelector('time').getAttribute('datetime')` (with fallback to `title` and relative text matching).
 2. **Age Calculation**: Compute `daysAgo = (Date.now() - timestamp) / (1000 * 60 * 60 * 24)`.
 3. **Filtering Rule**:
-   If date filter is active and `daysAgo < minDays` or `daysAgo > maxDays`, add `.hf-date-filtered-out` (`display: none !important;`) to the card wrapper.
+   If date filter is active and `daysAgo < minDays` or `daysAgo > maxDays`, add `.hf-date-filtered-out` and `.hf-filtered-out` (`display: none !important;`) to the card wrapper.
 4. **Sidebar Injection Seam**:
    Detect left panel (`form`, `aside`, or `div.left-sidebar`) and inject `#hf-date-filter-widget` at top.
 5. **Granular Presets & Inputs**:
    Provide presets (`24h`, `3d`, `7d`, `14d`, `30d`, `60d`, `90d`, `180d`, `1y`, `All`), range slider, and numeric day input fields.
-6. **Empty State Handling**:
-   When `visibleCards === 0` and `totalCards > 0`, render `#hf-df-empty-notice` notifying the user to scroll for more models or adjust date limits.
 
 ---
 
-## 6. Lifecycle & SPA Observation
+## 6. Negative Text / Keyword Filtering Strategy (v1.9.0)
 
-Hugging Face uses Svelte / client-side routing (SPA). A `MutationObserver` monitors DOM mutations on `document.body` with 200ms debouncing to automatically tag and date-filter new model cards loaded via lazy loading or infinite scrolling.
+1. **Target Matching Scope**: Matches against normalized model ID (`owner/model-name`) and card title text (`card.querySelector('h4, .title, header span')`).
+2. **Tokenization & Delimiters**: Comma-separated or newline-separated terms (e.g. `gguf, fp8, /test.*/i`).
+3. **Pattern Matching Engine**:
+   - Case-insensitive substring matching for normal tokens.
+   - Regular expression matching for `/pattern/flags` tokens.
+   - Safe parsing: Invalid regex strings automatically fall back to literal substring matching without breaking DOM processing.
+4. **Interactive Dimming & Typing Optimization**:
+   - Fast 120ms debounce on text input for instant live card filtering.
+   - 350ms debounced persistence to storage (`GM_setValue` / `localStorage`) preventing storage I/O thrashing.
+   - Section dimming (`opacity: 0.4; pointer-events: none;`) when individual filter toggles are disabled.
+   - Integrated quick clear (`✕`) button.
+5. **Empty State & Combined Stats**:
+   - `updateEmptyNotice()` delivers smart contextual explanations distinguishing date filtering, keyword filtering, or combined exclusions.
+   - `updateWidgetStats()` reports overall visible/total counts alongside detailed breakdown notes.
 
 ---
 
-## 7. Code Audit & Robustness Hardenings (v1.7.7)
+## 7. Lifecycle & SPA Observation
 
-1. **MutationObserver Target Node Safety**: Resolved `const targetEl = target.nodeType === 1 ? target : target.parentElement;` before invoking `.closest('#hf-date-filter-widget')` to prevent `TypeError` exceptions when DOM mutations occur on text nodes (`Node.TEXT_NODE`).
-2. **Multi-Path Heart SVG Inspection**: Updated `isModelLiked()` to iterate through all `<path>` elements via `querySelectorAll('path')` instead of querying only the first child path.
-3. **SPA Detached Element Handling**: Added `!document.body.contains(noticeEl)` check inside `updateEmptyNotice()` to ensure empty notice re-injection after SPA page transitions.
-4. **Min/Max Days Input Range Synchronization**: Enforced `DATE_MAX_DAYS >= DATE_MIN_DAYS` auto-adjustment when user increases `minInput`.
-5. **Hydrated Like State Precedence**: Ignore userscript-owned `aria-pressed` values after binding and observe native heart-path attribute changes so hydrated liked cards lose the green unliked border.
-6. **Shared Footer SVG Selection**: Hugging Face footers can contain task, parameter, download, inference, and heart SVGs in one container. Heart selection must validate path signatures and scan all marked-container SVGs instead of trusting the first child or an ancestor class.
+Hugging Face uses Svelte / client-side routing (SPA). A `MutationObserver` monitors DOM mutations on `document.body` with 200ms debouncing to automatically tag, date-filter, and text-filter new model cards loaded via lazy loading or infinite scrolling. All internal widget mutations are excluded from triggering feedback loops.
