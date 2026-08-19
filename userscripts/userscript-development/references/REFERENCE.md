@@ -29,7 +29,12 @@ Metadata rules:
 - Declare only APIs the implementation calls; add explicit `@connect` hosts for `GM_xmlhttpRequest` or `GM_cookie`.
 - Pin exact `@require` versions.
 - Use semver; add `@updateURL`/`@downloadURL` only when the distribution path needs them.
-- Keep user-tunable `CONFIG` and `STYLES` outside the IIFE; keep runtime implementation inside.
+- Keep user-tunable `CONFIG` outside the IIFE; keep runtime implementation and UI encapsulation inside.
+
+Manifest V3 manager nuances (Chrome 120+, Tampermonkey/Violentmonkey MV3):
+- Script managers execute under the `chrome.userScripts` backend.
+- In Chrome 138+, users must toggle **"Allow User Scripts"** on the extension details page (`chrome://extensions`) if user scripts fail to run.
+- `@grant none` scripts run directly in `MAIN` world (sharing JS variables with the page); `@grant GM_*` scripts run in `USER_SCRIPT` isolated world (exempt from page CSP).
 
 ScriptCat-specific rules:
 
@@ -42,17 +47,17 @@ ScriptCat-specific rules:
 
 ```javascript
 const DEFAULTS = { /* user-tunable defaults */ };
-const STYLES = `/* injected styles */`;
 
 (() => {
   'use strict';
-  // 1. style injection
-  // 2. storage/configuration
-  // 3. normalization/visibility/event adapters
-  // 4. feature state transitions
-  // 5. timers and one-shot effects
-  // 6. settings UI
-  // 7. one shared orchestrator
+  // 1. shadow DOM host & style encapsulation
+  // 2. storage / configuration
+  // 3. normalization / visibility / non-destructive event adapters
+  // 4. batched DOM mutators & yielding
+  // 5. feature state transitions
+  // 6. timers & one-shot side effects
+  // 7. encapsulated settings UI & toasts (Top Layer)
+  // 8. one shared orchestrator
 })();
 ```
 
@@ -64,9 +69,27 @@ Use ranked heuristics rather than one brittle selector:
 
 1. Stable semantic or structural anchor.
 2. Accessible role, label, or test identifier.
-3. Normalized text as a constrained fallback.
+3. Non-destructive text matching with `TreeWalker`.
 
-Exclude the script's own root (`#px-settings-modal` or equivalent) before broad page scans so settings controls cannot be mistaken for domain controls.
+**Non-destructive text matching** — avoid `innerHTML` manipulation or container regex matching, which destroys framework virtual DOM fibers and event listeners:
+
+```javascript
+function findTextNodes(root, pattern) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!node.nodeValue?.trim()) return NodeFilter.FILTER_REJECT;
+      const parent = node.parentElement;
+      if (!parent || parent.closest('#px-root, script, style, textarea, input, [contenteditable="true"]')) {
+        return NodeFilter.FILTER_REJECT;
+      }
+      return pattern.test(node.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+    }
+  });
+  const matches = [];
+  while (walker.nextNode()) matches.push(walker.currentNode);
+  return matches;
+}
+```
 
 **Visibility** — reject detached, hidden, transparent, or zero-size elements:
 
@@ -95,7 +118,7 @@ const link = card.tagName === 'A' ? card : card.closest('a[href]') || card.query
 const normalize = value => String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
 ```
 
-**Event dispatch** — when `.click()` is unreliable on React/Radix, dispatch a full pointer/mouse sequence:
+**Event dispatch** — when `.click()` is unreliable on React/Radix synthetic event managers, dispatch a full pointer/mouse sequence:
 
 ```javascript
 function dispatchClickEvents(element) {
@@ -110,14 +133,115 @@ function dispatchClickEvents(element) {
 }
 ```
 
+## Performance and main-thread yielding
+
+When mutating multiple DOM nodes (e.g. search feeds, infinite lists), chunk operations with `requestAnimationFrame` and yield using `globalThis.scheduler?.yield()` to prevent main-thread freezing and protect Interaction to Next Paint (INP):
+
+```javascript
+async function batchProcessElements(elements, processFn, batchSize = 20) {
+  for (let i = 0; i < elements.length; i += batchSize) {
+    const chunk = elements.slice(i, i + batchSize);
+    await new Promise(resolve => requestAnimationFrame(() => {
+      chunk.forEach(processFn);
+      resolve();
+    }));
+    if (globalThis.scheduler?.yield) {
+      await scheduler.yield();
+    }
+  }
+}
+```
+
+## Shadow DOM & Top Layer UI
+
+Encapsulate all injected userscript UI (FAB, modal, toasts, badges) in a single host element with an open Shadow Root. This prevents host page CSS resets from distorting script controls and prevents userscript CSS from leaking into the page.
+
+```javascript
+function initUI(styles) {
+  let host = document.getElementById('px-root');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'px-root';
+    document.body.appendChild(host);
+  }
+
+  const shadow = host.shadowRoot || host.attachShadow({ mode: 'open' });
+  shadow.innerHTML = `
+    <style>
+      ${styles}
+      :host { all: initial; }
+      dialog[popover], .px-modal {
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 12px;
+        background: #1e293b;
+        color: #f8fafc;
+        padding: 20px;
+      }
+      dialog::backdrop {
+        background: rgba(15, 23, 42, 0.6);
+        backdrop-filter: blur(4px);
+      }
+    </style>
+    <div id="px-ui-container">
+      <button id="px-fab" title="Open Settings">⚙️</button>
+      <dialog id="px-settings-dialog" popover="auto">
+        <!-- Settings Controls -->
+      </dialog>
+      <div id="px-toast-container"></div>
+    </div>
+  `;
+  return shadow;
+}
+```
+
+**Top Layer modals (`popover="auto"` or `<dialog>`)**:
+- Mounts directly into the browser top layer, rendering above all host `z-index` stacks without `z-index: 99999999` wars.
+- Built-in light dismiss: clicking outside the dialog or pressing `Escape` closes it automatically without manual backdrop event listeners.
+
+**Transient toasts**:
+```javascript
+function showToast(shadow, message, durationMs = 2500) {
+  const container = shadow.getElementById('px-toast-container');
+  if (!container) return;
+  const toast = document.createElement('div');
+  toast.className = 'px-toast';
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add('fade-out');
+    toast.addEventListener('transitionend', () => toast.remove());
+  }, durationMs);
+}
+```
+
+## Chrome built-in AI / Prompt API
+
+In modern Chromium (Chrome 130+), userscripts can leverage local on-device Gemini Nano via `LanguageModel` / `ai.languageModel` for fast, offline text processing without external API keys or `@grant GM_xmlhttpRequest`:
+
+```javascript
+async function getPromptSession(systemPrompt) {
+  const aiHost = globalThis.ai || (typeof unsafeWindow !== 'undefined' && unsafeWindow.ai);
+  if (!aiHost?.languageModel) return null;
+
+  try {
+    const capabilities = await aiHost.languageModel.capabilities();
+    if (capabilities.available === 'no') return null;
+    return await aiHost.languageModel.create({ systemPrompt });
+  } catch (err) {
+    console.warn('[Userscript AI] Local model unavailable:', err);
+    return null;
+  }
+}
+```
+
 ## Storage and migration
 
 Use one canonical project prefix (e.g. `px_<project>_`) in both layers:
 
 ```javascript
 function writeValue(key, value) {
-  GM_setValue(`${PREFIX}${key}`, value);
-  localStorage.setItem(`${PREFIX}${key}`, JSON.stringify(value));
+  if (typeof GM_setValue === 'function') GM_setValue(`${PREFIX}${key}`, value);
+  try { localStorage.setItem(`${PREFIX}${key}`, JSON.stringify(value)); } catch (_) {}
 }
 ```
 
@@ -147,18 +271,6 @@ Every run must be safe to call repeatedly:
 - Release locks in both normal and exceptional paths.
 
 For countdowns, use a monotonic remaining-time calculation or a fixed tick clamped at zero. Hover-pause must freeze the remaining value, not restart the full delay.
-
-## Settings UI
-
-One namespaced FAB/modal per script. The settings module must:
-
-- Render once; refresh fields from current configuration on open.
-- Validate and normalize values before saving.
-- Support Save, Cancel, backdrop close, and Escape.
-- Disable dependent controls visibly and functionally.
-- Cancel pending feature work immediately when a feature is disabled.
-- Use inline/flex labels — avoid absolute icons inside text inputs.
-- Stay outside selector scans for the target site.
 
 ## Observer and SPA orchestration
 
@@ -207,12 +319,15 @@ Load a local mock page and inject source directly:
 ```python
 page.goto(MOCK_HTML)
 page.evaluate(userscript_content)
-page.wait_for_selector('#target .expected-result')
+
+# Shadow DOM piercing selector
+page.locator('#px-root >> #px-fab').click()
+expect(page.locator('#px-root >> #px-settings-dialog')).to_be_visible()
 ```
 
 No extension manager is needed unless the test is specifically about manager installation. Use condition-based waits, not sleeps. Seed short test delays through canonical storage or a fixture; keep production defaults in the script.
 
-Cover: initial state, recovery, opposite toggle, timer pause/resume/cancel, duplicate mutations, route reset, settings validation/persistence, migration, and exclusion cases.
+Cover: initial state, recovery, opposite toggle, timer pause/resume/cancel, duplicate mutations, route reset, shadow DOM interactions, settings validation/persistence, migration, and exclusion cases.
 
 Keep Python dependencies in `tests/requirements.txt`. Browser binaries are machine-specific and should be ignored; a repo-local path (`userscripts/.playwright-browsers/`) plus `tests/conftest.py` setting `PLAYWRIGHT_BROWSERS_PATH` keeps the environment reproducible without tracking binaries.
 
@@ -240,4 +355,3 @@ All userscript package `README.md` files must follow the unified repository layo
 3. **⚡ Features**: Numbered list detailing core capabilities.
 4. **🚀 Instant Auto-Installer Tool & Auto-Updates**: Instructions for direct installation and `@updateURL` background auto-updates.
 5. **⚙️ Configuration & Persistence**: Guide on setting values via settings panels or `GM_registerMenuCommand` menu items, ending with a standard `[!NOTE]` callout regarding `GM_setValue` persistence.
-

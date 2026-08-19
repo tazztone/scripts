@@ -13,7 +13,7 @@ This document details the DOM structure and selection strategies used to automat
 **Fallback chain** (evaluated in order if primary fails):
 1. `button:has(svg path[d*="M5 13l4 4L19 7"])` — checkmark SVG path signature
 2. `[data-testid="confirm-btn"]` — React test ID (present in staging, may be stripped in prod)
-3. Text node match: `[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Confirm')`
+3. Non-destructive text match: `findTextNodes(modal, /^Confirm$/i).map(t => t.parentElement?.closest('button')).find(Boolean)`
 
 **Findings**:
 - Button is rendered by a Radix UI `<Dialog>` component; `.click()` alone is insufficient — must fire `PointerEvent` + `MouseEvent` chain.
@@ -47,7 +47,8 @@ This document details the DOM structure and selection strategies used to automat
 **Exclude**:
 - Any `button` whose `textContent` contains "Cancel" or "Later"
 - Full-width buttons (`width >= window.innerWidth * 0.9`) — these are drawer-level dismiss targets, not modal actions
-- Buttons inside `[role="tooltip"]` or `[aria-hidden="true"]` containers
+- Buttons inside `[role="tooltip"]`, `[aria-hidden="true"]`, or script-owned Shadow DOM (`#px-root`)
+- Any elements within active form inputs (`input`, `textarea`, `[contenteditable="true"]`)
 
 ---
 
