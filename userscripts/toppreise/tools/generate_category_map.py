@@ -281,24 +281,9 @@ def generate_comprehensive_map(max_workers=24, max_depth=5):
 
 def main():
     tools_dir = os.path.dirname(os.path.abspath(__file__))
-    json_out_path = os.path.join(tools_dir, "category_map.json")
-    js_out_path = os.path.join(tools_dir, "category_lookup_generated.js")
     user_js_path = os.path.abspath(os.path.join(tools_dir, "..", "toppreise.user.js"))
 
     lookup_map, detailed_map = generate_comprehensive_map()
-
-    # Save detailed JSON
-    with open(json_out_path, "w", encoding="utf-8") as f:
-        json.dump(detailed_map, f, ensure_ascii=False, indent=2)
-    print(f"💾 Saved detailed category map: {json_out_path}", flush=True)
-
-    # Save JS lookup
-    with open(js_out_path, "w", encoding="utf-8") as f:
-        f.write("// Auto-generated Toppreise Category Lookup Table\n")
-        f.write("const GENERATED_CATEGORY_LOOKUP = ")
-        json.dump(lookup_map, f, ensure_ascii=False, indent=2)
-        f.write(";\n")
-    print(f"💾 Saved JS lookup: {js_out_path}", flush=True)
 
     # Print per-group summary
     group_counts = {}

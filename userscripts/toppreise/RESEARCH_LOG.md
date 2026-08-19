@@ -80,9 +80,17 @@ This document details the DOM selectors, event management, and filter logic for 
    - *Gotcha*: Un-guarded DOM mutations inside a `MutationObserver` callback trigger the observer again, causing infinite re-render loops where UI elements flicker and pulse continuously.
    - *Rule*: Always guard DOM manipulations with element ID checks (`if (document.getElementById('tp-suite-filter-bar')) return;`) or `dataset.processed` flags to ensure idempotency and prevent self-observation loops.
 
-7. **Hidden Element Assertion in Playwright Tests**:
-   - *Gotcha*: Testing filter-out rules using default `page.wait_for_selector(..., state='visible')` times out on elements with `display: none !important;`.
-   - *Rule*: Use `state='attached'` when testing elements that are hidden by filter classes.
+8. **Top-Layer Dialog Popover Z-Index & Backdrop Trap**:
+   - *Gotcha*: When a `<dialog popover="auto">` is open in the browser Top Layer (Shadow DOM), child popovers appended to `document.body` render in the standard document layer behind the modal backdrop and are unclickable or invisible.
+   - *Rule*: Pass `mountContainer` to popover controllers and mount popovers directly inside the dialog element when open inside a Top-Layer modal.
+
+9. **Event Interception on Anchor Product Cards**:
+   - *Gotcha*: Action buttons (like 1-click quick-block) injected onto `<a class="Plugin_Product">` cards will navigate the browser to the product URL if the click event bubbles.
+   - *Rule*: Always invoke `e.preventDefault()`, `e.stopPropagation()`, and `e.stopImmediatePropagation()` inside card action button handlers.
+
+10. **Storage I/O Micro-Optimization during Batch DOM Processing**:
+    - *Gotcha*: Writing dynamic category mappings to `GM_setValue` / `localStorage` per card during DOM loops causes repeated synchronous I/O.
+    - *Rule*: Buffer updates in an in-memory map during the chunked batch run and flush with `flushDynamicMap()` once at the end of `processListings()`.
 
 ---
 

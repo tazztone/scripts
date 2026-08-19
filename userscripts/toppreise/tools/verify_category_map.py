@@ -36,17 +36,22 @@ BENCHMARK_CATEGORIES = [
 
 def main():
     tools_dir = os.path.dirname(os.path.abspath(__file__))
-    js_lookup_path = os.path.join(tools_dir, "category_lookup_generated.js")
+    userscript_path = os.path.join(os.path.dirname(tools_dir), "toppreise.user.js")
     
-    if not os.path.exists(js_lookup_path):
-        print(f"❌ Error: {js_lookup_path} not found.")
+    if not os.path.exists(userscript_path):
+        print(f"❌ Error: {userscript_path} not found.")
         sys.exit(1)
 
-    with open(js_lookup_path, "r", encoding="utf-8") as f:
+    with open(userscript_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    json_str = content.split('= ', 1)[1].rstrip(';\n')
-    lookup = json.loads(json_str)
+    import re
+    match = re.search(r'const CATEGORY_LOOKUP\s*=\s*({[\s\S]*?});', content)
+    if not match:
+        print("❌ Error: CATEGORY_LOOKUP not found in toppreise.user.js")
+        sys.exit(1)
+
+    lookup = json.loads(match.group(1))
 
     mapped = []
     unmapped = []

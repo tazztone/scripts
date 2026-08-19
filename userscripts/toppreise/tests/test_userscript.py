@@ -104,3 +104,86 @@ def test_suite_filter_bar_and_category_pill_styles(page: Page):
     border_radius = pill.evaluate("el => window.getComputedStyle(el).borderRadius")
     assert 'inline-flex' in display_val or 'flex' in display_val
     assert border_radius == '12px'
+
+
+def test_card_quick_block_button_and_toast_undo(page: Page):
+    # Verify quick-block button is injected on cards
+    page.wait_for_selector('#card-cheapest .tp-card-quick-block')
+    btn = page.locator('#card-cheapest .tp-card-quick-block')
+    assert btn.is_visible()
+    assert 'Grafikkarten' in (btn.text_content() or '')
+
+    # Click quick-block on cheapest card
+    btn.click()
+
+    # Card should be category filtered (display: none -> attached)
+    page.wait_for_selector('#card-cheapest.tp-category-filtered', state='attached')
+    assert 'tp-category-filtered' in (page.locator('#card-cheapest').get_attribute('class') or '')
+
+    # Toast should appear inside Shadow DOM with undo button
+    toast = page.locator('#tp-root >> .tp-toast')
+    page.wait_for_selector('#tp-root >> .tp-toast', state='visible')
+    assert toast.is_visible()
+    assert 'Grafikkarten' in (toast.text_content() or '')
+
+    undo_btn = page.locator('#tp-root >> .tp-toast-undo')
+    assert undo_btn.is_visible()
+
+    # Click undo
+    undo_btn.click()
+
+    # Card should no longer be filtered (becomes visible again)
+    page.wait_for_selector('#card-cheapest:not(.tp-category-filtered)', state='visible')
+    assert 'tp-category-filtered' not in (page.locator('#card-cheapest').get_attribute('class') or '')
+
+
+def test_modal_popover_in_shadow_dom(page: Page):
+    # Open settings modal
+    page.click('#tp-root >> #tp-settings-fab')
+    page.wait_for_selector('#tp-root >> #tp-settings-dialog', state='visible')
+
+    # Click group chevron inside modal
+    chevron = page.locator('#tp-root >> #tp-settings-dialog .tp-group-chevron').first
+    page.wait_for_selector('#tp-root >> #tp-settings-dialog .tp-group-chevron', state='visible')
+    chevron.click()
+
+    # Verify popover is rendered inside Shadow DOM / dialog
+    popover = page.locator('#tp-root >> .tp-group-popover')
+    page.wait_for_selector('#tp-root >> .tp-group-popover', state='visible')
+    assert popover.is_visible()
+
+    # Close modal
+    page.click('#tp-root >> #tp-btn-close')
+
+
+def test_sort_by_offers(page: Page):
+    # Open settings and enable sort by offers desc
+    page.click('#tp-root >> #tp-settings-fab')
+    page.click('#tp-root >> label[for="tp-sort-desc"]')
+    page.click('#tp-root >> #tp-btn-save')
+
+    # The card with 20 offers (card-cat-excluded) should now be first
+    cards = page.locator('#product-list .Plugin_Product')
+    first_card_id = cards.first.get_attribute('id')
+    assert first_card_id == 'card-cat-excluded'
+
+
+def test_reset_all_filters(page: Page):
+    # Add negative term and min offers filter
+    page.click('#tp-root >> #tp-settings-fab')
+    page.fill('#tp-root >> #tp-negative-terms-input', 'Case')
+    page.fill('#tp-root >> #tp-min-offers-val', '10')
+    page.click('#tp-root >> #tp-btn-save')
+
+    page.wait_for_selector('#card-negative.tp-negative-filtered', state='attached')
+    page.wait_for_selector('#card-low-offers.tp-min-offers-filtered', state='attached')
+
+    # Click Reset on toolbar
+    page.click('#tp-tb-reset')
+
+    # Verify all filters are cleared and cards restored to visible
+    page.wait_for_selector('#card-negative:not(.tp-negative-filtered)', state='visible')
+    page.wait_for_selector('#card-low-offers:not(.tp-min-offers-filtered)', state='visible')
+    assert 'tp-negative-filtered' not in (page.locator('#card-negative').get_attribute('class') or '')
+    assert 'tp-min-offers-filtered' not in (page.locator('#card-low-offers').get_attribute('class') or '')
+
