@@ -47,6 +47,8 @@ const SHADOW_STYLES = `
   dialog[popover] {
     box-sizing: border-box;
     width: min(90%, 400px);
+    max-height: 85vh;
+    overflow-y: auto;
     border: 1px solid rgba(255,255,255,0.15);
     border-radius: 12px;
     background: #0f172a;
@@ -123,14 +125,19 @@ const SHADOW_STYLES = `
     return matches;
   }
 
-  // Multi-element batched processor protecting Interaction to Next Paint (INP)
+  // Multi-element batched processor protecting Interaction to Next Paint (INP) with cancellation guard
+  let activeProcessRunId = 0;
+
   async function batchProcessElements(elements, processFn, batchSize = 20) {
+    const currentRunId = ++activeProcessRunId;
     for (let i = 0; i < elements.length; i += batchSize) {
+      if (currentRunId !== activeProcessRunId) return; // Discard stale in-flight batch
       const chunk = elements.slice(i, i + batchSize);
       await new Promise(resolve => requestAnimationFrame(() => {
         chunk.forEach(processFn);
         resolve();
       }));
+      if (currentRunId !== activeProcessRunId) return;
       if (globalThis.scheduler?.yield) await scheduler.yield();
     }
   }

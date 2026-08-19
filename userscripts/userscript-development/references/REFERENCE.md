@@ -150,16 +150,27 @@ function dispatchClickEvents(element) {
 
 ## Performance and main-thread yielding
 
-When mutating multiple DOM nodes (e.g. search feeds, infinite lists), chunk operations with `requestAnimationFrame` and yield using `globalThis.scheduler?.yield()` to prevent main-thread freezing and protect Interaction to Next Paint (INP):
+When mutating multiple DOM nodes (e.g. search feeds, infinite lists), chunk operations with `requestAnimationFrame` and yield using `globalThis.scheduler?.yield()` to prevent main-thread freezing and protect Interaction to Next Paint (INP).
+
+Always guard the loop with a monotonic sequence token (`runId`) before and after yielding so that rapid user inputs (typing in filters, dragging range sliders) or fresh mutation events immediately discard obsolete in-flight batches:
 
 ```javascript
+let activeProcessRunId = 0;
+
 async function batchProcessElements(elements, processFn, batchSize = 20) {
+  const currentRunId = ++activeProcessRunId;
+
   for (let i = 0; i < elements.length; i += batchSize) {
+    if (currentRunId !== activeProcessRunId) return; // Stale batch cancellation guard
+
     const chunk = elements.slice(i, i + batchSize);
     await new Promise(resolve => requestAnimationFrame(() => {
       chunk.forEach(processFn);
       resolve();
     }));
+
+    if (currentRunId !== activeProcessRunId) return;
+
     if (globalThis.scheduler?.yield) {
       await scheduler.yield();
     }
@@ -169,7 +180,18 @@ async function batchProcessElements(elements, processFn, batchSize = 20) {
 
 ## Shadow DOM & Top Layer UI
 
-Encapsulate all injected userscript UI (FAB, modal, toasts, badges) in a single host element with an open Shadow Root. This prevents host page CSS resets from distorting script controls and prevents userscript CSS from leaking into the page.
+### Dual-Layer Style Architecture
+Host-page elements cannot be styled by Shadow DOM stylesheets, while injecting global styles risks collisions with host CSS resets. Apply strict dual-layer style separation:
+
+| Style Layer | Location | Target Scope | Examples |
+| :--- | :--- | :--- | :--- |
+| **Layer 1: Host Styles** | `document.head` (`<style>`) | Host-site elements modified by the script | Highlight borders (`.tp-is-cheapest`, `.hf-is-liked`), dimming (`.tp-mode-dim`), hide rules (`.tp-negative-filtered`) |
+| **Layer 2: Shadow Styles** | Injected Shadow Root (`<style>`) | Injected script controls & modals | Floating Action Button (`#fab`), modal dialogs, toggle switches, range sliders, toasts |
+
+### Top Layer Modals (`popover="auto"` or `<dialog>`)
+Mount all injected UI inside an open Shadow Root. Using native `<dialog popover="auto">` renders the modal in the browser's Top Layer, guaranteeing it renders above host `z-index` stacks and provides built-in light-dismiss (Escape key and backdrop click).
+
+Constrain the dialog and scrollable sections with explicit viewport bounds (`max-height: 85vh; overflow-y: auto;`) so action buttons remain accessible in standard viewports (1280×720):
 
 ```javascript
 function initUI(styles) {
@@ -185,22 +207,36 @@ function initUI(styles) {
     <style>
       ${styles}
       :host { all: initial; }
-      dialog[popover], .px-modal {
+      dialog[popover], dialog#px-settings-dialog {
+        box-sizing: border-box;
+        width: min(92%, 520px);
+        max-height: 85vh;
+        overflow-y: auto;
         border: 1px solid rgba(255,255,255,0.12);
         border-radius: 12px;
         background: #1e293b;
         color: #f8fafc;
         padding: 20px;
+        margin: auto;
       }
       dialog::backdrop {
         background: rgba(15, 23, 42, 0.6);
         backdrop-filter: blur(4px);
       }
+      .px-modal-body {
+        max-height: 55vh;
+        overflow-y: auto;
+      }
     </style>
     <div id="px-ui-container">
       <button id="px-fab" title="Open Settings">⚙️</button>
       <dialog id="px-settings-dialog" popover="auto">
-        <!-- Settings Controls -->
+        <div class="px-modal-body">
+          <!-- Settings Controls -->
+        </div>
+        <div class="px-modal-actions">
+          <button id="px-btn-save">Speichern</button>
+        </div>
       </dialog>
       <div id="px-toast-container"></div>
     </div>
@@ -208,10 +244,6 @@ function initUI(styles) {
   return shadow;
 }
 ```
-
-**Top Layer modals (`popover="auto"` or `<dialog>`)**:
-- Mounts directly into the browser top layer, rendering above all host `z-index` stacks without `z-index: 99999999` wars.
-- Built-in light dismiss: clicking outside the dialog or pressing `Escape` closes it automatically without manual backdrop event listeners.
 
 **Transient toasts**:
 ```javascript
@@ -338,9 +370,13 @@ page.evaluate(userscript_content)
 # Shadow DOM piercing selector
 page.locator('#px-root >> #px-fab').click()
 expect(page.locator('#px-root >> #px-settings-dialog')).to_be_visible()
+
+# Asserting filtered / hidden elements (avoid default state='visible' timeouts on display:none)
+page.wait_for_selector('#card.tp-negative-filtered', state='attached')
+assert 'tp-negative-filtered' in (page.locator('#card').get_attribute('class') or '')
 ```
 
-No extension manager is needed unless the test is specifically about manager installation. Use condition-based waits, not sleeps. Seed short test delays through canonical storage or a fixture; keep production defaults in the script.
+No extension manager is needed unless the test is specifically about manager installation. Use condition-based waits, not sleeps. When asserting that an element was hidden by a userscript filter rule (`display: none !important`), use `state='attached'` because default `state='visible'` will time out. Seed short test delays through canonical storage or a fixture; keep production defaults in the script.
 
 Cover: initial state, recovery, opposite toggle, timer pause/resume/cancel, duplicate mutations, route reset, shadow DOM interactions, settings validation/persistence, migration, and exclusion cases.
 
@@ -348,7 +384,7 @@ Keep Python dependencies in `tests/requirements.txt`. Browser binaries are machi
 
 ```bash
 node --check path/to/script.user.js
-pytest path/to/tests/test_userscript.py
+pytest -o cache_dir=/tmp/.pytest_cache --import-mode=importlib path/to/tests/
 git diff --check
 ```
 

@@ -59,13 +59,14 @@ Keep the public surface small. A foreground script should separate:
 - encapsulated UI and settings (Shadow DOM + Top Layer);
 - one shared orchestrator.
 
-**UI Encapsulation & Top Layer**:
-- Mount all injected UI (FAB, settings modal, toasts, indicators) inside a dedicated host with an open Shadow Root (`host.attachShadow({ mode: 'open' })`). Scope all styles inside the shadow root to prevent host CSS collisions and stop style leaks.
-- Use native `<dialog>` or `popover="auto"` inside the shadow root for settings modals to guarantee top-layer rendering above host page `z-index` stacks and get built-in light-dismiss (Escape and backdrop click).
+**UI Encapsulation & Dual-Layer Styles**:
+- Apply the **Dual-Layer Style Architecture**: host-page element modifiers (borders, badges, dimming/hiding classes) belong in a document `<style>` tag in `document.head`; all injected UI components (FAB, settings dialog, toasts, indicators) belong strictly inside a dedicated host with an open Shadow Root (`host.attachShadow({ mode: 'open' })`).
+- Use native `<dialog>` or `popover="auto"` inside the shadow root for settings modals to guarantee top-layer rendering above host page `z-index` stacks, built-in light-dismiss (Escape and backdrop click), and explicit viewport sizing (`max-height: 85vh; overflow-y: auto`).
 - Provide transient toast feedback for hotkeys and background automation.
 
 **Performance & INP Protection**:
 - Batch multi-element DOM modifications in slices (e.g., chunks of 20) with `requestAnimationFrame`, and yield between slices via `globalThis.scheduler?.yield()`.
+- Guard async batch loops with a monotonic sequence token (`runId`) before and after yielding to immediately discard stale in-flight batches when users type or DOM mutations re-trigger processing.
 
 **Orchestration & Idempotence**:
 - The orchestrator owns one debounced `MutationObserver`, one navigation listener with a URL-change fallback, and one safety interval. Feature modules expose narrow operations (`runModelLock()`, `runAutoApprove()`); they do not create competing observers or intervals.
@@ -75,7 +76,7 @@ Keep the public surface small. A foreground script should separate:
 - Observe `childList`/`subtree`; avoid observing script-owned attributes or styles.
 - Release locks on both success and exceptions; schedule a follow-up run after a cooldown.
 
-Completion criterion: repeated `run()` calls, duplicate mutation events, route changes, and feature toggles cannot create duplicate controls, clicks, timers, or stuck locks; all injected UI is isolated in Shadow DOM; and multi-element operations yield to the main thread.
+Completion criterion: repeated `run()` calls, duplicate mutation events, route changes, and feature toggles cannot create duplicate controls, clicks, timers, or stuck locks; all injected UI is isolated in Shadow DOM; and multi-element operations yield to the main thread with monotonic cancellation guards.
 
 ### 5. Storage migration
 
@@ -105,7 +106,7 @@ Cover behavior, not implementation:
 - Legacy storage migration and canonical persistence.
 - Exclusion cases: follow-up text, locked options, disabled controls, script-owned UI.
 
-Use condition-based waits (`wait_for_selector`, `wait_for_function`), not arbitrary sleeps. Seed a short test-only delay through storage or a fixture; keep production defaults in the userscript. Keep Python dependencies in `tests/requirements.txt`.
+Use condition-based waits (`wait_for_selector`, `wait_for_function`), not arbitrary sleeps. Use `state='attached'` (not default `state='visible'`) when asserting elements hidden by filter rules (`display: none`). Seed a short test-only delay through storage or a fixture; keep production defaults in the userscript. Keep Python dependencies in `tests/requirements.txt`.
 
 Completion criterion: the suite proves each user-visible feature and its important failure modes, and runs from the documented command.
 
@@ -113,7 +114,7 @@ Completion criterion: the suite proves each user-visible feature and its importa
 
 ```bash
 node --check path/to/script.user.js
-pytest path/to/tests/test_userscript.py
+pytest -o cache_dir=/tmp/.pytest_cache --import-mode=importlib path/to/tests/
 git diff --check
 ```
 
