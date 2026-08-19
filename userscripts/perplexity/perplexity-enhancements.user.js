@@ -1,11 +1,13 @@
 // ==UserScript==
 // @name         Perplexity Enhancements
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.0.1
+// @version      1.1.1
 // @description  Keeps a preferred Perplexity model active and safely automates agent approvals and GitHub connector enablement.
 // @author       tazztone
 // @match        https://www.perplexity.ai/*
 // @match        https://perplexity.ai/*
+// @updateURL    https://raw.githubusercontent.com/tazztone/scripts/main/userscripts/perplexity/perplexity-enhancements.user.js
+// @downloadURL  https://raw.githubusercontent.com/tazztone/scripts/main/userscripts/perplexity/perplexity-enhancements.user.js
 // @run-at       document-idle
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -28,27 +30,69 @@ const DEFAULTS = {
 const STORAGE_PREFIX = 'px_enhancements_';
 const LEGACY_PREFIXES = ['px_model_lock_', 'px_auto_approve_'];
 
-const FEATURE_STYLES = `
+// Minimal host styles for in-page elements (indicators and progress bars)
+const HOST_FEATURE_STYLES = `
   .px-model-lock-indicator { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-left: 8px; vertical-align: middle; transition: all .3s ease; }
   .px-auto-approve-btn { position: relative !important; overflow: hidden !important; }
   .px-progress-bar { position: absolute; top: 0; left: 0; height: 4px; width: 100%; background: #00cc66; transform-origin: left; z-index: 10; pointer-events: none; }
   .px-paused .px-progress-bar { background: #ffa500 !important; }
 `;
 
-const MODAL_STYLES = `
-  #px-settings-fab { position: fixed; right: 16px; bottom: 16px; width: 50px; height: 50px; border: 1px solid rgba(255,255,255,.14); border-radius: 50%; background: rgba(30,41,59,.9); color: #f1f5f9; box-shadow: 0 4px 12px rgba(0,0,0,.3); cursor: pointer; z-index: 99999; display: flex; align-items: center; justify-content: center; transition: all .2s ease; }
-  #px-settings-fab:hover { background: rgba(59,130,246,.95); transform: scale(1.08); }
+// Scoped Shadow DOM styles for settings FAB, Top Layer dialog, and Toasts
+const SHADOW_STYLES = `
+  :host { all: initial; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  #px-settings-fab {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    width: 50px;
+    height: 50px;
+    border: 1px solid rgba(255,255,255,.14);
+    border-radius: 50%;
+    background: rgba(30,41,59,.9);
+    color: #f1f5f9;
+    box-shadow: 0 4px 12px rgba(0,0,0,.3);
+    cursor: pointer;
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all .2s ease;
+  }
+  #px-settings-fab:hover {
+    background: rgba(59,130,246,.95);
+    transform: scale(1.08);
+  }
   #px-settings-fab svg { width: 24px; height: 24px; }
-  #px-settings-modal-backdrop { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(15,23,42,.55); backdrop-filter: blur(6px); z-index: 99998; opacity: 0; pointer-events: none; transition: opacity .2s ease; }
-  #px-settings-modal-backdrop.open { opacity: 1; pointer-events: auto; }
-  #px-settings-modal { box-sizing: border-box; width: min(90%, 480px); max-height: 85vh; overflow-y: auto; padding: 24px; border: 1px solid rgba(255,255,255,.12); border-radius: 16px; background: rgba(30,41,59,.96); color: #f8fafc; box-shadow: 0 20px 25px -5px rgba(0,0,0,.5); font: 14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; transform: translateY(8px) scale(.97); transition: transform .2s ease; }
-  #px-settings-modal-backdrop.open #px-settings-modal { transform: translateY(0) scale(1); }
-  #px-settings-modal h3 { margin: 0 0 20px; color: #60a5fa; font-size: 18px; }
+
+  dialog#px-settings-dialog {
+    box-sizing: border-box;
+    width: min(90%, 480px);
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 24px;
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 16px;
+    background: rgba(30,41,59,.96);
+    color: #f8fafc;
+    box-shadow: 0 20px 25px -5px rgba(0,0,0,.5);
+    font: 14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    margin: auto;
+  }
+  dialog#px-settings-dialog::backdrop {
+    background: rgba(15,23,42,.55);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+  dialog#px-settings-dialog h3 { margin: 0 0 20px; color: #60a5fa; font-size: 18px; }
   .px-settings-section { padding-bottom: 8px; margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,.08); }
   .px-settings-section h4 { margin: 0 0 16px; color: #60a5fa; font-size: 13px; letter-spacing: .5px; text-transform: uppercase; }
   .px-settings-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
   .px-settings-group label { color: #cbd5e1; font-size: 13px; font-weight: 600; }
-  .px-settings-group input[type="text"], .px-settings-group input[type="number"] { box-sizing: border-box; width: 100%; min-height: 34px; padding: 6px 8px; border: 1px solid rgba(255,255,255,.12); border-radius: 6px; background: rgba(15,23,42,.7); color: #fff; }
+  .px-settings-group input[type="text"], .px-settings-group input[type="number"] {
+    box-sizing: border-box; width: 100%; min-height: 34px; padding: 6px 8px;
+    border: 1px solid rgba(255,255,255,.12); border-radius: 6px; background: rgba(15,23,42,.7); color: #fff;
+  }
   .px-settings-group input[type="range"] { width: 100%; accent-color: #3b82f6; }
   .px-switch-container { display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
   .px-switch { position: relative; width: 44px; height: 24px; flex: 0 0 auto; }
@@ -61,10 +105,39 @@ const MODAL_STYLES = `
   .px-btn { padding: 10px 18px; border-radius: 8px; border: 0; font-size: 13px; font-weight: 600; cursor: pointer; }
   .px-btn-secondary { border: 1px solid rgba(255,255,255,.12); background: transparent; color: #cbd5e1; }
   .px-btn-primary { background: linear-gradient(135deg,#60a5fa,#2563eb); color: #fff; }
+
+  #px-toast-container {
+    position: fixed;
+    bottom: 76px;
+    right: 16px;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 8px;
+    z-index: 100000;
+    pointer-events: none;
+  }
+  .px-toast {
+    background: rgba(30, 41, 59, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #f8fafc;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    pointer-events: auto;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+  .px-toast.fade-out {
+    opacity: 0;
+    transform: translateY(6px);
+  }
 `;
 
 (() => {
   'use strict';
+
+  let uiShadowRoot = null;
 
   const log = (...args) => { if (readConfig('DEBUG', DEFAULTS.DEBUG)) console.log('[Perplexity Enhancements]', ...args); };
   const error = (...args) => console.error('[Perplexity Enhancements]', ...args);
@@ -175,6 +248,21 @@ const MODAL_STYLES = `
     events.filter(Boolean).forEach(event => el.dispatchEvent(event));
   }
 
+  function showToast(message, durationMs = 2500) {
+    if (!uiShadowRoot) return;
+    const container = uiShadowRoot.getElementById('px-toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = 'px-toast';
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.classList.add('fade-out');
+      toast.addEventListener('transitionend', () => toast.remove());
+      setTimeout(() => toast.remove(), 400);
+    }, durationMs);
+  }
+
   // --- Model lock ---
   function findModelButton() {
     const textarea = document.querySelector('textarea[placeholder*="Ask" i], textarea[placeholder*="anything" i], textarea');
@@ -183,7 +271,7 @@ const MODAL_STYLES = `
     const keywords = ['model', 'best', 'sonar', 'gpt-', 'gemini', 'claude'];
 
     return candidates.find(btn => {
-      if (!isVisible(btn)) return false;
+      if (!isVisible(btn) || btn.closest('#px-root')) return false;
       const text = normalize(btn.textContent);
       const label = normalize(btn.getAttribute('aria-label'));
       if (text.includes('github') || text.includes('attach') || text.includes('focus') || text.includes('search') || label.includes('voice') || label.includes('dictate')) return false;
@@ -212,14 +300,14 @@ const MODAL_STYLES = `
     const target = normalize(CONFIG.TARGET_MODEL);
     const trigger = findModelButton();
     const candidates = [...document.querySelectorAll('[role="menuitem"], [role="option"], [role="menuitemcheckbox"], button, .dropdown-item')];
-    return candidates.find(el => isVisible(el) && !el.closest('#px-settings-modal') && el !== trigger && !trigger?.contains(el) && !isDisabledOption(el) && normalize(el.textContent).includes(target));
+    return candidates.find(el => isVisible(el) && !el.closest('#px-root') && el !== trigger && !trigger?.contains(el) && !isDisabledOption(el) && normalize(el.textContent).includes(target));
   }
 
   function findThinkingRow() {
     const trigger = findModelButton();
     const candidates = [...document.querySelectorAll('[role="menuitem"], [role="option"], [role="menuitemcheckbox"], button, .dropdown-item, div')];
     return candidates.find(el => {
-      if (!isVisible(el) || el.closest('#px-settings-modal') || el === trigger || trigger?.contains(el)) return false;
+      if (!isVisible(el) || el.closest('#px-root') || el === trigger || trigger?.contains(el)) return false;
       const text = normalize(el.textContent);
       return text.includes('thinking') && !/(claude|gpt|sonar|gemini)/.test(text) && el.querySelector('button[role="switch"], input[type="checkbox"], [aria-checked]');
     });
@@ -285,6 +373,7 @@ const MODAL_STYLES = `
   function findApproveButtons() {
     const texts = Array.isArray(CONFIG.APPROVE_TEXTS) ? CONFIG.APPROVE_TEXTS : DEFAULTS.APPROVE_TEXTS;
     return [...document.querySelectorAll('button, [role="button"]')].filter(el => {
+      if (el.closest('#px-root')) return false;
       const text = normalize(el.textContent);
       return isVisible(el) && !activeTimers.has(el) && !el.dataset.pxClicked && !el.disabled && el.getAttribute('aria-disabled') !== 'true' && texts.some(value => text.startsWith(normalize(value)));
     });
@@ -308,9 +397,14 @@ const MODAL_STYLES = `
     let timer;
     const update = () => { progress.style.transform = `scaleX(${Math.max(0, remaining / delay)})`; };
     const cleanup = () => { clearInterval(timer); activeTimers.delete(button); removeApprovalDecoration(button); };
+    const pause = () => { paused = true; button.classList.add('px-paused'); };
+    const resume = () => { paused = false; button.classList.remove('px-paused'); };
     const tick = () => {
       if (!document.contains(button) || !isVisible(button) || button.dataset.pxClicked) { cleanup(); return; }
-      if (paused) return;
+      if (paused || button.matches(':hover')) {
+        if (!paused) pause();
+        return;
+      }
       remaining -= 100;
       update();
       if (remaining <= 0) {
@@ -322,8 +416,11 @@ const MODAL_STYLES = `
     };
     timer = setInterval(tick, 100);
     activeTimers.set(button, timer);
-    button.addEventListener('mouseenter', () => { paused = true; button.classList.add('px-paused'); }, { passive: true });
-    button.addEventListener('mouseleave', () => { paused = false; button.classList.remove('px-paused'); }, { passive: true });
+    button.addEventListener('mouseenter', pause, { passive: true });
+    button.addEventListener('mouseover', pause, { passive: true });
+    button.addEventListener('pointerenter', pause, { passive: true });
+    button.addEventListener('mouseleave', resume, { passive: true });
+    button.addEventListener('pointerleave', resume, { passive: true });
   }
 
   function cancelApprovalTimers() {
@@ -341,6 +438,7 @@ const MODAL_STYLES = `
     if (!CONFIG.AUTO_ENABLE_GITHUB || isGithubEnabled()) return false;
     const matches = ['github', '+ github', 'github +', 'add github', 'enable github'];
     const pill = [...document.querySelectorAll('button')].find(el => {
+      if (el.closest('#px-root')) return false;
       const text = normalize(el.textContent);
       if (!matches.includes(text) || !isVisible(el) || el.getAttribute('aria-haspopup') === 'menu' || el.getBoundingClientRect().width > 500) return false;
       const style = window.getComputedStyle(el);
@@ -362,15 +460,23 @@ const MODAL_STYLES = `
     setTimeout(() => { connectorLock = false; }, 2000);
   }
 
-  // --- Settings UI ---
+  // --- Encapsulated Shadow DOM Settings UI & Top Layer Modal ---
   function setupSettingsUI() {
-    if (document.getElementById('px-settings-fab')) return;
-    const wrapper = document.createElement('div');
-    wrapper.innerHTML = `
+    let host = document.getElementById('px-root');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'px-root';
+      document.body.appendChild(host);
+    }
+
+    const shadow = host.shadowRoot || host.attachShadow({ mode: 'open' });
+    uiShadowRoot = shadow;
+    shadow.innerHTML = `
+      <style>${SHADOW_STYLES}</style>
       <button id="px-settings-fab" type="button" title="Configure Perplexity enhancements" aria-label="Configure Perplexity enhancements">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2a2 2 0 0 1 2 2v.2a7.7 7.7 0 0 1 2.1.9l.15-.1a2 2 0 1 1 2.8 2.8l-.1.15a7.7 7.7 0 0 1 .9 2.1H20a2 2 0 1 1 0 4h-.2a7.7 7.7 0 0 1-.9 2.1l.1.15a2 2 0 1 1-2.8 2.8l-.15-.1a7.7 7.7 0 0 1-2.1.9V20a2 2 0 1 1-4 0v-.2a7.7 7.7 0 0 1-2.1-.9l-.15.1a2 2 0 1 1-2.8-2.8l.1-.15a7.7 7.7 0 0 1-.9-2.1H4a2 2 0 1 1 0-4h.2a7.7 7.7 0 0 1 .9-2.1l-.1-.15a2 2 0 1 1 2.8-2.8l.15.1a7.7 7.7 0 0 1 2.1-.9V4a2 2 0 0 1 2-2z"/><circle cx="12" cy="12" r="3"/></svg>
       </button>
-      <div id="px-settings-modal-backdrop"><div id="px-settings-modal" role="dialog" aria-modal="true" aria-labelledby="px-settings-title" tabindex="-1">
+      <dialog id="px-settings-dialog" popover="auto" role="dialog" aria-modal="true" aria-labelledby="px-settings-title">
         <h3 id="px-settings-title">Perplexity Enhancements</h3>
         <section class="px-settings-section"><h4>Model Lock</h4>
           <div class="px-settings-group px-switch-container"><label for="px-model-lock-enabled">Enable model lock</label><label class="px-switch"><input id="px-model-lock-enabled" type="checkbox"><span class="px-slider"></span></label></div>
@@ -383,34 +489,67 @@ const MODAL_STYLES = `
           <div class="px-settings-group" id="px-auto-approve-delay-group"><label for="px-auto-approve-delay-range">Approval countdown (seconds)</label><input id="px-auto-approve-delay-range" type="range" min="1" max="30" step="1"><input id="px-auto-approve-delay-value" type="number" min="1" max="30" step="1"></div>
         </section>
         <div class="px-modal-actions"><button type="button" class="px-btn px-btn-secondary" id="px-btn-close">Cancel</button><button type="button" class="px-btn px-btn-primary" id="px-btn-save">Save Settings</button></div>
-      </div></div>`;
-    document.body.appendChild(wrapper);
+      </dialog>
+      <div id="px-toast-container"></div>
+    `;
 
-    const backdrop = document.getElementById('px-settings-modal-backdrop');
-    const modal = document.getElementById('px-settings-modal');
-    const enabled = document.getElementById('px-model-lock-enabled');
-    const target = document.getElementById('px-model-lock-target');
-    const thinking = document.getElementById('px-model-lock-thinking');
-    const autoApprove = document.getElementById('px-auto-approve-enabled');
-    const autoGithub = document.getElementById('px-auto-approve-github');
-    const delayRange = document.getElementById('px-auto-approve-delay-range');
-    const delayValue = document.getElementById('px-auto-approve-delay-value');
-    const delayGroup = document.getElementById('px-auto-approve-delay-group');
+    const fab = shadow.getElementById('px-settings-fab');
+    const dialog = shadow.getElementById('px-settings-dialog');
+    const enabled = shadow.getElementById('px-model-lock-enabled');
+    const target = shadow.getElementById('px-model-lock-target');
+    const thinking = shadow.getElementById('px-model-lock-thinking');
+    const autoApprove = shadow.getElementById('px-auto-approve-enabled');
+    const autoGithub = shadow.getElementById('px-auto-approve-github');
+    const delayRange = shadow.getElementById('px-auto-approve-delay-range');
+    const delayValue = shadow.getElementById('px-auto-approve-delay-value');
+    const delayGroup = shadow.getElementById('px-auto-approve-delay-group');
+    const btnClose = shadow.getElementById('px-btn-close');
+    const btnSave = shadow.getElementById('px-btn-save');
+
     const sync = () => {
       enabled.checked = CONFIG.MODEL_LOCK_ENABLED; target.value = CONFIG.TARGET_MODEL; thinking.checked = CONFIG.ENABLE_THINKING;
       autoApprove.checked = CONFIG.AUTO_APPROVE; autoGithub.checked = CONFIG.AUTO_ENABLE_GITHUB;
       const seconds = Math.max(1, Math.min(30, Math.round(CONFIG.CLICK_DELAY_MS / 1000))); delayRange.value = seconds; delayValue.value = seconds;
       delayGroup.style.opacity = CONFIG.AUTO_APPROVE ? '1' : '.4'; delayGroup.querySelectorAll('input').forEach(input => { input.disabled = !CONFIG.AUTO_APPROVE; });
     };
-    const close = () => backdrop.classList.remove('open');
-    document.getElementById('px-settings-fab').addEventListener('click', () => { sync(); backdrop.classList.add('open'); modal.focus(); });
-    document.getElementById('px-btn-close').addEventListener('click', close);
-    backdrop.addEventListener('click', event => { if (event.target === backdrop) close(); });
-    document.addEventListener('keydown', event => { if (event.key === 'Escape' && backdrop.classList.contains('open')) close(); });
-    autoApprove.addEventListener('change', event => { delayGroup.style.opacity = event.target.checked ? '1' : '.4'; delayGroup.querySelectorAll('input').forEach(input => { input.disabled = !event.target.checked; }); });
+
+    const openDialog = () => {
+      sync();
+      if (typeof dialog.showPopover === 'function') {
+        dialog.showPopover();
+      } else if (typeof dialog.showModal === 'function') {
+        dialog.showModal();
+      } else {
+        dialog.setAttribute('open', '');
+      }
+    };
+
+    const closeDialog = () => {
+      if (typeof dialog.hidePopover === 'function') {
+        dialog.hidePopover();
+      } else if (typeof dialog.close === 'function') {
+        dialog.close();
+      } else {
+        dialog.removeAttribute('open');
+      }
+    };
+
+    fab.addEventListener('click', openDialog);
+    btnClose.addEventListener('click', closeDialog);
+
+    // Escape listener fallback for environments where popover light-dismiss needs assistance
+    shadow.addEventListener('keydown', event => {
+      if (event.key === 'Escape') closeDialog();
+    });
+
+    autoApprove.addEventListener('change', event => {
+      delayGroup.style.opacity = event.target.checked ? '1' : '.4';
+      delayGroup.querySelectorAll('input').forEach(input => { input.disabled = !event.target.checked; });
+    });
     delayRange.addEventListener('input', event => { delayValue.value = event.target.value; });
     delayValue.addEventListener('input', event => { delayRange.value = event.target.value; });
-    document.getElementById('px-btn-save').addEventListener('click', () => {
+
+    btnSave.addEventListener('click', () => {
       const model = target.value.trim();
       if (!model) { target.focus(); return; }
       const seconds = Math.max(1, Math.min(30, Number.parseInt(delayValue.value, 10) || 3));
@@ -419,7 +558,9 @@ const MODAL_STYLES = `
       modelInteraction = false; modelCooldownUntil = 0;
       if (!CONFIG.AUTO_APPROVE) cancelApprovalTimers();
       if (!CONFIG.MODEL_LOCK_ENABLED) removeModelIndicators();
-      close(); run();
+      closeDialog();
+      showToast('Perplexity settings saved');
+      run();
     });
     sync();
   }
@@ -446,8 +587,7 @@ const MODAL_STYLES = `
   const handleNavigation = () => { lastUrl = location.href; modelInteraction = false; modelCooldownUntil = 0; connectorLock = false; connectorRoute = lastUrl; run(); };
   if (self.navigation && typeof self.navigation.addEventListener === 'function') self.navigation.addEventListener('navigatesuccess', handleNavigation);
 
-  injectStyle('px-enhancements-feature-style', FEATURE_STYLES);
-  injectStyle('px-enhancements-modal-style', MODAL_STYLES);
+  injectStyle('px-enhancements-feature-style', HOST_FEATURE_STYLES);
   setupSettingsUI();
   observer.observe(document.documentElement, { childList: true, subtree: true });
   run();

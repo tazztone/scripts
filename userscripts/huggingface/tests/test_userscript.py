@@ -117,11 +117,11 @@ def test_shared_footer_rescan_preserves_liked_state(shared_footer_page: Page):
     assert 'hf-is-liked' in final[1]
 
 
-@pytest.mark.parametrize('fetch_mode,expected_alert', [
+@pytest.mark.parametrize('fetch_mode,expected_toast', [
     ('unauthorized', True),
     ('reject', False),
 ])
-def test_failed_request_restores_optimistic_state(page: Page, fetch_mode, expected_alert):
+def test_failed_request_restores_optimistic_state(page: Page, fetch_mode, expected_toast):
     page.evaluate(f"window.fetchMode = '{fetch_mode}'")
     page.click('#unliked-like')
     page.wait_for_function('window.likeRequests.length === 1')
@@ -129,7 +129,9 @@ def test_failed_request_restores_optimistic_state(page: Page, fetch_mode, expect
 
     assert page.locator('#card-unliked').get_attribute('class').find('hf-is-unliked') >= 0
     assert page.locator('#unliked-like').inner_text() == '33'
-    assert bool(page.evaluate('window.alertMessages.length')) is expected_alert
+    if expected_toast:
+        page.wait_for_selector('#hf-date-filter-root >> .hf-toast')
+        assert page.locator('#hf-date-filter-root >> .hf-toast').is_visible()
 
 
 def test_keyboard_activation(page: Page):
@@ -167,51 +169,51 @@ def test_dynamic_cards_are_bound_once(page: Page):
 
 
 def test_negative_text_filter_substring(page: Page):
-    page.fill('#hf-exclude-input', 'gguf')
+    page.fill('#hf-date-filter-root >> #hf-exclude-input', 'gguf')
     page.wait_for_function("document.querySelector('#card-gguf').classList.contains('hf-filtered-out')")
 
     assert 'hf-filtered-out' in (page.locator('#card-gguf').get_attribute('class') or '')
     assert 'hf-filtered-out' not in (page.locator('#card-fp8').get_attribute('class') or '')
     assert 'hf-filtered-out' not in (page.locator('#card-unliked').get_attribute('class') or '')
     assert 'hf-filtered-out' not in (page.locator('#card-liked').get_attribute('class') or '')
-    assert 'Showing 3 / 4' in page.locator('#hf-df-badge').inner_text()
+    assert 'Showing 3 / 4' in page.locator('#hf-date-filter-root >> #hf-df-badge').inner_text()
 
 
 def test_negative_text_filter_regex_and_multi_term(page: Page):
-    page.fill('#hf-exclude-input', '/(?:gguf|fp8)/i')
+    page.fill('#hf-date-filter-root >> #hf-exclude-input', '/(?:gguf|fp8)/i')
     page.wait_for_function("document.querySelector('#card-gguf').classList.contains('hf-filtered-out') && document.querySelector('#card-fp8').classList.contains('hf-filtered-out')")
 
     assert 'hf-filtered-out' in (page.locator('#card-gguf').get_attribute('class') or '')
     assert 'hf-filtered-out' in (page.locator('#card-fp8').get_attribute('class') or '')
     assert 'hf-filtered-out' not in (page.locator('#card-unliked').get_attribute('class') or '')
-    assert 'Showing 2 / 4' in page.locator('#hf-df-badge').inner_text()
+    assert 'Showing 2 / 4' in page.locator('#hf-date-filter-root >> #hf-df-badge').inner_text()
 
 
 def test_negative_text_filter_clear_button(page: Page):
-    page.fill('#hf-exclude-input', 'gguf')
+    page.fill('#hf-date-filter-root >> #hf-exclude-input', 'gguf')
     page.wait_for_function("document.querySelector('#card-gguf').classList.contains('hf-filtered-out')")
 
-    page.click('#hf-exclude-clear-btn')
+    page.click('#hf-date-filter-root >> #hf-exclude-clear-btn')
     page.wait_for_function("!document.querySelector('#card-gguf').classList.contains('hf-filtered-out')")
 
-    assert page.locator('#hf-exclude-input').input_value() == ''
+    assert page.locator('#hf-date-filter-root >> #hf-exclude-input').input_value() == ''
     assert 'hf-filtered-out' not in (page.locator('#card-gguf').get_attribute('class') or '')
-    assert 'All shown (4)' in page.locator('#hf-df-badge').inner_text()
+    assert 'All shown (4)' in page.locator('#hf-date-filter-root >> #hf-df-badge').inner_text()
 
 
 def test_negative_text_filter_toggle(page: Page):
-    page.fill('#hf-exclude-input', 'gguf')
+    page.fill('#hf-date-filter-root >> #hf-exclude-input', 'gguf')
     page.wait_for_function("document.querySelector('#card-gguf').classList.contains('hf-filtered-out')")
 
     # Disable toggle
-    page.click('#hf-exclude-toggle + .hf-slider')
+    page.click('#hf-date-filter-root >> #hf-exclude-toggle + .hf-slider')
     page.wait_for_function("!document.querySelector('#card-gguf').classList.contains('hf-filtered-out')")
 
-    assert page.locator('#hf-exclude-input').input_value() == 'gguf'
+    assert page.locator('#hf-date-filter-root >> #hf-exclude-input').input_value() == 'gguf'
     assert 'hf-filtered-out' not in (page.locator('#card-gguf').get_attribute('class') or '')
-    assert 'hf-section-dimmed' in (page.locator('#hf-exclude-section-body').get_attribute('class') or '')
+    assert 'hf-section-dimmed' in (page.locator('#hf-date-filter-root >> #hf-exclude-section-body').get_attribute('class') or '')
 
     # Re-enable toggle
-    page.click('#hf-exclude-toggle + .hf-slider')
+    page.click('#hf-date-filter-root >> #hf-exclude-toggle + .hf-slider')
     page.wait_for_function("document.querySelector('#card-gguf').classList.contains('hf-filtered-out')")
     assert 'hf-filtered-out' in (page.locator('#card-gguf').get_attribute('class') or '')

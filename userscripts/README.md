@@ -23,8 +23,9 @@ Every userscript resides in its own subdirectory and adheres to the standard wor
 
 | Directory | Description |
 | :--- | :--- |
-| [**`perplexity`**](./perplexity) | Keeps a preferred Perplexity model active, automates action-card approvals, and enables the GitHub connector. |
-| [**`topp-alarm`**](./topp-alarm) | Streamlines setting price alarms on Toppreise.ch directly from item views. |
+| [**`huggingface`**](./huggingface) | Hugging Face Heart & Date Filter: Filter models/datasets by last modified date, auto-unheart/heart toggle, non-blocking toasts. |
+| [**`perplexity`**](./perplexity) | Perplexity Enhancements: Keeps preferred model active, auto-approves action cards, and enables GitHub connector. |
+| [**`toppreise`**](./toppreise) | Toppreise.ch Suite: Best price highlighting, negative text filter, hierarchical category exclusion, and price alarm automation. |
 | [**`userscript-development`**](./userscript-development) | Specialized workflow guidelines, architectural standards, and reference templates used to generate and maintain these scripts. |
 
 ---

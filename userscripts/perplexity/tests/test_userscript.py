@@ -19,7 +19,7 @@ def userscript_content():
 def page(browser, userscript_content):
     page = browser.new_page()
     page.goto(MOCK_HTML)
-    page.evaluate("localStorage.setItem('px_enhancements_CLICK_DELAY_MS', '300')")
+    page.evaluate("localStorage.setItem('px_enhancements_CLICK_DELAY_MS', '800')")
     page.evaluate(userscript_content)
     yield page
     page.close()
@@ -78,11 +78,12 @@ def test_github_suggestion_is_enabled_but_followup_is_ignored(page: Page):
 def test_settings_save_and_disable_cancels_pending_approval(settings_page: Page):
     page = settings_page
     page.wait_for_selector('#approve-btn .px-progress-bar')
-    page.click('#px-settings-fab')
-    assert page.locator('#px-settings-modal-backdrop.open').is_visible()
-    page.locator('#px-auto-approve-enabled').evaluate('(el) => { el.click(); }')
-    page.locator('#px-model-lock-enabled').evaluate('(el) => { el.click(); }')
-    page.click('#px-btn-save')
+    page.click('#px-root >> #px-settings-fab')
+    page.wait_for_selector('#px-root >> #px-settings-dialog')
+    assert page.locator('#px-root >> #px-settings-dialog').is_visible()
+    page.locator('#px-root >> #px-auto-approve-enabled').evaluate('(el) => { el.click(); }')
+    page.locator('#px-root >> #px-model-lock-enabled').evaluate('(el) => { el.click(); }')
+    page.click('#px-root >> #px-btn-save')
     page.wait_for_timeout(450)
     assert page.locator('#approve-btn').inner_text() != 'CLICKED'
     assert page.locator('.px-model-lock-indicator').count() == 0
@@ -95,10 +96,11 @@ def test_settings_escape_and_legacy_migration(browser, userscript_content):
     page.evaluate("localStorage.setItem('px_model_lock_TARGET_MODEL', JSON.stringify('Sonar 2'))")
     page.evaluate("localStorage.setItem('px_model_lock_ENABLE_THINKING', 'false')")
     page.evaluate(userscript_content)
-    page.click('#px-settings-fab')
+    page.click('#px-root >> #px-settings-fab')
+    page.wait_for_selector('#px-root >> #px-settings-dialog')
     page.keyboard.press('Escape')
-    assert page.locator('#px-settings-modal-backdrop.open').count() == 0
-    page.click('#px-settings-fab')
-    assert page.locator('#px-model-lock-target').input_value() == 'Sonar 2'
+    page.wait_for_timeout(200)
+    page.click('#px-root >> #px-settings-fab')
+    assert page.locator('#px-root >> #px-model-lock-target').input_value() == 'Sonar 2'
     assert page.evaluate("localStorage.getItem('px_enhancements_TARGET_MODEL')") == '"Sonar 2"'
     page.close()

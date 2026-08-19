@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.8.13
+// @version      2.8.14
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -102,497 +102,6 @@ const STYLES = `
   body.tp-reveal-filtered .tp-min-offers-filtered {
     display: block !important;
     opacity: 0.35 !important;
-    outline: 2px dashed #f59e0b !important;
-  }
-
-  /* Floating Settings Button */
-  #tp-settings-fab {
-    position: fixed;
-    bottom: 14px;
-    right: 14px;
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    background: rgba(30, 41, 59, 0.85);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
-    cursor: pointer;
-    z-index: 99999;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #f1f5f9;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  #tp-settings-fab:hover {
-    background: rgba(16, 185, 129, 0.9);
-    border-color: rgba(16, 185, 129, 0.2);
-    box-shadow: 0 0 15px rgba(16, 185, 129, 0.5);
-    transform: scale(1.1);
-  }
-  #tp-settings-fab svg {
-    width: 24px;
-    height: 24px;
-    transition: transform 0.6s ease;
-  }
-  #tp-settings-fab:hover svg {
-    transform: rotate(90deg);
-  }
-
-  /* Settings Modal Backdrop */
-  #tp-settings-modal-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: rgba(15, 23, 42, 0.5);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    z-index: 999998;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.3s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  #tp-settings-modal-backdrop.open {
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  /* Glassmorphic Modal Dialog Box */
-  #tp-settings-modal {
-    width: 92%;
-    max-width: 520px;
-    background: rgba(30, 41, 59, 0.92);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4);
-    border-radius: 16px;
-    color: #f8fafc;
-    padding: 24px;
-    transform: scale(0.95) translateY(10px);
-    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  }
-  #tp-settings-modal-backdrop.open #tp-settings-modal {
-    transform: scale(1) translateY(0);
-  }
-
-  #tp-settings-modal h3 {
-    margin: 0 0 18px 0;
-    font-size: 18px;
-    font-weight: 700;
-    letter-spacing: -0.5px;
-    background: linear-gradient(to right, #34d399, #059669);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }
-
-  /* Form Elements & Groups */
-  .tp-settings-group {
-    margin-bottom: 18px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .tp-settings-group label {
-    font-size: 13px;
-    font-weight: 600;
-    color: #94a3b8;
-    margin: 0;
-  }
-  .tp-section-header {
-    margin: 16px 0 12px 0;
-    color: #10b981;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    padding-bottom: 4px;
-  }
-  
-  /* Segmented Control */
-  .tp-segmented-control {
-    display: flex;
-    background: rgba(15, 23, 42, 0.6);
-    border-radius: 8px;
-    padding: 2px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-  }
-  .tp-segmented-control label {
-    flex: 1;
-    text-align: center;
-    padding: 7px 10px;
-    cursor: pointer;
-    font-size: 11px;
-    font-weight: 600;
-    color: #94a3b8;
-    border-radius: 6px;
-    transition: all 0.2s ease;
-    margin: 0;
-    user-select: none;
-  }
-  .tp-segmented-control input[type="radio"] {
-    display: none;
-  }
-  .tp-segmented-control label:hover {
-    color: #f1f5f9;
-  }
-  .tp-segmented-control input[type="radio"]:checked + label {
-    background: #10b981;
-    color: #fff;
-    box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
-  }
-  .tp-segmented-control-blue input[type="radio"]:checked + label {
-    background: #3b82f6 !important;
-    box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3) !important;
-  }
-
-  /* Range and Inputs */
-  .tp-range-container {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  .tp-range-container input[type="range"] {
-    flex: 1;
-    accent-color: #10b981;
-    background: rgba(15, 23, 42, 0.6);
-    height: 6px;
-    border-radius: 3px;
-    outline: none;
-    -webkit-appearance: none;
-  }
-  .tp-range-container.tp-blue input[type="range"] {
-    accent-color: #3b82f6;
-  }
-  .tp-range-container input[type="number"] {
-    width: 65px;
-    background: rgba(15, 23, 42, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 6px;
-    color: #fff;
-    padding: 6px 8px;
-    font-size: 13px;
-    text-align: center;
-    outline: none;
-  }
-
-  /* Textarea for Negative Filter */
-  .tp-textarea {
-    width: 100%;
-    background: rgba(15, 23, 42, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    color: #fff;
-    padding: 8px 12px;
-    font-size: 12px;
-    font-family: inherit;
-    resize: vertical;
-    min-height: 54px;
-    outline: none;
-    box-sizing: border-box;
-    transition: border-color 0.2s ease;
-  }
-  .tp-textarea:focus {
-    border-color: #10b981;
-  }
-
-  /* Category Pills Container */
-  .tp-cat-pills-container {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    max-height: 110px;
-    overflow-y: auto;
-    padding: 6px;
-    background: rgba(15, 23, 42, 0.6);
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-  }
-
-  /* High-Contrast Crisp Readable Category Pills */
-  .tp-cat-pill {
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-size: 11px;
-    font-weight: 600;
-    cursor: pointer;
-    user-select: none;
-    transition: all 0.2s ease;
-    background: #1e293b !important;
-    color: #f8fafc !important;
-    border: 1px solid #334155 !important;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
-  }
-  .tp-cat-pill:hover {
-    background: #334155 !important;
-    color: #ffffff !important;
-  }
-  .tp-cat-pill.tp-excluded {
-    background: #7f1d1d !important;
-    color: #fca5a5 !important;
-    border-color: #ef4444 !important;
-    text-decoration: line-through !important;
-  }
-
-  /* Group Pills & Collapsible Subcategories */
-  .tp-group-wrapper {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-  .tp-group-pill {
-    display: inline-flex !important;
-    align-items: center !important;
-    gap: 6px !important;
-    padding: 4px 10px !important;
-    border-radius: 12px !important;
-    font-size: 11px !important;
-    font-weight: 700 !important;
-    cursor: pointer !important;
-    user-select: none !important;
-    transition: all 0.2s ease !important;
-    background: #0f172a !important;
-    color: #38bdf8 !important;
-    border: 1px solid #0284c7 !important;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2) !important;
-  }
-  .tp-group-pill:hover {
-    background: #1e293b !important;
-    color: #7dd3fc !important;
-    border-color: #38bdf8 !important;
-  }
-  .tp-group-pill.tp-excluded-all {
-    background: #7f1d1d !important;
-    color: #fca5a5 !important;
-    border-color: #ef4444 !important;
-    text-decoration: line-through !important;
-  }
-  .tp-group-pill.tp-excluded-individual {
-    background: #9a3412 !important;
-    color: #ffedd5 !important;
-    border-color: #f97316 !important;
-    text-decoration: none !important;
-  }
-  .tp-group-pill.tp-partial {
-    border-color: #f59e0b !important;
-    color: #fef08a !important;
-    text-decoration: none !important;
-  }
-  .tp-group-chevron {
-    font-size: 9px !important;
-    padding: 1px 5px !important;
-    border-radius: 4px !important;
-    background: rgba(255, 255, 255, 0.15) !important;
-    cursor: pointer !important;
-    margin-left: 2px !important;
-  }
-  .tp-group-chevron:hover {
-    background: rgba(255, 255, 255, 0.3) !important;
-  }
-
-  /* Floating Glassmorphic Group Popover */
-  .tp-group-popover {
-    position: absolute !important;
-    z-index: 100000 !important;
-    min-width: 260px !important;
-    max-width: 380px !important;
-    padding: 10px !important;
-    background: rgba(15, 23, 42, 0.95) !important;
-    backdrop-filter: blur(16px) !important;
-    -webkit-backdrop-filter: blur(16px) !important;
-    border: 1px solid rgba(56, 189, 248, 0.3) !important;
-    border-radius: 12px !important;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(56, 189, 248, 0.1) !important;
-    animation: tpPopoverFadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;
-  }
-  @keyframes tpPopoverFadeIn {
-    from { opacity: 0; transform: translateY(-4px) scale(0.98); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
-  }
-  .tp-popover-header {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    padding-bottom: 8px !important;
-    margin-bottom: 8px !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
-  }
-  .tp-popover-title {
-    font-size: 12px !important;
-    font-weight: 700 !important;
-    color: #38bdf8 !important;
-  }
-  .tp-popover-actions {
-    display: flex !important;
-    gap: 6px !important;
-  }
-  .tp-popover-btn {
-    font-size: 10px !important;
-    padding: 2px 6px !important;
-    border-radius: 4px !important;
-    background: rgba(255, 255, 255, 0.1) !important;
-    color: #cbd5e1 !important;
-    cursor: pointer !important;
-    border: 1px solid rgba(255, 255, 255, 0.05) !important;
-    transition: all 0.15s ease !important;
-  }
-  .tp-popover-btn:hover {
-    background: rgba(56, 189, 248, 0.2) !important;
-    color: #ffffff !important;
-    border-color: rgba(56, 189, 248, 0.4) !important;
-  }
-  .tp-popover-search {
-    width: 100% !important;
-    box-sizing: border-box !important;
-    padding: 4px 8px !important;
-    margin-bottom: 8px !important;
-    font-size: 11px !important;
-    color: #e2e8f0 !important;
-    background: rgba(15, 23, 42, 0.6) !important;
-    border: 1px solid rgba(56, 189, 248, 0.25) !important;
-    border-radius: 6px !important;
-    outline: none !important;
-  }
-  .tp-popover-search:focus {
-    border-color: rgba(56, 189, 248, 0.6) !important;
-    box-shadow: 0 0 8px rgba(56, 189, 248, 0.2) !important;
-  }
-  .tp-popover-body {
-    display: flex !important;
-    flex-wrap: wrap !important;
-    gap: 6px !important;
-    max-height: 250px !important;
-    overflow-y: auto !important;
-    padding: 2px !important;
-  }
-  .tp-branch-wrapper {
-    width: 100% !important;
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 4px !important;
-    margin-bottom: 4px !important;
-  }
-  .tp-branch-header {
-    display: flex !important;
-    align-items: center !important;
-    gap: 4px !important;
-  }
-  .tp-branch-children {
-    display: flex !important;
-    flex-wrap: wrap !important;
-    gap: 4px !important;
-    padding-left: 12px !important;
-    margin-top: 2px !important;
-    border-left: 2px solid rgba(56, 189, 248, 0.2) !important;
-  }
-
-  /* Switch Toggle */
-  .tp-switch-container {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .tp-switch-label {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .tp-switch-desc {
-    font-size: 11px;
-    color: #64748b;
-  }
-  .tp-switch {
-    position: relative;
-    display: inline-block;
-    width: 44px;
-    height: 24px;
-  }
-  .tp-switch input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-  }
-  .tp-slider {
-    position: absolute;
-    cursor: pointer;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(15, 23, 42, 0.6);
-    transition: .4s;
-    border-radius: 24px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-  }
-  .tp-slider:before {
-    position: absolute;
-    content: "";
-    height: 16px;
-    width: 16px;
-    left: 3px;
-    bottom: 3px;
-    background-color: #94a3b8;
-    transition: .4s;
-    border-radius: 50%;
-  }
-  .tp-switch input:checked + .tp-slider {
-    background-color: #10b981;
-    border-color: rgba(16, 185, 129, 0.2);
-  }
-  .tp-switch.tp-blue input:checked + .tp-slider {
-    background-color: #3b82f6;
-    border-color: rgba(59, 130, 246, 0.2);
-  }
-  .tp-switch input:checked + .tp-slider:before {
-    transform: translateX(20px);
-    background-color: #fff;
-  }
-
-  /* Action Buttons */
-  .tp-modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-    margin-top: 20px;
-  }
-  .tp-btn {
-    padding: 10px 18px;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    border: none;
-    outline: none;
-  }
-  .tp-btn-secondary {
-    background: transparent;
-    color: #94a3b8;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-  }
-  .tp-btn-secondary:hover {
-    color: #f1f5f9;
-    background: rgba(255, 255, 255, 0.05);
-  }
-  .tp-btn-primary {
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    color: #fff;
-    box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3);
-  }
-  .tp-btn-primary:hover {
-    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.5);
-    transform: translateY(-1px);
-  }
-
   /* Floating Quick-Control Pill Toolbar */
   #tp-quick-toolbar {
     position: fixed;
@@ -871,6 +380,357 @@ const STYLES = `
       flex-wrap: wrap !important;
       justify-content: center !important;
     }
+  }
+`;
+
+const SHADOW_MODAL_STYLES = `
+  :host {
+    all: initial;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+
+  /* Floating Settings Button */
+  #tp-settings-fab {
+    position: fixed;
+    bottom: 14px;
+    right: 14px;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: rgba(30, 41, 59, 0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    cursor: pointer;
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #f1f5f9;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  #tp-settings-fab:hover {
+    background: rgba(16, 185, 129, 0.9);
+    border-color: rgba(16, 185, 129, 0.2);
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.5);
+    transform: scale(1.1);
+  }
+  #tp-settings-fab svg {
+    width: 24px;
+    height: 24px;
+    transition: transform 0.6s ease;
+  }
+  #tp-settings-fab:hover svg {
+    transform: rotate(90deg);
+  }
+
+  /* Top Layer Settings Modal Dialog */
+  dialog#tp-settings-dialog {
+    box-sizing: border-box;
+    width: 92%;
+    max-width: 520px;
+    max-height: 85vh;
+    overflow-y: auto;
+    background: rgba(30, 41, 59, 0.95);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4);
+    border-radius: 16px;
+    color: #f8fafc;
+    padding: 24px;
+    font-family: inherit;
+    margin: auto;
+  }
+  dialog#tp-settings-dialog::backdrop {
+    background: rgba(15, 23, 42, 0.5);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+  dialog#tp-settings-dialog h3 {
+    margin: 0 0 18px 0;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    background: linear-gradient(to right, #34d399, #059669);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  #tp-settings-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 55vh;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .tp-settings-group {
+    margin-bottom: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .tp-settings-group label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #94a3b8;
+    margin: 0;
+  }
+  .tp-section-header {
+    margin: 16px 0 12px 0;
+    color: #10b981;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 4px;
+  }
+
+  /* Segmented Control */
+  .tp-segmented-control {
+    display: flex;
+    background: rgba(15, 23, 42, 0.6);
+    border-radius: 8px;
+    padding: 2px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  .tp-segmented-control label {
+    flex: 1;
+    text-align: center;
+    padding: 7px 10px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    color: #94a3b8;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    margin: 0;
+    user-select: none;
+  }
+  .tp-segmented-control input[type="radio"] {
+    display: none;
+  }
+  .tp-segmented-control label:hover {
+    color: #f1f5f9;
+  }
+  .tp-segmented-control input[type="radio"]:checked + label {
+    background: #10b981;
+    color: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  }
+  .tp-segmented-control-blue input[type="radio"]:checked + label {
+    background: #3b82f6 !important;
+  }
+
+  .tp-range-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .tp-range-container input[type="range"] {
+    flex: 1;
+    accent-color: #10b981;
+  }
+  .tp-range-container.tp-blue input[type="range"] {
+    accent-color: #3b82f6;
+  }
+  .tp-range-container input[type="number"] {
+    width: 60px;
+    padding: 4px 8px;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    color: #fff;
+    font-size: 12px;
+    text-align: center;
+  }
+
+  .tp-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 70px;
+    padding: 8px 10px;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: #f8fafc;
+    font-family: inherit;
+    font-size: 12px;
+    resize: vertical;
+  }
+
+  .tp-cat-pills-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-height: 140px;
+    overflow-y: auto;
+    padding: 4px;
+    background: rgba(15, 23, 42, 0.4);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  .tp-group-wrapper {
+    display: inline-flex;
+    align-items: center;
+    position: relative;
+  }
+  .tp-group-pill {
+    display: inline-flex;
+    align-items: center;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    color: #cbd5e1;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s ease;
+  }
+  .tp-group-pill.tp-excluded-all {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+    border-color: rgba(239, 68, 68, 0.3);
+    text-decoration: line-through;
+  }
+  .tp-group-pill.tp-excluded-individual,
+  .tp-group-pill.tp-partial {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fcd34d;
+    border-color: rgba(245, 158, 11, 0.3);
+  }
+  .tp-group-chevron {
+    margin-left: 4px;
+    font-size: 9px;
+    opacity: 0.7;
+    padding: 2px;
+  }
+
+  /* Switch Toggle */
+  .tp-switch-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .tp-switch-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .tp-switch-desc {
+    font-size: 11px;
+    color: #64748b;
+  }
+  .tp-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+  }
+  .tp-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+  .tp-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(15, 23, 42, 0.6);
+    transition: .4s;
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .tp-slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 3px;
+    bottom: 3px;
+    background-color: #94a3b8;
+    transition: .4s;
+    border-radius: 50%;
+  }
+  .tp-switch input:checked + .tp-slider {
+    background-color: #10b981;
+    border-color: rgba(16, 185, 129, 0.2);
+  }
+  .tp-switch.tp-blue input:checked + .tp-slider {
+    background-color: #3b82f6;
+  }
+  .tp-switch input:checked + .tp-slider:before {
+    transform: translateX(20px);
+    background-color: #fff;
+  }
+
+  .tp-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .tp-btn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+  }
+  .tp-btn-secondary {
+    background: rgba(255, 255, 255, 0.08);
+    color: #94a3b8;
+  }
+  .tp-btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+  }
+  .tp-btn-primary {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  }
+  .tp-btn-primary:hover {
+    box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+    transform: translateY(-1px);
+  }
+
+  #tp-toast-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 100000;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 8px;
+    pointer-events: none;
+  }
+  .tp-toast {
+    background: rgba(15, 23, 42, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #f8fafc;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    pointer-events: auto;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+  .tp-toast.fade-out {
+    opacity: 0;
+    transform: translateY(6px);
   }
 `;
 
@@ -2280,12 +2140,16 @@ const STYLES = `
     return extracted;
   }
 
-  // Helper: Extract Offer Count
+  // Helper: Extract Offer Count with dataset caching
   function extractOfferCount(card) {
+    if (card.dataset && card.dataset.tpOfferCount) {
+      return parseInt(card.dataset.tpOfferCount, 10);
+    }
     const text = card.textContent || '';
     const match = text.match(/(\d+)\s*(?:Angebote|Angebot)/i);
-    if (match) return parseInt(match[1], 10);
-    return card.querySelectorAll('.Plugin_DealerRelProdPriceInfo').length;
+    const count = match ? parseInt(match[1], 10) : card.querySelectorAll('.Plugin_DealerRelProdPriceInfo').length;
+    if (card.dataset) card.dataset.tpOfferCount = String(count);
+    return count;
   }
 
   // Helper: Check Negative Term Match (Checks visible innerText with word-boundary matching for short terms)
@@ -2683,9 +2547,12 @@ const STYLES = `
     }
   }
 
-  function processListings() {
+  let listingRunId = 0;
+
+  async function processListings() {
     if (isModifyingDOM) return;
     isModifyingDOM = true;
+    const runId = ++listingRunId;
     try {
       log('Processing product listings...');
 
@@ -2713,79 +2580,90 @@ const STYLES = `
       const counts = { neg: 0, cat: 0, min: 0 };
       let pageHasOffers = false;
 
-      cards.forEach(card => {
-        // 1. Category extraction (DOM text + URL path slug parser + active breadcrumbs)
-        const catName = extractCardCategory(card);
-        if (catName) pageCategories.add(catName);
+      const batchSize = 20;
+      for (let i = 0; i < cards.length; i += batchSize) {
+        if (runId !== listingRunId) return;
 
-        // 2. Negative Text Filter (Strictly checks full card text content)
-        const isNeg = matchesNegativeTerms(card, termsList);
-        card.classList.toggle('tp-negative-filtered', isNeg);
-        if (isNeg) counts.neg++;
+        const chunk = cards.slice(i, i + batchSize);
+        for (const card of chunk) {
+          // 1. Category extraction (cached on dataset.tpCategory)
+          const catName = extractCardCategory(card);
+          if (catName) pageCategories.add(catName);
 
-        // 3. Category Filter
-        const rootGroup = resolveCategoryGroup(catName, card);
-        const isCatExcluded = catName && isPathExcluded(catName, rootGroup, excludedCats);
-        card.classList.toggle('tp-category-filtered', isCatExcluded);
-        if (isCatExcluded) counts.cat++;
+          // 2. Negative Text Filter (Strictly checks full card text content)
+          const isNeg = matchesNegativeTerms(card, termsList);
+          card.classList.toggle('tp-negative-filtered', isNeg);
+          if (isNeg) counts.neg++;
 
-        // 4. Offer Count Filter
-        const offerCount = extractOfferCount(card);
-        if (offerCount > 0) pageHasOffers = true;
+          // 3. Category Filter
+          const rootGroup = resolveCategoryGroup(catName, card);
+          const isCatExcluded = catName && isPathExcluded(catName, rootGroup, excludedCats);
+          card.classList.toggle('tp-category-filtered', isCatExcluded);
+          if (isCatExcluded) counts.cat++;
 
-        const isLowOffers = pageHasOffers && CONFIG.MIN_OFFERS > 0 && offerCount < CONFIG.MIN_OFFERS;
-        card.classList.toggle('tp-min-offers-filtered', isLowOffers);
-        if (isLowOffers) counts.min++;
+          // 4. Offer Count Filter (cached on dataset.tpOfferCount)
+          const offerCount = extractOfferCount(card);
+          if (offerCount > 0) pageHasOffers = true;
 
-        // 5. Best Price Highlighting / Dimming
-        if (activeStores.length === 0) {
-          card.classList.remove('tp-is-cheapest', 'tp-not-cheapest', 'tp-no-store-offer');
-          const badge = card.querySelector('.tp-best-price-badge');
-          if (badge) badge.remove();
-        } else {
-          const dealerRows = card.querySelectorAll('.Plugin_DealerRelProdPriceInfo');
-          let matchedRow = null;
+          const isLowOffers = pageHasOffers && CONFIG.MIN_OFFERS > 0 && offerCount < CONFIG.MIN_OFFERS;
+          card.classList.toggle('tp-min-offers-filtered', isLowOffers);
+          if (isLowOffers) counts.min++;
 
-          for (const row of dealerRows) {
-            const titleEl = row.querySelector('.title');
-            if (titleEl) {
-              const rowStoreNormalized = normalizeName(titleEl.textContent);
-              if (activeStores.some(store => rowStoreNormalized.includes(store) || store.includes(rowStoreNormalized))) {
-                matchedRow = row;
-                break;
+          // 5. Best Price Highlighting / Dimming
+          if (activeStores.length === 0) {
+            card.classList.remove('tp-is-cheapest', 'tp-not-cheapest', 'tp-no-store-offer');
+            const badge = card.querySelector('.tp-best-price-badge');
+            if (badge) badge.remove();
+          } else {
+            const dealerRows = card.querySelectorAll('.Plugin_DealerRelProdPriceInfo');
+            let matchedRow = null;
+
+            for (const row of dealerRows) {
+              const titleEl = row.querySelector('.title');
+              if (titleEl) {
+                const rowStoreNormalized = normalizeName(titleEl.textContent);
+                if (activeStores.some(store => rowStoreNormalized.includes(store) || store.includes(rowStoreNormalized))) {
+                  matchedRow = row;
+                  break;
+                }
               }
             }
-          }
 
-          if (matchedRow) {
-            const storePriceEl = CONFIG.USE_SHIPPING_PRICE
-              ? (matchedRow.querySelector('.shippingPrice .Plugin_Price') || matchedRow.querySelector('.productPrice .Plugin_Price'))
-              : (matchedRow.querySelector('.productPrice .Plugin_Price') || matchedRow.querySelector('.shippingPrice .Plugin_Price'));
-            const storePrice = storePriceEl ? parsePrice(storePriceEl.textContent) : 0;
+            if (matchedRow) {
+              const storePriceEl = CONFIG.USE_SHIPPING_PRICE
+                ? (matchedRow.querySelector('.shippingPrice .Plugin_Price') || matchedRow.querySelector('.productPrice .Plugin_Price'))
+                : (matchedRow.querySelector('.productPrice .Plugin_Price') || matchedRow.querySelector('.shippingPrice .Plugin_Price'));
+              const storePrice = storePriceEl ? parsePrice(storePriceEl.textContent) : 0;
 
-            const bestPriceEl = CONFIG.USE_SHIPPING_PRICE
-              ? (card.querySelector('.price_information_product .shippingPrice .Plugin_Price') || card.querySelector('.price_information_product .productPrice .Plugin_Price'))
-              : (card.querySelector('.price_information_product .productPrice .Plugin_Price') || card.querySelector('.price_information_product .shippingPrice .Plugin_Price'));
-            const bestPrice = bestPriceEl ? parsePrice(bestPriceEl.textContent) : 0;
+              const bestPriceEl = CONFIG.USE_SHIPPING_PRICE
+                ? (card.querySelector('.price_information_product .shippingPrice .Plugin_Price') || card.querySelector('.price_information_product .productPrice .Plugin_Price'))
+                : (card.querySelector('.price_information_product .productPrice .Plugin_Price') || card.querySelector('.price_information_product .shippingPrice .Plugin_Price'));
+              const bestPrice = bestPriceEl ? parsePrice(bestPriceEl.textContent) : 0;
 
-            if (storePrice > 0 && bestPrice > 0) {
-              const threshold = bestPrice * (1 + CONFIG.MARGIN_PERCENT / 100);
-              const isCheapest = storePrice <= threshold;
+              if (storePrice > 0 && bestPrice > 0) {
+                const threshold = bestPrice * (1 + CONFIG.MARGIN_PERCENT / 100);
+                const isCheapest = storePrice <= threshold;
 
-              if (isCheapest) {
-                card.classList.add('tp-is-cheapest');
-                card.classList.remove('tp-not-cheapest', 'tp-no-store-offer');
+                if (isCheapest) {
+                  card.classList.add('tp-is-cheapest');
+                  card.classList.remove('tp-not-cheapest', 'tp-no-store-offer');
 
-                let badge = card.querySelector('.tp-best-price-badge');
-                if (!badge) {
-                  badge = document.createElement('div');
-                  badge.className = 'tp-best-price-badge';
-                  badge.textContent = 'Best Price';
-                  card.appendChild(badge);
+                  let badge = card.querySelector('.tp-best-price-badge');
+                  if (!badge) {
+                    badge = document.createElement('div');
+                    badge.className = 'tp-best-price-badge';
+                    badge.textContent = 'Best Price';
+                    card.appendChild(badge);
+                  }
+                } else {
+                  card.classList.add('tp-not-cheapest');
+                  card.classList.remove('tp-is-cheapest', 'tp-no-store-offer');
+                  const badge = card.querySelector('.tp-best-price-badge');
+                  if (badge) badge.remove();
                 }
               } else {
-                card.classList.add('tp-not-cheapest');
-                card.classList.remove('tp-is-cheapest', 'tp-no-store-offer');
+                card.classList.add('tp-no-store-offer');
+                card.classList.remove('tp-is-cheapest', 'tp-not-cheapest');
                 const badge = card.querySelector('.tp-best-price-badge');
                 if (badge) badge.remove();
               }
@@ -2795,14 +2673,16 @@ const STYLES = `
               const badge = card.querySelector('.tp-best-price-badge');
               if (badge) badge.remove();
             }
-          } else {
-            card.classList.add('tp-no-store-offer');
-            card.classList.remove('tp-is-cheapest', 'tp-not-cheapest');
-            const badge = card.querySelector('.tp-best-price-badge');
-            if (badge) badge.remove();
           }
         }
-      });
+
+        if (i + batchSize < cards.length) {
+          await new Promise(resolve => requestAnimationFrame(resolve));
+          if (globalThis.scheduler?.yield) await globalThis.scheduler.yield();
+        }
+      }
+
+      if (runId !== listingRunId) return;
 
       // 6. Re-sorting by Offer Count
       if (pageHasOffers && CONFIG.SORT_BY_OFFERS !== 'none' && cards.length > 1) {
@@ -2900,71 +2780,104 @@ const STYLES = `
     }
   }
 
-  // ─── MODULE 3: UNIFIED GLASSMORPHIC SETTINGS UI ─────────────────────────────
+  // ─── MODULE 3: UNIFIED GLASSMORPHIC SETTINGS UI IN SHADOW DOM ──────────────
+  let uiShadowRoot = null;
+
+  function showToast(message, durationMs = 2500) {
+    if (!uiShadowRoot) return;
+    const container = uiShadowRoot.getElementById('tp-toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = 'tp-toast';
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.classList.add('fade-out');
+      toast.addEventListener('transitionend', () => toast.remove());
+      setTimeout(() => toast.remove(), 400);
+    }, durationMs);
+  }
+
   function ensureSkeleton() {
-    let fabButton = document.getElementById('tp-settings-fab');
-    if (!fabButton) {
-      const fabContainer = document.createElement('div');
-      fabContainer.innerHTML = `
-        <button id="tp-settings-fab" title="Toppreise Suite Einstellungen öffnen">
+    let host = document.getElementById('tp-root');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'tp-root';
+      document.body.appendChild(host);
+    }
+
+    const shadow = host.shadowRoot || host.attachShadow({ mode: 'open' });
+    uiShadowRoot = shadow;
+
+    if (!shadow.getElementById('tp-settings-fab')) {
+      shadow.innerHTML = `
+        <style>${SHADOW_MODAL_STYLES}</style>
+        <button id="tp-settings-fab" type="button" title="Toppreise Suite Einstellungen öffnen" aria-label="Toppreise Suite Einstellungen">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
         </button>
-      `;
-      fabButton = fabContainer.firstElementChild;
-      document.body.appendChild(fabButton);
-    }
-
-    let backdrop = document.getElementById('tp-settings-modal-backdrop');
-    if (!backdrop) {
-      const modalContainer = document.createElement('div');
-      modalContainer.innerHTML = `
-        <div id="tp-settings-modal-backdrop">
-          <div id="tp-settings-modal">
-            <h3>Toppreise Suite Einstellungen</h3>
-            <div id="tp-settings-sections" style="display: flex; flex-direction: column; gap: 8px; max-height: 72vh; overflow-y: auto; padding-right: 4px;">
-              <!-- Dynamic settings sections -->
-            </div>
-            <div class="tp-modal-actions">
-              <button type="button" class="tp-btn tp-btn-secondary" id="tp-btn-close" title="Einstellungen abbrechen ohne Speichern">Abbrechen</button>
-              <button type="button" class="tp-btn tp-btn-primary" id="tp-btn-save" title="Einstellungen dauerhaft speichern">Speichern</button>
-            </div>
+        <dialog id="tp-settings-dialog" popover="auto" role="dialog" aria-modal="true" aria-labelledby="tp-settings-title">
+          <h3 id="tp-settings-title">Toppreise Suite Einstellungen</h3>
+          <div id="tp-settings-sections">
+            <!-- Dynamic settings sections -->
           </div>
-        </div>
+          <div class="tp-modal-actions">
+            <button type="button" class="tp-btn tp-btn-secondary" id="tp-btn-close" title="Einstellungen abbrechen ohne Speichern">Abbrechen</button>
+            <button type="button" class="tp-btn tp-btn-primary" id="tp-btn-save" title="Einstellungen dauerhaft speichern">Speichern</button>
+          </div>
+        </dialog>
+        <div id="tp-toast-container"></div>
       `;
-      backdrop = modalContainer.firstElementChild;
-      document.body.appendChild(backdrop);
 
-      const btnClose = document.getElementById('tp-btn-close');
-      const closeModal = () => backdrop.classList.remove('open');
-      btnClose.addEventListener('click', closeModal);
-      backdrop.addEventListener('click', (e) => {
-        if (e.target === backdrop) closeModal();
-      });
+      const fabButton = shadow.getElementById('tp-settings-fab');
+      const dialog = shadow.getElementById('tp-settings-dialog');
+      const btnClose = shadow.getElementById('tp-btn-close');
+      const btnSave = shadow.getElementById('tp-btn-save');
 
-      fabButton.addEventListener('click', () => {
+      const openModal = () => {
         document.dispatchEvent(new CustomEvent('tp-settings-open'));
-        backdrop.classList.add('open');
+        if (typeof dialog.showPopover === 'function') {
+          dialog.showPopover();
+        } else if (typeof dialog.showModal === 'function') {
+          dialog.showModal();
+        } else {
+          dialog.setAttribute('open', '');
+        }
+      };
+
+      const closeModal = () => {
+        if (typeof dialog.hidePopover === 'function') {
+          dialog.hidePopover();
+        } else if (typeof dialog.close === 'function') {
+          dialog.close();
+        } else {
+          dialog.removeAttribute('open');
+        }
+      };
+
+      fabButton.addEventListener('click', openModal);
+      btnClose.addEventListener('click', closeModal);
+      shadow.addEventListener('keydown', e => {
+        if (e.key === 'Escape') closeModal();
       });
 
-      const btnSave = document.getElementById('tp-btn-save');
       btnSave.addEventListener('click', () => {
         document.dispatchEvent(new CustomEvent('tp-settings-save'));
         closeModal();
       });
     }
 
-    return { fabButton, backdrop };
+    return { fabButton: shadow.getElementById('tp-settings-fab'), dialog: shadow.getElementById('tp-settings-dialog'), shadow };
   }
 
   function setupUI() {
-    ensureSkeleton();
+    const { shadow } = ensureSkeleton();
 
-    let section = document.getElementById('tp-section-unified-suite');
+    let section = shadow.getElementById('tp-section-unified-suite');
     if (!section) {
-      const sectionsHolder = document.getElementById('tp-settings-sections');
+      const sectionsHolder = shadow.getElementById('tp-settings-sections');
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = `
         <div id="tp-section-unified-suite">
@@ -3118,37 +3031,37 @@ const STYLES = `
       sectionsHolder.appendChild(section);
     }
 
-    // Form Field References
-    const modeHighlight = document.getElementById('tp-mode-highlight-only');
-    const modeDim = document.getElementById('tp-mode-dim');
-    const modeHide = document.getElementById('tp-mode-hide');
-    const marginRange = document.getElementById('tp-margin-range');
-    const marginVal = document.getElementById('tp-margin-val');
-    const opacityRange = document.getElementById('tp-opacity-range');
-    const opacityVal = document.getElementById('tp-opacity-val');
-    const shippingToggle = document.getElementById('tp-shipping-toggle');
+    // Form Field References from Shadow DOM
+    const modeHighlight = shadow.getElementById('tp-mode-highlight-only');
+    const modeDim = shadow.getElementById('tp-mode-dim');
+    const modeHide = shadow.getElementById('tp-mode-hide');
+    const marginRange = shadow.getElementById('tp-margin-range');
+    const marginVal = shadow.getElementById('tp-margin-val');
+    const opacityRange = shadow.getElementById('tp-opacity-range');
+    const opacityVal = shadow.getElementById('tp-opacity-val');
+    const shippingToggle = shadow.getElementById('tp-shipping-toggle');
 
-    const negTermsInput = document.getElementById('tp-negative-terms-input');
-    const catPillsContainer = document.getElementById('tp-category-pills');
+    const negTermsInput = shadow.getElementById('tp-negative-terms-input');
+    const catPillsContainer = shadow.getElementById('tp-category-pills');
 
-    const minOffersRange = document.getElementById('tp-min-offers-range');
-    const minOffersVal = document.getElementById('tp-min-offers-val');
+    const minOffersRange = shadow.getElementById('tp-min-offers-range');
+    const minOffersVal = shadow.getElementById('tp-min-offers-val');
 
-    const sortNone = document.getElementById('tp-sort-none');
-    const sortDesc = document.getElementById('tp-sort-desc');
-    const sortAsc = document.getElementById('tp-sort-asc');
+    const sortNone = shadow.getElementById('tp-sort-none');
+    const sortDesc = shadow.getElementById('tp-sort-desc');
+    const sortAsc = shadow.getElementById('tp-sort-asc');
 
-    const counterToggle = document.getElementById('tp-counter-toggle');
+    const counterToggle = shadow.getElementById('tp-counter-toggle');
 
-    const alarmEnabledToggle = document.getElementById('tp-alarm-enabled-toggle');
-    const alarmTargetRange = document.getElementById('tp-alarm-target-range');
-    const alarmTargetVal = document.getElementById('tp-alarm-target-val');
-    const alarmAutoSubmitToggle = document.getElementById('tp-alarm-autosubmit-toggle');
+    const alarmEnabledToggle = shadow.getElementById('tp-alarm-enabled-toggle');
+    const alarmTargetRange = shadow.getElementById('tp-alarm-target-range');
+    const alarmTargetVal = shadow.getElementById('tp-alarm-target-val');
+    const alarmAutoSubmitToggle = shadow.getElementById('tp-alarm-autosubmit-toggle');
 
-    const dur90 = document.getElementById('tp-dur-90');
-    const dur180 = document.getElementById('tp-dur-180');
-    const dur365 = document.getElementById('tp-dur-365');
-    const dur730 = document.getElementById('tp-dur-730');
+    const dur90 = shadow.getElementById('tp-dur-90');
+    const dur180 = shadow.getElementById('tp-dur-180');
+    const dur365 = shadow.getElementById('tp-dur-365');
+    const dur730 = shadow.getElementById('tp-dur-730');
 
     let currentExcludedCats = [...(CONFIG.EXCLUDED_CATEGORIES || [])];
 
@@ -3312,7 +3225,7 @@ const STYLES = `
     }
 
     function updateOpacityState(selectedMode) {
-      const opacityGroup = document.getElementById('tp-dim-opacity-group');
+      const opacityGroup = shadow.getElementById('tp-dim-opacity-group');
       if (selectedMode === 'dim') {
         opacityGroup.style.opacity = '1';
         opacityRange.disabled = false;
@@ -3339,7 +3252,7 @@ const STYLES = `
 
     [modeHighlight, modeDim, modeHide].forEach(radio => {
       radio.addEventListener('change', () => {
-        const selectedMode = document.querySelector('input[name="tp-mode"]:checked').value;
+        const selectedMode = shadow.querySelector('input[name="tp-mode"]:checked').value;
         updateOpacityState(selectedMode);
       });
     });
@@ -3349,7 +3262,7 @@ const STYLES = `
     });
 
     document.addEventListener('tp-settings-save', () => {
-      const checkedModeEl = document.querySelector('input[name="tp-mode"]:checked');
+      const checkedModeEl = shadow.querySelector('input[name="tp-mode"]:checked');
       if (!checkedModeEl) return;
 
       saveConfigKey('MODE', checkedModeEl.value);
@@ -3361,7 +3274,7 @@ const STYLES = `
       saveConfigKey('EXCLUDED_CATEGORIES', currentExcludedCats);
       saveConfigKey('MIN_OFFERS', Math.max(0, parseInt(minOffersVal.value) || 0));
 
-      const checkedSort = document.querySelector('input[name="tp-sort-offers"]:checked');
+      const checkedSort = shadow.querySelector('input[name="tp-sort-offers"]:checked');
       if (checkedSort) saveConfigKey('SORT_BY_OFFERS', checkedSort.value);
 
       saveConfigKey('ENABLE_FILTER_COUNTER', counterToggle.checked);
@@ -3369,13 +3282,14 @@ const STYLES = `
       saveConfigKey('ALARM_ENABLED', alarmEnabledToggle.checked);
       saveConfigKey('ALARM_TARGET_PERCENT', Math.max(0.05, Math.min(0.99, (parseInt(alarmTargetVal.value) || 60) / 100)));
 
-      const checkedDur = document.querySelector('input[name="tp-alarm-duration"]:checked');
+      const checkedDur = shadow.querySelector('input[name="tp-alarm-duration"]:checked');
       if (checkedDur) saveConfigKey('ALARM_DURATION_DAYS', checkedDur.value);
 
       saveConfigKey('ALARM_AUTO_SUBMIT', alarmAutoSubmitToggle.checked);
 
       updateBodyClasses();
       processListings();
+      showToast('Toppreise Suite Einstellungen gespeichert');
     });
   }
 
@@ -3383,8 +3297,16 @@ const STYLES = `
   let debounceTimer = null;
   let isModifyingDOM = false;
 
-  const observer = new MutationObserver(() => {
+  const observer = new MutationObserver((mutations) => {
     if (isModifyingDOM) return;
+    const isInternalOnly = mutations.every(m => {
+      const target = m.target;
+      if (!target) return false;
+      const targetEl = target.nodeType === 1 ? target : target.parentElement;
+      return targetEl?.id === 'tp-root' || targetEl?.closest('#tp-root');
+    });
+    if (isInternalOnly) return;
+
     try {
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
@@ -3402,6 +3324,13 @@ const STYLES = `
     attributes: false,
     characterData: false
   });
+
+  if (self.navigation && typeof self.navigation.addEventListener === 'function') {
+    self.navigation.addEventListener('navigatesuccess', () => {
+      processListings();
+      processPriceAlarmModal();
+    });
+  }
 
   // Initialize UI controls, filters, and alarm listener
   setupUI();

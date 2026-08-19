@@ -1,6 +1,6 @@
 # Hugging Face Inline Liking, Unliked Model Highlighter, Date & Negative Filter
 
-A clean, high-performance userscript for Hugging Face (`https://huggingface.co/models` and user/organization model lists like `https://huggingface.co/lightx2v/models`) that lets you like or unlike model cards inline, highlights unliked models with a glowing green border, filters models by client-side **Date Range Slider**, and excludes unwanted models via a **Negative Text / Keyword Filter**.
+A clean, high-performance userscript for Hugging Face (`https://huggingface.co/models` and user/organization model lists) that lets you like or unlike model cards inline, highlights unliked models with a glowing green border, filters models by client-side **Date Range Slider**, and excludes unwanted models via a **Negative Text / Keyword Filter**.
 
 ![Hugging Face inline liking, unliked model highlighter, and date filter](Screenshot.webp)
 
@@ -10,19 +10,19 @@ Requires Violentmonkey (or a compatible userscript manager):
 - [Firefox](https://addons.mozilla.org/en-US/firefox/addon/violentmonkey/)
 - [Chrome / Brave](https://chromewebstore.google.com/detail/violentmonkey/jinjaccalgkegednnccohejagnlnfdag)
 
-### 👉 [**CLICK HERE TO INSTALL USERSCRIPT (v1.9.0)**](https://raw.githubusercontent.com/tazztone/scripts/main/userscripts/huggingface/huggingface-heart.user.js?v=1.9.0)
+### 👉 [**CLICK HERE TO INSTALL USERSCRIPT (v2.0.0)**](https://raw.githubusercontent.com/tazztone/scripts/main/userscripts/huggingface/huggingface-heart.user.js?v=2.0.0)
 
 ---
 
 ## ⚡ Features
 
 1. **💚 Unliked Model Highlighter**: Adds a distinct emerald green border (`#10b981`) with soft glow around unliked models in search and listing cards.
-2. **❤️ Inline Model Liking**: Click or keyboard-activate the heart/count area on a model card to like or unlike it without opening the model page. The native Hugging Face heart appearance is preserved and failed requests roll back immediately.
+2. **❤️ Inline Model Liking**: Click or keyboard-activate the heart/count area on a model card to like or unlike it without opening the model page. The native Hugging Face heart appearance is preserved and failed requests roll back immediately with non-blocking toast alerts.
 3. **🔎 Dynamic Liked State Detection**: Detects native outline and filled heart states and updates the green card border as cards load or change.
 4. **🚫 Negative Text / Keyword Filter**: Hide unwanted models by typing keywords or regex patterns (e.g. `gguf, fp8, /test.*/i`). Includes live 120ms debounced filtering, a quick clear (`✕`) button, and an independent toggle switch.
 5. **📅 Date Range Slider Filter**: Restrict models by update age using interactive sliders, numeric min/max day inputs, and quick presets (`24h`, `3d`, `7d`, `14d`, `30d`, `60d`, `90d`, `180d`, `1y`, `All`).
-6. **📊 Unified Sidebar Widget**: Injects a native-styled filter widget into the left sidebar showing exact date range labels, live model counters (`Showing X / Y models` with breakdown), interactive control dimming, and expandable **Highlighter Options** (color picker, glow toggle, highlight switch).
-7. **⚡ Performance Optimized**: MutationObserver feedback shielding and debounced storage IO for zero lag during typing, slider dragging, and infinite scroll.
+6. **🛡️ Encapsulated Shadow DOM Sidebar Widget**: Injects an isolated Shadow DOM filter widget (`#hf-date-filter-root`) into the sidebar preventing host Tailwind CSS conflicts, featuring live model counters (`Showing X / Y models`), interactive control dimming, and expandable **Highlighter Options**.
+7. **⚡ INP & Yield Protection**: Asynchronous chunked DOM processing with `requestAnimationFrame`, `scheduler.yield()`, date caching via `dataset`, and Run-ID cancellation guards for zero UI jank during infinite scrolling.
 
 ---
 
@@ -55,19 +55,11 @@ You can customize negative keywords, date filtering, and highlighter options dir
 > [!NOTE]
 > All settings and configuration options are saved **permanently** via `GM_setValue` / `GM_getValue` in userscript storage and persist indefinitely across browser sessions and site reloads.
 
-## 🧪 Development Checks
+---
 
-From `userscripts/huggingface/`:
+## 🧪 Development Checks
 
 ```bash
 node --check huggingface-heart.user.js
-node tests/test_logic.js
 pytest tests/test_userscript.py
-```
-
-Install the test dependencies and Chromium once before the browser tests:
-
-```bash
-python -m pip install -r tests/requirements.txt
-python -m playwright install chromium
 ```

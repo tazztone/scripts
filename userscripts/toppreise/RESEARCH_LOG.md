@@ -27,28 +27,22 @@ This document details the DOM selectors, event management, and filter logic for 
 
 ---
 
-## 2. Event & Auto-Close Handling
+## 2. UI Encapsulation & Shadow DOM Architecture
 
-When a price alarm bell icon is clicked:
-1. Modal mounts dynamically into `#tmpAbstractDialogContainer`.
-2. Script detects `.Plugin_NewInfoMailForm` and sets `dataset.tpAlarmProcessed = "true"`.
-3. Target price is set and dispatches `input` and `change` events.
-4. Terms checkbox is set `.checked = true`.
-5. Submit button `.click()` fires AJAX request.
-6. A 200ms polling loop checks `!document.contains(modalContainer)`. Once detached, the script invokes `closeButton.click()` to dismiss the wrapper dialog cleanly.
+- **Root Container**: `<div id="tp-root">` attached to `document.body` with an open Shadow Root.
+- **Top Layer Dialog**: `<dialog id="tp-settings-dialog" popover="auto">` renders inside the Top Layer, bypassing host site stacking contexts and `z-index` collisions.
+- **Dual-Layer Style Separation**:
+  - Host document styles (`.Plugin_Product.mixedBrowsingList.tp-is-cheapest`, `.tp-negative-filtered`, `#tp-suite-filter-bar`, `#tp-quick-toolbar`) live in a host `<style>` tag.
+  - Settings dialog and FAB styles live strictly inside the `#tp-root` Shadow Root (`SHADOW_MODAL_STYLES`).
+- **Toasts**: Non-blocking toast notifications render inside `#tp-toast-container` within the shadow root.
 
 ---
 
-## 3. Category Link & URL Patterns (Neue Toppreise & Search)
+## 3. INP Protection & Asynchronous Chunked Batching
 
-- **Category Links in Product Cards (`a[href*="-c"]`)**:
-  - Single-level: `/produktsuche/HiFi-Audio-c653`
-  - Multi-level nested: `/produktsuche/Computer-Zubehoer/Notebooks-Tablets-eReader/Notebooks-c13`
-  - Category extraction regex: `/\/produktsuche\/(?:.*\/)?([^\/-]+(?:-[^\/-]+)*)-c\d+/i`
-- **Product Links with Category Subpath**:
-  - Pattern: `/preisvergleich/Category/Subcategory/ProductTitle-p123456`
-  - Product URL extraction regex: `/\/preisvergleich\/(.+)\/[^\/]+-p\d+/i`
-- **Breadcrumb Fallback**: `.breadcrumb a:last-of-type, [class*="breadcrumb"] a:last-of-type`
+- `processListings()` processes product cards in chunked batches of 20 with `requestAnimationFrame` + `globalThis.scheduler?.yield()`.
+- A monotonically increasing `listingRunId` sequence token cancels stale in-flight batches when users type into filter inputs or resize the window.
+- Extracted metadata is cached on `card.dataset.tpCategory` and `card.dataset.tpOfferCount` to avoid repeated parsing during DOM mutations.
 
 ---
 
@@ -86,9 +80,9 @@ When a price alarm bell icon is clicked:
    - *Gotcha*: Un-guarded DOM mutations inside a `MutationObserver` callback trigger the observer again, causing infinite re-render loops where UI elements flicker and pulse continuously.
    - *Rule*: Always guard DOM manipulations with element ID checks (`if (document.getElementById('tp-suite-filter-bar')) return;`) or `dataset.processed` flags to ensure idempotency and prevent self-observation loops.
 
-7. **GitHub Raw CDN Edge Caching on Script Updates**:
-   - *Gotcha*: `raw.githubusercontent.com` caches raw files on CDN edge servers for ~5 minutes. Installing/reinstalling via a raw GitHub URL immediately after pushing a commit causes userscript managers to pull stale cached code.
-   - *Rule*: Append a query-parameter cache-buster (e.g. `?v=VERSION` or `?t=TIMESTAMP`) or use specific commit hashes in raw GitHub links (`raw.githubusercontent.com/.../COMMIT_HASH/toppreise.user.js`) to force the CDN and browser to serve the latest script code instantly.
+7. **Hidden Element Assertion in Playwright Tests**:
+   - *Gotcha*: Testing filter-out rules using default `page.wait_for_selector(..., state='visible')` times out on elements with `display: none !important;`.
+   - *Rule*: Use `state='attached'` when testing elements that are hidden by filter classes.
 
 ---
 
@@ -113,4 +107,3 @@ Subcategories appear in two distinct patterns across the site:
 4. **Layer 4: Brand & Keyword Rules (`BRAND_RULES`)**: Domain regex matching for brands (*CaDA*, *Playmobil*, *Cobi*, *Schleich*, etc.).
 5. **Layer 5: Word-Prefix Token Fallback**: Right-to-left word trimming (`Lego Star Wars` $\rightarrow$ `Lego` $\rightarrow$ `Spielwaren`).
 6. **Layer 6: DOM Breadcrumbs**: Fallback to page `.breadcrumb` links.
-

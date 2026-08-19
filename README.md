@@ -23,8 +23,8 @@ scripts/
 │   └── put_files_into_folder_by_extension/  # Auto-organizer: sort files into folders by extension
 └── userscripts/                    # Browser userscripts (Violentmonkey / Tampermonkey)
     ├── huggingface/                # Hugging Face inline liking, unliked highlighter, date & negative filter
-    └── perplexity/                 # Perplexity model lock, approvals, and GitHub enhancements
-```
+    ├── perplexity/                 # Perplexity model lock, approvals, and GitHub enhancements
+    └── toppreise/                  # Toppreise.ch Suite: best price highlight, negative & category filters, price alarm
 
 ## Highlights
 
@@ -46,6 +46,7 @@ scripts/
 ### `userscripts/` — Browser Userscripts
 - **Hugging Face Enhancements** — inline liking/unliking, unliked model card highlighter, date range slider filter, and negative text/regex keyword filter
 - **Perplexity Enhancements** — locks the preferred model, automates agent approvals, and enables the GitHub connector; uses `MutationObserver` for React SPA compatibility
+- **Toppreise.ch Suite** — best price dealer highlight, negative keyword filter, hierarchical category exclusion with floating popovers, offer count sorting, and price alarm automation
 
 ## Usage
 
@@ -54,7 +55,7 @@ Each subdirectory contains its own `README.md` with specific requirements and us
 - Bash scripts: [`sh/README.md`](sh/README.md)
 - Python utilities: [`python/README.md`](python/README.md)
 - Windows Batch: [`bat/README.md`](bat/README.md)
-- Userscripts: [`userscripts/huggingface/README.md`](userscripts/huggingface/README.md), [`userscripts/perplexity/README.md`](userscripts/perplexity/README.md)
+- Userscripts: [`userscripts/huggingface/README.md`](userscripts/huggingface/README.md), [`userscripts/perplexity/README.md`](userscripts/perplexity/README.md), [`userscripts/toppreise/README.md`](userscripts/toppreise/README.md)
 
 ### Quick examples
 

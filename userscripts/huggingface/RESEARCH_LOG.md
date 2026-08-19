@@ -1,110 +1,35 @@
-# Hugging Face Heart SVG, Inline Liking, Date & Negative Text Filter - Research Log
+# Hugging Face Model Helper - Research Log
 
-This document details the DOM structure, selection strategies, API endpoints, inline liking behavior, client-side date range filtering, and negative text filtering mechanisms used on Hugging Face model listing pages (`https://huggingface.co/models` and user/org pages like `https://huggingface.co/*/models`).
+This document records the DOM structures, event models, network behavior, and encapsulation architecture for Hugging Face inline liking and model filtering.
 
----
+## 1. Model Card DOM Structure
 
-## 1. Trigger & Target Elements
+Hugging Face model cards render as `<article class="overview-card-wrapper">`:
+- Model ID is derived from the main card link `a[href^="/"]` (e.g. `/tiiuae/falcon-180B`).
+- Non-model URLs (`/docs`, `/spaces`, `/datasets`, `/models`, etc.) are ignored using `RESERVED_MODEL_PREFIXES`.
+- Heart icon SVGs are differentiated from task badges (e.g. image-to-text, translation) using path signatures (`HEART_PATH_SIGNATURES` vs `NON_HEART_PATH_SIGNATURES`).
+- Liked state is detected via Tailwind red text/fill classes (`text-red-500`, `fill-red-500`), path attributes, or active override states in `inlineLikeStates`.
 
-**Goal**: Identify native heart icon SVGs on Hugging Face model cards, restore inline like/unlike actions, highlight unliked cards, apply client-side date filtering, and exclude models by negative keyword/regex matching.
+## 2. Inline Liking & Optimistic UI
 
-**Target Path Signatures**:
-- **Unliked Model List Card Heart (Outline `♡`)**: `d="M22.45,6a5.47,5.47,0,0,1,3.91,1.64...m0-2..."` (`d.includes('22.45')` or `d.includes('m0-2')`).
-- **Liked Model List Card Heart (Solid `♥`)**: `d="M22.5,4c-2,0-3.9,0.8-5.3,2.2L16,7.4..."` (`d.includes('M22.5,4')` / `d.includes('M22.5 4')`) or styled with `text-red-500` / `fill-red-500`.
-- **Detail Page Heart**: `d="M22.45,6a5.47,5.47,0,0,1,3.91,1.64..."` (`path[d^="M22.45"]`)
+- Inline liking attaches event listeners (`click`, `keydown` Enter/Space) to the heart container element with `dataset.hfInlineBound` for idempotency.
+- State updates are applied optimistically, incrementing/decrementing the count and updating card border styling immediately.
+- If the network request fails (e.g. HTTP 401/403 unauthorized or network disconnect), the UI restores the captured snapshot (`restoreInlineVisual`) and displays a non-blocking toast notification inside the shadow container.
 
-> [!NOTE]
-> Hugging Face uses `<svg fill="currentColor">` for both outline and solid heart icons on model list cards. Therefore, checking `fill !== 'none'` alone is insufficient; path `d` signatures (`M22.45` vs `M22.5,4`) and red/pink CSS class inspection (`text-red-500`) are required to accurately distinguish unliked vs liked state.
+## 3. UI Encapsulation (Shadow DOM & Toasts)
 
----
+- The filter controls and settings panel are mounted inside `<div id="hf-date-filter-root">` with an open Shadow Root (`shadowRoot`).
+- Scoped Shadow DOM CSS shields the widget controls, presets, sliders, and inputs from Hugging Face's Tailwind resets.
+- Card highlight styles (`.hf-is-unliked`, `.hf-filtered-out`, `.hf-inline-like-btn`) remain in the host document `<style>` tag.
+- Non-blocking toasts are rendered inside `#hf-toast-container` in the shadow root.
 
-## 2. Element Selectors & DOM Map
+## 4. INP Protection & Asynchronous Batching
 
-### Listing/Search Cards (Models, Datasets, Papers)
-- **Card Container**: `article.overview-card-wrapper`
-- **Model ID Anchor**: `article.overview-card-wrapper > a` (href format: `/${username}/${modelName}`)
-- **Heart Container**: `div.mr-1.flex.items-center` inside card footer
-- **SVG Selector**: `article.overview-card-wrapper a div.mr-1.flex.items-center > svg`
-- **Date Tag**: `article.overview-card-wrapper time` (`datetime` attribute ISO timestamp e.g. `2026-07-23T09:16:19`)
-- **Card Title / Header**: `article.overview-card-wrapper h4, .title, header span`
+- `processModelCards()` batches card inspection in slices of 20 using `requestAnimationFrame` + `globalThis.scheduler?.yield()`.
+- Each invocation generates a unique `processRunId` sequence token to cancel stale in-flight batches when users drag the slider rapidly or mutations fire.
+- Extracted dates from `<time>` elements are cached on `card.dataset.hfDateTimestamp` to prevent repeated parsing during scroll debouncing.
 
-### Repository Detail Pages (Models, Datasets, Spaces)
-- **SVG Selector (Unliked/Outline)**: `h1 button.hover:bg-linear-to-t.relative.flex > svg.left-1.5.absolute`
-- **SVG Selector (Liked/Filled)**: `h1 button.hover:bg-linear-to-t.relative.flex > svg.absolute.text-red-500`
+## 5. SPA Navigation & Observer Loop
 
----
-
-## 3. Hugging Face REST APIs for Liking
-
-### User Likes Synchronization
-- The inline feature intentionally does not fetch the user’s complete liked-model list. Initial state comes from the card’s native heart; optimistic state is kept in memory until the page reloads.
-
-### Like Model
-- **Endpoint**: `POST /api/models/${modelId}/like`
-- **Returns**: `200 OK`
-
-### Unlike Model
-- **Endpoint**: `DELETE /api/models/${modelId}/like`
-- **Returns**: `200 OK`
-
----
-
-## 4. Unliked Models Highlight & Inline Liking Strategy
-
-1. **Card Tagging & Solid vs Outline Heart Inspection**:
-   - Locate heart SVG via container attributes/classes (`[title*="like"]`, `[class*="heart"]`), exact SVG path `d` signatures (`M22.5,4`, `22.45`, `m0-2`), or the documented card-footer container.
-   - Differentiate liked models (`.hf-is-liked`) by detecting red/pink color classes (`text-red-500`) or solid heart path signature (`M22.5,4`).
-   - Differentiate unliked models (`.hf-is-unliked`) by detecting outline heart path signature (`M22.45` / `m0-2`) or gray styling (`text-gray-400`).
-   - Do not use generic task/stat path fragments (`4.318`, `14c1.49`, `20.91`) as heart evidence.
-2. **Green Border Styling**:
-   ```css
-   article.overview-card-wrapper.hf-is-unliked {
-     border: 2px solid #10b981 !important;
-     border-radius: 12px !important;
-     box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15) !important;
-     transition: border 0.3s ease, box-shadow 0.3s ease !important;
-   }
-   ```
-3. **Inline Liking Event & Card Identification**:
-   - **Model ID Resolution**: Cards contain multiple `<a>` tags (e.g. org avatar `/google` before model link `/google/gemma-7b`). Using `querySelectorAll('a[href^="/"]')` and filtering for 2-segment non-system routes guarantees accurate `modelId` resolution across all list styles.
-   - **Click Interception**: Attach capture-phase listeners to the heart/count container. `mousedown` and `mouseup` stop propagation only; `click` prevents the parent `<a>` navigation. Enter and Space provide keyboard activation.
-   - **Session Independence**: Requests to `POST /api/models/${modelId}/like` and `DELETE /api/models/${modelId}/like` use same-origin session cookies and operate independently of username detection. 401/403 responses prompt for login and restore the prior state.
-   - **Native Appearance**: The retired yellow styling is not restored. Successful optimistic updates use Hugging Face’s native red/filled and gray/outline heart states.
-
----
-
-## 5. Date Range Slider Filtering Strategy
-
-1. **Date Parsing**: Read the ISO timestamp string from `card.querySelector('time').getAttribute('datetime')` (with fallback to `title` and relative text matching).
-2. **Age Calculation**: Compute `daysAgo = (Date.now() - timestamp) / (1000 * 60 * 60 * 24)`.
-3. **Filtering Rule**:
-   If date filter is active and `daysAgo < minDays` or `daysAgo > maxDays`, add `.hf-date-filtered-out` and `.hf-filtered-out` (`display: none !important;`) to the card wrapper.
-4. **Sidebar Injection Seam**:
-   Detect left panel (`form`, `aside`, or `div.left-sidebar`) and inject `#hf-date-filter-widget` at top.
-5. **Granular Presets & Inputs**:
-   Provide presets (`24h`, `3d`, `7d`, `14d`, `30d`, `60d`, `90d`, `180d`, `1y`, `All`), range slider, and numeric day input fields.
-
----
-
-## 6. Negative Text / Keyword Filtering Strategy (v1.9.0)
-
-1. **Target Matching Scope**: Matches against normalized model ID (`owner/model-name`) and card title text (`card.querySelector('h4, .title, header span')`).
-2. **Tokenization & Delimiters**: Comma-separated or newline-separated terms (e.g. `gguf, fp8, /test.*/i`).
-3. **Pattern Matching Engine**:
-   - Case-insensitive substring matching for normal tokens.
-   - Regular expression matching for `/pattern/flags` tokens.
-   - Safe parsing: Invalid regex strings automatically fall back to literal substring matching without breaking DOM processing.
-4. **Interactive Dimming & Typing Optimization**:
-   - Fast 120ms debounce on text input for instant live card filtering.
-   - 350ms debounced persistence to storage (`GM_setValue` / `localStorage`) preventing storage I/O thrashing.
-   - Section dimming (`opacity: 0.4; pointer-events: none;`) when individual filter toggles are disabled.
-   - Integrated quick clear (`✕`) button.
-5. **Empty State & Combined Stats**:
-   - `updateEmptyNotice()` delivers smart contextual explanations distinguishing date filtering, keyword filtering, or combined exclusions.
-   - `updateWidgetStats()` reports overall visible/total counts alongside detailed breakdown notes.
-
----
-
-## 7. Lifecycle & SPA Observation
-
-Hugging Face uses Svelte / client-side routing (SPA). A `MutationObserver` monitors DOM mutations on `document.body` with 200ms debouncing to automatically tag, date-filter, and text-filter new model cards loaded via lazy loading or infinite scrolling. All internal widget mutations are excluded from triggering feedback loops.
+- `MutationObserver` watches `childList` and `subtree` on `document.body`, filtering out internal mutations on `#hf-date-filter-root` or `#hf-toast-root`.
+- The script listens to `self.navigation.addEventListener('navigatesuccess')` for client-side route changes.

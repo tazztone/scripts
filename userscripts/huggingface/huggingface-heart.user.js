@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Hugging Face Inline Liking, Unliked Model Highlighter, Date & Negative Filter
 // @namespace    https://github.com/tazztone/scripts
-// @version      1.9.0
+// @version      2.0.1
 // @description  Like or unlike model cards inline, highlight unliked models, and filter models by date range slider and negative text keywords.
 // @author       tazztone
 // @match        https://huggingface.co/*
@@ -51,8 +51,8 @@ const HEART_PATH_SIGNATURES = [
 
 const NON_HEART_PATH_SIGNATURES = ['4.318', '14c1.49', '20.91'];
 
-const WIDGET_STYLES = `
-  /* Card highlighting */
+// Minimal host stylesheet for card modifications and empty state banner
+const CARD_STYLES = `
   article.overview-card-wrapper.hf-is-unliked {
     border: 2px solid VAR_COLOR !important;
     border-radius: 12px !important;
@@ -67,8 +67,29 @@ const WIDGET_STYLES = `
   article.overview-card-wrapper.hf-text-filtered-out {
     display: none !important;
   }
+  .hf-inline-like-btn {
+    cursor: pointer !important;
+  }
+  #hf-df-empty-notice {
+    margin: 16px 0;
+    padding: 14px 16px;
+    border: 1px dashed rgba(245, 158, 11, 0.4);
+    border-radius: 12px;
+    background: rgba(245, 158, 11, 0.08);
+    color: #fbbf24;
+    font-size: 13px;
+    text-align: center;
+    line-height: 1.4;
+  }
+`;
 
-  /* Sidebar Filter Widget Styles */
+// Scoped Shadow DOM styles for the filter sidebar widget and toasts
+const SHADOW_WIDGET_STYLES = `
+  :host {
+    all: initial;
+    display: block;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
   #hf-date-filter-widget {
     box-sizing: border-box;
     width: 100%;
@@ -78,8 +99,8 @@ const WIDGET_STYLES = `
     border-radius: 12px;
     background: rgba(15, 23, 42, 0.65);
     backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     color: #f1f5f9;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
   }
   #hf-date-filter-widget .hf-df-header {
@@ -101,7 +122,6 @@ const WIDGET_STYLES = `
     gap: 6px;
   }
 
-  /* Filter Sections */
   .hf-filter-section {
     margin-bottom: 12px;
     padding-bottom: 12px;
@@ -131,7 +151,6 @@ const WIDGET_STYLES = `
     pointer-events: none;
   }
 
-  /* Exclude Text Input */
   .hf-exclude-input-wrapper {
     position: relative;
     display: flex;
@@ -185,7 +204,6 @@ const WIDGET_STYLES = `
     justify-content: space-between;
   }
 
-  /* Presets */
   #hf-date-filter-widget .hf-df-presets {
     display: flex;
     flex-wrap: wrap;
@@ -297,7 +315,6 @@ const WIDGET_STYLES = `
     min-height: 14px;
   }
 
-  /* Toggle Switches */
   .hf-switch {
     width: 36px;
     height: 20px;
@@ -336,7 +353,6 @@ const WIDGET_STYLES = `
     background: #fff;
   }
 
-  /* Settings Accordion Panel */
   .hf-df-settings-toggle {
     background: none;
     border: none;
@@ -382,21 +398,39 @@ const WIDGET_STYLES = `
     cursor: pointer;
   }
 
-  #hf-df-empty-notice {
-    margin: 16px 0;
-    padding: 14px 16px;
-    border: 1px dashed rgba(245, 158, 11, 0.4);
-    border-radius: 12px;
-    background: rgba(245, 158, 11, 0.08);
-    color: #fbbf24;
+  #hf-toast-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 100000;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 8px;
+    pointer-events: none;
+  }
+  .hf-toast {
+    background: rgba(15, 23, 42, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #f8fafc;
+    padding: 10px 16px;
+    border-radius: 8px;
     font-size: 13px;
-    text-align: center;
-    line-height: 1.4;
+    font-weight: 500;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    pointer-events: auto;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+  .hf-toast.fade-out {
+    opacity: 0;
+    transform: translateY(6px);
   }
 `;
 
 (() => {
   'use strict';
+
+  let widgetShadowRoot = null;
+  let processRunId = 0;
 
   const loadConfig = () => {
     const config = { ...DEFAULTS };
@@ -437,7 +471,7 @@ const WIDGET_STYLES = `
     const glowCss = CONFIG.BORDER_UNLIKED_GLOW
       ? `box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15) !important;`
       : '';
-    return WIDGET_STYLES
+    return CARD_STYLES
       .replace('VAR_COLOR', CONFIG.BORDER_UNLIKED_COLOR)
       .replace('VAR_GLOW', glowCss);
   };
@@ -452,107 +486,41 @@ const WIDGET_STYLES = `
     styleEl.textContent = buildStyle();
   }
 
-  // ─── NEGATIVE FILTER PARSER & MATCHER ─────────────────────────────────────────
-  function parseNegativeFilter(termsStr) {
-    if (!termsStr || typeof termsStr !== 'string') return [];
-    const rawTokens = termsStr.split(/[,\n]+/);
-    const matchers = [];
-
-    for (const raw of rawTokens) {
-      const token = raw.trim();
-      if (!token) continue;
-
-      // Detect /pattern/flags syntax
-      const regexMatch = token.match(/^\/(.+)\/([a-z]*)$/i);
-      if (regexMatch) {
-        try {
-          const pattern = regexMatch[1];
-          const flags = regexMatch[2] || 'i';
-          matchers.push({ type: 'regex', regex: new RegExp(pattern, flags), raw: token });
-          continue;
-        } catch (e) {
-          // If regex is invalid, safely fall through to literal substring match
-        }
+  function showToast(message, durationMs = 3000) {
+    let container = widgetShadowRoot?.getElementById('hf-toast-container');
+    if (!container) {
+      let toastHost = document.getElementById('hf-toast-root');
+      if (!toastHost) {
+        toastHost = document.createElement('div');
+        toastHost.id = 'hf-toast-root';
+        document.body.appendChild(toastHost);
       }
-
-      matchers.push({ type: 'string', text: token.toLowerCase(), raw: token });
-    }
-
-    return matchers;
-  }
-
-  function isCardExcludedByText(card, modelId, matchers) {
-    if (!matchers || matchers.length === 0) return false;
-
-    const idText = (modelId || '').toLowerCase();
-    const titleEl = card.querySelector('h4, .title, header span');
-    const titleText = (titleEl?.textContent || '').trim().toLowerCase();
-
-    for (const m of matchers) {
-      if (m.type === 'regex') {
-        if (m.regex.test(modelId || '') || (titleEl && m.regex.test(titleEl.textContent || ''))) {
-          return true;
-        }
-      } else if (m.type === 'string') {
-        if (idText.includes(m.text) || titleText.includes(m.text)) {
-          return true;
-        }
+      const shadow = toastHost.shadowRoot || toastHost.attachShadow({ mode: 'open' });
+      if (!shadow.getElementById('hf-toast-container')) {
+        shadow.innerHTML = `
+          <style>
+            #hf-toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 99999; display: flex; flex-direction: column-reverse; gap: 8px; pointer-events: none; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+            .hf-toast { background: rgba(15, 23, 42, 0.95); border: 1px solid rgba(255, 255, 255, 0.15); color: #f8fafc; padding: 10px 16px; border-radius: 8px; font-size: 13px; box-shadow: 0 4px 14px rgba(0,0,0,0.35); pointer-events: auto; transition: opacity 0.3s ease, transform 0.3s ease; }
+            .hf-toast.fade-out { opacity: 0; transform: translateY(6px); }
+          </style>
+          <div id="hf-toast-container"></div>
+        `;
       }
+      container = shadow.getElementById('hf-toast-container');
     }
-
-    return false;
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = 'hf-toast';
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.classList.add('fade-out');
+      toast.addEventListener('transitionend', () => toast.remove());
+      setTimeout(() => toast.remove(), 400);
+    }, durationMs);
   }
 
-  // ─── DATE HELPERS ────────────────────────────────────────────────────────────
-  function getModelDate(card) {
-    const timeEl = card.querySelector('time');
-    if (!timeEl) return null;
-
-    const dtAttr = timeEl.getAttribute('datetime') || timeEl.getAttribute('title');
-    if (dtAttr) {
-      const parsed = Date.parse(dtAttr);
-      if (!isNaN(parsed)) return parsed;
-    }
-
-    const text = timeEl.textContent.trim();
-    if (text) {
-      const parsedText = Date.parse(text);
-      if (!isNaN(parsedText)) return parsedText;
-
-      const match = text.match(/(\d+)\s+(minute|hour|day|week|month|year)s?\s+ago/i);
-      if (match) {
-        const amount = parseInt(match[1], 10);
-        const unit = match[2].toLowerCase();
-        const now = Date.now();
-        const multipliers = {
-          minute: 60 * 1000,
-          hour: 3600 * 1000,
-          day: 86400 * 1000,
-          week: 7 * 86400 * 1000,
-          month: 30 * 86400 * 1000,
-          year: 365 * 86400 * 1000
-        };
-        return now - (amount * (multipliers[unit] || 86400 * 1000));
-      }
-    }
-
-    return null;
-  }
-
-  function getDaysAgo(timestamp) {
-    if (!timestamp) return null;
-    const diffMs = Date.now() - timestamp;
-    return Math.max(0, diffMs / (1000 * 60 * 60 * 24));
-  }
-
-  function formatDateLabel(daysAgo) {
-    if (daysAgo >= 9999) return 'Beginning of time';
-    if (daysAgo === 0) return 'Today';
-    const date = new Date(Date.now() - daysAgo * 86400 * 1000);
-    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-  }
-
-  // ─── DOM CARD LIKED STATE INSPECTION & INLINE LIKING ─────────────────────────
+  // ─── MODEL IDENTIFICATION & PARSING ──────────────────────────────────────────
   function normalizeModelId(modelId) {
     return modelId ? modelId.toLowerCase() : '';
   }
@@ -577,6 +545,7 @@ const WIDGET_STYLES = `
     return null;
   }
 
+  // ─── SVG & HEART DETECTION ───────────────────────────────────────────────────
   function hasHeartPath(svg) {
     const paths = svg.querySelectorAll('path');
     let hasHeartSignature = false;
@@ -714,6 +683,149 @@ const WIDGET_STYLES = `
     return parent && parent.tagName.toLowerCase() !== 'a' ? parent : heartSvg;
   }
 
+  // ─── NEGATIVE FILTER PARSING & MATCHING ──────────────────────────────────────
+  function parseNegativeFilter(rawTerms) {
+    if (!rawTerms || typeof rawTerms !== 'string') return [];
+    const trimmed = rawTerms.trim();
+    if (!trimmed) return [];
+
+    const matchers = [];
+    const tokens = trimmed.split(/[,;\n]+/).map(t => t.trim()).filter(Boolean);
+
+    for (const token of tokens) {
+      const regexMatch = token.match(/^\/(.+)\/([gimsuy]*)$/);
+      if (regexMatch) {
+        try {
+          matchers.push({
+            type: 'regex',
+            value: new RegExp(regexMatch[1], regexMatch[2] || 'i'),
+            raw: token
+          });
+        } catch (e) {
+          matchers.push({
+            type: 'substring',
+            value: token.toLowerCase(),
+            raw: token
+          });
+        }
+      } else {
+        matchers.push({
+          type: 'substring',
+          value: token.toLowerCase(),
+          raw: token
+        });
+      }
+    }
+    return matchers;
+  }
+
+  function isCardExcludedByText(card, modelId, matchers) {
+    if (!matchers || matchers.length === 0) return false;
+    const cardText = (card.textContent || '').toLowerCase();
+    const cleanId = (modelId || '').toLowerCase();
+
+    for (const matcher of matchers) {
+      if (matcher.type === 'substring') {
+        if (cleanId.includes(matcher.value) || cardText.includes(matcher.value)) {
+          return true;
+        }
+      } else if (matcher.type === 'regex') {
+        if (matcher.value.test(modelId || '') || matcher.value.test(card.textContent || '')) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  // ─── DATE HELPERS WITH DATASET CACHING ───────────────────────────────────────
+  function getModelDate(card) {
+    if (card.dataset.hfDateTimestamp) {
+      const cached = Number(card.dataset.hfDateTimestamp);
+      if (!isNaN(cached)) return cached;
+    }
+    const timeEl = card.querySelector('time');
+    if (!timeEl) return null;
+
+    let result = null;
+    const dtAttr = timeEl.getAttribute('datetime') || timeEl.getAttribute('title');
+    if (dtAttr) {
+      const parsed = Date.parse(dtAttr);
+      if (!isNaN(parsed)) result = parsed;
+    }
+
+    if (result === null) {
+      const text = timeEl.textContent.trim();
+      if (text) {
+        const parsedText = Date.parse(text);
+        if (!isNaN(parsedText)) {
+          result = parsedText;
+        } else {
+          const match = text.match(/(\d+)\s+(minute|hour|day|week|month|year)s?\s+ago/i);
+          if (match) {
+            const amount = parseInt(match[1], 10);
+            const unit = match[2].toLowerCase();
+            const now = Date.now();
+            const multipliers = {
+              minute: 60 * 1000,
+              hour: 3600 * 1000,
+              day: 86400 * 1000,
+              week: 7 * 86400 * 1000,
+              month: 30 * 86400 * 1000,
+              year: 365 * 86400 * 1000
+            };
+            result = now - (amount * (multipliers[unit] || 86400 * 1000));
+          }
+        }
+      }
+    }
+
+    if (result !== null) {
+      card.dataset.hfDateTimestamp = String(result);
+    }
+    return result;
+  }
+
+  function getDaysAgo(timestamp) {
+    if (timestamp === null || timestamp === undefined) return null;
+    const diffMs = Date.now() - timestamp;
+    return Math.max(0, Math.floor(diffMs / (86400 * 1000)));
+  }
+
+  function formatDateLabel(days) {
+    if (days === 0) return 'Today';
+    if (days === 1) return 'Yesterday';
+    if (days >= 36500) return 'All time';
+    const date = new Date(Date.now() - days * 86400 * 1000);
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  // ─── CARD VISUAL STATE & ACCESSIBILITY ───────────────────────────────────────
+  function updateCardVisual(card, modelId) {
+    const isLiked = isModelLiked(card, modelId);
+
+    if (isLiked) {
+      card.classList.remove('hf-is-unliked');
+      if (CONFIG.BORDER_UNLIKED_ENABLED) card.classList.add('hf-is-liked');
+    } else {
+      card.classList.remove('hf-is-liked');
+      if (CONFIG.BORDER_UNLIKED_ENABLED) card.classList.add('hf-is-unliked');
+    }
+
+    if (!CONFIG.BORDER_UNLIKED_ENABLED) {
+      card.classList.remove('hf-is-unliked', 'hf-is-liked');
+    }
+
+    const heartSvg = findHeartSvg(card);
+    const container = getHeartContainer(heartSvg);
+    if (container?.dataset.hfInlineBound === modelId) {
+      updateInlineAccessibility(container, modelId, isLiked);
+    }
+    if (modelId && inlineLikeStates.has(normalizeModelId(modelId))) {
+      updateNativeHeartVisual(heartSvg, isLiked);
+    }
+  }
+
   function updateInlineAccessibility(container, modelId, isLiked) {
     if (!container) return;
 
@@ -774,30 +886,7 @@ const WIDGET_STYLES = `
     }
   }
 
-  function updateCardVisual(card, modelId) {
-    const isLiked = isModelLiked(card, modelId);
-    if (isLiked) {
-      card.classList.remove('hf-is-unliked');
-      if (CONFIG.BORDER_UNLIKED_ENABLED) card.classList.add('hf-is-liked');
-    } else {
-      card.classList.remove('hf-is-liked');
-      if (CONFIG.BORDER_UNLIKED_ENABLED) card.classList.add('hf-is-unliked');
-    }
-
-    if (!CONFIG.BORDER_UNLIKED_ENABLED) {
-      card.classList.remove('hf-is-unliked', 'hf-is-liked');
-    }
-
-    const heartSvg = findHeartSvg(card);
-    const container = getHeartContainer(heartSvg);
-    if (container?.dataset.hfInlineBound === modelId) {
-      updateInlineAccessibility(container, modelId, isLiked);
-    }
-    if (modelId && inlineLikeStates.has(normalizeModelId(modelId))) {
-      updateNativeHeartVisual(heartSvg, isLiked);
-    }
-  }
-
+  // ─── INLINE LIKE INTERACTION & EVENT BINDING ────────────────────────────────
   async function toggleInlineLike(card, modelId, container) {
     if (inlineLikePending.has(container)) return;
 
@@ -844,7 +933,7 @@ const WIDGET_STYLES = `
         updateCardVisual(card, modelId);
 
         if (requiresLogin) {
-          alert('Please log in to Hugging Face to like models directly.');
+          showToast('Please log in to Hugging Face to like models directly.');
         } else {
           console.error('[HF Inline Like] Failed to update like status:', failure);
         }
@@ -883,9 +972,11 @@ const WIDGET_STYLES = `
     }, true);
   }
 
-  function processModelCards() {
-    const cards = document.querySelectorAll('article.overview-card-wrapper');
-    let totalCards = cards.length;
+  // ─── ASYNC BATCH MODEL CARD PROCESSING (INP & RUN-ID GUARD) ──────────────────
+  async function processModelCards() {
+    const runId = ++processRunId;
+    const cards = Array.from(document.querySelectorAll('article.overview-card-wrapper'));
+    const totalCards = cards.length;
     let visibleCards = 0;
     let hiddenByDate = 0;
     let hiddenByText = 0;
@@ -897,85 +988,94 @@ const WIDGET_STYLES = `
     const isTextFilterActive = Boolean(CONFIG.FILTER_EXCLUDE_ENABLED && (CONFIG.FILTER_EXCLUDE_TERMS || '').trim());
     const matchers = isTextFilterActive ? parseNegativeFilter(CONFIG.FILTER_EXCLUDE_TERMS) : [];
 
-    cards.forEach(card => {
-      const modelId = getModelIdFromCard(card);
-      let dateExcluded = false;
-      let textExcluded = false;
+    const batchSize = 20;
+    for (let i = 0; i < cards.length; i += batchSize) {
+      if (runId !== processRunId) return;
 
-      if (isDateFilterActive) {
-        const timestamp = getModelDate(card);
-        if (timestamp !== null) {
-          const daysAgo = getDaysAgo(timestamp);
-          if (daysAgo !== null && (daysAgo < minDays || daysAgo > maxDays)) {
-            dateExcluded = true;
+      const chunk = cards.slice(i, i + batchSize);
+      for (const card of chunk) {
+        const modelId = getModelIdFromCard(card);
+        let dateExcluded = false;
+        let textExcluded = false;
+
+        if (isDateFilterActive) {
+          const timestamp = getModelDate(card);
+          if (timestamp !== null) {
+            const daysAgo = getDaysAgo(timestamp);
+            if (daysAgo !== null && (daysAgo < minDays || daysAgo > maxDays)) {
+              dateExcluded = true;
+            }
           }
         }
-      }
 
-      if (isTextFilterActive && matchers.length > 0) {
-        if (isCardExcludedByText(card, modelId, matchers)) {
-          textExcluded = true;
+        if (isTextFilterActive && matchers.length > 0) {
+          if (isCardExcludedByText(card, modelId, matchers)) {
+            textExcluded = true;
+          }
         }
+
+        if (dateExcluded) {
+          card.classList.add('hf-date-filtered-out');
+          hiddenByDate++;
+        } else {
+          card.classList.remove('hf-date-filtered-out');
+        }
+
+        if (textExcluded) {
+          card.classList.add('hf-text-filtered-out');
+          hiddenByText++;
+        } else {
+          card.classList.remove('hf-text-filtered-out');
+        }
+
+        const shouldHide = dateExcluded || textExcluded;
+        if (shouldHide) {
+          card.classList.add('hf-filtered-out');
+        } else {
+          card.classList.remove('hf-filtered-out');
+          visibleCards++;
+        }
+
+        updateCardVisual(card, modelId);
+        if (modelId) setupHeartButton(card, modelId);
       }
 
-      if (dateExcluded) {
-        card.classList.add('hf-date-filtered-out');
-        hiddenByDate++;
-      } else {
-        card.classList.remove('hf-date-filtered-out');
+      if (i + batchSize < cards.length) {
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        if (globalThis.scheduler?.yield) await globalThis.scheduler.yield();
       }
+    }
 
-      if (textExcluded) {
-        card.classList.add('hf-text-filtered-out');
-        hiddenByText++;
-      } else {
-        card.classList.remove('hf-text-filtered-out');
-      }
-
-      const shouldHide = dateExcluded || textExcluded;
-      if (shouldHide) {
-        card.classList.add('hf-filtered-out');
-      } else {
-        card.classList.remove('hf-filtered-out');
-        visibleCards++;
-      }
-
-      updateCardVisual(card, modelId);
-      if (modelId) setupHeartButton(card, modelId);
-    });
-
+    if (runId !== processRunId) return;
     updateWidgetStats(visibleCards, totalCards, hiddenByDate, hiddenByText, isDateFilterActive, isTextFilterActive);
     updateEmptyNotice(visibleCards, totalCards, isDateFilterActive, isTextFilterActive, hiddenByDate, hiddenByText);
   }
 
   function updateEmptyNotice(visibleCount, totalCount, isDateActive, isTextActive, hiddenByDate, hiddenByText) {
     let noticeEl = document.getElementById('hf-df-empty-notice');
-    const isAnyFilterActive = isDateActive || isTextActive;
+    const isAnyActive = isDateActive || isTextActive;
 
-    if (isAnyFilterActive && totalCount > 0 && visibleCount === 0) {
-      if (!noticeEl || !document.body.contains(noticeEl)) {
+    if (totalCount > 0 && visibleCount === 0 && isAnyActive) {
+      if (!noticeEl) {
         noticeEl = document.createElement('div');
         noticeEl.id = 'hf-df-empty-notice';
-        const main = document.querySelector('main') || document.querySelector('article')?.parentElement || document.body;
-        main.insertBefore(noticeEl, main.firstChild);
+        const card = document.querySelector('article.overview-card-wrapper');
+        const parent = card ? card.closest('.grid, [class*="grid"], main') || card.parentElement : null;
+        if (parent) parent.insertBefore(noticeEl, parent.firstChild);
       }
-
-      let reason = '';
-      if (isDateActive && isTextActive) {
-        reason = `active date filter (${hiddenByDate} excluded) and negative text filter (${hiddenByText} excluded)`;
-      } else if (isTextActive) {
-        reason = `negative text filter (${hiddenByText} models matched excluded keywords)`;
-      } else {
-        reason = `active date range filter (${hiddenByDate} models out of range)`;
+      if (noticeEl) {
+        noticeEl.style.display = 'block';
+        const reasons = [];
+        if (isTextActive && hiddenByText > 0) reasons.push(`${hiddenByText} by keyword filter`);
+        if (isDateActive && hiddenByDate > 0) reasons.push(`${hiddenByDate} by date filter`);
+        noticeEl.textContent = `No models match current filters (${reasons.join(', ')}). Adjust sidebar filter settings to see results.`;
       }
-
-      noticeEl.textContent = `No models match the ${reason} on the currently loaded list (${totalCount} models scanned). Scroll down to load more models, adjust the date slider, or update negative keywords.`;
-      noticeEl.style.display = 'block';
     } else if (noticeEl) {
       noticeEl.style.display = 'none';
     }
   }
 
+  // ─── MUTATION OBSERVER & SPA ORCHESTRATION ────────────────────────────────────
   let observerTimer = null;
   function observeCards() {
     const observer = new MutationObserver((mutations) => {
@@ -984,13 +1084,8 @@ const WIDGET_STYLES = `
         if (!target) return false;
         const targetEl = target.nodeType === 1 ? target : target.parentElement;
         if (!targetEl) return false;
-        if (targetEl.id === 'hf-date-filter-widget' || targetEl.id === 'hf-df-empty-notice' || targetEl.closest('#hf-date-filter-widget')) {
+        if (targetEl.id === 'hf-date-filter-root' || targetEl.id === 'hf-toast-root' || targetEl.closest('#hf-date-filter-root, #hf-toast-root')) {
           return true;
-        }
-        if (m.type === 'childList') {
-          const addedInternal = Array.from(m.addedNodes).every(n => n.id === 'hf-date-filter-widget' || n.id === 'hf-df-empty-notice');
-          const removedInternal = Array.from(m.removedNodes).every(n => n.id === 'hf-date-filter-widget' || n.id === 'hf-df-empty-notice');
-          if (addedInternal && removedInternal) return true;
         }
         return false;
       });
@@ -1012,11 +1107,11 @@ const WIDGET_STYLES = `
     });
   }
 
-  // ─── SIDEBAR / CONTAINER WIDGET ──────────────────────────────────────────────
+  // ─── SHADOW DOM SIDEBAR WIDGET ───────────────────────────────────────────────
   function findWidgetTarget() {
     const sidebars = document.querySelectorAll('aside, [class*="sidebar"]');
     for (const sb of sidebars) {
-      if (sb.closest('header, nav')) continue;
+      if (sb.closest('header, nav, #hf-date-filter-root')) continue;
       const text = sb.textContent;
       if (text.includes('Tasks') || text.includes('Libraries') || text.includes('Languages') || text.includes('Licenses') || text.includes('Parameters')) {
         return { element: sb, method: 'prepend' };
@@ -1025,10 +1120,10 @@ const WIDGET_STYLES = `
 
     const forms = document.querySelectorAll('form');
     for (const f of forms) {
-      if (f.closest('header, nav')) continue;
+      if (f.closest('header, nav, #hf-date-filter-root')) continue;
       if (f.querySelector('input[placeholder*="Search models, datasets"]')) continue;
       const aside = f.closest('aside');
-      if (aside && !aside.closest('header, nav')) return { element: aside, method: 'prepend' };
+      if (aside && !aside.closest('header, nav, #hf-date-filter-root')) return { element: aside, method: 'prepend' };
       const text = f.textContent;
       if (text.includes('Tasks') || text.includes('Libraries') || text.includes('Languages') || text.includes('Licenses')) {
         return { element: f, method: 'prepend' };
@@ -1038,16 +1133,16 @@ const WIDGET_STYLES = `
     const card = document.querySelector('article.overview-card-wrapper');
     if (card) {
       const grid = card.closest('.grid, [class*="grid"], [class*="gap-"]');
-      if (grid && !grid.closest('header, nav')) {
+      if (grid && !grid.closest('header, nav, #hf-date-filter-root')) {
         return { element: grid, method: 'before' };
       }
-      if (card.parentElement && !card.parentElement.closest('header, nav')) {
+      if (card.parentElement && !card.parentElement.closest('header, nav, #hf-date-filter-root')) {
         return { element: card.parentElement, method: 'before' };
       }
     }
 
     const mainSection = document.querySelector('main section, main');
-    if (mainSection && !mainSection.closest('header, nav')) {
+    if (mainSection && !mainSection.closest('header, nav, #hf-date-filter-root')) {
       return { element: mainSection, method: 'prepend' };
     }
 
@@ -1055,11 +1150,12 @@ const WIDGET_STYLES = `
   }
 
   function setupSidebarWidget() {
-    const existingWidget = document.getElementById('hf-date-filter-widget');
-    if (existingWidget) {
-      if (existingWidget.closest('header, nav')) {
-        existingWidget.remove();
-      } else if (document.body.contains(existingWidget)) {
+    let host = document.getElementById('hf-date-filter-root');
+    if (host) {
+      if (host.closest('header, nav')) {
+        host.remove();
+        host = null;
+      } else if (document.body.contains(host)) {
         return;
       }
     }
@@ -1067,131 +1163,140 @@ const WIDGET_STYLES = `
     const target = findWidgetTarget();
     if (!target || !target.element) return;
 
-    const widget = document.createElement('div');
-    widget.id = 'hf-date-filter-widget';
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'hf-date-filter-root';
+    }
 
-    widget.innerHTML = `
-      <div class="hf-df-header">
-        <div class="hf-df-title">
-          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+    const shadow = host.shadowRoot || host.attachShadow({ mode: 'open' });
+    widgetShadowRoot = shadow;
+
+    shadow.innerHTML = `
+      <style>${SHADOW_WIDGET_STYLES}</style>
+      <div id="hf-date-filter-widget">
+        <div class="hf-df-header">
+          <div class="hf-df-title">
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            </svg>
+            Model Filters
+          </div>
+        </div>
+
+        <!-- SECTION 1: Exclude Text Filter -->
+        <div class="hf-filter-section" id="hf-exclude-section">
+          <div class="hf-filter-section-header">
+            <div class="hf-filter-section-title">
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+              </svg>
+              Exclude Keywords
+            </div>
+            <label class="hf-switch" title="Toggle negative text filter">
+              <input id="hf-exclude-toggle" type="checkbox">
+              <span class="hf-slider"></span>
+            </label>
+          </div>
+          <div class="hf-section-body" id="hf-exclude-section-body">
+            <div class="hf-exclude-input-wrapper">
+              <input type="text" id="hf-exclude-input" class="hf-exclude-input" placeholder="e.g. gguf, fp8, /test.*/i" autocomplete="off" spellcheck="false">
+              <button type="button" id="hf-exclude-clear-btn" class="hf-clear-btn" title="Clear filter terms">✕</button>
+            </div>
+            <div class="hf-exclude-hint">
+              <span>Comma-separated or /regex/</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- SECTION 2: Date Range Filter -->
+        <div class="hf-filter-section" id="hf-date-section">
+          <div class="hf-filter-section-header">
+            <div class="hf-filter-section-title">
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              Date Range
+            </div>
+            <label class="hf-switch" title="Toggle date range filter">
+              <input id="hf-df-toggle" type="checkbox">
+              <span class="hf-slider"></span>
+            </label>
+          </div>
+
+          <div class="hf-section-body" id="hf-date-section-body">
+            <div class="hf-df-presets" id="hf-df-presets-container">
+              ${PRESETS.map(p => `<button type="button" class="hf-df-preset-btn" data-preset="${p.id}">${p.label}</button>`).join('')}
+            </div>
+
+            <div class="hf-df-controls">
+              <div class="hf-df-range-container">
+                <div class="hf-df-slider-row">
+                  <input type="range" id="hf-df-slider-max" min="1" max="365" step="1" title="Max days ago (Updated recently)">
+                </div>
+                <div class="hf-df-inputs">
+                  <div class="hf-df-input-group">
+                    <label for="hf-df-min-input">Min Days</label>
+                    <input type="number" id="hf-df-min-input" min="0" max="3650" placeholder="0">
+                  </div>
+                  <div class="hf-df-input-group">
+                    <label for="hf-df-max-input">Max Days</label>
+                    <input type="number" id="hf-df-max-input" min="0" max="3650" placeholder="30">
+                  </div>
+                </div>
+              </div>
+
+              <div class="hf-df-range-label" id="hf-df-range-label">
+                Updated: Today – 30 days ago
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STATUS BAR -->
+        <div class="hf-df-status">
+          <div class="hf-df-status-main">
+            <span>Filter Status</span>
+            <span class="hf-df-badge" id="hf-df-badge">All shown</span>
+          </div>
+          <div class="hf-df-substatus" id="hf-df-substatus"></div>
+        </div>
+
+        <!-- SECTION 3: Highlighter Options -->
+        <button type="button" class="hf-df-settings-toggle" id="hf-df-settings-toggle">
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
           </svg>
-          Model Filters
-        </div>
-      </div>
+          Highlighter Options
+        </button>
 
-      <!-- SECTION 1: Exclude Text Filter -->
-      <div class="hf-filter-section" id="hf-exclude-section">
-        <div class="hf-filter-section-header">
-          <div class="hf-filter-section-title">
-            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-            </svg>
-            Exclude Keywords
+        <div class="hf-df-settings-panel" id="hf-df-settings-panel">
+          <div class="hf-settings-row">
+            <label for="hf-border-unliked-enabled">Highlight unliked models</label>
+            <label class="hf-switch">
+              <input id="hf-border-unliked-enabled" type="checkbox">
+              <span class="hf-slider"></span>
+            </label>
           </div>
-          <label class="hf-switch" title="Toggle negative text filter">
-            <input id="hf-exclude-toggle" type="checkbox">
-            <span class="hf-slider"></span>
-          </label>
-        </div>
-        <div class="hf-section-body" id="hf-exclude-section-body">
-          <div class="hf-exclude-input-wrapper">
-            <input type="text" id="hf-exclude-input" class="hf-exclude-input" placeholder="e.g. gguf, fp8, /test.*/i" autocomplete="off" spellcheck="false">
-            <button type="button" id="hf-exclude-clear-btn" class="hf-clear-btn" title="Clear filter terms">✕</button>
+          <div class="hf-settings-row">
+            <label for="hf-border-unliked-glow">Enable border glow</label>
+            <label class="hf-switch">
+              <input id="hf-border-unliked-glow" type="checkbox">
+              <span class="hf-slider"></span>
+            </label>
           </div>
-          <div class="hf-exclude-hint">
-            <span>Comma-separated or /regex/</span>
+          <div class="hf-settings-row">
+            <label for="hf-border-unliked-color">Border color</label>
+            <input id="hf-border-unliked-color" type="color">
           </div>
         </div>
       </div>
-
-      <!-- SECTION 2: Date Range Filter -->
-      <div class="hf-filter-section" id="hf-date-section">
-        <div class="hf-filter-section-header">
-          <div class="hf-filter-section-title">
-            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            Date Range
-          </div>
-          <label class="hf-switch" title="Toggle date range filter">
-            <input id="hf-df-toggle" type="checkbox">
-            <span class="hf-slider"></span>
-          </label>
-        </div>
-
-        <div class="hf-section-body" id="hf-date-section-body">
-          <div class="hf-df-presets" id="hf-df-presets-container">
-            ${PRESETS.map(p => `<button type="button" class="hf-df-preset-btn" data-preset="${p.id}">${p.label}</button>`).join('')}
-          </div>
-
-          <div class="hf-df-controls">
-            <div class="hf-df-range-container">
-              <div class="hf-df-slider-row">
-                <input type="range" id="hf-df-slider-max" min="1" max="365" step="1" title="Max days ago (Updated recently)">
-              </div>
-              <div class="hf-df-inputs">
-                <div class="hf-df-input-group">
-                  <label for="hf-df-min-input">Min Days</label>
-                  <input type="number" id="hf-df-min-input" min="0" max="3650" placeholder="0">
-                </div>
-                <div class="hf-df-input-group">
-                  <label for="hf-df-max-input">Max Days</label>
-                  <input type="number" id="hf-df-max-input" min="0" max="3650" placeholder="30">
-                </div>
-              </div>
-            </div>
-
-            <div class="hf-df-range-label" id="hf-df-range-label">
-              Updated: Today – 30 days ago
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- STATUS BAR -->
-      <div class="hf-df-status">
-        <div class="hf-df-status-main">
-          <span>Filter Status</span>
-          <span class="hf-df-badge" id="hf-df-badge">All shown</span>
-        </div>
-        <div class="hf-df-substatus" id="hf-df-substatus"></div>
-      </div>
-
-      <!-- SECTION 3: Highlighter Options -->
-      <button type="button" class="hf-df-settings-toggle" id="hf-df-settings-toggle">
-        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-        </svg>
-        Highlighter Options
-      </button>
-
-      <div class="hf-df-settings-panel" id="hf-df-settings-panel">
-        <div class="hf-settings-row">
-          <label for="hf-border-unliked-enabled">Highlight unliked models</label>
-          <label class="hf-switch">
-            <input id="hf-border-unliked-enabled" type="checkbox">
-            <span class="hf-slider"></span>
-          </label>
-        </div>
-        <div class="hf-settings-row">
-          <label for="hf-border-unliked-glow">Enable border glow</label>
-          <label class="hf-switch">
-            <input id="hf-border-unliked-glow" type="checkbox">
-            <span class="hf-slider"></span>
-          </label>
-        </div>
-        <div class="hf-settings-row">
-          <label for="hf-border-unliked-color">Border color</label>
-          <input id="hf-border-unliked-color" type="color">
-        </div>
-      </div>
+      <div id="hf-toast-container"></div>
     `;
 
     if (target.method === 'before' && target.element.parentNode) {
-      target.element.parentNode.insertBefore(widget, target.element);
+      target.element.parentNode.insertBefore(host, target.element);
     } else {
-      target.element.insertBefore(widget, target.element.firstChild);
+      target.element.insertBefore(host, target.element.firstChild);
     }
 
     bindWidgetEvents();
@@ -1199,27 +1304,29 @@ const WIDGET_STYLES = `
   }
 
   function bindWidgetEvents() {
-    const excludeToggle = document.getElementById('hf-exclude-toggle');
-    const excludeInput = document.getElementById('hf-exclude-input');
-    const clearBtn = document.getElementById('hf-exclude-clear-btn');
+    if (!widgetShadowRoot) return;
+    const shadow = widgetShadowRoot;
 
-    const dateToggle = document.getElementById('hf-df-toggle');
-    const sliderMax = document.getElementById('hf-df-slider-max');
-    const minInput = document.getElementById('hf-df-min-input');
-    const maxInput = document.getElementById('hf-df-max-input');
-    const presetsContainer = document.getElementById('hf-df-presets-container');
+    const excludeToggle = shadow.getElementById('hf-exclude-toggle');
+    const excludeInput = shadow.getElementById('hf-exclude-input');
+    const clearBtn = shadow.getElementById('hf-exclude-clear-btn');
 
-    const highlightToggle = document.getElementById('hf-border-unliked-enabled');
-    const glowToggle = document.getElementById('hf-border-unliked-glow');
-    const colorInput = document.getElementById('hf-border-unliked-color');
-    const settingsToggleBtn = document.getElementById('hf-df-settings-toggle');
-    const settingsPanel = document.getElementById('hf-df-settings-panel');
+    const dateToggle = shadow.getElementById('hf-df-toggle');
+    const sliderMax = shadow.getElementById('hf-df-slider-max');
+    const minInput = shadow.getElementById('hf-df-min-input');
+    const maxInput = shadow.getElementById('hf-df-max-input');
+    const presetsContainer = shadow.getElementById('hf-df-presets-container');
+
+    const highlightToggle = shadow.getElementById('hf-border-unliked-enabled');
+    const glowToggle = shadow.getElementById('hf-border-unliked-glow');
+    const colorInput = shadow.getElementById('hf-border-unliked-color');
+    const settingsToggleBtn = shadow.getElementById('hf-df-settings-toggle');
+    const settingsPanel = shadow.getElementById('hf-df-settings-panel');
 
     settingsToggleBtn?.addEventListener('click', () => {
       settingsPanel?.classList.toggle('open');
     });
 
-    // Exclude Filter Events
     excludeToggle?.addEventListener('change', (e) => {
       saveConfig('FILTER_EXCLUDE_ENABLED', e.target.checked);
       syncWidgetUI();
@@ -1248,24 +1355,14 @@ const WIDGET_STYLES = `
       }, 350);
     });
 
-    excludeInput?.addEventListener('change', (e) => {
-      if (textSaveDebounceTimer) clearTimeout(textSaveDebounceTimer);
-      saveConfig('FILTER_EXCLUDE_TERMS', e.target.value);
-    });
-
     clearBtn?.addEventListener('click', () => {
-      if (excludeInput) {
-        excludeInput.value = '';
-        excludeInput.focus();
-      }
-      CONFIG.FILTER_EXCLUDE_TERMS = '';
-      if (clearBtn) clearBtn.classList.remove('visible');
-      if (textSaveDebounceTimer) clearTimeout(textSaveDebounceTimer);
       saveConfig('FILTER_EXCLUDE_TERMS', '');
+      if (excludeInput) excludeInput.value = '';
+      clearBtn.classList.remove('visible');
+      syncWidgetUI();
       processModelCards();
     });
 
-    // Date Range Events
     dateToggle?.addEventListener('change', (e) => {
       saveConfig('DATE_FILTER_ENABLED', e.target.checked);
       syncWidgetUI();
@@ -1274,24 +1371,15 @@ const WIDGET_STYLES = `
 
     sliderMax?.addEventListener('input', (e) => {
       const val = parseInt(e.target.value, 10);
-      CONFIG.DATE_MAX_DAYS = val;
-      CONFIG.DATE_PRESET = 'custom';
-      syncWidgetUI();
-      processModelCards();
-    });
-
-    sliderMax?.addEventListener('change', (e) => {
-      const val = parseInt(e.target.value, 10);
       saveConfig('DATE_MAX_DAYS', val);
       saveConfig('DATE_PRESET', 'custom');
+      syncWidgetUI();
+      processModelCards();
     });
 
     minInput?.addEventListener('change', (e) => {
       const val = Math.max(0, parseInt(e.target.value, 10) || 0);
       saveConfig('DATE_MIN_DAYS', val);
-      if (CONFIG.DATE_MAX_DAYS < val) {
-        saveConfig('DATE_MAX_DAYS', val);
-      }
       saveConfig('DATE_PRESET', 'custom');
       syncWidgetUI();
       processModelCards();
@@ -1322,7 +1410,6 @@ const WIDGET_STYLES = `
       processModelCards();
     });
 
-    // Highlighter Options Events
     highlightToggle?.addEventListener('change', (e) => {
       saveConfig('BORDER_UNLIKED_ENABLED', e.target.checked);
       processModelCards();
@@ -1341,22 +1428,25 @@ const WIDGET_STYLES = `
   }
 
   function syncWidgetUI() {
-    const excludeToggle = document.getElementById('hf-exclude-toggle');
-    const excludeInput = document.getElementById('hf-exclude-input');
-    const clearBtn = document.getElementById('hf-exclude-clear-btn');
-    const excludeSectionBody = document.getElementById('hf-exclude-section-body');
+    if (!widgetShadowRoot) return;
+    const shadow = widgetShadowRoot;
 
-    const dateToggle = document.getElementById('hf-df-toggle');
-    const dateSectionBody = document.getElementById('hf-date-section-body');
-    const sliderMax = document.getElementById('hf-df-slider-max');
-    const minInput = document.getElementById('hf-df-min-input');
-    const maxInput = document.getElementById('hf-df-max-input');
-    const rangeLabel = document.getElementById('hf-df-range-label');
-    const presetBtns = document.querySelectorAll('.hf-df-preset-btn');
+    const excludeToggle = shadow.getElementById('hf-exclude-toggle');
+    const excludeInput = shadow.getElementById('hf-exclude-input');
+    const clearBtn = shadow.getElementById('hf-exclude-clear-btn');
+    const excludeSectionBody = shadow.getElementById('hf-exclude-section-body');
 
-    const highlightToggle = document.getElementById('hf-border-unliked-enabled');
-    const glowToggle = document.getElementById('hf-border-unliked-glow');
-    const colorInput = document.getElementById('hf-border-unliked-color');
+    const dateToggle = shadow.getElementById('hf-df-toggle');
+    const dateSectionBody = shadow.getElementById('hf-date-section-body');
+    const sliderMax = shadow.getElementById('hf-df-slider-max');
+    const minInput = shadow.getElementById('hf-df-min-input');
+    const maxInput = shadow.getElementById('hf-df-max-input');
+    const rangeLabel = shadow.getElementById('hf-df-range-label');
+    const presetBtns = shadow.querySelectorAll('.hf-df-preset-btn');
+
+    const highlightToggle = shadow.getElementById('hf-border-unliked-enabled');
+    const glowToggle = shadow.getElementById('hf-border-unliked-glow');
+    const colorInput = shadow.getElementById('hf-border-unliked-color');
 
     if (excludeToggle) excludeToggle.checked = Boolean(CONFIG.FILTER_EXCLUDE_ENABLED);
     if (excludeInput) {
@@ -1403,8 +1493,11 @@ const WIDGET_STYLES = `
   }
 
   function updateWidgetStats(visibleCount, totalCount, hiddenByDate, hiddenByText, isDateActive, isTextActive) {
-    const badge = document.getElementById('hf-df-badge');
-    const substatus = document.getElementById('hf-df-substatus');
+    if (!widgetShadowRoot) return;
+    const shadow = widgetShadowRoot;
+
+    const badge = shadow.getElementById('hf-df-badge');
+    const substatus = shadow.getElementById('hf-df-substatus');
     if (!badge) return;
 
     const isAnyActive = isDateActive || isTextActive;
@@ -1440,6 +1533,15 @@ const WIDGET_STYLES = `
     observeCards();
     processModelCards();
   };
+
+  const handleNavigation = () => {
+    setupSidebarWidget();
+    processModelCards();
+  };
+
+  if (self.navigation && typeof self.navigation.addEventListener === 'function') {
+    self.navigation.addEventListener('navigatesuccess', handleNavigation);
+  }
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init, { once: true });
