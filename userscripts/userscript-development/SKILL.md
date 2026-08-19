@@ -23,9 +23,9 @@ Completion criterion: the target files, current behavior, verification path, and
 
 Choose exactly one runtime branch before writing logic:
 
-- **Foreground DOM script** — ordinary `==UserScript==` metadata; for page UI, DOM scraping, and event handling.
-- **ScriptCat background / crontab script** — use `@background` or `@crontab` only when work runs persistently or on schedule without DOM access; async operations must settle a returned `Promise`.
-- **ScriptCat subscription package** — use `==UserSubscribe==` (`.user.sub.js`) only when distributing multiple scripts as a single bundle.
+- **Foreground DOM script** — ordinary `==UserScript==` metadata; for page UI, DOM scraping, and event handling. Details: [REFERENCE.md](references/REFERENCE.md).
+- **ScriptCat background / crontab script** — use `@background` or `@crontab` only when work runs persistently or on schedule without DOM access; async operations must settle a returned `Promise`. Details: [SCRIPTCAT.md](references/SCRIPTCAT.md).
+- **ScriptCat subscription package** — use `==UserSubscribe==` (`.user.sub.js`) only when distributing multiple scripts as a single bundle. Details: [SCRIPTCAT.md](references/SCRIPTCAT.md).
 
 Preflight verification:
 - On Manifest V3 browsers, confirm extension developer mode or "Allow User Scripts" is toggled if scripts fail to inject.
@@ -126,6 +126,7 @@ Completion criterion: syntax checks pass, tests pass or have an explicit blocker
 ## References
 
 - Metadata, DOM heuristics, Shadow DOM, storage, observers, Playwright patterns: [REFERENCE.md](references/REFERENCE.md)
+- ScriptCat background workers, crontab, UserConfig, subscriptions: [SCRIPTCAT.md](references/SCRIPTCAT.md)
 - Reference foreground script: [example.user.js](references/example.user.js)
 - Research-log template: [example_research_log.md](references/example_research_log.md)
 - Standard README template: [example_readme.md](references/example_readme.md)
