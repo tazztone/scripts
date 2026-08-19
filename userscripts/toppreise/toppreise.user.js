@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.9.0
+// @version      2.9.1
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -108,12 +108,12 @@ const STYLES = `
   /* 1-Click Card Quick-Block Category Action Button */
   .tp-card-quick-block {
     position: absolute !important;
-    top: 8px !important;
+    bottom: 8px !important;
     left: 8px !important;
-    background: rgba(15, 23, 42, 0.88) !important;
+    background: rgba(15, 23, 42, 0.92) !important;
     backdrop-filter: blur(8px) !important;
     -webkit-backdrop-filter: blur(8px) !important;
-    border: 1px solid rgba(244, 63, 94, 0.4) !important;
+    border: 1px solid rgba(244, 63, 94, 0.5) !important;
     color: #fda4af !important;
     font-size: 11px !important;
     font-weight: 600 !important;
@@ -121,8 +121,9 @@ const STYLES = `
     border-radius: 6px !important;
     cursor: pointer !important;
     opacity: 0 !important;
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
-    z-index: 15 !important;
+    transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s ease !important;
+    z-index: 9999 !important;
+    pointer-events: auto !important;
     display: inline-flex !important;
     align-items: center !important;
     gap: 4px !important;
@@ -132,19 +133,21 @@ const STYLES = `
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
   }
   .Plugin_Product:hover .tp-card-quick-block,
   .mixedBrowsingListProduct:hover .tp-card-quick-block {
     opacity: 1 !important;
+    z-index: 9999 !important;
   }
   .tp-card-quick-block:hover {
     background: #e11d48 !important;
     border-color: #f43f5e !important;
     color: #ffffff !important;
     transform: scale(1.04) !important;
-    box-shadow: 0 4px 12px rgba(225, 29, 72, 0.4) !important;
+    box-shadow: 0 4px 12px rgba(225, 29, 72, 0.5) !important;
+    z-index: 10000 !important;
   }
   @media (hover: none) {
     .tp-card-quick-block {
