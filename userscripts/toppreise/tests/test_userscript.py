@@ -81,3 +81,26 @@ def test_price_alarm_automation(page: Page):
     # 60% of CHF 1000.00 = 600.00
     assert price_val == '600.00'
     assert page.locator('#im_nimf_prtrm').is_checked()
+
+
+def test_suite_filter_bar_and_category_pill_styles(page: Page):
+    # Verify filter bar is injected and styled
+    filter_bar = page.locator('#tp-suite-filter-bar')
+    page.wait_for_selector('#tp-suite-filter-bar')
+    assert filter_bar.is_visible()
+
+    # Expand category drawer if collapsed
+    toggle_btn = page.locator('#tp-toggle-cats-btn')
+    if toggle_btn.is_visible():
+        toggle_btn.click()
+
+    # Verify group pills have proper CSS styling (not unstyled raw text)
+    pill = page.locator('.tp-group-pill').first
+    page.wait_for_selector('.tp-group-pill')
+    assert pill.is_visible()
+
+    # Check computed styles: border-radius, background, display
+    display_val = pill.evaluate("el => window.getComputedStyle(el).display")
+    border_radius = pill.evaluate("el => window.getComputedStyle(el).borderRadius")
+    assert 'inline-flex' in display_val or 'flex' in display_val
+    assert border_radius == '12px'

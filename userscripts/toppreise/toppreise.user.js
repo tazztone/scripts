@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.8.14
+// @version      2.8.15
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -102,6 +102,9 @@ const STYLES = `
   body.tp-reveal-filtered .tp-min-offers-filtered {
     display: block !important;
     opacity: 0.35 !important;
+    outline: 2px dashed #f59e0b !important;
+  }
+
   /* Floating Quick-Control Pill Toolbar */
   #tp-quick-toolbar {
     position: fixed;
@@ -198,7 +201,7 @@ const STYLES = `
     gap: 8px !important;
     z-index: 9990 !important;
     position: relative !important;
-    overflow: hidden !important;
+    overflow: visible !important;
   }
 
   .tp-filter-main-row {
@@ -343,6 +346,186 @@ const STYLES = `
     flex: 1 !important;
     max-width: 100% !important;
     box-sizing: border-box !important;
+  }
+
+  /* High-Contrast Crisp Readable Category Pills */
+  .tp-cat-pill {
+    padding: 4px 10px !important;
+    border-radius: 12px !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    user-select: none !important;
+    transition: all 0.2s ease !important;
+    background: #1e293b !important;
+    color: #f8fafc !important;
+    border: 1px solid #334155 !important;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15) !important;
+    display: inline-flex !important;
+    align-items: center !important;
+  }
+  .tp-cat-pill:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+  }
+  .tp-cat-pill.tp-excluded {
+    background: #7f1d1d !important;
+    color: #fca5a5 !important;
+    border-color: #ef4444 !important;
+    text-decoration: line-through !important;
+  }
+
+  /* Group Pills & Collapsible Subcategories */
+  .tp-group-wrapper {
+    display: inline-flex !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+    position: relative !important;
+  }
+  .tp-group-pill {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    padding: 4px 10px !important;
+    border-radius: 12px !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    cursor: pointer !important;
+    user-select: none !important;
+    transition: all 0.2s ease !important;
+    background: #0f172a !important;
+    color: #38bdf8 !important;
+    border: 1px solid #0284c7 !important;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2) !important;
+  }
+  .tp-group-pill:hover {
+    background: #1e293b !important;
+    color: #7dd3fc !important;
+    border-color: #38bdf8 !important;
+  }
+  .tp-group-pill.tp-excluded-all {
+    background: #7f1d1d !important;
+    color: #fca5a5 !important;
+    border-color: #ef4444 !important;
+    text-decoration: line-through !important;
+  }
+  .tp-group-pill.tp-excluded-individual {
+    background: #9a3412 !important;
+    color: #ffedd5 !important;
+    border-color: #f97316 !important;
+    text-decoration: none !important;
+  }
+  .tp-group-pill.tp-partial {
+    border-color: #f59e0b !important;
+    color: #fef08a !important;
+    text-decoration: none !important;
+  }
+  .tp-group-chevron {
+    font-size: 9px !important;
+    padding: 1px 5px !important;
+    border-radius: 4px !important;
+    background: rgba(255, 255, 255, 0.15) !important;
+    cursor: pointer !important;
+    margin-left: 2px !important;
+  }
+  .tp-group-chevron:hover {
+    background: rgba(255, 255, 255, 0.3) !important;
+  }
+
+  /* Floating Glassmorphic Group Popover */
+  .tp-group-popover {
+    position: absolute !important;
+    z-index: 100000 !important;
+    min-width: 260px !important;
+    max-width: 380px !important;
+    padding: 10px !important;
+    background: rgba(15, 23, 42, 0.95) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    border: 1px solid rgba(56, 189, 248, 0.3) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(56, 189, 248, 0.1) !important;
+    animation: tpPopoverFadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+  @keyframes tpPopoverFadeIn {
+    from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .tp-popover-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding-bottom: 8px !important;
+    margin-bottom: 8px !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+  }
+  .tp-popover-title {
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    color: #38bdf8 !important;
+  }
+  .tp-popover-actions {
+    display: flex !important;
+    gap: 6px !important;
+  }
+  .tp-popover-btn {
+    font-size: 10px !important;
+    padding: 2px 6px !important;
+    border-radius: 4px !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: #cbd5e1 !important;
+    cursor: pointer !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    transition: all 0.15s ease !important;
+  }
+  .tp-popover-btn:hover {
+    background: rgba(56, 189, 248, 0.2) !important;
+    color: #ffffff !important;
+    border-color: rgba(56, 189, 248, 0.4) !important;
+  }
+  .tp-popover-search {
+    width: 100% !important;
+    box-sizing: border-box !important;
+    padding: 4px 8px !important;
+    margin-bottom: 8px !important;
+    font-size: 11px !important;
+    color: #e2e8f0 !important;
+    background: rgba(15, 23, 42, 0.6) !important;
+    border: 1px solid rgba(56, 189, 248, 0.25) !important;
+    border-radius: 6px !important;
+    outline: none !important;
+  }
+  .tp-popover-search:focus {
+    border-color: rgba(56, 189, 248, 0.6) !important;
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.2) !important;
+  }
+  .tp-popover-body {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+    max-height: 250px !important;
+    overflow-y: auto !important;
+    padding: 2px !important;
+  }
+  .tp-branch-wrapper {
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+    margin-bottom: 4px !important;
+  }
+  .tp-branch-header {
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+  }
+  .tp-branch-children {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 4px !important;
+    padding-left: 12px !important;
+    margin-top: 2px !important;
+    border-left: 2px solid rgba(56, 189, 248, 0.2) !important;
   }
 
   /* Mobile Responsive Fixes */

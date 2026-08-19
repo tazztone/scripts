@@ -2,19 +2,27 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <title>Mock Toppreise Page</title>
+  <title>Mock Toppreise - Neue Toppreise</title>
   <style>
-    body { font-family: sans-serif; margin: 20px; background: #0f172a; color: #fff; }
-    .Plugin_Product.mixedBrowsingList {
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 20px; background: #1a1a1a; color: #fff; }
+    .pageContent { max-width: 1200px; margin: 0 auto; }
+    .Plugin_Product {
+      display: block;
+      text-decoration: none;
+      color: inherit;
       border: 1px solid #334155;
+      background: #242424;
       padding: 16px;
       margin-bottom: 16px;
       border-radius: 8px;
       position: relative;
     }
+    .product-name { font-size: 15px; font-weight: 600; margin-bottom: 8px; color: #f1f5f9; }
+    .priceContainer { display: flex; gap: 4px; font-size: 14px; }
+    .Plugin_Price { font-weight: 700; color: #10b981; }
   </style>
 </head>
-<body>
+<body class="color_page">
   <div class="filters">
     <div class="f_remove_filter" data-target-type="df">
       Digitec
@@ -22,84 +30,86 @@
     </div>
   </div>
 
-  <div id="product-list">
-    <!-- Card 1: Cheapest Store Product -->
-    <div id="card-cheapest" class="Plugin_Product mixedBrowsingList" data-category="Grafikkarten">
-      <a href="/preisvergleich/Grafikkarten/Nvidia-RTX-4090-p12345" class="title">Nvidia GeForce RTX 4090</a>
-      <div class="price_information_product">
-        <div class="productPrice"><span class="Plugin_Price">CHF 1800.00</span></div>
-        <div class="shippingPrice"><span class="Plugin_Price">CHF 1800.00</span></div>
-      </div>
-      <div class="Plugin_DealerRelProdPriceInfo">
-        <span class="title">Digitec</span>
-        <div class="productPrice"><span class="Plugin_Price">CHF 1800.00</span></div>
-        <div class="shippingPrice"><span class="Plugin_Price">CHF 1800.00</span></div>
-      </div>
-      <div class="Plugin_DealerRelProdPriceInfo">
-        <span class="title">Brack.ch</span>
-        <div class="productPrice"><span class="Plugin_Price">CHF 1850.00</span></div>
-      </div>
-      <div class="offersCount">12 Angebote</div>
-    </div>
+  <div class="pageContent color_page" id="FrameContent">
+    <div id="product-list" class="row">
+      <!-- Card 1: Cheapest Store Product (Real Anchor Card Pattern from live neue-toppreise) -->
+      <a href="/preisvergleich/Grafikkarten/Nvidia-RTX-4090-p797571" id="card-cheapest" class="Plugin_Product medium-box mixedBrowsingList" data-entity-id="797571">
+        <div class="product-name">Nvidia GeForce RTX 4090 24GB</div>
+        <div class="Plugin_PriceInformation price_information_product">
+          <div class="priceContainer shippingPrice"><span class="currency">CHF </span><div class="Plugin_Price">1800.00</div></div>
+          <div class="priceContainer productPrice"><span class="currency">CHF </span><div class="Plugin_Price">1800.00</div></div>
+        </div>
+        <div class="Plugin_DealerRelProdPriceInfo">
+          <span class="title">Digitec</span>
+          <div class="productPrice"><div class="Plugin_Price">CHF 1800.00</div></div>
+          <div class="shippingPrice"><div class="Plugin_Price">CHF 1800.00</div></div>
+        </div>
+        <div class="Plugin_DealerRelProdPriceInfo">
+          <span class="title">Brack.ch</span>
+          <div class="productPrice"><div class="Plugin_Price">CHF 1850.00</div></div>
+        </div>
+        <div class="offersCount">12 Angebote</div>
+      </a>
 
-    <!-- Card 2: Expensive Store Product (Not cheapest) -->
-    <div id="card-expensive" class="Plugin_Product mixedBrowsingList" data-category="Grafikkarten">
-      <a href="/preisvergleich/Grafikkarten/Nvidia-RTX-4080-p12346" class="title">Nvidia GeForce RTX 4080</a>
-      <div class="price_information_product">
-        <div class="productPrice"><span class="Plugin_Price">CHF 1100.00</span></div>
-      </div>
-      <div class="Plugin_DealerRelProdPriceInfo">
-        <span class="title">Digitec</span>
-        <div class="productPrice"><span class="Plugin_Price">CHF 1250.00</span></div>
-      </div>
-      <div class="offersCount">8 Angebote</div>
-    </div>
+      <!-- Card 2: Expensive Store Product (Not cheapest) -->
+      <a href="/preisvergleich/Grafikkarten/Nvidia-RTX-4080-p797572" id="card-expensive" class="Plugin_Product medium-box mixedBrowsingList" data-entity-id="797572">
+        <div class="product-name">Nvidia GeForce RTX 4080 16GB</div>
+        <div class="Plugin_PriceInformation price_information_product">
+          <div class="priceContainer productPrice"><span class="currency">CHF </span><div class="Plugin_Price">1100.00</div></div>
+        </div>
+        <div class="Plugin_DealerRelProdPriceInfo">
+          <span class="title">Digitec</span>
+          <div class="productPrice"><div class="Plugin_Price">CHF 1250.00</div></div>
+        </div>
+        <div class="offersCount">8 Angebote</div>
+      </a>
 
-    <!-- Card 3: Negative Keyword Product -->
-    <div id="card-negative" class="Plugin_Product mixedBrowsingList" data-category="Zubehör">
-      <a href="/preisvergleich/Zubehoer/Silikon-Case-Huelle-p12347" class="title">Schutzhülle Case Silikon Schwarz</a>
-      <div class="price_information_product">
-        <div class="productPrice"><span class="Plugin_Price">CHF 15.00</span></div>
-      </div>
-      <div class="Plugin_DealerRelProdPriceInfo">
-        <span class="title">Digitec</span>
-        <div class="productPrice"><span class="Plugin_Price">CHF 15.00</span></div>
-      </div>
-      <div class="offersCount">5 Angebote</div>
-    </div>
+      <!-- Card 3: Negative Keyword Product -->
+      <a href="/preisvergleich/Zubehoer/Silikon-Case-Huelle-p797573" id="card-negative" class="Plugin_Product medium-box mixedBrowsingList" data-entity-id="797573">
+        <div class="product-name">Schutzhülle Case Silikon Schwarz</div>
+        <div class="Plugin_PriceInformation price_information_product">
+          <div class="priceContainer productPrice"><span class="currency">CHF </span><div class="Plugin_Price">15.00</div></div>
+        </div>
+        <div class="Plugin_DealerRelProdPriceInfo">
+          <span class="title">Digitec</span>
+          <div class="productPrice"><div class="Plugin_Price">CHF 15.00</div></div>
+        </div>
+        <div class="offersCount">5 Angebote</div>
+      </a>
 
-    <!-- Card 4: Category Excluded Product -->
-    <div id="card-cat-excluded" class="Plugin_Product mixedBrowsingList" data-category="Smartphones">
-      <a href="/preisvergleich/Smartphones/Apple-iPhone-15-p12348" class="title">Apple iPhone 15 Pro</a>
-      <div class="price_information_product">
-        <div class="productPrice"><span class="Plugin_Price">CHF 950.00</span></div>
-      </div>
-      <div class="Plugin_DealerRelProdPriceInfo">
-        <span class="title">Digitec</span>
-        <div class="productPrice"><span class="Plugin_Price">CHF 950.00</span></div>
-      </div>
-      <div class="offersCount">20 Angebote</div>
-    </div>
+      <!-- Card 4: Category Excluded Product -->
+      <a href="/preisvergleich/Smartphones/Apple-iPhone-15-p797574" id="card-cat-excluded" class="Plugin_Product medium-box mixedBrowsingList" data-entity-id="797574">
+        <div class="product-name">Apple iPhone 15 Pro Max 256GB</div>
+        <div class="Plugin_PriceInformation price_information_product">
+          <div class="priceContainer productPrice"><span class="currency">CHF </span><div class="Plugin_Price">950.00</div></div>
+        </div>
+        <div class="Plugin_DealerRelProdPriceInfo">
+          <span class="title">Digitec</span>
+          <div class="productPrice"><div class="Plugin_Price">CHF 950.00</div></div>
+        </div>
+        <div class="offersCount">20 Angebote</div>
+      </a>
 
-    <!-- Card 5: Low Offer Count Product -->
-    <div id="card-low-offers" class="Plugin_Product mixedBrowsingList" data-category="Monitore">
-      <a href="/preisvergleich/Monitore/Dell-UltraSharp-p12349" class="title">Dell UltraSharp 27 Monitor</a>
-      <div class="price_information_product">
-        <div class="productPrice"><span class="Plugin_Price">CHF 450.00</span></div>
-      </div>
-      <div class="Plugin_DealerRelProdPriceInfo">
-        <span class="title">Digitec</span>
-        <div class="productPrice"><span class="Plugin_Price">CHF 450.00</span></div>
-      </div>
-      <div class="offersCount">1 Angebot</div>
+      <!-- Card 5: Low Offer Count Product -->
+      <a href="/preisvergleich/Monitore/Dell-UltraSharp-p797575" id="card-low-offers" class="Plugin_Product medium-box mixedBrowsingList" data-entity-id="797575">
+        <div class="product-name">Dell UltraSharp 27 4K Monitor</div>
+        <div class="Plugin_PriceInformation price_information_product">
+          <div class="priceContainer productPrice"><span class="currency">CHF </span><div class="Plugin_Price">450.00</div></div>
+        </div>
+        <div class="Plugin_DealerRelProdPriceInfo">
+          <span class="title">Digitec</span>
+          <div class="productPrice"><div class="Plugin_Price">CHF 450.00</div></div>
+        </div>
+        <div class="offersCount">1 Angebot</div>
+      </a>
     </div>
   </div>
 
-  <!-- Price Alarm Modal Markup -->
-  <div class="AbstractDialog" style="display: none;" id="mock-alarm-dialog">
+  <!-- Real Price Alarm Modal Markup from Toppreise.ch -->
+  <div class="AbstractDialog AbstractDialog_NewInfoMailFormDialog" style="display: none;" id="mock-alarm-dialog">
     <div class="AbstractDialog_CloseButton">✕</div>
     <div class="Plugin_NewInfoMailForm">
-      <div class="productPrice"><span class="Plugin_Price">CHF 1000.00</span></div>
+      <div class="productPrice"><span class="currency">CHF </span><span class="Plugin_Price">1000.00</span></div>
       <input type="text" id="f_NewInfoMailForm_priceFrom" name="im_nimf_pvf" value="" />
       <input type="hidden" name="im_nimf_du" value="" />
       <ul>
