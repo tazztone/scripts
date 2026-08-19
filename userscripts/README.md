@@ -32,4 +32,5 @@ Every userscript resides in its own subdirectory and adheres to the standard wor
 
 ## Shared Tooling
 
+- **`bump_version_precommit.py`**: Universal pre-commit hook script that automatically increments `@version` patch numbers for any staged `*.user.js` file and syncs adjacent `README.md` install links before committing.
 - **`venv/`**: A shared Python virtual environment utilized by individual projects for automated extraction (agent-assisted) and end-to-end validation.
