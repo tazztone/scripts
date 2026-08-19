@@ -1,6 +1,6 @@
 ---
 name: userscript-development
-description: Build, refactor, debug, test, or document browser userscripts for Tampermonkey, Violentmonkey, or ScriptCat. Triggers on: userscripts, @match, @grant, @require, Shadow DOM UI, GM storage migration, ==UserConfig==, ==UserSubscribe==, or @background.
+description: Userscript engineering for Tampermonkey, Violentmonkey, and ScriptCat. Trigger on userscript development, @match, @grant, GM API quirks, Shadow DOM UI, storage migration, ScriptCat ==UserConfig==, @background, @crontab, or ==UserSubscribe== bundles.
 ---
 
 # Userscript Development
@@ -21,15 +21,17 @@ Completion criterion: the target files, current behavior, verification path, and
 
 ### 2. Metadata first
 
-Choose exactly one runtime branch:
+Choose exactly one runtime branch before writing logic:
 
-- **Foreground DOM script** — ordinary `==UserScript==` metadata; use when the script interacts with a page.
-- **ScriptCat background/cron** — use `@background` or `@crontab` only when work must run without DOM access; return a `Promise` for async work.
-- **ScriptCat subscription** — use `==UserSubscribe==` only when distributing a bundle.
+- **Foreground DOM script** — ordinary `==UserScript==` metadata; for page UI, DOM scraping, and event handling.
+- **ScriptCat background / crontab script** — use `@background` or `@crontab` only when work runs persistently or on schedule without DOM access; async operations must settle a returned `Promise`.
+- **ScriptCat subscription package** — use `==UserSubscribe==` (`.user.sub.js`) only when distributing multiple scripts as a single bundle.
 
-For every branch, declare the smallest correct `@match`, `@run-at`, `@grant`, `@connect`, and `@require` surface. Pin exact library versions in `@require`. Keep foreground `CONFIG` outside the IIFE; keep implementation and UI encapsulation inside.
+Preflight verification:
+- On Manifest V3 browsers, confirm extension developer mode or "Allow User Scripts" is toggled if scripts fail to inject.
+- Declare the smallest correct `@match`, `@run-at`, `@grant`, `@connect`, and `@require` surface. Pin exact library versions in `@require`. Keep foreground `CONFIG` outside the IIFE; keep implementation and UI encapsulation inside.
 
-Completion criterion: every declared permission is justified by an implementation use.
+Completion criterion: runtime branch chosen, preflight constraints verified, and every declared permission justified by an implementation use.
 
 ### 3. Research the page
 

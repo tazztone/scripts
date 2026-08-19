@@ -8,7 +8,7 @@ Choose one runtime before writing page logic:
 
 - **Portable foreground** — ordinary `==UserScript==`; has page DOM access.
 - **ScriptCat background/cron** — no DOM access; use `@background` or `@crontab` for persistent or scheduled work.
-- **ScriptCat subscription** — use `==UserSubscribe==` only for a distributable bundle.
+- **ScriptCat subscription** — use `==UserSubscribe==` (`.user.sub.js`) for a multi-script distributable bundle.
 
 ```javascript
 // ==UserScript==
@@ -36,12 +36,103 @@ Manifest V3 manager nuances (Chrome 120+, Tampermonkey/Violentmonkey MV3):
 - In Chrome 138+, users must toggle **"Allow User Scripts"** on the extension details page (`chrome://extensions`) if user scripts fail to run.
 - `@grant none` scripts run directly in `MAIN` world (sharing JS variables with the page); `@grant GM_*` scripts run in `USER_SCRIPT` isolated world (exempt from page CSP).
 
-ScriptCat-specific rules:
+## ScriptCat runtime extensions: UserConfig, crontab, and subscriptions
 
-- Background and cron scripts have no DOM access.
-- Async work must return a `Promise` that settles only after real work finishes.
-- Retry with `new CATRetryError(message, seconds)`; keep retry delay plus work duration below the cron interval.
-- `==UserConfig==` pairs with `GM_getValue` for manager-provided settings; `==UserSubscribe==` requires HTTPS distribution.
+### `==UserConfig==` settings block
+
+ScriptCat supports declarative in-manager settings UI using YAML. Place the `==UserConfig==` block immediately after `==UserScript==`:
+
+```javascript
+// ==UserScript==
+// @name         Configurable Script
+// @namespace    https://example.com/
+// @version      1.0.0
+// @match        https://example.com/*
+// @grant        GM_getValue
+// @grant        GM_setValue
+// ==/UserScript==
+
+/* ==UserConfig==
+settings:
+  apiToken:
+    title: API Token
+    type: text
+    password: true
+    default: ""
+  enableAutomation:
+    title: Enable Automation
+    type: checkbox
+    default: true
+  interval:
+    title: Sync Interval (seconds)
+    type: number
+    default: 60
+    min: 10
+    max: 3600
+==/UserConfig== */
+
+// Values are accessed with GM_getValue via the "group.key" namespace:
+const enabled = GM_getValue("settings.enableAutomation", true);
+const apiToken = GM_getValue("settings.apiToken", "");
+```
+
+### `@background` and `@crontab` lifecycle
+
+- **Zero DOM access**: Background and cron scripts run in a detached background sandbox without `window` or DOM APIs.
+- **Async settling contract**: Return a `Promise` for all asynchronous work. The script runtime terminates immediately when the promise settles (resolves or rejects); any `GM_*` calls triggered after settlement will fail silently.
+- **`CATRetryError` backoff**: Reject with `new CATRetryError(message, seconds)` (minimum delay 5 seconds) to request that ScriptCat schedule a retry:
+  ```javascript
+  return new Promise(async (resolve, reject) => {
+    try {
+      await syncData();
+      resolve();
+    } catch (err) {
+      reject(new CATRetryError("Sync failed, retrying in 30s", 30));
+    }
+  });
+  ```
+- **Cron rules**:
+  - Only the **first** `@crontab` directive in the script header is evaluated.
+  - Standard 5-field cron syntax is preferred (`* * * * *`).
+  - Use `once` or `once(expr)` modifiers to prevent overlapping executions within the same time bucket.
+  - Keep single execution duration + retry backoff strictly shorter than the cron interval.
+
+### `==UserSubscribe==` multi-script bundles
+
+For packaging and distributing multiple userscripts as a unified subscribable bundle:
+
+```javascript
+// ==UserSubscribe==
+// @name         Tool Suite Subscription
+// @version      1.0.0
+// @author       tazztone
+// @connect      api.example.com
+// @scriptUrl    https://example.com/scripts/core.user.js
+// @scriptUrl    https://example.com/scripts/enhancer.user.js
+// ==/UserSubscribe==
+```
+
+- Distribute with the `.user.sub.js` file extension and require HTTPS URLs.
+- User approves permissions once at subscription install; future script additions update silently unless permissions expand.
+- Subscription-level `@connect` directives cascade to and override individual child scripts.
+
+### CloudCat FaaS execution caveats
+
+When exporting background/cron tasks to ScriptCat CloudCat (FaaS execution):
+- API surface is restricted to `GM_xmlhttpRequest`, `GM_notification`, `GM_log`, and exported `GM_getValue`.
+- Use `@exportValue` and `@exportCookie` headers to explicitly permit state and credentials to synchronize to the cloud worker.
+
+## Cross-manager GM API quirks and compatibility
+
+| API / Feature | Tampermonkey / Violentmonkey | ScriptCat | Practical rule |
+| :--- | :--- | :--- | :--- |
+| `GM_setValue(k, undefined)` | Stores string `"undefined"` or errors | **Deletes the key** | Use `GM_deleteValue(k)` explicitly for cross-manager consistency. |
+| Storage async timing | Synchronous in-memory cache | Asynchronous under the hood | If a page may close immediately after saving, prefer `await GM.setValue(...)`. |
+| `GM_setClipboard` | Supports callback parameter | No callback parameter support | Avoid relying on completion callbacks for clipboard writes. |
+| `GM_openInTab` | `loadInBackground: boolean` | `active: boolean` | Prefer `{ active: true/false }` over deprecated `loadInBackground`. |
+| `GM_xmlhttpRequest` | Host headers restricted by browser | Supports `origin`, `referer`, `cookie`, `host`, `user-agent` | Declare explicit `@connect` for every target host across all engines. |
+| Response types | `text`, `json`, `blob`, `arraybuffer`, `document` | Same + `stream` support | Check manager compatibility before using streaming responses. |
+| `GM_info` metadata | Exposes `GM_info.runAt`, `sandboxMode` | `runAt` unsupported; `sandboxMode` raw | Guard access to engine-specific `GM_info` properties. |
 
 ## Foreground module shape
 
