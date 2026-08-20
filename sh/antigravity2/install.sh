@@ -70,6 +70,7 @@ Update after install:
 USAGE
 }
 
+# shellcheck disable=SC2034
 while [ $# -gt 0 ]; do
   case "$1" in
     install|update) ;;
@@ -88,7 +89,6 @@ while [ $# -gt 0 ]; do
     --status) DO_STATUS=1 ;;
     --print-downloads) DO_PRINT_DOWNLOADS=1 ;;
     --uninstall) DO_UNINSTALL=1 ;;
-    # shellcheck disable=SC2034
     -y|--yes) YES=1 ;;
     -h|--help) usage; exit 0 ;;
     *) err "Unknown option: $1" ;;

@@ -1,3 +1,6 @@
+#!/bin/bash
+# shellcheck shell=bash
+# shellcheck disable=SC2034
 # Universal Toolbox UI Adapter
 # Contains the Zenity interactive wizard and configuration form loops.
 
@@ -221,7 +224,7 @@ show_universal_wizard_flow() {
             if [[ "$H_ACCEL" == *"QSV"* ]]; then CHOICES+="🏎️ Use QSV (Intel)|"; fi
             if [[ "$H_ACCEL" == *"VAAPI"* ]]; then CHOICES+="🏎️ Use VAAPI (AMD/Intel)|"; fi
 
-            CHOICES=$(echo "$CHOICES" | sed 's/|$//')
+            CHOICES="${CHOICES%|}"
             _wizard_log "Final CHOICES: [$CHOICES]"
             
             [ -z "$CHOICES" ] && continue

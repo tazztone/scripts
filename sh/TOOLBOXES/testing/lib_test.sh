@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2034,SC2155,SC2129,SC1091
 # testing/lib_test.sh
 
 # --- Configuration ---
@@ -9,7 +10,7 @@ HEADLESS=true
 
 mkdir -p "$TEST_DATA" "$MOCK_BIN"
 if [ -z "$TEST_SUITE_RUNNING" ]; then
-    > "$REPORT_FILE"
+    : > "$REPORT_FILE"
     printf "0\n0\n" > /tmp/scripts_test_count.log
     export TEST_SUITE_RUNNING=1
 fi

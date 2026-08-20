@@ -5,9 +5,9 @@ set -euo pipefail
 
 # Source shared logic
 SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
-# shellcheck source=./common.sh
+# shellcheck source=/dev/null
 source "$SCRIPT_DIR/common.sh"
-# shellcheck source=../common/wizard.sh
+# shellcheck source=/dev/null
 source "$SCRIPT_DIR/../common/wizard.sh"
 
 init_ffmpeg_script
@@ -134,7 +134,7 @@ fi
 if [ -n "$PRELOADED_CHOICES" ]; then
     CHOICES="$PRELOADED_CHOICES"
 else
-    # shellcheck source=./Universal-UI.sh
+    # shellcheck source=/dev/null
     source "$SCRIPT_DIR/Universal-UI.sh"
     show_universal_wizard_flow
 fi
@@ -558,7 +558,7 @@ for f in "$@"; do
         ffmpeg -y -nostdin "${INPUT_OPTS[@]}" "${CMD_HW[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_2PASS[@]}" -b:v "${V_BR_INT}k" -nostats -progress /dev/stdout -pass 1 -passlogfile "$PASS_LOG" -an -f null /dev/null 2>"$LOG_FILE" | awk -v dur="$DUR" -F'=' '/out_time_us=/ { if(dur>0){ pct=($2/1000000)/dur*50; if(pct>49)pct=49; printf "%.0f\n", pct; fflush(); } }'
         STATUS=${PIPESTATUS[0]}
 
-        if [ $STATUS -ne 0 ]; then
+        if [ "$STATUS" -ne 0 ]; then
             _wizard_log "Pass 1 failed for $f"
             echo "FAIL" > "$FAIL_SENTINEL"
             zenity --error --text="Encoding Pass 1 failed for: $(basename "$f")\n\nCheck $LOG_FILE for details."
@@ -601,7 +601,7 @@ for f in "$@"; do
     fi
     
     # --- GRACEFUL RETRY (Fallback to CPU) ---
-    if [ $STATUS -ne 0 ] && [ "$USE_GPU" = true ]; then
+    if [ "$STATUS" -ne 0 ] && [ "$USE_GPU" = true ]; then
         _wizard_log "GPU Encoding failed. Retrying with CPU..."
         echo "# GPU failed. Retrying with CPU..." # Update progress bar
         
@@ -634,7 +634,7 @@ for f in "$@"; do
         STATUS=${PIPESTATUS[0]}
     fi
 
-    if [ $STATUS -eq 0 ]; then
+    if [ "$STATUS" -eq 0 ]; then
         _wizard_log "Successfully processed: $OUT_FILE"
     else
         _wizard_log "Failed to process: $f"

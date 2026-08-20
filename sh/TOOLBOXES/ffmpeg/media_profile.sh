@@ -1,3 +1,5 @@
+#!/bin/bash
+# shellcheck shell=bash
 # Media Profiler Module for Nautilus scripts-sh
 # Parses video and audio stream information in a single ffprobe pass and caches the results.
 
@@ -72,29 +74,40 @@ probe_media() {
                 PROBED_INFO[has_video]="true"
             fi
         elif [[ "$line" =~ ^streams\.stream\.([0-9]+)\.codec_name=\"([^\"]+)\" ]]; then
-            stream_codecs[${BASH_REMATCH[1]}]="${BASH_REMATCH[2]}"
+            idx="${BASH_REMATCH[1]}"
+            stream_codecs[idx]="${BASH_REMATCH[2]}"
         elif [[ "$line" =~ ^streams\.stream\.([0-9]+)\.profile=\"([^\"]+)\" ]]; then
-            stream_profiles[${BASH_REMATCH[1]}]="${BASH_REMATCH[2]}"
+            idx="${BASH_REMATCH[1]}"
+            stream_profiles[idx]="${BASH_REMATCH[2]}"
         elif [[ "$line" =~ ^streams\.stream\.([0-9]+)\.level=([0-9\-]+) ]]; then
-            stream_levels[${BASH_REMATCH[1]}]="${BASH_REMATCH[2]}"
+            idx="${BASH_REMATCH[1]}"
+            stream_levels[idx]="${BASH_REMATCH[2]}"
         elif [[ "$line" =~ ^streams\.stream\.([0-9]+)\.pix_fmt=\"([^\"]+)\" ]]; then
-            stream_pix_fmts[${BASH_REMATCH[1]}]="${BASH_REMATCH[2]}"
+            idx="${BASH_REMATCH[1]}"
+            stream_pix_fmts[idx]="${BASH_REMATCH[2]}"
         elif [[ "$line" =~ ^streams\.stream\.([0-9]+)\.width=([0-9]+) ]]; then
-            stream_widths[${BASH_REMATCH[1]}]="${BASH_REMATCH[2]}"
+            idx="${BASH_REMATCH[1]}"
+            stream_widths[idx]="${BASH_REMATCH[2]}"
         elif [[ "$line" =~ ^streams\.stream\.([0-9]+)\.height=([0-9]+) ]]; then
-            stream_heights[${BASH_REMATCH[1]}]="${BASH_REMATCH[2]}"
+            idx="${BASH_REMATCH[1]}"
+            stream_heights[idx]="${BASH_REMATCH[2]}"
         elif [[ "$line" =~ ^streams\.stream\.([0-9]+)\.r_frame_rate=\"([^\"]+)\" ]]; then
-            stream_fps[${BASH_REMATCH[1]}]="${BASH_REMATCH[2]}"
+            idx="${BASH_REMATCH[1]}"
+            stream_fps[idx]="${BASH_REMATCH[2]}"
         elif [[ "$line" =~ ^streams\.stream\.([0-9]+)\.sample_rate=\"([^\"]+)\" ]]; then
-            stream_sample_rates[${BASH_REMATCH[1]}]="${BASH_REMATCH[2]}"
+            idx="${BASH_REMATCH[1]}"
+            stream_sample_rates[idx]="${BASH_REMATCH[2]}"
         elif [[ "$line" =~ ^streams\.stream\.([0-9]+)\.channels=([0-9]+) ]]; then
-            stream_channels[${BASH_REMATCH[1]}]="${BASH_REMATCH[2]}"
+            idx="${BASH_REMATCH[1]}"
+            stream_channels[idx]="${BASH_REMATCH[2]}"
         elif [[ "$line" =~ ^streams\.stream\.([0-9]+)\.channel_layout=\"([^\"]+)\" ]]; then
-            stream_layouts[${BASH_REMATCH[1]}]="${BASH_REMATCH[2]}"
+            idx="${BASH_REMATCH[1]}"
+            stream_layouts[idx]="${BASH_REMATCH[2]}"
         elif [[ "$line" =~ ^format\.duration=\"([0-9\.]+)\" ]]; then
             PROBED_INFO[duration]="${BASH_REMATCH[1]}"
         elif [[ "$line" =~ ^streams\.stream\.([0-9]+)\.tags\.rotate=\"([0-9\-]+)\" ]]; then
-            stream_rotations[${BASH_REMATCH[1]}]="${BASH_REMATCH[2]}"
+            idx="${BASH_REMATCH[1]}"
+            stream_rotations[idx]="${BASH_REMATCH[2]}"
         fi
     done <<< "$raw_data"
 
