@@ -1,3 +1,5 @@
+#!/bin/bash
+# shellcheck shell=bash
 # Lossless Operations Toolbox UI Adapter
 # Contains Zenity interactive dialogs and wizard selection screens.
 
@@ -78,15 +80,13 @@ show_trimming_interface() {
     fi
     
     local start_time
-    start_time=$(validate_time_format "$start_input")
-    if [ $? -ne 0 ]; then
+    if ! start_time=$(validate_time_format "$start_input"); then
         zenity --error --text="Invalid start time format: '$start_input'\nUse seconds (e.g., 30) or time format (e.g., 1:30 or 01:30:45)"
         return 1
     fi
     
     local end_time
-    end_time=$(validate_time_format "$end_input")
-    if [ $? -ne 0 ]; then
+    if ! end_time=$(validate_time_format "$end_input"); then
         zenity --error --text="Invalid end time format: '$end_input'\nUse seconds (e.g., 120) or time format (e.g., 2:00 or 00:02:00)"
         return 1
     fi

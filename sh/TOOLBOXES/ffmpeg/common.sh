@@ -1,3 +1,5 @@
+#!/bin/bash
+# shellcheck shell=bash
 # Common utility functions for Nautilus FFmpeg Scripts
 
 # Sourcing Guard
@@ -5,6 +7,7 @@
 readonly _FFMPEG_COMMON_SH_LOADED=1
 
 _COMMON_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+# shellcheck source=/dev/null
 source "$_COMMON_DIR/media_profile.sh"
 
 # Ensure dependencies

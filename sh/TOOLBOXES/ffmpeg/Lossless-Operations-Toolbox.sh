@@ -1,11 +1,14 @@
 #!/bin/bash
+# shellcheck disable=SC2034,SC2155
 set -euo pipefail
 # Lossless Operations Toolbox
 # Specialized script for lossless video operations using FFmpeg stream copy only
 
 # Source shared logic
 SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+# shellcheck source=/dev/null
 source "$SCRIPT_DIR/common.sh"
+# shellcheck source=/dev/null
 source "$SCRIPT_DIR/../common/wizard.sh"
 
 init_ffmpeg_script
@@ -590,6 +593,7 @@ get_container_optimization_flags() {
     esac
 }
 ## ===== USER INTERFACE =====
+# shellcheck source=/dev/null
 source "$SCRIPT_DIR/Lossless-UI.sh"
 
 # Enhanced main script execution with preset support

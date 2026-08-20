@@ -4,9 +4,9 @@ set -euo pipefail
 # Smart Recipe Builder - Stack edits and Context-Aware UI
 
 SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
-# shellcheck source=./common.sh
+# shellcheck source=/dev/null
 source "$SCRIPT_DIR/common.sh"
-# shellcheck source=../common/wizard.sh
+# shellcheck source=/dev/null
 source "$SCRIPT_DIR/../common/wizard.sh"
 
 init_imagemagick_script
