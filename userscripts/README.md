@@ -10,7 +10,7 @@ Requires Violentmonkey (or a compatible userscript manager):
 
 ## Standard Project Structure
 
-Every userscript resides in its own subdirectory and adheres to the standard workflow defined in [userscript-development](./userscript-development/SKILL.md):
+Every userscript resides in its own subdirectory:
 
 - **`RESEARCH_LOG.md`**: Rigorous documentation of the target site's DOM structure, robust selectors, and visual heuristics. Used to ensure longevity against UI updates.
 - **`[name].user.js`**: The source code following a strict component separation (CONFIG, STYLES, UTILITIES, LOGIC, ORCHESTRATION).
@@ -26,7 +26,7 @@ Every userscript resides in its own subdirectory and adheres to the standard wor
 | [**`huggingface`**](./huggingface) | Hugging Face Heart & Date Filter: Filter models/datasets by last modified date, auto-unheart/heart toggle, non-blocking toasts. |
 | [**`perplexity`**](./perplexity) | Perplexity Enhancements: Keeps preferred model active, auto-approves action cards, and enables GitHub connector. |
 | [**`toppreise`**](./toppreise) | Toppreise.ch Suite: Best price highlighting, negative text filter, hierarchical category exclusion, and price alarm automation. |
-| [**`userscript-development`**](./userscript-development) | Specialized workflow guidelines, architectural standards, and reference templates used to generate and maintain these scripts. |
+| [**`fastlog-watcher`**](./fastlog-watcher) | Fastlog Watcher: Real-time event and log stream monitor (under development). |
 
 ---
 

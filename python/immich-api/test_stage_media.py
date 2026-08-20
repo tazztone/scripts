@@ -1,9 +1,14 @@
 import json
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
+
+# Add current directory to sys.path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 from stage_media import (
     sanitize_filename,
     generate_staged_name,

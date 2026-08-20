@@ -1,5 +1,10 @@
 import unittest
+import sys
 from pathlib import Path
+
+# Add current directory to sys.path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 from resolve_auto_organize import classify_media_clip, get_strict_resolution_label, get_normalized_fps_label
 
 class TestResolveAutoOrganize(unittest.TestCase):
