@@ -1,5 +1,37 @@
+import sys
 import unittest
-from unittest.mock import Mock
+from pathlib import Path
+from unittest.mock import Mock, MagicMock
+
+# Add current directory to sys.path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+# Ensure google modules can be imported even if not installed in current environment
+for mod in [
+    "google_auth_oauthlib",
+    "google_auth_oauthlib.flow",
+    "google.auth",
+    "google.auth.transport",
+    "google.auth.transport.requests",
+    "google.oauth2",
+    "google.oauth2.credentials",
+    "googleapiclient",
+    "googleapiclient.discovery",
+    "googleapiclient.errors",
+    "httplib2",
+]:
+    if mod not in sys.modules:
+        sys.modules[mod] = MagicMock()
+
+class MockHttpError(Exception):
+    def __init__(self, resp=None, content=b""):
+        self.resp = resp
+        self.content = content
+
+import duplicate_scanner
+if not isinstance(duplicate_scanner.HttpError, type) or not issubclass(duplicate_scanner.HttpError, BaseException):
+    duplicate_scanner.HttpError = MockHttpError
+
 from duplicate_scanner import SelectionAssistant
 
 class TestSelectionAssistant(unittest.TestCase):
@@ -109,14 +141,11 @@ class TestSelectionAssistant(unittest.TestCase):
 
 class TestFetchAllFiles(unittest.TestCase):
     def test_fetch_all_files_http_error(self):
+        import duplicate_scanner
         from duplicate_scanner import fetch_all_files
-        from googleapiclient.errors import HttpError
-        import httplib2
 
         mock_service = Mock()
-        mock_execute = Mock()
-        mock_resp = httplib2.Response({'status': 500})
-        mock_execute.side_effect = HttpError(resp=mock_resp, content=b'{"error": "Simulated error"}')
+        mock_execute = Mock(side_effect=duplicate_scanner.HttpError(resp=Mock(status=500), content=b'{"error": "Simulated error"}'))
         mock_list = Mock()
         mock_list.execute = mock_execute
         mock_files = Mock()

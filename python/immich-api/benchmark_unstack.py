@@ -2,9 +2,21 @@ import time
 import requests
 import json
 import os
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
-import importlib.util
+from pathlib import Path
+
+current_dir = Path(__file__).resolve().parent
+sys.path.insert(0, str(current_dir))
+
+try:
+    import dotenv
+except ImportError:
+    from unittest.mock import MagicMock
+    sys.modules['dotenv'] = MagicMock()
+
+import timelapse_stacking
 
 # Setup a dummy server to mock Immich API
 class MockImmichHandler(BaseHTTPRequestHandler):
@@ -23,6 +35,9 @@ class MockImmichHandler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
+    def log_message(self, format, *args):
+        pass # Suppress HTTP server logging during benchmark
+
 def run_server():
     server = HTTPServer(('localhost', 8283), MockImmichHandler)
     server.serve_forever()
@@ -30,14 +45,9 @@ def run_server():
 server_thread = threading.Thread(target=run_server, daemon=True)
 server_thread.start()
 
-# Load timelapse_stacking.py module
-import sys
-sys.path.append(os.path.abspath("python/immich-api"))
-import timelapse_stacking
-
 # Override settings
 timelapse_stacking.BASE_URL = "http://localhost:8283"
-timelapse_stacking.LOG_PATH = "timelapse_stacking_last_run.json"
+timelapse_stacking.LOG_PATH = str(current_dir / "timelapse_stacking_benchmark_run.json")
 
 # Create fake log
 run_log = [
@@ -47,13 +57,11 @@ run_log = [
 with open(timelapse_stacking.LOG_PATH, "w") as f:
     json.dump(run_log, f)
 
-# Original time
-start = time.time()
-timelapse_stacking.unstack_last_run()
-end = time.time()
-
-print(f"Time taken: {end - start:.2f} seconds")
-
-# Clean up log
-if os.path.exists(timelapse_stacking.LOG_PATH):
-    os.remove(timelapse_stacking.LOG_PATH)
+try:
+    start = time.time()
+    timelapse_stacking.unstack_last_run()
+    end = time.time()
+    print(f"Time taken: {end - start:.2f} seconds")
+finally:
+    if os.path.exists(timelapse_stacking.LOG_PATH):
+        os.remove(timelapse_stacking.LOG_PATH)
