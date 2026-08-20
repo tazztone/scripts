@@ -5,15 +5,19 @@ set -euo pipefail
 
 # Source shared logic
 SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+# shellcheck source=./common.sh
 source "$SCRIPT_DIR/common.sh"
+# shellcheck source=../common/wizard.sh
 source "$SCRIPT_DIR/../common/wizard.sh"
 
 init_ffmpeg_script
 
 # --- CONFIG & PRESETS ---
 state_init "ffmpeg"
+# shellcheck disable=SC2034
 CONFIG_DIR="$STATE_CONFIG_DIR"
 PRESET_FILE="$STATE_PRESET_FILE"
+# shellcheck disable=SC2034
 HISTORY_FILE="$STATE_HISTORY_FILE"
 LOG_FILE="${LOG_FILE:-$HOME/.local/share/scripts-sh/ffmpeg_last_run.log}"
 mkdir -p "$(dirname "$LOG_FILE")"
@@ -26,7 +30,6 @@ USER_TARGET_MB=""
 USER_TRIM_S=""
 USER_TRIM_E=""
 USER_W=""
-USER_SPEED=""
 USER_RATIO=""
 USER_AUDIO_FILTER=""
 USER_SUB_STYLE=""
@@ -37,11 +40,17 @@ START=""
 PTS=""
 ATEMPO=""
 SPEED_VAL=""
+# shellcheck disable=SC2034
 VAL_ispd=" (Inactive)"
+# shellcheck disable=SC2034
 VAL_ires=" (Inactive)"
+# shellcheck disable=SC2034
 VAL_icrp=" (Inactive)"
+# shellcheck disable=SC2034
 VAL_ior=" (Inactive)"
+# shellcheck disable=SC2034
 VAL_iaud=" (Inactive)"
+# shellcheck disable=SC2034
 VAL_isub=" (Inactive)"
 REMOVE_AUDIO=false
 USE_GPU=false
@@ -125,6 +134,7 @@ fi
 if [ -n "$PRELOADED_CHOICES" ]; then
     CHOICES="$PRELOADED_CHOICES"
 else
+    # shellcheck source=./Universal-UI.sh
     source "$SCRIPT_DIR/Universal-UI.sh"
     show_universal_wizard_flow
 fi
@@ -133,9 +143,6 @@ fi
 state_add_history "$CHOICES"
 
 # --- EXTRACT EMBEDDED CONFIG VALUES FROM CHOICES ---
-if [[ "$CHOICES" =~ Speed:\ ([0-9.x]+) ]]; then
-    USER_SPEED="${BASH_REMATCH[1]}"
-fi
 if [[ "$CHOICES" =~ Custom\ Scale\ Width:([0-9]+) ]]; then
     USER_W="${BASH_REMATCH[1]}"
 fi
@@ -194,7 +201,6 @@ GLOBAL_OPTS=("-movflags" "+faststart")
 EXT="mp4"
 TAG=""
 FILTER_COUNT=0
-FPS_OVERRIDE=""
 USE_GPU=false
 GPU_TYPE=""
 CMD_HW=() # Initialize CMD_HW array
@@ -421,7 +427,6 @@ fi
 
 # --- SUBTITLES ---
 HAS_SUBS=false
-SUB_EXT=""
 if [[ "$CHOICES" == *"Subtitles: Burn-in"* ]]; then HAS_SUBS=true; SUB_TYPE="burn"; TAG="${TAG}_sub"; fi
 if [[ "$CHOICES" == *"Subtitles: Mux"* ]]; then HAS_SUBS=true; SUB_TYPE="mux"; TAG="${TAG}_sub"; fi
 
@@ -549,7 +554,7 @@ for f in "$@"; do
         
         # PASS 1 (Fast & Silent)
         echo "# Pass 1: Analyzing $(basename "$f")..."
-        _wizard_log "Pass 1 command: ffmpeg -y -nostdin ${INPUT_OPTS[@]} ${CMD_HW[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_2PASS[@]} -b:v ${V_BR_INT}k -pass 1 -passlogfile $PASS_LOG -an -f null /dev/null"
+        _wizard_log "Pass 1 command: ffmpeg -y -nostdin ${INPUT_OPTS[*]} ${CMD_HW[*]} -i $f ${SUB_MAPPING[*]} ${CMD_FILTERS[*]} ${VCODEC_2PASS[*]} -b:v ${V_BR_INT}k -pass 1 -passlogfile $PASS_LOG -an -f null /dev/null"
         ffmpeg -y -nostdin "${INPUT_OPTS[@]}" "${CMD_HW[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_2PASS[@]}" -b:v "${V_BR_INT}k" -nostats -progress /dev/stdout -pass 1 -passlogfile "$PASS_LOG" -an -f null /dev/null 2>"$LOG_FILE" | awk -v dur="$DUR" -F'=' '/out_time_us=/ { if(dur>0){ pct=($2/1000000)/dur*50; if(pct>49)pct=49; printf "%.0f\n", pct; fflush(); } }'
         STATUS=${PIPESTATUS[0]}
 
@@ -563,7 +568,8 @@ for f in "$@"; do
         
         # PASS 2 (Actual Encode)
         echo "# Pass 2: Encoding $(basename "$f")..."
-        _wizard_log "Pass 2 command: ffmpeg -y -nostdin ${INPUT_OPTS[@]} ${CMD_HW[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_2PASS[@]} -b:v ${V_BR_INT}k -pass 2 -passlogfile $PASS_LOG ${CURRENT_ACORE[@]} ${FPS_ARG[@]} ${GLOBAL_OPTS[@]} ${EXTRA_OPTS} $OUT_FILE"
+        _wizard_log "Pass 2 command: ffmpeg -y -nostdin ${INPUT_OPTS[*]} ${CMD_HW[*]} -i $f ${SUB_MAPPING[*]} ${CMD_FILTERS[*]} ${VCODEC_2PASS[*]} -b:v ${V_BR_INT}k -pass 2 -passlogfile $PASS_LOG ${CURRENT_ACORE[*]} ${FPS_ARG[*]} ${GLOBAL_OPTS[*]} ${EXTRA_OPTS} $OUT_FILE"
+        # shellcheck disable=SC2086
         ffmpeg -y -nostdin "${INPUT_OPTS[@]}" "${CMD_HW[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_2PASS[@]}" -b:v "${V_BR_INT}k" -nostats -progress /dev/stdout -pass 2 -passlogfile "$PASS_LOG" "${CURRENT_ACORE[@]}" "${FPS_ARG[@]}" "${GLOBAL_OPTS[@]}" ${EXTRA_OPTS} "$OUT_FILE" 2>>"$LOG_FILE" | awk -v dur="$DUR" -F'=' '/out_time_us=/ { if(dur>0){ pct=50+($2/1000000)/dur*50; if(pct>99)pct=99; printf "%.0f\n", pct; fflush(); } }'
         
         STATUS=${PIPESTATUS[0]}
@@ -588,7 +594,8 @@ for f in "$@"; do
     else
         # Standard Video/Audio (CRF/CQ Mode)
         echo "# Encoding $(basename "$f")..."
-        _wizard_log "Executing: ffmpeg -y -nostdin ${INPUT_OPTS[@]} ${CMD_HW[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_OPTS[@]} ${CURRENT_ACORE[@]} ${FPS_ARG[@]} ${GLOBAL_OPTS[@]} ${EXTRA_OPTS} $OUT_FILE"
+        _wizard_log "Executing: ffmpeg -y -nostdin ${INPUT_OPTS[*]} ${CMD_HW[*]} -i $f ${SUB_MAPPING[*]} ${CMD_FILTERS[*]} ${VCODEC_OPTS[*]} ${CURRENT_ACORE[*]} ${FPS_ARG[*]} ${GLOBAL_OPTS[*]} ${EXTRA_OPTS} $OUT_FILE"
+        # shellcheck disable=SC2086
         ffmpeg -y -nostdin "${INPUT_OPTS[@]}" "${CMD_HW[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_OPTS[@]}" -nostats -progress /dev/stdout "${CURRENT_ACORE[@]}" "${FPS_ARG[@]}" "${GLOBAL_OPTS[@]}" ${EXTRA_OPTS} "$OUT_FILE" 2>"$LOG_FILE" | awk -v dur="$DUR" -F'=' '/out_time_us=/ { if(dur>0){ pct=($2/1000000)/dur*100; if(pct>99)pct=99; printf "%.0f\n", pct; fflush(); } }'
         STATUS=${PIPESTATUS[0]}
     fi
@@ -621,7 +628,8 @@ for f in "$@"; do
             GLOBAL_OPTS=("${NEW_GLOBAL[@]}")
         fi
 
-        _wizard_log "Retrying with: ffmpeg -y -nostdin ${INPUT_OPTS[@]} -i $f ${SUB_MAPPING[@]} ${CMD_FILTERS[@]} ${VCODEC_OPTS[@]} ${CURRENT_ACORE[@]} ${FPS_ARG[@]} ${GLOBAL_OPTS[@]} $OUT_FILE"
+        _wizard_log "Retrying with: ffmpeg -y -nostdin ${INPUT_OPTS[*]} -i $f ${SUB_MAPPING[*]} ${CMD_FILTERS[*]} ${VCODEC_OPTS[*]} ${CURRENT_ACORE[*]} ${FPS_ARG[*]} ${GLOBAL_OPTS[*]} $OUT_FILE"
+        # shellcheck disable=SC2086
         ffmpeg -y -nostdin "${INPUT_OPTS[@]}" -i "$f" "${SUB_MAPPING[@]}" "${CMD_FILTERS[@]}" "${VCODEC_OPTS[@]}" ${EXTRA_OPTS} -nostats -progress /dev/stdout "${CURRENT_ACORE[@]}" "${FPS_ARG[@]}" "${GLOBAL_OPTS[@]}" "$OUT_FILE" 2>>"$LOG_FILE" | awk -v dur="$DUR" -F'=' '/out_time_us=/ { if(dur>0){ pct=($2/1000000)/dur*100; if(pct>99)pct=99; printf "%.0f\n", pct; fflush(); } }'
         STATUS=${PIPESTATUS[0]}
     fi
