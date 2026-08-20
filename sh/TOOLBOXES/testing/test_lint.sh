@@ -12,12 +12,22 @@ FAILED=0
 # Use process substitution to avoid subshell scope issues
 while IFS= read -r -d '' script; do
     relative_path="${script#$PROJECT_ROOT/}"
-    if bash -n "$script" 2>/tmp/lint_error.log; then
-        log_pass "Syntax OK: $relative_path"
+    if command -v shellcheck &>/dev/null; then
+        if shellcheck "$script" 2>/tmp/lint_error.log && bash -n "$script" 2>/tmp/lint_error.log; then
+            log_pass "ShellCheck & Syntax OK: $relative_path"
+        else
+            log_fail "Lint ERROR: $relative_path"
+            cat /tmp/lint_error.log
+            FAILED=$((FAILED + 1))
+        fi
     else
-        log_fail "Syntax ERROR: $relative_path"
-        cat /tmp/lint_error.log
-        FAILED=$((FAILED + 1))
+        if bash -n "$script" 2>/tmp/lint_error.log; then
+            log_pass "Syntax OK: $relative_path"
+        else
+            log_fail "Syntax ERROR: $relative_path"
+            cat /tmp/lint_error.log
+            FAILED=$((FAILED + 1))
+        fi
     fi
 done < <(find "$PROJECT_ROOT" -name "*.sh" -not -path "*/.*" -print0)
 
