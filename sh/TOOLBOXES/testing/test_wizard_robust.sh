@@ -10,11 +10,6 @@ source "$PROJECT_ROOT/common/wizard.sh"
 
 log_info "Starting Robust Wizard Parser Tests..."
 
-# Mock zenity locally
-zenity() {
-    echo "$MOCK_RESULT"
-}
-
 # Helper to test the parser in isolation
 test_parser_isolated() {
     local name="$1"

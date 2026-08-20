@@ -68,7 +68,11 @@ run_test "$IM_TOOLBOX" "tags=text" "$TEST_DATA/input.jpg" || FAILED=1
 # Test 10: PDF Extract (Images from PDF)
 echo "Test 10: PDF Extract"
 cp "$TEST_DATA/input.jpg" "$TEST_DATA/extract_test.jpg"
-magick "$TEST_DATA/extract_test.jpg" "$TEST_DATA/extract_test.pdf"
+if command -v magick &>/dev/null; then
+    magick "$TEST_DATA/extract_test.jpg" "$TEST_DATA/extract_test.pdf"
+elif command -v convert &>/dev/null; then
+    convert "$TEST_DATA/extract_test.jpg" "$TEST_DATA/extract_test.pdf"
+fi
 export MOCK_LIST="Action: ExtractPDF|Convert Format"
 export MOCK_FILE="."
 export MOCK_FORMS="JPG|Web Ready (Quality 85)|"
