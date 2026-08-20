@@ -148,7 +148,11 @@ generate_test_media() {
     ffmpeg -y -nostdin -f lavfi -i color=c=black:s=1280x720:d=1:r=30 -f lavfi -i anullsrc=r=44100:cl=stereo:d=1 \
            -c:v libx264 -c:a aac -pix_fmt yuv420p "$TEST_DATA/input.mp4" &>/dev/null
     ffmpeg -y -nostdin -f lavfi -i color=c=blue:s=1280x720:d=1 -vframes 1 "$TEST_DATA/input.jpg" &>/dev/null
-    magick -size 100x100 xc:transparent "$TEST_DATA/alpha.png" &>/dev/null
+    if command -v magick &>/dev/null; then
+        magick -size 100x100 xc:transparent "$TEST_DATA/alpha.png" &>/dev/null
+    elif command -v convert &>/dev/null; then
+        convert -size 100x100 xc:transparent "$TEST_DATA/alpha.png" &>/dev/null
+    fi
 
     # Create src.* copies for compatibility with legacy tests
     cp "$TEST_DATA/input.mp4" "$TEST_DATA/src.mp4"
@@ -219,7 +223,11 @@ validate_media() {
             format)
                 local fmt=""
                 if [[ "$file" =~ \.(jpg|png|webp|gif|jpeg)$ ]]; then
-                    fmt=$(magick identify -format "%m" "$file" 2>/dev/null | tr '[:upper:]' '[:lower:]' | head -n 1)
+                    if command -v magick &>/dev/null; then
+                        fmt=$(magick identify -format "%m" "$file" 2>/dev/null | tr '[:upper:]' '[:lower:]' | head -n 1)
+                    elif command -v identify &>/dev/null; then
+                        fmt=$(identify -format "%m" "$file" 2>/dev/null | tr '[:upper:]' '[:lower:]' | head -n 1)
+                    fi
                 else
                     fmt=$(ffprobe -v error -show_entries format=format_name -of default=noprint_wrappers=1:nokey=1 "$file" | head -n 1 | cut -d',' -f1 | tr -d '\n\r' | tr '[:upper:]' '[:lower:]')
                 fi

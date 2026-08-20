@@ -4,7 +4,9 @@ set -euo pipefail
 # Smart Recipe Builder - Stack edits and Context-Aware UI
 
 SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+# shellcheck source=./common.sh
 source "$SCRIPT_DIR/common.sh"
+# shellcheck source=../common/wizard.sh
 source "$SCRIPT_DIR/../common/wizard.sh"
 
 init_imagemagick_script
@@ -27,6 +29,7 @@ fi
 
 # --- CONFIG ---
 state_init "imagemagick"
+# shellcheck disable=SC2034
 CONFIG_DIR="$STATE_CONFIG_DIR"
 PRESET_FILE="$STATE_PRESET_FILE"
 HISTORY_FILE="$STATE_HISTORY_FILE"
@@ -209,7 +212,6 @@ show_main_menu() {
     if [[ "$HAS_AUDIO" -eq 1 ]]; then INTENTS+=";🔇|Remove Audio|Strip audio from video"; fi
 
     local LOOP_COUNT=0
-    local -a VALS=()
     while true; do
         LOOP_COUNT=$((LOOP_COUNT + 1))
         if [ $LOOP_COUNT -gt 10 ]; then
@@ -272,7 +274,8 @@ show_main_menu() {
                         RES=$(show_scale_interface || true)
                         if [ -z "$RES" ]; then continue; fi
                         parse_forms_result "$RES" "resolution" "custom_geometry"
-                        local CLEAN_RES=$(echo "${CONFIG[resolution]}" | sed 's/ (.*)$//')
+                        local CLEAN_RES
+                        CLEAN_RES="${CONFIG[resolution]%% (*)}"
                         if [[ "$CLEAN_RES" == "50%" ]]; then recipe_list+=("Scale: 50%")
                         elif [[ "$CLEAN_RES" == "Custom" ]]; then recipe_list+=("CustomGeometry:${CONFIG[custom_geometry]}")
                         else recipe_list+=("Scale: $CLEAN_RES")
@@ -320,7 +323,8 @@ show_main_menu() {
                         RES=$(show_montage_interface || true)
                         if [ -z "$RES" ]; then continue; fi
                         parse_forms_result "$RES" "layout" "custom_grid"
-                        local CLEAN_MONT=$(echo "${CONFIG[layout]}" | sed 's/ (.*)$//')
+                        local CLEAN_MONT
+                        CLEAN_MONT="${CONFIG[layout]%% (*)}"
                         if [ -n "${CONFIG[custom_grid]}" ]; then
                             echo "Canvas: CustomGrid:${CONFIG[custom_grid]}"
                         else
@@ -507,6 +511,7 @@ if [ ${#FORMAT_ARGS[@]} -gt 0 ]; then IM_ARGS+=("${FORMAT_ARGS[@]}"); fi
 # --- SPECIAL MODE: MONTAGE ---
 if [ "$DO_MONTAGE" = true ]; then
     OUT_FILE=$(generate_safe_filename "montage" "$TAG" "${OUT_EXT:-jpg}")
+    # shellcheck disable=SC2086,SC2153
     ( echo "10"; echo "# Creating Montage..."; $IM_MONTAGE "$@" "${IM_ARGS[@]}" "$OUT_FILE" ) | zenity --progress --title="Creating Montage" --auto-close --pulsate
     zenity --notification --text="Montage Finished: $OUT_FILE"
     exit 0

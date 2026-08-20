@@ -54,7 +54,7 @@ if [ $MISSING_DEPS -eq 1 ]; then
     PKG_CMD=$(detect_pkg_mgr)
     echo -e "${RED}Please install missing dependencies manually:${NC}"
     echo "  $PKG_CMD ffmpeg imagemagick zenity bc"
-    read -p "Do you want to continue installation anyway? (y/N) " confirm
+    read -r -p "Do you want to continue installation anyway? (y/N) " confirm
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
         echo "Installation aborted."
         exit 1
@@ -101,7 +101,7 @@ install_scripts() {
                          continue
                      fi
                 else
-                     read -p "Overwrite existing link for $(basename "$script")? (y/N) " confirm
+                     read -r -p "Overwrite existing link for $(basename "$script")? (y/N) " confirm
                      [[ ! "$confirm" =~ ^[Yy]$ ]] && { echo "  Skipped: $(basename "$script")"; continue; }
                 fi
             fi

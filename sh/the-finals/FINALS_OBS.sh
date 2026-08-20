@@ -62,9 +62,9 @@ if [ "$OBS_WAS_RUNNING" -eq 0 ]; then
     sleep 15
 
     # Gracefully shut down OBS to release GPU/VRAM encode sessions
-    obs_pids=$(pgrep -x "obs|obs-studio" 2>/dev/null)
-    if [ -n "$obs_pids" ]; then
-      kill -TERM $obs_pids >/dev/null 2>&1
+    mapfile -t obs_pids < <(pgrep -x "obs|obs-studio" 2>/dev/null)
+    if [ "${#obs_pids[@]}" -gt 0 ]; then
+      kill -TERM "${obs_pids[@]}" >/dev/null 2>&1
     fi
   ) >/dev/null 2>&1 &
 fi

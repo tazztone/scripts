@@ -1,3 +1,5 @@
+#!/bin/bash
+# shellcheck shell=bash
 # Common utility functions for Nautilus ImageMagick Scripts
 
 # Sourcing Guard
@@ -9,6 +11,7 @@ init_imagemagick_script() {
     _wizard_check_zenity
 
     # Check for ImageMagick v7 (magick) or v6 (convert)
+    # shellcheck disable=SC2034
     if command -v magick &> /dev/null; then
         IM_EXE="magick"
         IM_MONTAGE="magick montage"
