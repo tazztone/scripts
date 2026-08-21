@@ -217,3 +217,75 @@ def test_negative_text_filter_toggle(page: Page):
     page.click('#hf-date-filter-root >> #hf-exclude-toggle + .hf-slider')
     page.wait_for_function("document.querySelector('#card-gguf').classList.contains('hf-filtered-out')")
     assert 'hf-filtered-out' in (page.locator('#card-gguf').get_attribute('class') or '')
+
+
+def test_widget_collapse_and_expand(page: Page):
+    # Initially expanded
+    assert 'collapsed' not in (page.locator('#hf-date-filter-root >> #hf-date-filter-widget').get_attribute('class') or '')
+    assert page.locator('#hf-date-filter-root >> #hf-widget-body').is_visible()
+
+    # Click header to collapse
+    page.click('#hf-date-filter-root >> #hf-df-header')
+    page.wait_for_function("document.querySelector('#hf-date-filter-root').shadowRoot.querySelector('#hf-date-filter-widget').classList.contains('collapsed')")
+    assert 'collapsed' in (page.locator('#hf-date-filter-root >> #hf-date-filter-widget').get_attribute('class') or '')
+    assert not page.locator('#hf-date-filter-root >> #hf-widget-body').is_visible()
+
+    # Click collapse button to expand
+    page.click('#hf-date-filter-root >> #hf-df-collapse-btn')
+    page.wait_for_function("!document.querySelector('#hf-date-filter-root').shadowRoot.querySelector('#hf-date-filter-widget').classList.contains('collapsed')")
+    assert 'collapsed' not in (page.locator('#hf-date-filter-root >> #hf-date-filter-widget').get_attribute('class') or '')
+    assert page.locator('#hf-date-filter-root >> #hf-widget-body').is_visible()
+
+
+def test_reset_all_filters_button(page: Page):
+    # Set negative keywords and enable date preset
+    page.fill('#hf-date-filter-root >> #hf-exclude-input', 'gguf')
+    page.click('#hf-date-filter-root >> [data-preset="7d"]')
+    page.wait_for_function("document.querySelector('#card-gguf').classList.contains('hf-filtered-out')")
+
+    # Click reset button in header
+    page.click('#hf-date-filter-root >> #hf-df-reset-btn')
+    page.wait_for_function("document.querySelector('#hf-date-filter-root').shadowRoot.querySelector('#hf-exclude-input').value === ''")
+
+    # Verify input cleared and all cards shown
+    assert page.locator('#hf-date-filter-root >> #hf-exclude-input').input_value() == ''
+    assert 'All shown (4)' in page.locator('#hf-date-filter-root >> #hf-df-badge').inner_text()
+    assert 'hf-filtered-out' not in (page.locator('#card-gguf').get_attribute('class') or '')
+
+
+def test_summary_chips_rendering(page: Page):
+    # Add negative keyword filter
+    page.fill('#hf-date-filter-root >> #hf-exclude-input', 'gguf')
+    page.wait_for_function("document.querySelector('#hf-date-filter-root').shadowRoot.querySelectorAll('.hf-df-chip').length >= 1")
+    chips_text = page.locator('#hf-date-filter-root >> #hf-df-summary-chips').inner_text()
+    assert 'gguf' in chips_text
+
+    # Enable date preset
+    page.click('#hf-date-filter-root >> [data-preset="30d"]')
+    page.wait_for_function("document.querySelector('#hf-date-filter-root').shadowRoot.querySelectorAll('.hf-df-chip').length === 2")
+    chips_text = page.locator('#hf-date-filter-root >> #hf-df-summary-chips').inner_text()
+    assert '30d' in chips_text
+
+
+def test_keyboard_shortcut_alt_f(page: Page):
+    # Press Alt+F to focus and toggle
+    page.keyboard.press('Alt+KeyF')
+    page.wait_for_timeout(100)
+    focused_id = page.evaluate("document.querySelector('#hf-date-filter-root').shadowRoot.activeElement?.id")
+    assert focused_id == 'hf-exclude-input'
+
+
+def test_widget_on_zero_model_cards_page(browser, userscript_content):
+    page = browser.new_page()
+    page.goto(MOCK_HTML)
+    # Clear all model cards to simulate a single model page or empty search
+    page.evaluate("document.querySelector('#model-grid').innerHTML = ''")
+    page.evaluate(userscript_content)
+    page.wait_for_selector('#hf-date-filter-root')
+
+    # Badge should show Ready and no empty-notice alert should appear
+    badge_text = page.locator('#hf-date-filter-root >> #hf-df-badge').inner_text()
+    assert badge_text in ['Ready', 'All shown (0)']
+    assert page.locator('#hf-df-empty-notice').count() == 0
+    page.close()
+

@@ -33,3 +33,12 @@ Hugging Face model cards render as `<article class="overview-card-wrapper">`:
 
 - `MutationObserver` watches `childList` and `subtree` on `document.body`, filtering out internal mutations on `#hf-date-filter-root` or `#hf-toast-root`.
 - The script listens to `self.navigation.addEventListener('navigatesuccess')` for client-side route changes.
+
+## 6. Collapsible Widget & Compact UI Architecture
+
+- The widget supports persisted collapsible state stored via `GM_setValue('WIDGET_COLLAPSED')`.
+- When collapsed, the widget renders as a slim 34px bar displaying active filter summary chips (`.hf-df-chip`) such as `🚫 term` and `📅 ≤180d`.
+- Compact layout streamlines inputs, preset buttons, and sliders into a ~120px tall body (reduced from >320px).
+- A one-click `Reset` button (`↺`) resets all filters to default.
+- Hotkey `Alt+F` toggles collapse/expand and automatically focuses the keyword input.
+

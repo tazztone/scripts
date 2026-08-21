@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Hugging Face Inline Liking, Unliked Model Highlighter, Date & Negative Filter
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.0.1
+// @version      2.0.2
 // @description  Like or unlike model cards inline, highlight unliked models, and filter models by date range slider and negative text keywords.
 // @author       tazztone
 // @match        https://huggingface.co/*
@@ -23,7 +23,8 @@ const DEFAULTS = {
   DATE_MAX_DAYS: 30,
   DATE_PRESET: 'all',
   FILTER_EXCLUDE_ENABLED: true,
-  FILTER_EXCLUDE_TERMS: ''
+  FILTER_EXCLUDE_TERMS: '',
+  WIDGET_COLLAPSED: false
 };
 
 const PRESETS = [
@@ -71,13 +72,13 @@ const CARD_STYLES = `
     cursor: pointer !important;
   }
   #hf-df-empty-notice {
-    margin: 16px 0;
-    padding: 14px 16px;
+    margin: 12px 0;
+    padding: 10px 14px;
     border: 1px dashed rgba(245, 158, 11, 0.4);
-    border-radius: 12px;
+    border-radius: 10px;
     background: rgba(245, 158, 11, 0.08);
     color: #fbbf24;
-    font-size: 13px;
+    font-size: 12px;
     text-align: center;
     line-height: 1.4;
   }
@@ -89,84 +90,183 @@ const SHADOW_WIDGET_STYLES = `
     all: initial;
     display: block;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin-bottom: 12px;
   }
   #hf-date-filter-widget {
     box-sizing: border-box;
     width: 100%;
-    margin-bottom: 24px;
-    padding: 14px 16px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
-    background: rgba(15, 23, 42, 0.65);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     color: #f1f5f9;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+    transition: all 0.2s ease;
+    overflow: hidden;
   }
-  #hf-date-filter-widget .hf-df-header {
+  #hf-date-filter-widget.has-active-filters {
+    border-color: rgba(245, 158, 11, 0.35);
+  }
+
+  /* ── HEADER (COLLAPSIBLE BAR) ── */
+  .hf-df-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 12px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 7px 10px;
+    cursor: pointer;
+    user-select: none;
+    background: rgba(255, 255, 255, 0.02);
+    transition: background 0.15s ease;
+    gap: 8px;
   }
-  #hf-date-filter-widget .hf-df-title {
-    font-size: 13px;
+  .hf-df-header:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+  .hf-df-header-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .hf-df-title {
+    font-size: 11px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: #fbbf24;
     display: flex;
     align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+  }
+  .hf-df-summary-chips {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    overflow: hidden;
+  }
+  .hf-df-chip {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(245, 158, 11, 0.18);
+    color: #fde68a;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    max-width: 140px;
+  }
+  .hf-df-header-right {
+    display: flex;
+    align-items: center;
     gap: 6px;
+    flex-shrink: 0;
+  }
+  .hf-df-badge {
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    font-size: 10px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .hf-df-header-btn {
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 2px 5px;
+    border-radius: 4px;
+    font-size: 10px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+  }
+  .hf-df-header-btn:hover {
+    color: #f8fafc;
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+  .hf-df-collapse-icon {
+    transition: transform 0.2s ease;
+  }
+  #hf-date-filter-widget.collapsed .hf-df-collapse-icon {
+    transform: rotate(-90deg);
   }
 
+  /* ── WIDGET BODY ── */
+  .hf-widget-body {
+    padding: 8px 10px 10px 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  #hf-date-filter-widget.collapsed .hf-widget-body {
+    display: none !important;
+  }
+
+  /* ── SECTION COMPACT LAYOUTS ── */
   .hf-filter-section {
-    margin-bottom: 12px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .hf-filter-section:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
   }
   .hf-filter-section-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 8px;
+    margin-bottom: 5px;
   }
   .hf-filter-section-title {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: #cbd5e1;
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
   }
   .hf-section-body {
     transition: opacity 0.2s ease;
   }
   .hf-section-dimmed {
-    opacity: 0.4;
-    pointer-events: none;
+    opacity: 0.45;
   }
 
+  /* Exclude Input Row */
+  .hf-exclude-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
   .hf-exclude-input-wrapper {
     position: relative;
     display: flex;
     align-items: center;
-    width: 100%;
+    flex: 1;
   }
   .hf-exclude-input {
     box-sizing: border-box;
     width: 100%;
-    height: 30px;
-    padding: 4px 26px 4px 8px;
+    height: 26px;
+    padding: 3px 22px 3px 7px;
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 6px;
-    background: rgba(15, 23, 42, 0.8);
+    border-radius: 5px;
+    background: rgba(15, 23, 42, 0.85);
     color: #f8fafc;
-    font-size: 12px;
+    font-size: 11px;
     font-family: inherit;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
   }
@@ -177,16 +277,16 @@ const SHADOW_WIDGET_STYLES = `
   }
   .hf-clear-btn {
     position: absolute;
-    right: 6px;
+    right: 5px;
     top: 50%;
     transform: translateY(-50%);
     background: none;
     border: none;
     color: #94a3b8;
-    font-size: 14px;
+    font-size: 12px;
     line-height: 1;
     cursor: pointer;
-    padding: 2px 4px;
+    padding: 1px 3px;
     border-radius: 3px;
     display: none;
   }
@@ -196,130 +296,97 @@ const SHADOW_WIDGET_STYLES = `
   .hf-clear-btn:hover {
     color: #f87171;
   }
-  .hf-exclude-hint {
-    font-size: 10px;
-    color: #64748b;
-    margin-top: 4px;
-    display: flex;
-    justify-content: space-between;
-  }
 
-  #hf-date-filter-widget .hf-df-presets {
+  /* Date Presets Row */
+  .hf-df-presets {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
-    margin-bottom: 10px;
+    gap: 3px;
+    margin-bottom: 6px;
   }
   .hf-df-preset-btn {
-    padding: 3px 8px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 6px;
-    background: rgba(255, 255, 255, 0.05);
+    padding: 2px 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.04);
     color: #94a3b8;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.15s ease;
+    line-height: 1.2;
   }
   .hf-df-preset-btn:hover {
-    background: rgba(251, 191, 36, 0.15);
+    background: rgba(251, 191, 36, 0.12);
     color: #fef08a;
-    border-color: rgba(251, 191, 36, 0.4);
+    border-color: rgba(251, 191, 36, 0.35);
   }
   .hf-df-preset-btn.active {
-    background: rgba(245, 158, 11, 0.25);
+    background: rgba(245, 158, 11, 0.22);
     color: #fbbf24;
     border-color: #f59e0b;
-    box-shadow: 0 0 8px rgba(245, 158, 11, 0.3);
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.25);
   }
 
+  /* Date Controls (Slider + Inline Inputs) */
   .hf-df-controls {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 5px;
   }
-  .hf-df-range-container {
+  .hf-df-slider-inputs-row {
     display: flex;
-    flex-direction: column;
+    align-items: center;
     gap: 6px;
   }
-  .hf-df-inputs {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .hf-df-input-group {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    flex: 1;
-  }
-  .hf-df-input-group label {
-    font-size: 10px;
-    color: #94a3b8;
-    text-transform: uppercase;
-  }
-  .hf-df-input-group input[type="number"] {
-    box-sizing: border-box;
-    width: 100%;
-    height: 28px;
-    padding: 2px 6px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 6px;
-    background: rgba(15, 23, 42, 0.8);
-    color: #f8fafc;
-    font-size: 12px;
-  }
-  .hf-df-slider-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .hf-df-slider-row input[type="range"] {
+  .hf-df-slider-inputs-row input[type="range"] {
     flex: 1;
     accent-color: #f59e0b;
+    height: 4px;
+    cursor: pointer;
+  }
+  .hf-df-inline-input {
+    box-sizing: border-box;
+    width: 44px;
+    height: 22px;
+    padding: 1px 4px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+    background: rgba(15, 23, 42, 0.85);
+    color: #f8fafc;
+    font-size: 10px;
+    text-align: center;
+    font-family: inherit;
+  }
+  .hf-df-inline-input:focus {
+    outline: none;
+    border-color: #f59e0b;
   }
   .hf-df-range-label {
-    font-size: 11px;
-    color: #cbd5e1;
-    line-height: 1.3;
-    background: rgba(0, 0, 0, 0.2);
-    padding: 6px 8px;
-    border-radius: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-  }
-  .hf-df-status {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    margin-top: 4px;
-  }
-  .hf-df-status-main {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 11px;
-    color: #94a3b8;
-  }
-  .hf-df-badge {
-    padding: 2px 6px;
-    border-radius: 4px;
-    background: rgba(16, 185, 129, 0.15);
-    color: #34d399;
-    font-weight: 600;
-  }
-  .hf-df-substatus {
     font-size: 10px;
     color: #94a3b8;
-    text-align: right;
-    min-height: 14px;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
+  /* Status Subdetails */
+  .hf-df-substatus {
+    font-size: 9px;
+    color: #94a3b8;
+    text-align: right;
+    min-height: 11px;
+    margin-top: -2px;
+  }
+
+  /* Switch Toggle */
   .hf-switch {
-    width: 36px;
-    height: 20px;
+    width: 28px;
+    height: 16px;
     position: relative;
     display: inline-block;
+    flex-shrink: 0;
   }
   .hf-switch input {
     opacity: 0;
@@ -329,53 +396,55 @@ const SHADOW_WIDGET_STYLES = `
   .hf-slider {
     position: absolute;
     inset: 0;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 20px;
-    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    background: rgba(15, 23, 42, 0.8);
     cursor: pointer;
+    transition: background 0.2s ease;
   }
   .hf-slider::before {
     content: "";
     position: absolute;
     left: 2px;
     bottom: 2px;
-    width: 14px;
-    height: 14px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
     background: #94a3b8;
-    transition: transform 0.25s ease;
+    transition: transform 0.2s ease, background 0.2s ease;
   }
   .hf-switch input:checked + .hf-slider {
     background: #f59e0b;
+    border-color: #f59e0b;
   }
   .hf-switch input:checked + .hf-slider::before {
-    transform: translateX(16px);
+    transform: translateX(12px);
     background: #fff;
   }
 
+  /* Highlighter Settings */
   .hf-df-settings-toggle {
     background: none;
     border: none;
     color: #94a3b8;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
     cursor: pointer;
     display: flex;
     align-items: center;
     gap: 4px;
     padding: 0;
-    margin-top: 8px;
-    transition: color 0.2s ease;
+    transition: color 0.15s ease;
   }
   .hf-df-settings-toggle:hover {
     color: #fbbf24;
   }
   .hf-df-settings-panel {
     display: none;
-    margin-top: 10px;
-    padding-top: 10px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-    gap: 10px;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    gap: 6px;
     flex-direction: column;
   }
   .hf-df-settings-panel.open {
@@ -385,15 +454,15 @@ const SHADOW_WIDGET_STYLES = `
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 12px;
+    font-size: 10px;
     color: #cbd5e1;
   }
   .hf-settings-row input[type="color"] {
-    width: 32px;
-    height: 24px;
-    padding: 1px;
+    width: 24px;
+    height: 18px;
+    padding: 0;
     border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 4px;
+    border-radius: 3px;
     background: transparent;
     cursor: pointer;
   }
@@ -412,9 +481,9 @@ const SHADOW_WIDGET_STYLES = `
     background: rgba(15, 23, 42, 0.95);
     border: 1px solid rgba(255, 255, 255, 0.15);
     color: #f8fafc;
-    padding: 10px 16px;
-    border-radius: 8px;
-    font-size: 13px;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 12px;
     font-weight: 500;
     box-shadow: 0 4px 14px rgba(0,0,0,0.35);
     pointer-events: auto;
@@ -1109,27 +1178,30 @@ const SHADOW_WIDGET_STYLES = `
 
   // ─── SHADOW DOM SIDEBAR WIDGET ───────────────────────────────────────────────
   function findWidgetTarget() {
-    const sidebars = document.querySelectorAll('aside, [class*="sidebar"]');
+    // 1. Check for left sidebar containers (holding Tasks, Libraries, Parameters, etc.)
+    const sidebars = document.querySelectorAll('aside, [class*="sidebar"], div[class*="col-span-"]');
     for (const sb of sidebars) {
       if (sb.closest('header, nav, #hf-date-filter-root')) continue;
-      const text = sb.textContent;
+      const text = sb.textContent || '';
       if (text.includes('Tasks') || text.includes('Libraries') || text.includes('Languages') || text.includes('Licenses') || text.includes('Parameters')) {
         return { element: sb, method: 'prepend' };
       }
     }
 
+    // 2. Check for form containers in sidebars
     const forms = document.querySelectorAll('form');
     for (const f of forms) {
       if (f.closest('header, nav, #hf-date-filter-root')) continue;
       if (f.querySelector('input[placeholder*="Search models, datasets"]')) continue;
-      const aside = f.closest('aside');
+      const aside = f.closest('aside, div[class*="sidebar"]');
       if (aside && !aside.closest('header, nav, #hf-date-filter-root')) return { element: aside, method: 'prepend' };
-      const text = f.textContent;
+      const text = f.textContent || '';
       if (text.includes('Tasks') || text.includes('Libraries') || text.includes('Languages') || text.includes('Licenses')) {
         return { element: f, method: 'prepend' };
       }
     }
 
+    // 3. Check for overview card grid (embed before grid if no sidebar)
     const card = document.querySelector('article.overview-card-wrapper');
     if (card) {
       const grid = card.closest('.grid, [class*="grid"], [class*="gap-"]');
@@ -1141,6 +1213,7 @@ const SHADOW_WIDGET_STYLES = `
       }
     }
 
+    // 4. Main content fallback (single model pages, user profiles)
     const mainSection = document.querySelector('main section, main');
     if (mainSection && !mainSection.closest('header, nav, #hf-date-filter-root')) {
       return { element: mainSection, method: 'prepend' };
@@ -1173,120 +1246,125 @@ const SHADOW_WIDGET_STYLES = `
 
     shadow.innerHTML = `
       <style>${SHADOW_WIDGET_STYLES}</style>
-      <div id="hf-date-filter-widget">
-        <div class="hf-df-header">
-          <div class="hf-df-title">
-            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-            </svg>
-            Model Filters
-          </div>
-        </div>
-
-        <!-- SECTION 1: Exclude Text Filter -->
-        <div class="hf-filter-section" id="hf-exclude-section">
-          <div class="hf-filter-section-header">
-            <div class="hf-filter-section-title">
+      <div id="hf-date-filter-widget" class="${CONFIG.WIDGET_COLLAPSED ? 'collapsed' : ''}">
+        <!-- HEADER / COLLAPSIBLE BAR -->
+        <div class="hf-df-header" id="hf-df-header" title="Click to collapse / expand (Alt+F)">
+          <div class="hf-df-header-left">
+            <div class="hf-df-title">
               <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
               </svg>
-              Exclude Keywords
+              <span>Model Filters</span>
             </div>
-            <label class="hf-switch" title="Toggle negative text filter">
-              <input id="hf-exclude-toggle" type="checkbox">
-              <span class="hf-slider"></span>
-            </label>
-          </div>
-          <div class="hf-section-body" id="hf-exclude-section-body">
-            <div class="hf-exclude-input-wrapper">
-              <input type="text" id="hf-exclude-input" class="hf-exclude-input" placeholder="e.g. gguf, fp8, /test.*/i" autocomplete="off" spellcheck="false">
-              <button type="button" id="hf-exclude-clear-btn" class="hf-clear-btn" title="Clear filter terms">✕</button>
-            </div>
-            <div class="hf-exclude-hint">
-              <span>Comma-separated or /regex/</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- SECTION 2: Date Range Filter -->
-        <div class="hf-filter-section" id="hf-date-section">
-          <div class="hf-filter-section-header">
-            <div class="hf-filter-section-title">
-              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              Date Range
-            </div>
-            <label class="hf-switch" title="Toggle date range filter">
-              <input id="hf-df-toggle" type="checkbox">
-              <span class="hf-slider"></span>
-            </label>
+            <div class="hf-df-summary-chips" id="hf-df-summary-chips"></div>
           </div>
 
-          <div class="hf-section-body" id="hf-date-section-body">
-            <div class="hf-df-presets" id="hf-df-presets-container">
-              ${PRESETS.map(p => `<button type="button" class="hf-df-preset-btn" data-preset="${p.id}">${p.label}</button>`).join('')}
-            </div>
-
-            <div class="hf-df-controls">
-              <div class="hf-df-range-container">
-                <div class="hf-df-slider-row">
-                  <input type="range" id="hf-df-slider-max" min="1" max="365" step="1" title="Max days ago (Updated recently)">
-                </div>
-                <div class="hf-df-inputs">
-                  <div class="hf-df-input-group">
-                    <label for="hf-df-min-input">Min Days</label>
-                    <input type="number" id="hf-df-min-input" min="0" max="3650" placeholder="0">
-                  </div>
-                  <div class="hf-df-input-group">
-                    <label for="hf-df-max-input">Max Days</label>
-                    <input type="number" id="hf-df-max-input" min="0" max="3650" placeholder="30">
-                  </div>
-                </div>
-              </div>
-
-              <div class="hf-df-range-label" id="hf-df-range-label">
-                Updated: Today – 30 days ago
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- STATUS BAR -->
-        <div class="hf-df-status">
-          <div class="hf-df-status-main">
-            <span>Filter Status</span>
+          <div class="hf-df-header-right">
             <span class="hf-df-badge" id="hf-df-badge">All shown</span>
+            <button type="button" class="hf-df-header-btn" id="hf-df-reset-btn" title="Reset all filters to default">
+              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
+            <button type="button" class="hf-df-header-btn hf-df-collapse-icon" id="hf-df-collapse-btn" title="Toggle collapse (Alt+F)">
+              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
           </div>
-          <div class="hf-df-substatus" id="hf-df-substatus"></div>
         </div>
 
-        <!-- SECTION 3: Highlighter Options -->
-        <button type="button" class="hf-df-settings-toggle" id="hf-df-settings-toggle">
-          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-          </svg>
-          Highlighter Options
-        </button>
+        <!-- EXPANDED BODY -->
+        <div class="hf-widget-body" id="hf-widget-body">
+          <!-- SECTION 1: Exclude Text Filter -->
+          <div class="hf-filter-section" id="hf-exclude-section">
+            <div class="hf-filter-section-header">
+              <div class="hf-filter-section-title">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                </svg>
+                Exclude Keywords
+              </div>
+              <label class="hf-switch" title="Toggle negative text filter">
+                <input id="hf-exclude-toggle" type="checkbox">
+                <span class="hf-slider"></span>
+              </label>
+            </div>
+            <div class="hf-section-body" id="hf-exclude-section-body">
+              <div class="hf-exclude-row">
+                <div class="hf-exclude-input-wrapper">
+                  <input type="text" id="hf-exclude-input" class="hf-exclude-input" placeholder="Exclude: e.g. gguf, fp8, /test.*/i" autocomplete="off" spellcheck="false">
+                  <button type="button" id="hf-exclude-clear-btn" class="hf-clear-btn" title="Clear filter terms">✕</button>
+                </div>
+              </div>
+            </div>
+          </div>
 
-        <div class="hf-df-settings-panel" id="hf-df-settings-panel">
-          <div class="hf-settings-row">
-            <label for="hf-border-unliked-enabled">Highlight unliked models</label>
-            <label class="hf-switch">
-              <input id="hf-border-unliked-enabled" type="checkbox">
-              <span class="hf-slider"></span>
-            </label>
+          <!-- SECTION 2: Date Range Filter -->
+          <div class="hf-filter-section" id="hf-date-section">
+            <div class="hf-filter-section-header">
+              <div class="hf-filter-section-title">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Date Range
+              </div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span class="hf-df-range-label" id="hf-df-range-label">Updated: Today – 30d</span>
+                <label class="hf-switch" title="Toggle date range filter">
+                  <input id="hf-df-toggle" type="checkbox">
+                  <span class="hf-slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="hf-section-body" id="hf-date-section-body">
+              <div class="hf-df-presets" id="hf-df-presets-container">
+                ${PRESETS.map(p => `<button type="button" class="hf-df-preset-btn" data-preset="${p.id}">${p.label}</button>`).join('')}
+              </div>
+
+              <div class="hf-df-controls">
+                <div class="hf-df-slider-inputs-row">
+                  <input type="number" id="hf-df-min-input" class="hf-df-inline-input" min="0" max="3650" placeholder="0" title="Min days ago">
+                  <input type="range" id="hf-df-slider-max" min="1" max="365" step="1" title="Max days ago slider">
+                  <input type="number" id="hf-df-max-input" class="hf-df-inline-input" min="0" max="3650" placeholder="30" title="Max days ago">
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="hf-settings-row">
-            <label for="hf-border-unliked-glow">Enable border glow</label>
-            <label class="hf-switch">
-              <input id="hf-border-unliked-glow" type="checkbox">
-              <span class="hf-slider"></span>
-            </label>
-          </div>
-          <div class="hf-settings-row">
-            <label for="hf-border-unliked-color">Border color</label>
-            <input id="hf-border-unliked-color" type="color">
+
+          <!-- STATUS SUBDETAILS -->
+          <div class="hf-df-substatus" id="hf-df-substatus"></div>
+
+          <!-- SECTION 3: Highlighter Options -->
+          <div class="hf-filter-section" style="border-bottom: none; padding-bottom: 0;">
+            <button type="button" class="hf-df-settings-toggle" id="hf-df-settings-toggle">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              </svg>
+              <span>Highlighter Options</span>
+            </button>
+
+            <div class="hf-df-settings-panel" id="hf-df-settings-panel">
+              <div class="hf-settings-row">
+                <label for="hf-border-unliked-enabled">Highlight unliked</label>
+                <label class="hf-switch">
+                  <input id="hf-border-unliked-enabled" type="checkbox">
+                  <span class="hf-slider"></span>
+                </label>
+              </div>
+              <div class="hf-settings-row">
+                <label for="hf-border-unliked-glow">Border glow</label>
+                <label class="hf-switch">
+                  <input id="hf-border-unliked-glow" type="checkbox">
+                  <span class="hf-slider"></span>
+                </label>
+              </div>
+              <div class="hf-settings-row">
+                <label for="hf-border-unliked-color">Color</label>
+                <input id="hf-border-unliked-color" type="color">
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1303,9 +1381,31 @@ const SHADOW_WIDGET_STYLES = `
     syncWidgetUI();
   }
 
+  function toggleWidgetCollapse() {
+    CONFIG.WIDGET_COLLAPSED = !CONFIG.WIDGET_COLLAPSED;
+    saveConfig('WIDGET_COLLAPSED', CONFIG.WIDGET_COLLAPSED);
+    syncWidgetUI();
+  }
+
+  function resetAllFilters() {
+    saveConfig('FILTER_EXCLUDE_TERMS', '');
+    saveConfig('FILTER_EXCLUDE_ENABLED', true);
+    saveConfig('DATE_FILTER_ENABLED', false);
+    saveConfig('DATE_PRESET', 'all');
+    saveConfig('DATE_MIN_DAYS', 0);
+    saveConfig('DATE_MAX_DAYS', 99999);
+    syncWidgetUI();
+    processModelCards();
+    showToast('Filters reset to default');
+  }
+
   function bindWidgetEvents() {
     if (!widgetShadowRoot) return;
     const shadow = widgetShadowRoot;
+
+    const header = shadow.getElementById('hf-df-header');
+    const collapseBtn = shadow.getElementById('hf-df-collapse-btn');
+    const resetBtn = shadow.getElementById('hf-df-reset-btn');
 
     const excludeToggle = shadow.getElementById('hf-exclude-toggle');
     const excludeInput = shadow.getElementById('hf-exclude-input');
@@ -1322,6 +1422,22 @@ const SHADOW_WIDGET_STYLES = `
     const colorInput = shadow.getElementById('hf-border-unliked-color');
     const settingsToggleBtn = shadow.getElementById('hf-df-settings-toggle');
     const settingsPanel = shadow.getElementById('hf-df-settings-panel');
+
+    // Header collapse / expand handling
+    header?.addEventListener('click', (e) => {
+      if (e.target.closest('#hf-df-reset-btn')) return;
+      toggleWidgetCollapse();
+    });
+
+    collapseBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleWidgetCollapse();
+    });
+
+    resetBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      resetAllFilters();
+    });
 
     settingsToggleBtn?.addEventListener('click', () => {
       settingsPanel?.classList.toggle('open');
@@ -1346,6 +1462,7 @@ const SHADOW_WIDGET_STYLES = `
 
       if (textInputDebounceTimer) clearTimeout(textInputDebounceTimer);
       textInputDebounceTimer = setTimeout(() => {
+        syncWidgetUI();
         processModelCards();
       }, 120);
 
@@ -1355,7 +1472,8 @@ const SHADOW_WIDGET_STYLES = `
       }, 350);
     });
 
-    clearBtn?.addEventListener('click', () => {
+    clearBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
       saveConfig('FILTER_EXCLUDE_TERMS', '');
       if (excludeInput) excludeInput.value = '';
       clearBtn.classList.remove('visible');
@@ -1427,9 +1545,34 @@ const SHADOW_WIDGET_STYLES = `
     });
   }
 
+  // Keyboard shortcut Alt+F
+  window.addEventListener('keydown', (e) => {
+    if (e.altKey && (e.key === 'f' || e.key === 'F')) {
+      e.preventDefault();
+      if (!widgetShadowRoot) return;
+      const widget = widgetShadowRoot.getElementById('hf-date-filter-widget');
+      const input = widgetShadowRoot.getElementById('hf-exclude-input');
+      if (widget?.classList.contains('collapsed')) {
+        CONFIG.WIDGET_COLLAPSED = false;
+        saveConfig('WIDGET_COLLAPSED', false);
+        syncWidgetUI();
+        setTimeout(() => input?.focus(), 50);
+      } else if (widgetShadowRoot.activeElement === input) {
+        CONFIG.WIDGET_COLLAPSED = true;
+        saveConfig('WIDGET_COLLAPSED', true);
+        syncWidgetUI();
+      } else {
+        input?.focus();
+      }
+    }
+  });
+
   function syncWidgetUI() {
     if (!widgetShadowRoot) return;
     const shadow = widgetShadowRoot;
+
+    const widget = shadow.getElementById('hf-date-filter-widget');
+    const summaryChips = shadow.getElementById('hf-df-summary-chips');
 
     const excludeToggle = shadow.getElementById('hf-exclude-toggle');
     const excludeInput = shadow.getElementById('hf-exclude-input');
@@ -1448,9 +1591,35 @@ const SHADOW_WIDGET_STYLES = `
     const glowToggle = shadow.getElementById('hf-border-unliked-glow');
     const colorInput = shadow.getElementById('hf-border-unliked-color');
 
+    const isTextActive = Boolean(CONFIG.FILTER_EXCLUDE_ENABLED && (CONFIG.FILTER_EXCLUDE_TERMS || '').trim());
+    const isDateActive = Boolean(CONFIG.DATE_FILTER_ENABLED);
+    const hasActiveFilters = isTextActive || isDateActive;
+
+    if (widget) {
+      widget.classList.toggle('collapsed', Boolean(CONFIG.WIDGET_COLLAPSED));
+      widget.classList.toggle('has-active-filters', hasActiveFilters);
+    }
+
+    // Update summary chips
+    if (summaryChips) {
+      const chips = [];
+      if (isTextActive) {
+        const raw = CONFIG.FILTER_EXCLUDE_TERMS.trim();
+        const display = raw.length > 14 ? raw.slice(0, 12) + '…' : raw;
+        chips.push(`<span class="hf-df-chip" title="Excluded: ${raw}">🚫 ${display}</span>`);
+      }
+      if (isDateActive) {
+        const label = CONFIG.DATE_PRESET !== 'custom' ? CONFIG.DATE_PRESET : `≤${CONFIG.DATE_MAX_DAYS}d`;
+        chips.push(`<span class="hf-df-chip" title="Date range: ${label}">📅 ${label}</span>`);
+      }
+      summaryChips.innerHTML = chips.join('');
+    }
+
     if (excludeToggle) excludeToggle.checked = Boolean(CONFIG.FILTER_EXCLUDE_ENABLED);
     if (excludeInput) {
-      excludeInput.value = CONFIG.FILTER_EXCLUDE_TERMS || '';
+      if (excludeInput.value !== (CONFIG.FILTER_EXCLUDE_TERMS || '')) {
+        excludeInput.value = CONFIG.FILTER_EXCLUDE_TERMS || '';
+      }
       if (clearBtn) {
         clearBtn.classList.toggle('visible', Boolean(CONFIG.FILTER_EXCLUDE_TERMS));
       }
@@ -1480,14 +1649,12 @@ const SHADOW_WIDGET_STYLES = `
     });
 
     if (rangeLabel) {
-      const minStr = formatDateLabel(CONFIG.DATE_MIN_DAYS);
-      const maxStr = formatDateLabel(CONFIG.DATE_MAX_DAYS);
-      if (CONFIG.DATE_MAX_DAYS >= 9999) {
-        rangeLabel.textContent = `Updated: ${minStr} and older`;
+      if (!CONFIG.DATE_FILTER_ENABLED || CONFIG.DATE_PRESET === 'all' || CONFIG.DATE_MAX_DAYS >= 9999) {
+        rangeLabel.textContent = `All time`;
       } else if (CONFIG.DATE_MIN_DAYS === 0) {
-        rangeLabel.textContent = `Updated: Last ${CONFIG.DATE_MAX_DAYS} days (${maxStr} – Today)`;
+        rangeLabel.textContent = `≤ ${CONFIG.DATE_MAX_DAYS}d`;
       } else {
-        rangeLabel.textContent = `Updated: ${CONFIG.DATE_MIN_DAYS} to ${CONFIG.DATE_MAX_DAYS} days ago (${maxStr} – ${minStr})`;
+        rangeLabel.textContent = `${CONFIG.DATE_MIN_DAYS}d–${CONFIG.DATE_MAX_DAYS}d`;
       }
     }
   }
@@ -1501,6 +1668,14 @@ const SHADOW_WIDGET_STYLES = `
     if (!badge) return;
 
     const isAnyActive = isDateActive || isTextActive;
+
+    if (totalCount === 0) {
+      badge.textContent = isAnyActive ? 'Active' : 'Ready';
+      badge.style.background = isAnyActive ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.15)';
+      badge.style.color = isAnyActive ? '#fbbf24' : '#34d399';
+      if (substatus) substatus.textContent = isAnyActive ? 'Settings persist for model lists' : '';
+      return;
+    }
 
     if (!isAnyActive) {
       badge.textContent = `All shown (${totalCount})`;
@@ -1549,3 +1724,4 @@ const SHADOW_WIDGET_STYLES = `
     init();
   }
 })();
+
