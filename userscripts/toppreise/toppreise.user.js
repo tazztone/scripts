@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.9.4
+// @version      2.9.5
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -101,7 +101,15 @@ const STYLES = `
   body.tp-reveal-filtered .tp-category-filtered,
   body.tp-reveal-filtered .tp-min-offers-filtered {
     display: block !important;
-    opacity: 0.35 !important;
+    opacity: var(--tp-dim-opacity, 0.25) !important;
+    filter: grayscale(40%) !important;
+    transition: opacity 0.3s ease, filter 0.3s ease !important;
+  }
+  body.tp-reveal-filtered .tp-negative-filtered:hover,
+  body.tp-reveal-filtered .tp-category-filtered:hover,
+  body.tp-reveal-filtered .tp-min-offers-filtered:hover {
+    opacity: 0.6 !important;
+    filter: grayscale(10%) !important;
   }
 
   /* 1-Click Card Quick-Block Category Action Button (Bottom-Left Overlay) */
@@ -3193,6 +3201,7 @@ const SHADOW_MODAL_STYLES = `
       };
 
       const closeModal = () => {
+        document.documentElement.style.setProperty('--tp-dim-opacity', CONFIG.DIM_OPACITY);
         if (typeof dialog.hidePopover === 'function') {
           dialog.hidePopover();
         } else if (typeof dialog.close === 'function') {
@@ -3253,7 +3262,7 @@ const SHADOW_MODAL_STYLES = `
           </div>
           
           <div class="tp-settings-group" id="tp-dim-opacity-group">
-            <label title="Deckkraft für gedimmte Produkte im Dimmen-Modus">Transparenz Nicht-Günstigste</label>
+            <label title="Deckkraft für gedimmte Angebote sowie eingeblendete gefilterte Produkte">Deckkraft / Dimmung (Gedimmt & Gefiltert)</label>
             <div class="tp-range-container">
               <input type="range" id="tp-opacity-range" min="0.05" max="0.95" step="0.05" value="0.25">
               <input type="number" id="tp-opacity-val" min="5" max="95" step="5" value="25">
@@ -3579,14 +3588,10 @@ const SHADOW_MODAL_STYLES = `
 
     function updateOpacityState(selectedMode) {
       const opacityGroup = shadow.getElementById('tp-dim-opacity-group');
-      if (selectedMode === 'dim') {
+      if (opacityGroup) {
         opacityGroup.style.opacity = '1';
         opacityRange.disabled = false;
         opacityVal.disabled = false;
-      } else {
-        opacityGroup.style.opacity = '0.4';
-        opacityRange.disabled = true;
-        opacityVal.disabled = true;
       }
     }
 
@@ -3594,8 +3599,16 @@ const SHADOW_MODAL_STYLES = `
     marginRange.addEventListener('input', (e) => marginVal.value = e.target.value);
     marginVal.addEventListener('input', (e) => marginRange.value = parseFloat(e.target.value) || 0);
 
-    opacityRange.addEventListener('input', (e) => opacityVal.value = Math.round(parseFloat(e.target.value) * 100));
-    opacityVal.addEventListener('input', (e) => opacityRange.value = (parseInt(e.target.value) || 25) / 100);
+    opacityRange.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value) || 0.25;
+      opacityVal.value = Math.round(val * 100);
+      document.documentElement.style.setProperty('--tp-dim-opacity', val);
+    });
+    opacityVal.addEventListener('input', (e) => {
+      const val = (parseInt(e.target.value) || 25) / 100;
+      opacityRange.value = val;
+      document.documentElement.style.setProperty('--tp-dim-opacity', val);
+    });
 
     minOffersRange.addEventListener('input', (e) => minOffersVal.value = e.target.value);
     minOffersVal.addEventListener('input', (e) => minOffersRange.value = parseInt(e.target.value) || 0);
