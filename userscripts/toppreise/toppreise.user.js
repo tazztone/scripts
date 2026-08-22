@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.9.6
+// @version      2.9.7
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -2577,44 +2577,54 @@ const SHADOW_MODAL_STYLES = `
   function getSuiteBarPlacement() {
     const bar = document.getElementById('tp-suite-filter-bar');
 
-    // 1. Native filter container on category/search pages
-    const nativeFilters = document.querySelector('.filters, #filters, .filter_box, .filter-box');
-    if (nativeFilters && nativeFilters.parentElement && nativeFilters !== bar) {
-      return { container: nativeFilters.parentElement, reference: nativeFilters };
+    // Helper: Verify element is safe from native filter/header click capture & AJAX wiping
+    const isSafe = (el) => {
+      if (!el) return false;
+      return !el.closest('.header, [class*="MainTopHead"], [class*="MainHead"], .f_filter_plugin, .filters, .filterBox, #tp-root, dialog');
+    };
+
+    // 1. Primary: Main page product listing container on deals, search, and category pages
+    const mainTargets = [
+      '#Page_ListTopPriceReductionProducts',
+      '#Page_ListTop100Products',
+      '[id^="Page_List"]',
+      '#Page_Browsing',
+      '.f_browsingListContainer',
+      '#Plugin_MixedBrowsingList',
+      '[id^="Plugin_MixedBrowsingList"]',
+      '.standardList',
+      '#product-list'
+    ];
+
+    for (const sel of mainTargets) {
+      const target = document.querySelector(sel);
+      if (target && target.parentElement && isSafe(target.parentElement) && target !== bar) {
+        return { container: target.parentElement, reference: target };
+      }
     }
 
-    // 2. Main page listing container (Page_ListTopPriceReductionProducts, bestListContainer, etc.)
-    const mainPage = document.querySelector('[id^="Page_List"], .bestListContainer, .pageContainer, #browseContent');
-    if (mainPage && mainPage.parentElement && mainPage !== bar) {
-      return { container: mainPage.parentElement, reference: mainPage };
+    // 2. Fallback: Main content area (FrameContent / pageContent)
+    const contentContainers = [
+      document.getElementById('FrameContent'),
+      document.querySelector('#tpContent .pageContent'),
+      document.querySelector('.pageContent'),
+      document.querySelector('#browseContent'),
+      document.querySelector('main'),
+      document.querySelector('#content')
+    ];
+
+    for (const container of contentContainers) {
+      if (container && isSafe(container) && container !== bar) {
+        let ref = container.firstElementChild;
+        while (ref && (ref === bar || !isSafe(ref))) {
+          ref = ref.nextElementSibling;
+        }
+        return { container, reference: ref || null };
+      }
     }
 
-    // 3. Directly below site header (Plugin_MainHead) inside FrameContent
-    const mainHead = document.querySelector('[class*="MainHead"]');
-    if (mainHead && mainHead.parentElement && mainHead !== bar) {
-      let ref = mainHead.nextElementSibling;
-      while (ref === bar) ref = ref.nextElementSibling;
-      return { container: mainHead.parentElement, reference: ref };
-    }
-
-    // 4. Main page content area fallback
-    const mainContent = document.querySelector('#tpContent .pageContent') ||
-      document.querySelector('#browseContent') ||
-      document.querySelector('.pageContent') ||
-      document.querySelector('main') ||
-      document.querySelector('#content');
-
-    if (mainContent && mainContent !== bar) {
-      let ref = mainContent.firstChild;
-      while (ref === bar) ref = ref.nextSibling;
-      return { container: mainContent, reference: ref };
-    }
-
-    // 5. Fallback: FrameContent or Body
-    const frameContent = document.getElementById('FrameContent') || document.body;
-    let ref = frameContent.firstChild;
-    while (ref === bar) ref = ref.nextSibling;
-    return { container: frameContent, reference: ref };
+    // 3. Last-resort fallback: document.body
+    return { container: document.body, reference: document.body.firstElementChild };
   }
 
   // Unified Glassmorphic Power Filter Bar prepended to top of product content

@@ -96,6 +96,10 @@ This document details the DOM selectors, event management, and filter logic for 
     - *Gotcha*: Quick-block category buttons on search result pages or specific category catalog pages clutter targeted user browsing where category-blocking is unnecessary.
     - *Rule*: Restrict `.tp-card-quick-block` strictly to Neue Toppreise feed pages (`isNeueToppreisePage()`), and actively clean up lingering buttons on regular catalog/search listings.
 
+12. **Safe Placement Anchor (Avoid `.f_filter_plugin` and Site Header)**:
+    - *Gotcha*: Anchoring the filter bar inside `.f_filter_plugin` or `.filters` caused Toppreise's native `standard.js` AJAX replacement and jQuery event capture to intercept clicks and wipe the bar on filter changes. Anchoring inside the site header placed it beneath backdrop overlays.
+    - *Rule*: Always mount `#tp-suite-filter-bar` as a direct child of `#FrameContent` / `.pageContent` directly preceding the primary product browsing container (`#Page_List...`, `#Page_Browsing`, `.f_browsingListContainer`, `#Plugin_MixedBrowsingList`), and strictly verify `parentElement` is not an unsafe container.
+
 ---
 
 ## 6. Comprehensive Category Taxonomy & Resolution Engine (v2.8.12)

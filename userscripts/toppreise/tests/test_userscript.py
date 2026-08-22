@@ -203,3 +203,26 @@ def test_quick_block_hidden_on_non_neue_toppreise_pages(page: Page):
     assert quick_blocks.count() == 0
 
 
+def test_filter_bar_mounting_safety_and_interaction(page: Page):
+    # Assert filter bar is not mounted inside .f_filter_plugin, .filters, or header
+    is_safe_placement = page.evaluate("""() => {
+        const bar = document.getElementById('tp-suite-filter-bar');
+        if (!bar) return false;
+        return !bar.closest('.header, [class*="MainTopHead"], [class*="MainHead"], .f_filter_plugin, .filters, .filterBox');
+    }""")
+    assert is_safe_placement is True
+
+    # Test toggling category drawer on filter bar
+    toggle_btn = page.locator('#tp-toggle-cats-btn')
+    assert toggle_btn.is_visible()
+    toggle_btn.click()
+    page.wait_for_selector('#tp-collapsible-cat-row', state='visible')
+
+    # Test negative input interaction
+    neg_input = page.locator('#tp-inline-negative-input')
+    neg_input.fill('Adapter')
+    page.wait_for_timeout(250)
+    assert neg_input.input_value() == 'Adapter'
+
+
+
