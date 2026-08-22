@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.9.5
+// @version      2.9.6
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -2852,6 +2852,19 @@ const SHADOW_MODAL_STYLES = `
     }
   }
 
+  function isNeueToppreisePage() {
+    const path = (window.location.pathname || '') + (window.location.search || '');
+    const currentUrl = document.body?.getAttribute('data-current_url') || '';
+    return path.includes('neue-toppreise') ||
+           path.includes('new-best-prices') ||
+           path.includes('nouveaux-meilleurs-prix') ||
+           currentUrl.includes('neue-toppreise') ||
+           currentUrl.includes('new-best-prices') ||
+           currentUrl.includes('nouveaux-meilleurs-prix') ||
+           document.body?.classList.contains('Page_ListTopPriceReductionProducts') ||
+           !!document.getElementById('Page_ListTopPriceReductionProducts');
+  }
+
   let listingRunId = 0;
 
   async function processListings() {
@@ -2884,6 +2897,7 @@ const SHADOW_MODAL_STYLES = `
       const excludedCats = CONFIG.EXCLUDED_CATEGORIES || [];
       const counts = { neg: 0, cat: 0, min: 0 };
       let pageHasOffers = false;
+      const isNeueFeed = isNeueToppreisePage();
 
       const batchSize = 20;
       for (let i = 0; i < cards.length; i += batchSize) {
@@ -2897,32 +2911,37 @@ const SHADOW_MODAL_STYLES = `
 
           const rootGroup = resolveCategoryGroup(catName, card);
 
-          // 1b. Inject 1-Click Card Quick-Block Action Button
-          if (catName && !card.querySelector('.tp-card-quick-block')) {
-            const quickBlockBtn = document.createElement('button');
-            quickBlockBtn.type = 'button';
-            quickBlockBtn.className = 'tp-card-quick-block';
-            quickBlockBtn.title = `Kategorie "${catName}" (${rootGroup}) ausblenden`;
-            quickBlockBtn.innerHTML = `🚫 <span>${catName}</span>`;
-            quickBlockBtn.onclick = (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              e.stopImmediatePropagation();
-              const curr = CONFIG.EXCLUDED_CATEGORIES || [];
-              const key = `PATH:${rootGroup}/${catName}`;
-              if (!curr.includes(key) && !curr.includes(catName)) {
-                const updated = [...curr, key];
-                saveConfigKey('EXCLUDED_CATEGORIES', updated);
-                processListings();
-                showToast(`Kategorie "${catName}" ausgeblendet`, 4000, 'Rückgängig', () => {
-                  const restored = (CONFIG.EXCLUDED_CATEGORIES || []).filter(c => c !== key && c !== catName);
-                  saveConfigKey('EXCLUDED_CATEGORIES', restored);
+          // 1b. Inject 1-Click Card Quick-Block Action Button (Only on Neue Toppreise feed)
+          if (isNeueFeed) {
+            if (catName && !card.querySelector('.tp-card-quick-block')) {
+              const quickBlockBtn = document.createElement('button');
+              quickBlockBtn.type = 'button';
+              quickBlockBtn.className = 'tp-card-quick-block';
+              quickBlockBtn.title = `Kategorie "${catName}" (${rootGroup}) ausblenden`;
+              quickBlockBtn.innerHTML = `🚫 <span>${catName}</span>`;
+              quickBlockBtn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                const curr = CONFIG.EXCLUDED_CATEGORIES || [];
+                const key = `PATH:${rootGroup}/${catName}`;
+                if (!curr.includes(key) && !curr.includes(catName)) {
+                  const updated = [...curr, key];
+                  saveConfigKey('EXCLUDED_CATEGORIES', updated);
                   processListings();
-                  showToast(`Kategorie "${catName}" wieder eingeblendet`);
-                });
-              }
-            };
-            card.appendChild(quickBlockBtn);
+                  showToast(`Kategorie "${catName}" ausgeblendet`, 4000, 'Rückgängig', () => {
+                    const restored = (CONFIG.EXCLUDED_CATEGORIES || []).filter(c => c !== key && c !== catName);
+                    saveConfigKey('EXCLUDED_CATEGORIES', restored);
+                    processListings();
+                    showToast(`Kategorie "${catName}" wieder eingeblendet`);
+                  });
+                }
+              };
+              card.appendChild(quickBlockBtn);
+            }
+          } else {
+            const existingQuickBlock = card.querySelector('.tp-card-quick-block');
+            if (existingQuickBlock) existingQuickBlock.remove();
           }
 
           // 2. Negative Text Filter (Strictly checks full card text content)

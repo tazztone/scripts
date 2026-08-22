@@ -92,6 +92,10 @@ This document details the DOM selectors, event management, and filter logic for 
     - *Gotcha*: Writing dynamic category mappings to `GM_setValue` / `localStorage` per card during DOM loops causes repeated synchronous I/O.
     - *Rule*: Buffer updates in an in-memory map during the chunked batch run and flush with `flushDynamicMap()` once at the end of `processListings()`.
 
+11. **Scoped Feed Action Buttons (Neue Toppreise Only)**:
+    - *Gotcha*: Quick-block category buttons on search result pages or specific category catalog pages clutter targeted user browsing where category-blocking is unnecessary.
+    - *Rule*: Restrict `.tp-card-quick-block` strictly to Neue Toppreise feed pages (`isNeueToppreisePage()`), and actively clean up lingering buttons on regular catalog/search listings.
+
 ---
 
 ## 6. Comprehensive Category Taxonomy & Resolution Engine (v2.8.12)

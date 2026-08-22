@@ -187,3 +187,19 @@ def test_reset_all_filters(page: Page):
     assert 'tp-negative-filtered' not in (page.locator('#card-negative').get_attribute('class') or '')
     assert 'tp-min-offers-filtered' not in (page.locator('#card-low-offers').get_attribute('class') or '')
 
+
+def test_quick_block_hidden_on_non_neue_toppreise_pages(page: Page):
+    # Simulate navigation to a normal search / category page
+    page.evaluate("""() => {
+        document.body.classList.remove('Page_ListTopPriceReductionProducts');
+        document.body.removeAttribute('data-current_url');
+        // Trigger re-process
+        window.dispatchEvent(new Event('scroll'));
+    }""")
+    page.wait_for_timeout(350)
+
+    # Verify quick-block buttons are removed / absent on regular pages
+    quick_blocks = page.locator('.tp-card-quick-block')
+    assert quick_blocks.count() == 0
+
+
