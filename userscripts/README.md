@@ -25,7 +25,7 @@ Every userscript resides in its own subdirectory:
 | :--- | :--- |
 | [**`huggingface`**](./huggingface) | Hugging Face Heart & Date Filter: Filter models/datasets by last modified date, auto-unheart/heart toggle, non-blocking toasts. |
 | [**`perplexity`**](./perplexity) | Perplexity Enhancements: Keeps preferred model active, auto-approves action cards, and enables GitHub connector. |
-| [**`toppreise`**](./toppreise) | Toppreise.ch Suite: Best price highlighting, negative text filter, hierarchical category exclusion, and price alarm automation. |
+| [**`toppreise`**](./toppreise) | Toppreise.ch Suite: Best price highlighting, discount heatmap, negative text filter, hierarchical category exclusion, and price alarm automation. |
 | [**`fastlog-watcher`**](./fastlog-watcher) | Fastlog Watcher: Real-time event and log stream monitor (under development). |
 
 ---

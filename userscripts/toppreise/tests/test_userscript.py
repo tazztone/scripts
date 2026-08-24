@@ -225,4 +225,80 @@ def test_filter_bar_mounting_safety_and_interaction(page: Page):
     assert neg_input.input_value() == 'Adapter'
 
 
+def test_discount_heatmap_rendering(page: Page):
+    # Card 1 has -67% discount -> hot thermal styling
+    page.wait_for_selector('#card-cheapest.tp-heatmap-active')
+    card_hot = page.locator('#card-cheapest')
+    assert 'tp-heatmap-active' in (card_hot.get_attribute('class') or '')
+
+    # Card 2 has -10% discount -> cold thermal styling
+    card_cold = page.locator('#card-expensive')
+    assert 'tp-heatmap-active' in (card_cold.get_attribute('class') or '')
+
+    # Check CSS variable values on cards
+    hot_bg = card_hot.evaluate("el => el.style.getPropertyValue('--tp-heat-bg')")
+    cold_bg = card_cold.evaluate("el => el.style.getPropertyValue('--tp-heat-bg')")
+    assert 'linear-gradient' in hot_bg
+    assert 'linear-gradient' in cold_bg
+    assert hot_bg != cold_bg
+
+
+def test_discount_heatmap_toolbar_toggle(page: Page):
+    heat_btn = page.locator('#tp-tb-heatmap')
+    page.wait_for_selector('#tp-tb-heatmap')
+    assert heat_btn.is_visible()
+    assert 'tp-active' in (heat_btn.get_attribute('class') or '')
+
+    # Click to toggle heatmap OFF
+    heat_btn.click()
+    page.wait_for_timeout(200)
+
+    assert 'tp-active' not in (heat_btn.get_attribute('class') or '')
+    assert 'tp-heatmap-active' not in (page.locator('#card-cheapest').get_attribute('class') or '')
+
+    # Click to toggle heatmap back ON
+    heat_btn.click()
+    page.wait_for_timeout(200)
+
+    assert 'tp-active' in (heat_btn.get_attribute('class') or '')
+    assert 'tp-heatmap-active' in (page.locator('#card-cheapest').get_attribute('class') or '')
+
+
+def test_discount_heatmap_settings_modal_controls(page: Page):
+    # Open settings modal
+    page.click('#tp-root >> #tp-settings-fab')
+    page.wait_for_selector('#tp-root >> #tp-settings-dialog', state='visible')
+
+    # Toggle heatmap switch off inside modal via slider
+    slider = page.locator('#tp-root >> #tp-heatmap-enabled-toggle + .tp-slider')
+    slider.click()
+    page.click('#tp-root >> #tp-btn-save')
+
+    page.wait_for_timeout(200)
+    assert 'tp-heatmap-active' not in (page.locator('#card-cheapest').get_attribute('class') or '')
+
+    # Re-enable in settings
+    page.click('#tp-root >> #tp-settings-fab')
+    slider.click()
+    page.click('#tp-root >> #tp-btn-save')
+
+    page.wait_for_timeout(200)
+    assert 'tp-heatmap-active' in (page.locator('#card-cheapest').get_attribute('class') or '')
+
+
+def test_sort_by_discount(page: Page):
+    # Open settings and enable sort by discount descending
+    page.click('#tp-root >> #tp-settings-fab')
+    page.click('#tp-root >> label[for="tp-sort-discount"]')
+    page.click('#tp-btn-save')
+
+    # Card 1 has 67% discount, Card 4 has 50% discount
+    cards = page.locator('#product-list .Plugin_Product')
+    first_id = cards.nth(0).get_attribute('id')
+    second_id = cards.nth(1).get_attribute('id')
+    assert first_id == 'card-cheapest'  # 67%
+    assert second_id == 'card-cat-excluded'  # 50%
+
+
+
 

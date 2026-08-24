@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.9.7
-// @description  All-in-one suite for Toppreise.ch: Highlights best prices, excludes negative keywords, filters categories, sorts/filters by offer count, and automates price alarm creation.
+// @version      2.10.2
+// @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
 // @updateURL    https://raw.githubusercontent.com/tazztone/scripts/main/userscripts/toppreise/toppreise.user.js
@@ -21,11 +21,16 @@ const DEFAULTS = {
   DIM_OPACITY: 0.25,
   USE_SHIPPING_PRICE: true,
 
+  // Discount Heatmap
+  HEATMAP_ENABLED: true,
+  HEATMAP_INTENSITY: 1.0,
+  HEATMAP_CURVE: 'calibrated',
+
   // Power Filters
   NEGATIVE_TERMS: '',
   EXCLUDED_CATEGORIES: [],
   MIN_OFFERS: 0,
-  SORT_BY_OFFERS: 'none',
+  SORT_BY_OFFERS: 'none', // 'none', 'desc', 'asc', 'discount-desc'
   ENABLE_FILTER_COUNTER: true,
   CATS_EXPANDED: false,
 
@@ -42,6 +47,17 @@ const DEFAULTS = {
 
 // ─── STYLES ──────────────────────────────────────────────────────────────────
 const STYLES = `
+  /* Discount Heatmap Cards */
+  .Plugin_Product.tp-heatmap-active {
+    background: var(--tp-heat-bg) !important;
+    border-color: var(--tp-heat-border) !important;
+    box-shadow: var(--tp-heat-glow, none) !important;
+    transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, filter 0.2s ease !important;
+  }
+  .Plugin_Product.tp-heatmap-active:hover {
+    filter: brightness(1.12) !important;
+  }
+
   /* Glow and border for products with best price */
   .Plugin_Product.mixedBrowsingList.tp-is-cheapest {
     border: 2px solid #10b981 !important;
@@ -49,6 +65,10 @@ const STYLES = `
     position: relative !important;
     box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15) !important;
     transition: all 0.3s ease !important;
+  }
+  .Plugin_Product.mixedBrowsingList.tp-is-cheapest.tp-heatmap-active {
+    border: 2px solid #10b981 !important;
+    box-shadow: 0 4px 20px rgba(16, 185, 129, 0.25), var(--tp-heat-glow, none) !important;
   }
   
   /* Best Price Badge styling */
@@ -777,6 +797,9 @@ const SHADOW_MODAL_STYLES = `
   .tp-range-container.tp-blue input[type="range"] {
     accent-color: #3b82f6;
   }
+  .tp-range-container.tp-rose input[type="range"] {
+    accent-color: #f43f5e;
+  }
   .tp-range-container input[type="number"] {
     width: 60px;
     padding: 4px 8px;
@@ -905,6 +928,9 @@ const SHADOW_MODAL_STYLES = `
   }
   .tp-switch.tp-blue input:checked + .tp-slider {
     background-color: #3b82f6;
+  }
+  .tp-switch.tp-rose input:checked + .tp-slider {
+    background-color: #f43f5e;
   }
   .tp-switch input:checked + .tp-slider:before {
     transform: translateX(20px);
@@ -1142,6 +1168,9 @@ const SHADOW_MODAL_STYLES = `
     MARGIN_PERCENT: parseFloat(_getValue('MARGIN_PERCENT', DEFAULTS.MARGIN_PERCENT)),
     DIM_OPACITY: parseFloat(_getValue('DIM_OPACITY', DEFAULTS.DIM_OPACITY)),
     USE_SHIPPING_PRICE: _getValue('USE_SHIPPING_PRICE', DEFAULTS.USE_SHIPPING_PRICE),
+    HEATMAP_ENABLED: _getValue('HEATMAP_ENABLED', DEFAULTS.HEATMAP_ENABLED),
+    HEATMAP_INTENSITY: parseFloat(_getValue('HEATMAP_INTENSITY', DEFAULTS.HEATMAP_INTENSITY)),
+    HEATMAP_CURVE: _getValue('HEATMAP_CURVE', DEFAULTS.HEATMAP_CURVE),
     NEGATIVE_TERMS: _getValue('NEGATIVE_TERMS', DEFAULTS.NEGATIVE_TERMS),
     EXCLUDED_CATEGORIES: _getValue('EXCLUDED_CATEGORIES', DEFAULTS.EXCLUDED_CATEGORIES),
     MIN_OFFERS: parseInt(_getValue('MIN_OFFERS', DEFAULTS.MIN_OFFERS)),
@@ -2462,6 +2491,107 @@ const SHADOW_MODAL_STYLES = `
     });
   }
 
+  // ─── DISCOUNT HEATMAP ENGINE ────────────────────────────────────────────────
+  // Helper: Extract Discount Percentage from Card (Cached on dataset.tpDiscount)
+  function extractCardDiscount(card) {
+    if (card.dataset && card.dataset.tpDiscount !== undefined) {
+      const cached = parseFloat(card.dataset.tpDiscount);
+      return isNaN(cached) ? null : cached;
+    }
+
+    let discount = null;
+    // 1. Primary target: Toppreise discount badge (.badge-dif, .badge)
+    const badgeEl = card.querySelector('.badge-dif, .badge, [class*="badge-dif"]');
+    if (badgeEl) {
+      const match = badgeEl.textContent.match(/([+-]?\d+(?:[\.,]\d+)?)\s*%/);
+      if (match) {
+        discount = Math.abs(parseFloat(match[1].replace(',', '.')));
+      }
+    }
+
+    // 2. Fallback: Search inside card for discount pattern
+    if (discount === null) {
+      const match = card.textContent.match(/(?:Differenz|Rabatt|Discount)[\s\S]*?([+-]?\d+(?:[\.,]\d+)?)\s*%/i) ||
+                    card.textContent.match(/-\s*(\d+(?:[\.,]\d+)?)\s*%/);
+      if (match) {
+        discount = Math.abs(parseFloat(match[1].replace(',', '.')));
+      }
+    }
+
+    if (discount !== null && !isNaN(discount)) {
+      discount = Math.min(100, Math.max(0, discount));
+      if (card.dataset) card.dataset.tpDiscount = String(discount);
+      return discount;
+    }
+
+    if (card.dataset) card.dataset.tpDiscount = '';
+    return null;
+  }
+
+  function interpolateRgb(c1, c2, factor) {
+    return [
+      Math.round(c1[0] + (c2[0] - c1[0]) * factor),
+      Math.round(c1[1] + (c2[1] - c1[1]) * factor),
+      Math.round(c1[2] + (c2[2] - c1[2]) * factor)
+    ];
+  }
+
+  function getHeatmapStyles(discountPercent, intensity = 1.0, curve = 'calibrated') {
+    // Determine t (0.0 to 1.0)
+    let t = 0;
+    const clampedDiscount = Math.max(0, Math.min(100, discountPercent));
+    if (curve === 'linear') {
+      t = clampedDiscount / 100;
+    } else {
+      // Realistic deal calibration: 75%+ is peak volcanic heat (t = 1.0), 35% is warm amber (t = 0.5)
+      const capped = Math.min(75, clampedDiscount);
+      t = Math.min(1.0, Math.pow(capped / 75, 0.9));
+    }
+
+    // 5 Thermal Anchor Stops:
+    // 0.00 (0%): Cold Deep Navy
+    // 0.25 (20-25%): Cool Teal
+    // 0.50 (35-40%): Warm Amber
+    // 0.75 (55-60%): Hot Orange-Red
+    // 1.00 (75-100%): Blazing Crimson
+    const stops = [
+      { t: 0.00, base: [15, 23, 42],  acc: [25, 45, 80],   border: [59, 130, 246, 0.25] },
+      { t: 0.25, base: [13, 28, 38],  acc: [14, 75, 85],   border: [20, 184, 166, 0.35] },
+      { t: 0.50, base: [35, 26, 16],  acc: [140, 85, 15],  border: [245, 158, 11, 0.50] },
+      { t: 0.75, base: [42, 18, 16],  acc: [195, 50, 18],  border: [249, 115, 22, 0.70] },
+      { t: 1.00, base: [48, 10, 24],  acc: [225, 25, 65],  border: [244, 63, 94, 0.85] }
+    ];
+
+    let base = stops[0].base;
+    let acc = stops[0].acc;
+    let borderRgb = stops[0].border.slice(0, 3);
+    let borderAlpha = stops[0].border[3];
+
+    for (let i = 0; i < stops.length - 1; i++) {
+      const s0 = stops[i];
+      const s1 = stops[i + 1];
+      if (t >= s0.t && t <= s1.t) {
+        const factor = (t - s0.t) / (s1.t - s0.t);
+        base = interpolateRgb(s0.base, s1.base, factor);
+        acc = interpolateRgb(s0.acc, s1.acc, factor);
+        borderRgb = interpolateRgb(s0.border.slice(0, 3), s1.border.slice(0, 3), factor);
+        borderAlpha = s0.border[3] + (s1.border[3] - s0.border[3]) * factor;
+        break;
+      }
+    }
+
+    const safeIntensity = Math.max(0.2, Math.min(1.0, intensity));
+    const alphaBase = 0.94;
+    const alphaAcc = (0.35 + 0.35 * t) * safeIntensity;
+    const effectiveBorderAlpha = (borderAlpha * safeIntensity).toFixed(2);
+
+    const bg = `linear-gradient(135deg, rgba(${base[0]}, ${base[1]}, ${base[2]}, ${alphaBase}) 0%, rgba(${acc[0]}, ${acc[1]}, ${acc[2]}, ${alphaAcc.toFixed(2)}) 100%)`;
+    const border = `rgba(${borderRgb[0]}, ${borderRgb[1]}, ${borderRgb[2]}, ${effectiveBorderAlpha})`;
+    const glow = t >= 0.65 ? `0 4px 20px rgba(${acc[0]}, ${acc[1]}, ${acc[2]}, ${(0.3 * safeIntensity).toFixed(2)})` : 'none';
+
+    return { bg, border, glow };
+  }
+
   // Central Filter Reset Helper
   function resetAllFilters() {
     saveConfigKey('NEGATIVE_TERMS', '');
@@ -2512,6 +2642,14 @@ const SHADOW_MODAL_STYLES = `
           </button>
         </div>
 
+        <div class="tp-toolbar-divider"></div>
+
+        <div class="tp-toolbar-group">
+          <button class="tp-toolbar-btn" id="tp-tb-heatmap" title="Rabatt-Heatmap ein-/ausschalten (100% Heiß 🔥 | 0% Kalt ❄️)">
+            🔥 <span id="tp-tb-heat-label">Heatmap</span>
+          </button>
+        </div>
+
         <div class="tp-toolbar-divider" id="tp-tb-divider-offers"></div>
 
         <div class="tp-toolbar-group" id="tp-tb-min-group" title="Mindestanzahl benötigter Händler-Angebote pro Produkt (Produkte mit weniger Angeboten werden ausgeblendet)">
@@ -2529,6 +2667,16 @@ const SHADOW_MODAL_STYLES = `
       };
 
       bar.querySelector('#tp-tb-reset').onclick = resetAllFilters;
+
+      bar.querySelector('#tp-tb-heatmap').onclick = () => {
+        const nextState = !CONFIG.HEATMAP_ENABLED;
+        saveConfigKey('HEATMAP_ENABLED', nextState);
+        if (uiShadowRoot) {
+          const modalToggle = uiShadowRoot.getElementById('tp-heatmap-enabled-toggle');
+          if (modalToggle) modalToggle.checked = nextState;
+        }
+        processListings();
+      };
 
       bar.querySelector('#tp-tb-min-minus').onclick = () => {
         if (CONFIG.MIN_OFFERS > 0) {
@@ -2559,6 +2707,7 @@ const SHADOW_MODAL_STYLES = `
     const countEl = bar.querySelector('#tp-tb-hidden-count');
     const revealBtn = bar.querySelector('#tp-tb-reveal');
     const revealLabel = bar.querySelector('#tp-tb-reveal-label');
+    const heatBtn = bar.querySelector('#tp-tb-heatmap');
     const minValEl = bar.querySelector('#tp-tb-min-val');
 
     const dividerOffers = bar.querySelector('#tp-tb-divider-offers');
@@ -2571,6 +2720,7 @@ const SHADOW_MODAL_STYLES = `
     if (minValEl) minValEl.textContent = CONFIG.MIN_OFFERS;
     if (revealBtn) revealBtn.classList.toggle('tp-active', isRevealed);
     if (revealLabel) revealLabel.textContent = isRevealed ? 'Verbergen' : 'Einblenden';
+    if (heatBtn) heatBtn.classList.toggle('tp-active', CONFIG.HEATMAP_ENABLED !== false);
   }
 
   // Dedicated Power Filter Bar Target & Placement Selector
@@ -2915,6 +3065,21 @@ const SHADOW_MODAL_STYLES = `
 
         const chunk = cards.slice(i, i + batchSize);
         for (const card of chunk) {
+          // 0. Discount Heatmap Highlighting
+          const discountVal = extractCardDiscount(card);
+          if (CONFIG.HEATMAP_ENABLED && discountVal !== null) {
+            const heatStyles = getHeatmapStyles(discountVal, CONFIG.HEATMAP_INTENSITY, CONFIG.HEATMAP_CURVE);
+            card.style.setProperty('--tp-heat-bg', heatStyles.bg);
+            card.style.setProperty('--tp-heat-border', heatStyles.border);
+            card.style.setProperty('--tp-heat-glow', heatStyles.glow);
+            card.classList.add('tp-heatmap-active');
+          } else {
+            card.classList.remove('tp-heatmap-active');
+            card.style.removeProperty('--tp-heat-bg');
+            card.style.removeProperty('--tp-heat-border');
+            card.style.removeProperty('--tp-heat-glow');
+          }
+
           // 1. Category extraction (cached on dataset.tpCategory)
           const catName = extractCardCategory(card);
           if (catName) pageCategories.add(catName);
@@ -3047,8 +3212,19 @@ const SHADOW_MODAL_STYLES = `
 
       if (runId !== listingRunId) return;
 
-      // 6. Re-sorting by Offer Count
-      if (pageHasOffers && CONFIG.SORT_BY_OFFERS !== 'none' && cards.length > 1) {
+      // 6. Re-sorting by Offer Count or Discount
+      if (CONFIG.SORT_BY_OFFERS === 'discount-desc' && cards.length > 1) {
+        const parent = cards[0].parentElement;
+        if (parent) {
+          const cardArray = Array.from(cards);
+          cardArray.sort((a, b) => {
+            const discA = extractCardDiscount(a) ?? -1;
+            const discB = extractCardDiscount(b) ?? -1;
+            return discB - discA;
+          });
+          cardArray.forEach(c => parent.appendChild(c));
+        }
+      } else if (pageHasOffers && CONFIG.SORT_BY_OFFERS !== 'none' && cards.length > 1) {
         const parent = cards[0].parentElement;
         if (parent) {
           const cardArray = Array.from(cards);
@@ -3335,7 +3511,7 @@ const SHADOW_MODAL_STYLES = `
           </div>
 
           <div class="tp-settings-group">
-            <label title="Produkte nach Anzahl verfügbarer Händler-Angebote sortieren">Sortierung nach Anzahl Angebote</label>
+            <label title="Produkte nach Anzahl verfügbarer Händler-Angebote oder Rabatt sortieren">Sortierung nach Angeboten / Rabatt</label>
             <div class="tp-segmented-control">
               <input type="radio" id="tp-sort-none" name="tp-sort-offers" value="none">
               <label for="tp-sort-none" title="Standard-Reihenfolge der Seite beibehalten">Standard</label>
@@ -3345,6 +3521,9 @@ const SHADOW_MODAL_STYLES = `
               
               <input type="radio" id="tp-sort-asc" name="tp-sort-offers" value="asc">
               <label for="tp-sort-asc" title="Produkte mit den wenigsten Angeboten zuerst">Wenigste ⬆</label>
+
+              <input type="radio" id="tp-sort-discount" name="tp-sort-offers" value="discount-desc">
+              <label for="tp-sort-discount" title="Produkte mit dem höchsten Rabatt zuerst">% Rabatt ⬇</label>
             </div>
           </div>
 
@@ -3408,6 +3587,28 @@ const SHADOW_MODAL_STYLES = `
             </label>
           </div>
 
+          <!-- Section 6: Rabatt-Heatmap (Neue Toppreise) -->
+          <div class="tp-section-header" style="color: #f43f5e;">6. Rabatt-Heatmap (Neue Toppreise)</div>
+          
+          <div class="tp-settings-group tp-switch-container">
+            <div class="tp-switch-label">
+              <label title="Produktkarten farblich als Heatmap nach Rabatthöhe einfärben (Heiß 🔥 bis Kalt ❄️)">Rabatt-Heatmap aktivieren</label>
+              <span class="tp-switch-desc">Kartenhintergrund färbt sich nach % Rabatt (100% Heiß 🔥 | 0% Kalt ❄️)</span>
+            </div>
+            <label class="tp-switch tp-rose">
+              <input type="checkbox" id="tp-heatmap-enabled-toggle">
+              <span class="tp-slider"></span>
+            </label>
+          </div>
+
+          <div class="tp-settings-group">
+            <label title="Farbintensität der Heatmap-Hintergründe">Heatmap-Intensität (%)</label>
+            <div class="tp-range-container tp-rose">
+              <input type="range" id="tp-heatmap-intensity-range" min="20" max="100" step="5" value="100">
+              <input type="number" id="tp-heatmap-intensity-val" min="20" max="100" step="5" value="100">
+            </div>
+          </div>
+
         </div>
       `;
       section = tempDiv.firstElementChild;
@@ -3433,6 +3634,7 @@ const SHADOW_MODAL_STYLES = `
     const sortNone = shadow.getElementById('tp-sort-none');
     const sortDesc = shadow.getElementById('tp-sort-desc');
     const sortAsc = shadow.getElementById('tp-sort-asc');
+    const sortDiscount = shadow.getElementById('tp-sort-discount');
 
     const counterToggle = shadow.getElementById('tp-counter-toggle');
 
@@ -3440,6 +3642,10 @@ const SHADOW_MODAL_STYLES = `
     const alarmTargetRange = shadow.getElementById('tp-alarm-target-range');
     const alarmTargetVal = shadow.getElementById('tp-alarm-target-val');
     const alarmAutoSubmitToggle = shadow.getElementById('tp-alarm-autosubmit-toggle');
+
+    const heatmapEnabledToggle = shadow.getElementById('tp-heatmap-enabled-toggle');
+    const heatmapIntensityRange = shadow.getElementById('tp-heatmap-intensity-range');
+    const heatmapIntensityVal = shadow.getElementById('tp-heatmap-intensity-val');
 
     const dur90 = shadow.getElementById('tp-dur-90');
     const dur180 = shadow.getElementById('tp-dur-180');
@@ -3595,6 +3801,7 @@ const SHADOW_MODAL_STYLES = `
       const sort = CONFIG.SORT_BY_OFFERS;
       if (sort === 'desc') sortDesc.checked = true;
       else if (sort === 'asc') sortAsc.checked = true;
+      else if (sort === 'discount-desc') sortDiscount.checked = true;
       else sortNone.checked = true;
 
       counterToggle.checked = CONFIG.ENABLE_FILTER_COUNTER !== false;
@@ -3611,6 +3818,11 @@ const SHADOW_MODAL_STYLES = `
       else dur730.checked = true;
 
       alarmAutoSubmitToggle.checked = CONFIG.ALARM_AUTO_SUBMIT !== false;
+
+      heatmapEnabledToggle.checked = CONFIG.HEATMAP_ENABLED !== false;
+      const heatIntensityPct = Math.round((CONFIG.HEATMAP_INTENSITY ?? 1.0) * 100);
+      heatmapIntensityRange.value = heatIntensityPct;
+      heatmapIntensityVal.value = heatIntensityPct;
 
       updateOpacityState(mode);
     }
@@ -3644,6 +3856,9 @@ const SHADOW_MODAL_STYLES = `
 
     alarmTargetRange.addEventListener('input', (e) => alarmTargetVal.value = e.target.value);
     alarmTargetVal.addEventListener('input', (e) => alarmTargetRange.value = parseInt(e.target.value) || 60);
+
+    heatmapIntensityRange.addEventListener('input', (e) => heatmapIntensityVal.value = e.target.value);
+    heatmapIntensityVal.addEventListener('input', (e) => heatmapIntensityRange.value = parseInt(e.target.value) || 100);
 
     [modeHighlight, modeDim, modeHide].forEach(radio => {
       radio.addEventListener('change', () => {
@@ -3681,6 +3896,9 @@ const SHADOW_MODAL_STYLES = `
       if (checkedDur) saveConfigKey('ALARM_DURATION_DAYS', checkedDur.value);
 
       saveConfigKey('ALARM_AUTO_SUBMIT', alarmAutoSubmitToggle.checked);
+
+      saveConfigKey('HEATMAP_ENABLED', heatmapEnabledToggle.checked);
+      saveConfigKey('HEATMAP_INTENSITY', Math.max(0.2, Math.min(1.0, (parseInt(heatmapIntensityVal.value) || 100) / 100)));
 
       updateBodyClasses();
       processListings();

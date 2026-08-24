@@ -123,3 +123,23 @@ Subcategories appear in two distinct patterns across the site:
 4. **Layer 4: Brand & Keyword Rules (`BRAND_RULES`)**: Domain regex matching for brands (*CaDA*, *Playmobil*, *Cobi*, *Schleich*, etc.).
 5. **Layer 5: Word-Prefix Token Fallback**: Right-to-left word trimming (`Lego Star Wars` $\rightarrow$ `Lego` $\rightarrow$ `Spielwaren`).
 6. **Layer 6: DOM Breadcrumbs**: Fallback to page `.breadcrumb` links.
+
+---
+
+## 7. Discount Heatmap Engine & Thermal Scaling (v2.10.0)
+
+### 1. Target Selectors & Data Extraction
+- **Discount Badge**: `.badge.badge-dif, .badge` with difference bracket classes (`m_1_25`, `m_26_50`, `m_51_75`, `m_76_100`).
+- **Inner Markup**: `<div class="text">Differenz</div> <p>-XX%</p>`.
+- **Extraction Function**: `extractCardDiscount(card)` caches parsed percentage ($0 \le D \le 100$) onto `card.dataset.tpDiscount`.
+
+### 2. Thermal Color Keypoints & Interpolation
+- **5 Anchor Stops**:
+  - `0%` (Cold Navy): Base `[15, 23, 42]`, Accent `[25, 45, 80]`, Border `[59, 130, 246, 0.25]`
+  - `25%` (Cool Teal): Base `[13, 28, 38]`, Accent `[14, 75, 85]`, Border `[20, 184, 166, 0.35]`
+  - `50%` (Warm Amber): Base `[35, 26, 16]`, Accent `[140, 85, 15]`, Border `[245, 158, 11, 0.50]`
+  - `75%` (Hot Orange-Red): Base `[42, 18, 16]`, Accent `[195, 50, 18]`, Border `[249, 115, 22, 0.70]`
+  - `100%` (Blazing Crimson): Base `[48, 10, 24]`, Accent `[225, 25, 65]`, Border `[244, 63, 94, 0.85]`
+- **Power Curve Calibration**: $t = (D / 75)^{0.9}$ ensures real-world clearance discounts ($\ge 60\%$) reach peak fiery thermal intensity while preserving dark-theme typography contrast.
+- **State Marker**: `.Plugin_Product.tp-heatmap-active` with CSS properties `--tp-heat-bg`, `--tp-heat-border`, and `--tp-heat-glow`.
+
