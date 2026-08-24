@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.10.2
+// @version      2.10.3
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -50,12 +50,18 @@ const STYLES = `
   /* Discount Heatmap Cards */
   .Plugin_Product.tp-heatmap-active {
     background: var(--tp-heat-bg) !important;
-    border-color: var(--tp-heat-border) !important;
-    box-shadow: var(--tp-heat-glow, none) !important;
-    transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, filter 0.2s ease !important;
+    border: 1.5px solid var(--tp-heat-border) !important;
+    box-shadow: var(--tp-heat-glow, 0 2px 8px rgba(0, 0, 0, 0.25)) !important;
+    transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, transform 0.2s ease, filter 0.2s ease !important;
   }
   .Plugin_Product.tp-heatmap-active:hover {
-    filter: brightness(1.12) !important;
+    filter: brightness(1.15) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35), var(--tp-heat-glow, none) !important;
+  }
+  .Plugin_Product.tp-heatmap-active .badge.badge-dif {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 10px var(--tp-heat-border) !important;
+    transition: box-shadow 0.3s ease !important;
   }
 
   /* Glow and border for products with best price */
@@ -2537,29 +2543,33 @@ const SHADOW_MODAL_STYLES = `
   }
 
   function getHeatmapStyles(discountPercent, intensity = 1.0, curve = 'calibrated') {
-    // Determine t (0.0 to 1.0)
     let t = 0;
     const clampedDiscount = Math.max(0, Math.min(100, discountPercent));
     if (curve === 'linear') {
       t = clampedDiscount / 100;
     } else {
-      // Realistic deal calibration: 75%+ is peak volcanic heat (t = 1.0), 35% is warm amber (t = 0.5)
-      const capped = Math.min(75, clampedDiscount);
-      t = Math.min(1.0, Math.pow(capped / 75, 0.9));
+      // Dynamic calibrated deal curve matching real-world feed dynamics (10% cold -> 50%+ blazing)
+      if (clampedDiscount <= 10.0) {
+        t = (clampedDiscount / 10.0) * 0.12;
+      } else if (clampedDiscount >= 50.0) {
+        t = Math.min(1.0, 0.85 + ((clampedDiscount - 50.0) / 25.0) * 0.15);
+      } else {
+        t = 0.12 + ((clampedDiscount - 10.0) / 40.0) * 0.73;
+      }
     }
 
-    // 5 Thermal Anchor Stops:
-    // 0.00 (0%): Cold Deep Navy
-    // 0.25 (20-25%): Cool Teal
-    // 0.50 (35-40%): Warm Amber
-    // 0.75 (55-60%): Hot Orange-Red
-    // 1.00 (75-100%): Blazing Crimson
+    // 5 High-Saturation, High-Vibrancy Thermal Anchor Stops:
+    // 0.00 (0-10%):  Vibrant Cobalt/Ice Blue
+    // 0.25 (15-20%): Vibrant Cyan / Teal
+    // 0.50 (28-35%): Warm Golden Amber
+    // 0.75 (40-48%): Fiery Hot Flame Orange
+    // 1.00 (50-100%): Blazing Volcanic Ruby Crimson
     const stops = [
-      { t: 0.00, base: [15, 23, 42],  acc: [25, 45, 80],   border: [59, 130, 246, 0.25] },
-      { t: 0.25, base: [13, 28, 38],  acc: [14, 75, 85],   border: [20, 184, 166, 0.35] },
-      { t: 0.50, base: [35, 26, 16],  acc: [140, 85, 15],  border: [245, 158, 11, 0.50] },
-      { t: 0.75, base: [42, 18, 16],  acc: [195, 50, 18],  border: [249, 115, 22, 0.70] },
-      { t: 1.00, base: [48, 10, 24],  acc: [225, 25, 65],  border: [244, 63, 94, 0.85] }
+      { t: 0.00, base: [18, 48, 88],   acc: [28, 92, 175],   border: [56, 140, 248, 0.70] },
+      { t: 0.25, base: [12, 58, 64],   acc: [16, 130, 125],  border: [20, 210, 190, 0.75] },
+      { t: 0.50, base: [68, 48, 10],   acc: [180, 118, 15],  border: [245, 175, 20, 0.80] },
+      { t: 0.75, base: [85, 28, 12],   acc: [228, 76, 18],   border: [251, 115, 36, 0.88] },
+      { t: 1.00, base: [98, 14, 32],   acc: [238, 25, 65],   border: [244, 63, 94, 0.95] }
     ];
 
     let base = stops[0].base;
@@ -2581,13 +2591,13 @@ const SHADOW_MODAL_STYLES = `
     }
 
     const safeIntensity = Math.max(0.2, Math.min(1.0, intensity));
-    const alphaBase = 0.94;
-    const alphaAcc = (0.35 + 0.35 * t) * safeIntensity;
+    const alphaBase = (0.92 + 0.04 * t);
+    const alphaAcc = (0.75 + 0.20 * t) * safeIntensity;
     const effectiveBorderAlpha = (borderAlpha * safeIntensity).toFixed(2);
 
-    const bg = `linear-gradient(135deg, rgba(${base[0]}, ${base[1]}, ${base[2]}, ${alphaBase}) 0%, rgba(${acc[0]}, ${acc[1]}, ${acc[2]}, ${alphaAcc.toFixed(2)}) 100%)`;
+    const bg = `linear-gradient(135deg, rgba(${base[0]}, ${base[1]}, ${base[2]}, ${alphaBase.toFixed(2)}) 0%, rgba(${acc[0]}, ${acc[1]}, ${acc[2]}, ${alphaAcc.toFixed(2)}) 100%)`;
     const border = `rgba(${borderRgb[0]}, ${borderRgb[1]}, ${borderRgb[2]}, ${effectiveBorderAlpha})`;
-    const glow = t >= 0.65 ? `0 4px 20px rgba(${acc[0]}, ${acc[1]}, ${acc[2]}, ${(0.3 * safeIntensity).toFixed(2)})` : 'none';
+    const glow = t >= 0.45 ? `0 4px 18px rgba(${acc[0]}, ${acc[1]}, ${acc[2]}, ${(0.32 * safeIntensity).toFixed(2)})` : 'none';
 
     return { bg, border, glow };
   }

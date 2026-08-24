@@ -134,12 +134,12 @@ Subcategories appear in two distinct patterns across the site:
 - **Extraction Function**: `extractCardDiscount(card)` caches parsed percentage ($0 \le D \le 100$) onto `card.dataset.tpDiscount`.
 
 ### 2. Thermal Color Keypoints & Interpolation
-- **5 Anchor Stops**:
-  - `0%` (Cold Navy): Base `[15, 23, 42]`, Accent `[25, 45, 80]`, Border `[59, 130, 246, 0.25]`
-  - `25%` (Cool Teal): Base `[13, 28, 38]`, Accent `[14, 75, 85]`, Border `[20, 184, 166, 0.35]`
-  - `50%` (Warm Amber): Base `[35, 26, 16]`, Accent `[140, 85, 15]`, Border `[245, 158, 11, 0.50]`
-  - `75%` (Hot Orange-Red): Base `[42, 18, 16]`, Accent `[195, 50, 18]`, Border `[249, 115, 22, 0.70]`
-  - `100%` (Blazing Crimson): Base `[48, 10, 24]`, Accent `[225, 25, 65]`, Border `[244, 63, 94, 0.85]`
-- **Power Curve Calibration**: $t = (D / 75)^{0.9}$ ensures real-world clearance discounts ($\ge 60\%$) reach peak fiery thermal intensity while preserving dark-theme typography contrast.
+- **5 High-Saturation Anchor Stops**:
+  - `0% – 10%` (Vibrant Cobalt/Ice Blue): Base `[18, 48, 88]`, Accent `[28, 92, 175]`, Border `[56, 140, 248, 0.70]`
+  - `15% – 20%` (Vibrant Cyan/Teal): Base `[12, 58, 64]`, Accent `[16, 130, 125]`, Border `[20, 210, 190, 0.75]`
+  - `28% – 35%` (Warm Golden Amber): Base `[68, 48, 10]`, Accent `[180, 118, 15]`, Border `[245, 175, 20, 0.80]`
+  - `40% – 48%` (Fiery Flame Orange): Base `[85, 28, 12]`, Accent `[228, 76, 18]`, Border `[251, 115, 36, 0.88]`
+  - `50% – 100%` (Blazing Volcanic Ruby Crimson): Base `[98, 14, 32]`, Accent `[238, 25, 65]`, Border `[244, 63, 94, 0.95]`
+- **Feed-Calibrated Curve**: Dynamic piecewise interpolation anchored to real-world Toppreise feed discount ranges (10% cold base $\rightarrow$ 35% warm amber $\rightarrow$ 50%+ blazing flame/crimson) with high saturation and luminous badge/border accents.
 - **State Marker**: `.Plugin_Product.tp-heatmap-active` with CSS properties `--tp-heat-bg`, `--tp-heat-border`, and `--tp-heat-glow`.
 
