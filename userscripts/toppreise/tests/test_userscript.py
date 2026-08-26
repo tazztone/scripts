@@ -89,21 +89,11 @@ def test_suite_filter_bar_and_category_pill_styles(page: Page):
     page.wait_for_selector('#tp-suite-filter-bar')
     assert filter_bar.is_visible()
 
-    # Expand category drawer if collapsed
-    toggle_btn = page.locator('#tp-toggle-cats-btn')
-    if toggle_btn.is_visible():
-        toggle_btn.click()
-
-    # Verify group pills have proper CSS styling (not unstyled raw text)
-    pill = page.locator('.tp-group-pill').first
-    page.wait_for_selector('.tp-group-pill')
-    assert pill.is_visible()
-
-    # Check computed styles: border-radius, background, display
-    display_val = pill.evaluate("el => window.getComputedStyle(el).display")
-    border_radius = pill.evaluate("el => window.getComputedStyle(el).borderRadius")
-    assert 'inline-flex' in display_val or 'flex' in display_val
-    assert border_radius == '12px'
+    # Verify inline negative input is present and styled
+    neg_input = page.locator('#tp-inline-negative-input')
+    assert neg_input.is_visible()
+    border_radius = neg_input.evaluate("el => window.getComputedStyle(el).borderRadius")
+    assert border_radius == '8px'
 
 
 def test_card_quick_block_button_and_toast_undo(page: Page):
@@ -119,6 +109,12 @@ def test_card_quick_block_button_and_toast_undo(page: Page):
     # Card should be category filtered (display: none -> attached)
     page.wait_for_selector('#card-cheapest.tp-category-filtered', state='attached')
     assert 'tp-category-filtered' in (page.locator('#card-cheapest').get_attribute('class') or '')
+
+    # Blocked chip row should appear on top filter bar
+    page.wait_for_selector('#tp-suite-filter-bar .tp-blocked-chip')
+    chip = page.locator('#tp-suite-filter-bar .tp-blocked-chip').first
+    assert chip.is_visible()
+    assert 'Grafikkarten' in (chip.text_content() or '')
 
     # Toast should appear inside Shadow DOM with undo button
     toast = page.locator('#tp-root >> .tp-toast')
@@ -137,23 +133,19 @@ def test_card_quick_block_button_and_toast_undo(page: Page):
     assert 'tp-category-filtered' not in (page.locator('#card-cheapest').get_attribute('class') or '')
 
 
-def test_modal_popover_in_shadow_dom(page: Page):
+def test_modal_mode_and_settings_in_shadow_dom(page: Page):
     # Open settings modal
     page.click('#tp-root >> #tp-settings-fab')
     page.wait_for_selector('#tp-root >> #tp-settings-dialog', state='visible')
 
-    # Click group chevron inside modal
-    chevron = page.locator('#tp-root >> #tp-settings-dialog .tp-group-chevron').first
-    page.wait_for_selector('#tp-root >> #tp-settings-dialog .tp-group-chevron', state='visible')
-    chevron.click()
+    # Toggle mode to 'hide' via segmented control
+    page.click('#tp-root >> label[for="tp-mode-hide"]')
+    page.click('#tp-root >> #tp-btn-save')
 
-    # Verify popover is rendered inside Shadow DOM / dialog
-    popover = page.locator('#tp-root >> .tp-group-popover')
-    page.wait_for_selector('#tp-root >> .tp-group-popover', state='visible')
-    assert popover.is_visible()
-
-    # Close modal
-    page.click('#tp-root >> #tp-btn-close')
+    # Dialog should close and body class updated
+    page.wait_for_selector('#tp-root >> #tp-settings-dialog', state='hidden')
+    has_mode_hide = page.evaluate("() => document.body.classList.contains('tp-mode-hide')")
+    assert has_mode_hide is True
 
 
 def test_sort_by_offers(page: Page):
@@ -178,8 +170,8 @@ def test_reset_all_filters(page: Page):
     page.wait_for_selector('#card-negative.tp-negative-filtered', state='attached')
     page.wait_for_selector('#card-low-offers.tp-min-offers-filtered', state='attached')
 
-    # Click Reset on toolbar
-    page.click('#tp-tb-reset')
+    # Click Reset on top filter bar
+    page.click('#tp-bar-reset-btn')
 
     # Verify all filters are cleared and cards restored to visible
     page.wait_for_selector('#card-negative:not(.tp-negative-filtered)', state='visible')
@@ -212,12 +204,6 @@ def test_filter_bar_mounting_safety_and_interaction(page: Page):
     }""")
     assert is_safe_placement is True
 
-    # Test toggling category drawer on filter bar
-    toggle_btn = page.locator('#tp-toggle-cats-btn')
-    assert toggle_btn.is_visible()
-    toggle_btn.click()
-    page.wait_for_selector('#tp-collapsible-cat-row', state='visible')
-
     # Test negative input interaction
     neg_input = page.locator('#tp-inline-negative-input')
     neg_input.fill('Adapter')
@@ -244,8 +230,8 @@ def test_discount_heatmap_rendering(page: Page):
 
 
 def test_discount_heatmap_toolbar_toggle(page: Page):
-    heat_btn = page.locator('#tp-tb-heatmap')
-    page.wait_for_selector('#tp-tb-heatmap')
+    heat_btn = page.locator('#tp-bar-heat-btn')
+    page.wait_for_selector('#tp-bar-heat-btn')
     assert heat_btn.is_visible()
     assert 'tp-active' in (heat_btn.get_attribute('class') or '')
 
@@ -290,7 +276,7 @@ def test_sort_by_discount(page: Page):
     # Open settings and enable sort by discount descending
     page.click('#tp-root >> #tp-settings-fab')
     page.click('#tp-root >> label[for="tp-sort-discount"]')
-    page.click('#tp-btn-save')
+    page.click('#tp-root >> #tp-btn-save')
 
     # Card 1 has 67% discount, Card 4 has 50% discount
     cards = page.locator('#product-list .Plugin_Product')
@@ -298,7 +284,3 @@ def test_sort_by_discount(page: Page):
     second_id = cards.nth(1).get_attribute('id')
     assert first_id == 'card-cheapest'  # 67%
     assert second_id == 'card-cat-excluded'  # 50%
-
-
-
-

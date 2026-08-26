@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.10.3
+// @version      2.11.2
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -31,8 +31,6 @@ const DEFAULTS = {
   EXCLUDED_CATEGORIES: [],
   MIN_OFFERS: 0,
   SORT_BY_OFFERS: 'none', // 'none', 'desc', 'asc', 'discount-desc'
-  ENABLE_FILTER_COUNTER: true,
-  CATS_EXPANDED: false,
 
   // Price Alarm Automation
   ALARM_ENABLED: true,
@@ -129,6 +127,8 @@ const STYLES = `
     display: block !important;
     opacity: var(--tp-dim-opacity, 0.25) !important;
     filter: grayscale(40%) !important;
+    outline: 2px dashed #f59e0b !important;
+    outline-offset: -2px !important;
     transition: opacity 0.3s ease, filter 0.3s ease !important;
   }
   body.tp-reveal-filtered .tp-negative-filtered:hover,
@@ -162,7 +162,7 @@ const STYLES = `
     gap: 4px !important;
     text-decoration: none !important;
     user-select: none !important;
-    max-width: 150px !important;
+    max-width: 160px !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
@@ -188,85 +188,7 @@ const STYLES = `
     }
   }
 
-  /* Floating Quick-Control Pill Toolbar */
-  #tp-quick-toolbar {
-    position: fixed;
-    bottom: 14px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(30, 41, 59, 0.92);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 24px;
-    padding: 6px 16px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-    z-index: 99990;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    color: #f8fafc;
-    font-size: 12px;
-    font-weight: 600;
-  }
-
-  .tp-toolbar-group {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .tp-toolbar-divider {
-    width: 1px;
-    height: 16px;
-    background: rgba(255, 255, 255, 0.15);
-  }
-
-  .tp-toolbar-btn {
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    color: #cbd5e1;
-    padding: 4px 10px;
-    border-radius: 14px;
-    font-size: 11px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    user-select: none;
-  }
-  .tp-toolbar-btn:hover {
-    background: rgba(255, 255, 255, 0.18);
-    color: #fff;
-  }
-  .tp-toolbar-btn.tp-active {
-    background: rgba(16, 185, 129, 0.25);
-    border-color: rgba(16, 185, 129, 0.5);
-    color: #34d399;
-  }
-  .tp-stepper-btn {
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    color: #fff;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    user-select: none;
-    font-size: 12px;
-    transition: background 0.2s ease;
-  }
-  .tp-stepper-btn:hover {
-    background: rgba(16, 185, 129, 0.4);
-  }
-
-  /* Compact Single-Row Power Filter Bar with Collapsible Category Drawer */
+  /* Compact Consolidated Power Filter Bar */
   #tp-suite-filter-bar {
     margin: 8px auto 12px auto !important;
     width: 100% !important;
@@ -284,7 +206,6 @@ const STYLES = `
     gap: 8px !important;
     z-index: 9990 !important;
     position: relative !important;
-    overflow: visible !important;
   }
 
   .tp-filter-main-row {
@@ -292,7 +213,6 @@ const STYLES = `
     align-items: center !important;
     gap: 8px !important;
     width: 100% !important;
-    max-width: 100% !important;
     box-sizing: border-box !important;
     flex-wrap: wrap !important;
   }
@@ -308,12 +228,11 @@ const STYLES = `
   }
 
   .tp-input-wrapper {
-    flex: 1 1 240px !important;
+    flex: 1 1 200px !important;
     display: flex !important;
     align-items: center !important;
     gap: 6px !important;
     min-width: 0 !important;
-    max-width: 100% !important;
     box-sizing: border-box !important;
   }
 
@@ -369,7 +288,8 @@ const STYLES = `
     color: #f43f5e !important;
   }
 
-  .tp-btn-toggle {
+  /* Control buttons in Top Bar */
+  .tp-bar-btn {
     background: rgba(51, 65, 85, 0.6) !important;
     border: 1px solid #334155 !important;
     color: #cbd5e1 !important;
@@ -386,14 +306,47 @@ const STYLES = `
     white-space: nowrap !important;
     flex-shrink: 0 !important;
   }
-  .tp-btn-toggle:hover {
+  .tp-bar-btn:hover {
     background: #334155 !important;
     color: #fff !important;
   }
-  .tp-btn-toggle.tp-active {
+  .tp-bar-btn.tp-active {
     background: rgba(16, 185, 129, 0.2) !important;
     border-color: rgba(16, 185, 129, 0.4) !important;
     color: #34d399 !important;
+  }
+
+  .tp-bar-stepper-group {
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    background: rgba(15, 23, 42, 0.6) !important;
+    border: 1px solid #334155 !important;
+    padding: 2px 6px !important;
+    border-radius: 8px !important;
+    font-size: 11px !important;
+    color: #94a3b8 !important;
+    user-select: none !important;
+    flex-shrink: 0 !important;
+  }
+  .tp-stepper-btn {
+    width: 20px !important;
+    height: 20px !important;
+    border-radius: 50% !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    color: #fff !important;
+    font-weight: 700 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    font-size: 11px !important;
+    transition: background 0.2s ease !important;
+    padding: 0 !important;
+  }
+  .tp-stepper-btn:hover {
+    background: rgba(16, 185, 129, 0.5) !important;
   }
 
   .tp-filter-bar-reset {
@@ -414,201 +367,66 @@ const STYLES = `
     color: #fff !important;
   }
 
-  .tp-cat-collapsible-body {
+  /* Blocked Categories Overview Row */
+  .tp-blocked-cats-row {
     border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
-    padding-top: 8px !important;
-    max-width: 100% !important;
-    box-sizing: border-box !important;
-  }
-
-  .tp-cat-pills-row {
+    padding-top: 6px !important;
     display: flex !important;
-    flex-wrap: wrap !important;
-    gap: 6px !important;
     align-items: center !important;
-    flex: 1 !important;
-    max-width: 100% !important;
-    box-sizing: border-box !important;
+    gap: 6px !important;
+    flex-wrap: wrap !important;
   }
-
-  /* High-Contrast Crisp Readable Category Pills */
-  .tp-cat-pill {
-    padding: 4px 10px !important;
-    border-radius: 12px !important;
+  .tp-blocked-cats-label {
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    color: #f43f5e !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    white-space: nowrap !important;
+  }
+  .tp-blocked-chip {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 5px !important;
+    padding: 2px 8px !important;
+    border-radius: 10px !important;
     font-size: 11px !important;
     font-weight: 600 !important;
-    cursor: pointer !important;
-    user-select: none !important;
-    transition: all 0.2s ease !important;
-    background: #1e293b !important;
-    color: #f8fafc !important;
-    border: 1px solid #334155 !important;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15) !important;
-    display: inline-flex !important;
-    align-items: center !important;
-  }
-  .tp-cat-pill:hover {
-    background: #334155 !important;
-    color: #ffffff !important;
-  }
-  .tp-cat-pill.tp-excluded {
-    background: #7f1d1d !important;
+    background: rgba(239, 68, 68, 0.18) !important;
+    border: 1px solid rgba(239, 68, 68, 0.4) !important;
     color: #fca5a5 !important;
-    border-color: #ef4444 !important;
-    text-decoration: line-through !important;
-  }
-
-  /* Group Pills & Collapsible Subcategories */
-  .tp-group-wrapper {
-    display: inline-flex !important;
-    flex-direction: column !important;
-    gap: 4px !important;
-    position: relative !important;
-  }
-  .tp-group-pill {
-    display: inline-flex !important;
-    align-items: center !important;
-    gap: 6px !important;
-    padding: 4px 10px !important;
-    border-radius: 12px !important;
-    font-size: 11px !important;
-    font-weight: 700 !important;
-    cursor: pointer !important;
     user-select: none !important;
-    transition: all 0.2s ease !important;
-    background: #0f172a !important;
-    color: #38bdf8 !important;
-    border: 1px solid #0284c7 !important;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2) !important;
-  }
-  .tp-group-pill:hover {
-    background: #1e293b !important;
-    color: #7dd3fc !important;
-    border-color: #38bdf8 !important;
-  }
-  .tp-group-pill.tp-excluded-all {
-    background: #7f1d1d !important;
-    color: #fca5a5 !important;
-    border-color: #ef4444 !important;
-    text-decoration: line-through !important;
-  }
-  .tp-group-pill.tp-excluded-individual {
-    background: #9a3412 !important;
-    color: #ffedd5 !important;
-    border-color: #f97316 !important;
-    text-decoration: none !important;
-  }
-  .tp-group-pill.tp-partial {
-    border-color: #f59e0b !important;
-    color: #fef08a !important;
-    text-decoration: none !important;
-  }
-  .tp-group-chevron {
-    font-size: 9px !important;
-    padding: 1px 5px !important;
-    border-radius: 4px !important;
-    background: rgba(255, 255, 255, 0.15) !important;
-    cursor: pointer !important;
-    margin-left: 2px !important;
-  }
-  .tp-group-chevron:hover {
-    background: rgba(255, 255, 255, 0.3) !important;
-  }
-
-  /* Floating Glassmorphic Group Popover */
-  .tp-group-popover {
-    position: absolute !important;
-    z-index: 100000 !important;
-    min-width: 260px !important;
-    max-width: 380px !important;
-    padding: 10px !important;
-    background: rgba(15, 23, 42, 0.95) !important;
-    backdrop-filter: blur(16px) !important;
-    -webkit-backdrop-filter: blur(16px) !important;
-    border: 1px solid rgba(56, 189, 248, 0.3) !important;
-    border-radius: 12px !important;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(56, 189, 248, 0.1) !important;
-    animation: tpPopoverFadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;
-  }
-  @keyframes tpPopoverFadeIn {
-    from { opacity: 0; transform: translateY(-4px) scale(0.98); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
-  }
-  .tp-popover-header {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    padding-bottom: 8px !important;
-    margin-bottom: 8px !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
-  }
-  .tp-popover-title {
-    font-size: 12px !important;
-    font-weight: 700 !important;
-    color: #38bdf8 !important;
-  }
-  .tp-popover-actions {
-    display: flex !important;
-    gap: 6px !important;
-  }
-  .tp-popover-btn {
-    font-size: 10px !important;
-    padding: 2px 6px !important;
-    border-radius: 4px !important;
-    background: rgba(255, 255, 255, 0.1) !important;
-    color: #cbd5e1 !important;
-    cursor: pointer !important;
-    border: 1px solid rgba(255, 255, 255, 0.05) !important;
     transition: all 0.15s ease !important;
   }
-  .tp-popover-btn:hover {
-    background: rgba(56, 189, 248, 0.2) !important;
-    color: #ffffff !important;
-    border-color: rgba(56, 189, 248, 0.4) !important;
+  .tp-blocked-chip:hover {
+    background: rgba(239, 68, 68, 0.3) !important;
+    border-color: #ef4444 !important;
+    color: #fff !important;
   }
-  .tp-popover-search {
-    width: 100% !important;
-    box-sizing: border-box !important;
-    padding: 4px 8px !important;
-    margin-bottom: 8px !important;
-    font-size: 11px !important;
-    color: #e2e8f0 !important;
-    background: rgba(15, 23, 42, 0.6) !important;
-    border: 1px solid rgba(56, 189, 248, 0.25) !important;
-    border-radius: 6px !important;
-    outline: none !important;
+  .tp-blocked-chip-remove {
+    cursor: pointer !important;
+    font-weight: 700 !important;
+    font-size: 12px !important;
+    color: #fca5a5 !important;
+    padding: 0 2px !important;
+    border-radius: 3px !important;
   }
-  .tp-popover-search:focus {
-    border-color: rgba(56, 189, 248, 0.6) !important;
-    box-shadow: 0 0 8px rgba(56, 189, 248, 0.2) !important;
+  .tp-blocked-chip-remove:hover {
+    color: #fff !important;
+    background: rgba(255, 255, 255, 0.2) !important;
   }
-  .tp-popover-body {
-    display: flex !important;
-    flex-wrap: wrap !important;
-    gap: 6px !important;
-    max-height: 250px !important;
-    overflow-y: auto !important;
-    padding: 2px !important;
+  .tp-blocked-clear-all {
+    font-size: 10px !important;
+    color: #94a3b8 !important;
+    background: transparent !important;
+    border: none !important;
+    text-decoration: underline !important;
+    cursor: pointer !important;
+    padding: 2px 4px !important;
   }
-  .tp-branch-wrapper {
-    width: 100% !important;
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 4px !important;
-    margin-bottom: 4px !important;
-  }
-  .tp-branch-header {
-    display: flex !important;
-    align-items: center !important;
-    gap: 4px !important;
-  }
-  .tp-branch-children {
-    display: flex !important;
-    flex-wrap: wrap !important;
-    gap: 4px !important;
-    padding-left: 12px !important;
-    margin-top: 2px !important;
-    border-left: 2px solid rgba(56, 189, 248, 0.2) !important;
+  .tp-blocked-clear-all:hover {
+    color: #f43f5e !important;
   }
 
   /* Mobile Responsive Fixes */
@@ -624,27 +442,12 @@ const STYLES = `
     .tp-input-wrapper {
       flex: 1 1 100% !important;
       width: 100% !important;
-      min-width: 0 !important;
     }
-    .tp-btn-toggle, .tp-filter-bar-reset {
+    .tp-bar-btn, .tp-filter-bar-reset {
       flex: 1 1 auto !important;
       justify-content: center !important;
       text-align: center !important;
-      font-size: 11px !important;
       padding: 6px 8px !important;
-    }
-    #tp-quick-toolbar {
-      width: 95% !important;
-      max-width: 95% !important;
-      flex-wrap: wrap !important;
-      justify-content: center !important;
-      padding: 6px 10px !important;
-      border-radius: 16px !important;
-      gap: 6px !important;
-    }
-    .tp-toolbar-group {
-      flex-wrap: wrap !important;
-      justify-content: center !important;
     }
   }
 `;
@@ -691,11 +494,11 @@ const SHADOW_MODAL_STYLES = `
     transform: rotate(90deg);
   }
 
-  /* Top Layer Settings Modal Dialog */
+  /* Settings Modal Dialog */
   dialog#tp-settings-dialog {
     box-sizing: border-box;
     width: 92%;
-    max-width: 520px;
+    max-width: 500px;
     max-height: 85vh;
     overflow-y: auto;
     background: rgba(30, 41, 59, 0.95);
@@ -733,7 +536,7 @@ const SHADOW_MODAL_STYLES = `
     padding-right: 4px;
   }
   .tp-settings-group {
-    margin-bottom: 18px;
+    margin-bottom: 16px;
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -745,7 +548,7 @@ const SHADOW_MODAL_STYLES = `
     margin: 0;
   }
   .tp-section-header {
-    margin: 16px 0 12px 0;
+    margin: 14px 0 10px 0;
     color: #10b981;
     font-size: 12px;
     font-weight: 700;
@@ -829,54 +632,6 @@ const SHADOW_MODAL_STYLES = `
     font-family: inherit;
     font-size: 12px;
     resize: vertical;
-  }
-
-  .tp-cat-pills-container {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    max-height: 140px;
-    overflow-y: auto;
-    padding: 4px;
-    background: rgba(15, 23, 42, 0.4);
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-  }
-  .tp-group-wrapper {
-    display: inline-flex;
-    align-items: center;
-    position: relative;
-  }
-  .tp-group-pill {
-    display: inline-flex;
-    align-items: center;
-    font-size: 11px;
-    padding: 3px 8px;
-    border-radius: 6px;
-    background: rgba(255, 255, 255, 0.08);
-    color: #cbd5e1;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    cursor: pointer;
-    user-select: none;
-    transition: all 0.15s ease;
-  }
-  .tp-group-pill.tp-excluded-all {
-    background: rgba(239, 68, 68, 0.2);
-    color: #fca5a5;
-    border-color: rgba(239, 68, 68, 0.3);
-    text-decoration: line-through;
-  }
-  .tp-group-pill.tp-excluded-individual,
-  .tp-group-pill.tp-partial {
-    background: rgba(245, 158, 11, 0.2);
-    color: #fcd34d;
-    border-color: rgba(245, 158, 11, 0.3);
-  }
-  .tp-group-chevron {
-    margin-left: 4px;
-    font-size: 9px;
-    opacity: 0.7;
-    padding: 2px;
   }
 
   /* Switch Toggle */
@@ -1023,105 +778,6 @@ const SHADOW_MODAL_STYLES = `
     background: #38bdf8;
     color: #0f172a;
   }
-
-  /* Popover styles within Shadow DOM */
-  .tp-group-popover {
-    position: absolute !important;
-    z-index: 100000 !important;
-    min-width: 260px !important;
-    max-width: 380px !important;
-    padding: 10px !important;
-    background: rgba(15, 23, 42, 0.95) !important;
-    backdrop-filter: blur(16px) !important;
-    -webkit-backdrop-filter: blur(16px) !important;
-    border: 1px solid rgba(56, 189, 248, 0.3) !important;
-    border-radius: 12px !important;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(56, 189, 248, 0.1) !important;
-    animation: tpPopoverFadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;
-  }
-  .tp-popover-header {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    margin-bottom: 8px !important;
-    gap: 8px !important;
-  }
-  .tp-popover-title {
-    font-size: 12px !important;
-    font-weight: 700 !important;
-    color: #38bdf8 !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-  }
-  .tp-popover-actions {
-    display: flex !important;
-    gap: 4px !important;
-    flex-shrink: 0 !important;
-  }
-  .tp-popover-btn {
-    background: rgba(255, 255, 255, 0.08) !important;
-    border: 1px solid rgba(255, 255, 255, 0.12) !important;
-    color: #cbd5e1 !important;
-    font-size: 10px !important;
-    font-weight: 600 !important;
-    padding: 2px 6px !important;
-    border-radius: 4px !important;
-    cursor: pointer !important;
-    transition: all 0.2s ease !important;
-  }
-  .tp-popover-btn:hover {
-    background: rgba(255, 255, 255, 0.2) !important;
-    color: #fff !important;
-  }
-  .tp-popover-search {
-    width: 100% !important;
-    box-sizing: border-box !important;
-    background: rgba(2, 6, 23, 0.7) !important;
-    border: 1px solid rgba(255, 255, 255, 0.15) !important;
-    color: #fff !important;
-    padding: 5px 8px !important;
-    border-radius: 6px !important;
-    font-size: 11px !important;
-    margin-bottom: 8px !important;
-    outline: none !important;
-  }
-  .tp-popover-search:focus {
-    border-color: #38bdf8 !important;
-  }
-  .tp-popover-body {
-    display: flex !important;
-    flex-wrap: wrap !important;
-    gap: 4px !important;
-    max-height: 220px !important;
-    overflow-y: auto !important;
-    padding-right: 2px !important;
-  }
-  .tp-cat-pill {
-    padding: 4px 10px !important;
-    border-radius: 12px !important;
-    font-size: 11px !important;
-    font-weight: 600 !important;
-    cursor: pointer !important;
-    user-select: none !important;
-    transition: all 0.2s ease !important;
-    background: #1e293b !important;
-    color: #f8fafc !important;
-    border: 1px solid #334155 !important;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15) !important;
-    display: inline-flex !important;
-    align-items: center !important;
-  }
-  .tp-cat-pill:hover {
-    background: #334155 !important;
-    color: #ffffff !important;
-  }
-  .tp-cat-pill.tp-excluded {
-    background: #7f1d1d !important;
-    color: #fca5a5 !important;
-    border-color: #ef4444 !important;
-    text-decoration: line-through !important;
-  }
 `;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1129,7 +785,7 @@ const SHADOW_MODAL_STYLES = `
 (() => {
   'use strict';
 
-  // Fast 2-Layer Storage Helpers with GM_setValue + domain localStorage Failover (Reinstall-Proof)
+  // Fast Typed Storage Helpers with GM_getValue + localStorage Fallback
   const LOCAL_STORAGE_PREFIX = 'tp_suite_v2_';
 
   const _getValue = (key, def) => {
@@ -1140,13 +796,11 @@ const SHADOW_MODAL_STYLES = `
       }
     } catch (e) { }
 
-    // Failover: Try domain localStorage backup if GM_getValue was wiped on script reinstall
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
         const raw = window.localStorage.getItem(LOCAL_STORAGE_PREFIX + key);
         if (raw !== null) {
           const parsed = JSON.parse(raw);
-          // Re-seed extension storage for future fast access
           if (typeof GM_setValue !== 'undefined') GM_setValue(key, parsed);
           return parsed;
         }
@@ -1181,8 +835,6 @@ const SHADOW_MODAL_STYLES = `
     EXCLUDED_CATEGORIES: _getValue('EXCLUDED_CATEGORIES', DEFAULTS.EXCLUDED_CATEGORIES),
     MIN_OFFERS: parseInt(_getValue('MIN_OFFERS', DEFAULTS.MIN_OFFERS)),
     SORT_BY_OFFERS: _getValue('SORT_BY_OFFERS', DEFAULTS.SORT_BY_OFFERS),
-    ENABLE_FILTER_COUNTER: _getValue('ENABLE_FILTER_COUNTER', DEFAULTS.ENABLE_FILTER_COUNTER),
-    CATS_EXPANDED: _getValue('CATS_EXPANDED', DEFAULTS.CATS_EXPANDED),
     ALARM_ENABLED: _getValue('ALARM_ENABLED', DEFAULTS.ALARM_ENABLED),
     ALARM_TARGET_PERCENT: parseFloat(_getValue('ALARM_TARGET_PERCENT', DEFAULTS.ALARM_TARGET_PERCENT)),
     ALARM_DURATION_DAYS: String(_getValue('ALARM_DURATION_DAYS', DEFAULTS.ALARM_DURATION_DAYS)),
@@ -1197,9 +849,6 @@ const SHADOW_MODAL_STYLES = `
   };
 
   const log = (...args) => { if (CONFIG.DEBUG) console.log('[Toppreise-Suite]', ...args); };
-
-  // Set of categories detected on active page cards
-  const pageCategories = new Set();
 
   // Inject Custom Stylesheet safely
   if (!document.getElementById('tp-unified-settings-styles')) {
@@ -1223,815 +872,30 @@ const SHADOW_MODAL_STYLES = `
     return name.toLowerCase().replace(/[^a-z0-9]/g, '');
   }
 
-  // Auto-generated Toppreise Category Lookup Table
-  const CATEGORY_LOOKUP = {
-    "abenteuer": "Filme",
-    "abenteür": "Filme",
-    "accessoires": "Garten & Baumarkt",
-    "action": "Filme",
-    "action cameras": "TV & Video",
-    "actioncameras": "TV & Video",
-    "actioncams": "TV & Video",
-    "actionspiele": "Videogames",
-    "activity tracker": "Sport & Freizeit",
-    "activity tracker smartwatches": "Sport & Freizeit",
-    "activitytracker": "Sport & Freizeit",
-    "activitytrackersmartwatches": "Sport & Freizeit",
-    "after shave": "Drogerie",
-    "aftershave": "Drogerie",
-    "akku bohrmaschinen": "Garten & Baumarkt",
-    "akku schrauber": "Garten & Baumarkt",
-    "akkubohrmaschinen": "Garten & Baumarkt",
-    "akkus": "Smartphones & Mobiltelefone",
-    "akkus ladegeraete": "Garten & Baumarkt",
-    "akkus ladegeräte": "Garten & Baumarkt",
-    "akkuschrauber": "Garten & Baumarkt",
-    "akkusladegeraete": "Garten & Baumarkt",
-    "akkusladegeräte": "Garten & Baumarkt",
-    "aktenordner": "Bürobedarf & Schreibwaren",
-    "analoge funktelefone": "Smartphones & Mobiltelefone",
-    "analoge telefone": "Smartphones & Mobiltelefone",
-    "analogefunktelefone": "Smartphones & Mobiltelefone",
-    "analogetelefone": "Smartphones & Mobiltelefone",
-    "android": "Smartphones & Mobiltelefone",
-    "anh&auml;nger &amp; charms": "Uhren",
-    "anh&auml;nger&amp;charms": "Uhren",
-    "anz&uuml;ge": "Garten & Baumarkt",
-    "apple": "Smartphones & Mobiltelefone",
-    "apple h10": "Smartphones & Mobiltelefone",
-    "apple watch": "Smartphones & Mobiltelefone",
-    "appleh10": "Smartphones & Mobiltelefone",
-    "applewatch": "Smartphones & Mobiltelefone",
-    "arbeitsplatz": "Bürobedarf & Schreibwaren",
-    "armbanduhren": "Uhren",
-    "audio streaming": "HiFi & Audio",
-    "audiostreaming": "HiFi & Audio",
-    "auto": "Auto & Motorrad",
-    "auto &amp; motorrad": "Auto & Motorrad",
-    "auto motorrad": "Auto & Motorrad",
-    "auto&amp;motorrad": "Auto & Motorrad",
-    "automotorrad": "Auto & Motorrad",
-    "autorennbahnen": "Spielwaren",
-    "autos": "Spielwaren",
-    "av receiver": "HiFi & Audio",
-    "avreceiver": "HiFi & Audio",
-    "b&uuml;robedarf &amp; schreibwaren": "Bürobedarf & Schreibwaren",
-    "b&uuml;robedarf&amp;schreibwaren": "Bürobedarf & Schreibwaren",
-    "b&uuml;roeinrichtung": "Bürobedarf & Schreibwaren",
-    "b&uuml;roelektronik": "Bürobedarf & Schreibwaren",
-    "b&uuml;röinrichtung": "Bürobedarf & Schreibwaren",
-    "b&uuml;rölektronik": "Bürobedarf & Schreibwaren",
-    "baby": "Haushalt & Küche",
-    "baby  &amp; kinderpflege": "Drogerie",
-    "baby kinderpflege": "Drogerie",
-    "baby&amp;kinderpflege": "Drogerie",
-    "babykinderpflege": "Drogerie",
-    "back ofenformen": "Haushalt & Küche",
-    "backofenformen": "Haushalt & Küche",
-    "bademode": "Garten & Baumarkt",
-    "batterien &amp; akkus": "Garten & Baumarkt",
-    "batterien akkus ladegeraete": "Garten & Baumarkt",
-    "batterien akkus ladegeräte": "Garten & Baumarkt",
-    "batterien&amp;akkus": "Garten & Baumarkt",
-    "batterienakkusladegeraete": "Garten & Baumarkt",
-    "batterienakkusladegeräte": "Garten & Baumarkt",
-    "bau &amp; konstruktionsspielzeug": "Spielwaren",
-    "bau konstruktionsspielzeug": "Spielwaren",
-    "bau&amp;konstruktionsspielzeug": "Spielwaren",
-    "baukonstruktionsspielzeug": "Spielwaren",
-    "beamer": "TV & Video",
-    "beat em up": "Videogames",
-    "beatemup": "Videogames",
-    "bekleidung &amp; schuhe": "Bekleidung & Schuhe",
-    "bekleidung accessoires": "Garten & Baumarkt",
-    "bekleidung schuhe": "Bekleidung & Schuhe",
-    "bekleidung&amp;schuhe": "Bekleidung & Schuhe",
-    "bekleidungaccessoires": "Garten & Baumarkt",
-    "bekleidungschuhe": "Bekleidung & Schuhe",
-    "binden &amp; laminieren": "Bürobedarf & Schreibwaren",
-    "binden laminieren": "Bürobedarf & Schreibwaren",
-    "binden&amp;laminieren": "Bürobedarf & Schreibwaren",
-    "bindenlaminieren": "Bürobedarf & Schreibwaren",
-    "biografie": "Filme",
-    "blu ray 4k ultra hd filme": "Filme",
-    "blu ray filme": "Filme",
-    "blu ray player": "TV & Video",
-    "bluetooth lautsprecher": "HiFi & Audio",
-    "bluetoothlautsprecher": "HiFi & Audio",
-    "bluray4kultrahdfilme": "Filme",
-    "blurayfilme": "Filme",
-    "blurayplayer": "TV & Video",
-    "blütooth lautsprecher": "HiFi & Audio",
-    "blütoothlautsprecher": "HiFi & Audio",
-    "bohrmaschinen &amp; schrauber": "Garten & Baumarkt",
-    "bohrmaschinen schrauber": "Garten & Baumarkt",
-    "bohrmaschinen&amp;schrauber": "Garten & Baumarkt",
-    "bohrmaschinenschrauber": "Garten & Baumarkt",
-    "braeter dampfgarer": "Haushalt & Küche",
-    "braeterdampfgarer": "Haushalt & Küche",
-    "brixies": "Spielwaren",
-    "bräter dampfgarer": "Haushalt & Küche",
-    "bräterdampfgarer": "Haushalt & Küche",
-    "buerobedarf &amp; schreibwaren": "Bürobedarf & Schreibwaren",
-    "buerobedarf schreibwaren": "Bürobedarf & Schreibwaren",
-    "buerobedarf&amp;schreibwaren": "Bürobedarf & Schreibwaren",
-    "buerobedarfschreibwaren": "Bürobedarf & Schreibwaren",
-    "bueroeinrichtung": "Bürobedarf & Schreibwaren",
-    "bueroelektronik": "Bürobedarf & Schreibwaren",
-    "bürobedarf &amp; schreibwaren": "Bürobedarf & Schreibwaren",
-    "bürobedarf schreibwaren": "Bürobedarf & Schreibwaren",
-    "bürobedarf&amp;schreibwaren": "Bürobedarf & Schreibwaren",
-    "bürobedarfschreibwaren": "Bürobedarf & Schreibwaren",
-    "büröinrichtung": "Bürobedarf & Schreibwaren",
-    "bürölektronik": "Bürobedarf & Schreibwaren",
-    "cada": "Spielwaren",
-    "camcorder": "TV & Video",
-    "camping outdoor": "Sport & Freizeit",
-    "campingoutdoor": "Sport & Freizeit",
-    "car hifi / car video": "Auto & Motorrad",
-    "car hifi car video": "Auto & Motorrad",
-    "carhifi/carvideo": "Auto & Motorrad",
-    "carhificarvideo": "Auto & Motorrad",
-    "cd &amp; sacd player": "HiFi & Audio",
-    "cd sacd player": "HiFi & Audio",
-    "cd&amp;sacdplayer": "HiFi & Audio",
-    "cdsacdplayer": "HiFi & Audio",
-    "cobi": "Spielwaren",
-    "computer &amp; zubeh&ouml;r": "Computer & Zubehör",
-    "computer &amp; zubehoer": "Computer & Zubehör",
-    "computer &amp; zubehör": "Computer & Zubehör",
-    "computer zubehoer": "Computer & Zubehör",
-    "computer zubehör": "Computer & Zubehör",
-    "computer&amp;zubeh&ouml;r": "Computer & Zubehör",
-    "computer&amp;zubehoer": "Computer & Zubehör",
-    "computer&amp;zubehör": "Computer & Zubehör",
-    "computerspiele fuer windows": "Videogames",
-    "computerspiele für windows": "Videogames",
-    "computerspielefuerwindows": "Videogames",
-    "computerspielefürwindows": "Videogames",
-    "computerzubehoer": "Computer & Zubehör",
-    "computerzubehör": "Computer & Zubehör",
-    "cover": "Smartphones & Mobiltelefone",
-    "damen deodorants": "Drogerie",
-    "damend&uuml;fte": "Drogerie",
-    "damendeodorants": "Drogerie",
-    "damenduefte": "Drogerie",
-    "damendüfte": "Drogerie",
-    "damenmode": "Garten & Baumarkt",
-    "dashboards buttonboxes": "Videogames",
-    "dashboardsbuttonboxes": "Videogames",
-    "decken wandhalterungen": "TV & Video",
-    "deckenwandhalterungen": "TV & Video",
-    "deodorant": "Drogerie",
-    "digitalkameras": "Foto & Video",
-    "djing": "HiFi & Audio",
-    "drogerie": "Drogerie",
-    "drucker &amp; scanner": "Computer & Zubehör",
-    "drucker scanner": "Computer & Zubehör",
-    "drucker&amp;scanner": "Computer & Zubehör",
-    "druckerscanner": "Computer & Zubehör",
-    "dvb receiver": "TV & Video",
-    "dvbreceiver": "TV & Video",
-    "dvd action thriller horror": "Filme",
-    "dvd filme": "Filme",
-    "dvd kinder familie": "Filme",
-    "dvd komoedie drama": "Filme",
-    "dvd komödie drama": "Filme",
-    "dvd science fiction fantasy": "Filme",
-    "dvd tv dokumentationen": "Filme",
-    "dvdactionthrillerhorror": "Filme",
-    "dvdfilme": "Filme",
-    "dvdkinderfamilie": "Filme",
-    "dvdkomoediedrama": "Filme",
-    "dvdkomödiedrama": "Filme",
-    "dvdsciencefictionfantasy": "Filme",
-    "dvdtvdokumentationen": "Filme",
-    "e scooter": "Sport & Freizeit",
-    "eastern": "Filme",
-    "eau de parfum": "Drogerie",
-    "eau de toilette": "Drogerie",
-    "eaudeparfum": "Drogerie",
-    "eaudetoilette": "Drogerie",
-    "ebook reader": "Computer & Zubehör",
-    "ebookreader": "Computer & Zubehör",
-    "einzelkomponenten": "HiFi & Audio",
-    "elektrogrills": "Garten & Baumarkt",
-    "elektronik": "Computer & Zubehör",
-    "elektrozahnbuersten": "Drogerie",
-    "elektrozahnbürsten": "Drogerie",
-    "erotik": "Garten & Baumarkt",
-    "ersatzbuersten": "Drogerie",
-    "ersatzbürsten": "Drogerie",
-    "escooter": "Sport & Freizeit",
-    "experimentierk&auml;sten": "Spielwaren",
-    "experimentierkaesten": "Spielwaren",
-    "experimentierkästen": "Spielwaren",
-    "externe solid state drives ssd": "Computer & Zubehör",
-    "externe ssd": "Computer & Zubehör",
-    "externesolidstatedrivesssd": "Computer & Zubehör",
-    "externessd": "Computer & Zubehör",
-    "fairphone": "Smartphones & Mobiltelefone",
-    "fairphone h3048": "Smartphones & Mobiltelefone",
-    "fairphoneh3048": "Smartphones & Mobiltelefone",
-    "familienspiele": "Spielwaren",
-    "fantasy": "Filme",
-    "fenster tuer": "Garten & Baumarkt",
-    "fenster tür": "Garten & Baumarkt",
-    "fensterreinigungsroboter": "Haushalt & Küche",
-    "fenstertuer": "Garten & Baumarkt",
-    "fenstertür": "Garten & Baumarkt",
-    "ferngl&auml;ser": "Sport & Freizeit",
-    "fernglaeser": "Sport & Freizeit",
-    "ferngläser": "Sport & Freizeit",
-    "festnetz telefone": "Smartphones & Mobiltelefone",
-    "festnetztelefone": "Smartphones & Mobiltelefone",
-    "festplatten &amp; ssd": "Computer & Zubehör",
-    "festplatten ssd": "Computer & Zubehör",
-    "festplatten&amp;ssd": "Computer & Zubehör",
-    "festplattenssd": "Computer & Zubehör",
-    "filme": "Filme",
-    "fischertechnik": "Spielwaren",
-    "flight sticks sim flying": "Videogames",
-    "flightstickssimflying": "Videogames",
-    "fondue": "Haushalt & Küche",
-    "fondü": "Haushalt & Küche",
-    "foto": "Foto & Video",
-    "funkger&auml;te": "Smartphones & Mobiltelefone",
-    "funkgeraete": "Smartphones & Mobiltelefone",
-    "funkgeräte": "Smartphones & Mobiltelefone",
-    "funktelefone": "Smartphones & Mobiltelefone",
-    "games": "Videogames",
-    "garten": "Garten & Baumarkt",
-    "gartenger&auml;te": "Garten & Baumarkt",
-    "gartengeraete": "Garten & Baumarkt",
-    "gartengeräte": "Garten & Baumarkt",
-    "gartenm&ouml;bel": "Garten & Baumarkt",
-    "gartenmoebel": "Garten & Baumarkt",
-    "gartenmöbel": "Garten & Baumarkt",
-    "gasgrills": "Garten & Baumarkt",
-    "geschenksets": "Drogerie",
-    "geschirr besteck glaeser": "Haushalt & Küche",
-    "geschirr besteck gläser": "Haushalt & Küche",
-    "geschirr, besteck &amp; gl&auml;ser": "Haushalt & Küche",
-    "geschirr,besteck&amp;gl&auml;ser": "Haushalt & Küche",
-    "geschirrbesteckglaeser": "Haushalt & Küche",
-    "geschirrbesteckgläser": "Haushalt & Küche",
-    "gesellschaftsspiele": "Spielwaren",
-    "gin": "Haushalt & Küche",
-    "google": "Smartphones & Mobiltelefone",
-    "google h1825": "Smartphones & Mobiltelefone",
-    "googleh1825": "Smartphones & Mobiltelefone",
-    "gps geraete": "Sport & Freizeit",
-    "gps geräte": "Sport & Freizeit",
-    "gps module": "Computer & Zubehör",
-    "gps navigations geraete": "Computer & Zubehör",
-    "gps navigations geräte": "Computer & Zubehör",
-    "gpsgeraete": "Sport & Freizeit",
-    "gpsgeräte": "Sport & Freizeit",
-    "gpsmodule": "Computer & Zubehör",
-    "gpsnavigationsgeraete": "Computer & Zubehör",
-    "gpsnavigationsgeräte": "Computer & Zubehör",
-    "grafikkarten": "Computer & Zubehör",
-    "grafikkarten zubehoer": "Computer & Zubehör",
-    "grafikkarten zubehör": "Computer & Zubehör",
-    "grafikkartenzubehoer": "Computer & Zubehör",
-    "grafikkartenzubehör": "Computer & Zubehör",
-    "grappa": "Haushalt & Küche",
-    "grillieren": "Garten & Baumarkt",
-    "halterungen": "Computer & Zubehör",
-    "handfunkgeraete": "Smartphones & Mobiltelefone",
-    "handfunkgeräte": "Smartphones & Mobiltelefone",
-    "handwerkzeuge": "Garten & Baumarkt",
-    "haus": "Garten & Baumarkt",
-    "haus &amp; garten": "Garten & Baumarkt",
-    "haus garten": "Garten & Baumarkt",
-    "haus sicherheitstechnik": "Garten & Baumarkt",
-    "haus&amp;garten": "Garten & Baumarkt",
-    "hausgarten": "Garten & Baumarkt",
-    "haushalt &amp; k&uuml;che": "Haushalt & Küche",
-    "haushalt &amp; kueche": "Haushalt & Küche",
-    "haushalt &amp; küche": "Haushalt & Küche",
-    "haushalt kueche": "Haushalt & Küche",
-    "haushalt küche": "Haushalt & Küche",
-    "haushalt&amp;k&uuml;che": "Haushalt & Küche",
-    "haushalt&amp;kueche": "Haushalt & Küche",
-    "haushalt&amp;küche": "Haushalt & Küche",
-    "haushaltkueche": "Haushalt & Küche",
-    "haushaltküche": "Haushalt & Küche",
-    "haushaltsger&auml;te": "Haushalt & Küche",
-    "haushaltsgeraete": "Haushalt & Küche",
-    "haushaltsgeräte": "Haushalt & Küche",
-    "haussicherheitstechnik": "Garten & Baumarkt",
-    "headsets": "Smartphones & Mobiltelefone",
-    "heften": "Bürobedarf & Schreibwaren",
-    "heizung klima": "Garten & Baumarkt",
-    "heizungklima": "Garten & Baumarkt",
-    "hemden &amp; blusen": "Garten & Baumarkt",
-    "hemden&amp;blusen": "Garten & Baumarkt",
-    "herren after shave": "Drogerie",
-    "herrenaftershave": "Drogerie",
-    "herrend&uuml;fte": "Drogerie",
-    "herrenduefte": "Drogerie",
-    "herrendüfte": "Drogerie",
-    "herrenmode": "Garten & Baumarkt",
-    "hifi": "HiFi & Audio",
-    "hifi &amp; audio": "HiFi & Audio",
-    "hifi audio": "HiFi & Audio",
-    "hifi einzelkomponenten": "HiFi & Audio",
-    "hifi&amp;audio": "HiFi & Audio",
-    "hifiaudio": "HiFi & Audio",
-    "hifieinzelkomponenten": "HiFi & Audio",
-    "holzkohlegrills": "Garten & Baumarkt",
-    "home cinema av receiver": "HiFi & Audio",
-    "home cinema video": "TV & Video",
-    "homecinemaavreceiver": "HiFi & Audio",
-    "homecinemavideo": "TV & Video",
-    "horror": "Filme",
-    "horrorkomoedie": "Filme",
-    "horrorkomödie": "Filme",
-    "hosen": "Garten & Baumarkt",
-    "huelle": "Smartphones & Mobiltelefone",
-    "huellen": "Smartphones & Mobiltelefone",
-    "hülle": "Smartphones & Mobiltelefone",
-    "hüllen": "Smartphones & Mobiltelefone",
-    "jeans": "Garten & Baumarkt",
-    "jump &#39;n run &amp; geschicklichkeit": "Videogames",
-    "jump n run geschicklichkeit": "Videogames",
-    "jump&#39;nrun&amp;geschicklichkeit": "Videogames",
-    "jumpnrungeschicklichkeit": "Videogames",
-    "k&ouml;rperpflege": "Drogerie",
-    "k&uuml;chenger&auml;te": "Haushalt & Küche",
-    "kaffee  &amp; espressomaschinen": "Haushalt & Küche",
-    "kaffee espressomaschinen": "Haushalt & Küche",
-    "kaffee&amp;espressomaschinen": "Haushalt & Küche",
-    "kaffeeespressomaschinen": "Haushalt & Küche",
-    "kalender": "Bürobedarf & Schreibwaren",
-    "karten software": "Computer & Zubehör",
-    "kartensoftware": "Computer & Zubehör",
-    "kartenspiele": "Spielwaren",
-    "ketten": "Uhren",
-    "kindermode": "Garten & Baumarkt",
-    "kindersitze": "Auto & Motorrad",
-    "kinderspiele": "Spielwaren",
-    "kinderspielzeug": "Spielwaren",
-    "klassisches drama": "Filme",
-    "klassischesdrama": "Filme",
-    "kleider": "Garten & Baumarkt",
-    "klimageraete": "Haushalt & Küche",
-    "klimageräte": "Haushalt & Küche",
-    "klingel tuersprechanlage": "Garten & Baumarkt",
-    "klingel türsprechanlage": "Garten & Baumarkt",
-    "klingeltuersprechanlage": "Garten & Baumarkt",
-    "klingeltürsprechanlage": "Garten & Baumarkt",
-    "kochgeschirr": "Haushalt & Küche",
-    "kochkellen": "Haushalt & Küche",
-    "koerperpflege": "Drogerie",
-    "komoedie": "Filme",
-    "komödie": "Filme",
-    "kontaktlinsen": "Drogerie",
-    "kopfh&ouml;rer": "HiFi & Audio",
-    "kopfhoerer": "HiFi & Audio",
-    "kopfhörer": "HiFi & Audio",
-    "krimikomoedie": "Filme",
-    "krimikomödie": "Filme",
-    "kuechengeraete": "Haushalt & Küche",
-    "kuechenhelfer": "Haushalt & Küche",
-    "körperpflege": "Drogerie",
-    "küchengeräte": "Haushalt & Küche",
-    "küchenhelfer": "Haushalt & Küche",
-    "ladegeraete netzadapter": "Smartphones & Mobiltelefone",
-    "ladegeraetenetzadapter": "Smartphones & Mobiltelefone",
-    "ladegeräte netzadapter": "Smartphones & Mobiltelefone",
-    "ladegerätenetzadapter": "Smartphones & Mobiltelefone",
-    "lampen": "Garten & Baumarkt",
-    "lampen leuchtmittel": "Garten & Baumarkt",
-    "lampenleuchtmittel": "Garten & Baumarkt",
-    "lautsprecher": "HiFi & Audio",
-    "lego": "Spielwaren",
-    "lego city": "Spielwaren",
-    "lego editions": "Spielwaren",
-    "lego icons": "Spielwaren",
-    "lego ideas": "Spielwaren",
-    "lego marvel": "Spielwaren",
-    "lego pokemon": "Spielwaren",
-    "lego super mario": "Spielwaren",
-    "lego technic": "Spielwaren",
-    "lego the legend of zelda": "Spielwaren",
-    "lego the lord of the rings": "Spielwaren",
-    "legocity": "Spielwaren",
-    "legoeditions": "Spielwaren",
-    "legoicons": "Spielwaren",
-    "legoideas": "Spielwaren",
-    "legomarvel": "Spielwaren",
-    "legopokemon": "Spielwaren",
-    "legosupermario": "Spielwaren",
-    "legotechnic": "Spielwaren",
-    "legothelegendofzelda": "Spielwaren",
-    "legothelordoftherings": "Spielwaren",
-    "lenkrad komplettsets": "Videogames",
-    "lenkradkomplettsets": "Videogames",
-    "lenkraeder": "Videogames",
-    "lenkräder": "Videogames",
-    "lesegeraete fuer speicherkarten": "TV & Video",
-    "lesegeraetefuerspeicherkarten": "TV & Video",
-    "lesegeräte für speicherkarten": "TV & Video",
-    "lesegerätefürspeicherkarten": "TV & Video",
-    "lik&ouml;re": "Haushalt & Küche",
-    "luftbefeuchter luftentfeuchter luftreiniger": "Haushalt & Küche",
-    "luftbefeuchterluftentfeuchterluftreiniger": "Haushalt & Küche",
-    "lumibricks funwhole": "Spielwaren",
-    "lumibricksfunwhole": "Spielwaren",
-    "lust &amp; liebe": "Drogerie",
-    "lust liebe": "Drogerie",
-    "lust&amp;liebe": "Drogerie",
-    "lustliebe": "Drogerie",
-    "mainboards": "Computer & Zubehör",
-    "mattel brick shop": "Spielwaren",
-    "mattelbrickshop": "Spielwaren",
-    "mega construx": "Spielwaren",
-    "megaconstrux": "Spielwaren",
-    "mehr drama": "Filme",
-    "mehr komoedie": "Filme",
-    "mehr komödie": "Filme",
-    "mehrdrama": "Filme",
-    "mehrkomoedie": "Filme",
-    "mehrkomödie": "Filme",
-    "microsd speicherkarten": "TV & Video",
-    "microsdspeicherkarten": "TV & Video",
-    "mobile akku ladegeraete powerbanks": "Garten & Baumarkt",
-    "mobile akku ladegeräte powerbanks": "Garten & Baumarkt",
-    "mobileakkuladegeraetepowerbanks": "Garten & Baumarkt",
-    "mobileakkuladegerätepowerbanks": "Garten & Baumarkt",
-    "mobilteile": "Smartphones & Mobiltelefone",
-    "monitore": "Computer & Zubehör",
-    "mould king": "Spielwaren",
-    "mouldking": "Spielwaren",
-    "multicopter": "Spielwaren",
-    "multimedia player": "TV & Video",
-    "multimediaplayer": "TV & Video",
-    "mund  &amp; zahnpflege": "Drogerie",
-    "mund zahnpflege": "Drogerie",
-    "mund&amp;zahnpflege": "Drogerie",
-    "mundduschen": "Drogerie",
-    "mundzahnpflege": "Drogerie",
-    "musikinstrumente": "HiFi & Audio",
-    "musikinstrumente &amp; pro audio": "HiFi & Audio",
-    "musikinstrumente pro audio": "HiFi & Audio",
-    "musikinstrumente&amp;proaudio": "HiFi & Audio",
-    "musikinstrumenteproaudio": "HiFi & Audio",
-    "nas systeme": "Computer & Zubehör",
-    "nassysteme": "Computer & Zubehör",
-    "natur": "Filme",
-    "navigation": "Computer & Zubehör",
-    "navigationsger&auml;te": "Computer & Zubehör",
-    "netzwerktechnik": "Computer & Zubehör",
-    "nintendo switch": "Videogames",
-    "nintendo switch 2": "Videogames",
-    "nintendo switch 2 games": "Videogames",
-    "nintendo switch 2 konsolen": "Videogames",
-    "nintendo switch games": "Videogames",
-    "nintendoswitch": "Videogames",
-    "nintendoswitch2": "Videogames",
-    "nintendoswitch2games": "Videogames",
-    "nintendoswitch2konsolen": "Videogames",
-    "nintendoswitchgames": "Videogames",
-    "notebooks": "Computer & Zubehör",
-    "notebooks tablets ereader": "Computer & Zubehör",
-    "notebookstabletsereader": "Computer & Zubehör",
-    "oberschalen cover": "Smartphones & Mobiltelefone",
-    "oberschalencover": "Smartphones & Mobiltelefone",
-    "objektive": "Foto & Video",
-    "ohrringe": "Uhren",
-    "oneplus": "Smartphones & Mobiltelefone",
-    "oneplus h2516": "Smartphones & Mobiltelefone",
-    "oneplush2516": "Smartphones & Mobiltelefone",
-    "oppo": "Smartphones & Mobiltelefone",
-    "oppo h2007": "Smartphones & Mobiltelefone",
-    "oppoh2007": "Smartphones & Mobiltelefone",
-    "optik": "Sport & Freizeit",
-    "outdoor spielzeug": "Spielwaren",
-    "outdoorspielzeug": "Spielwaren",
-    "pantasy": "Spielwaren",
-    "papier": "Bürobedarf & Schreibwaren",
-    "parf&uuml;merie": "Drogerie",
-    "parfuemerie": "Drogerie",
-    "parfum": "Drogerie",
-    "parfüm": "Drogerie",
-    "parfümerie": "Drogerie",
-    "pc komponenten": "Computer & Zubehör",
-    "pckomponenten": "Computer & Zubehör",
-    "pedale": "Videogames",
-    "peripheriegeraete": "Computer & Zubehör",
-    "peripheriegeräte": "Computer & Zubehör",
-    "pfannensets": "Haushalt & Küche",
-    "plattenspieler": "HiFi & Audio",
-    "playstation 4": "Videogames",
-    "playstation 5": "Videogames",
-    "playstation4": "Videogames",
-    "playstation5": "Videogames",
-    "portable lautsprecher": "HiFi & Audio",
-    "portablelautsprecher": "HiFi & Audio",
-    "portables": "HiFi & Audio",
-    "powerbanks": "Garten & Baumarkt",
-    "produktpreis": "Garten & Baumarkt",
-    "professional audio djing": "HiFi & Audio",
-    "professionalaudiodjing": "HiFi & Audio",
-    "prozessoren": "Computer & Zubehör",
-    "ps4 games": "Videogames",
-    "ps4games": "Videogames",
-    "ps5 games": "Videogames",
-    "ps5games": "Videogames",
-    "radios": "HiFi & Audio",
-    "radios radio recorder": "HiFi & Audio",
-    "radiosradiorecorder": "HiFi & Audio",
-    "rasur &amp; haarpflege": "Drogerie",
-    "rasur haarpflege": "Drogerie",
-    "rasur&amp;haarpflege": "Drogerie",
-    "rasurhaarpflege": "Drogerie",
-    "rc modelle": "Spielwaren",
-    "rcmodelle": "Spielwaren",
-    "receiver": "HiFi & Audio",
-    "reifen": "Auto & Motorrad",
-    "rennspiele": "Videogames",
-    "ringe": "Uhren",
-    "rollenspiele &amp; adventures": "Videogames",
-    "rollenspiele adventures": "Videogames",
-    "rollenspiele&amp;adventures": "Videogames",
-    "rollenspieleadventures": "Videogames",
-    "romantische komoedie": "Filme",
-    "romantische komödie": "Filme",
-    "romantischekomoedie": "Filme",
-    "romantischekomödie": "Filme",
-    "ros&eacute;weine": "Haushalt & Küche",
-    "rotweine": "Haushalt & Küche",
-    "rum": "Haushalt & Küche",
-    "s&auml;gen &amp; fr&auml;sen": "Garten & Baumarkt",
-    "s&auml;gen&amp;fr&auml;sen": "Garten & Baumarkt",
-    "s&uuml;ssweine": "Haushalt & Küche",
-    "saegen fraesen": "Garten & Baumarkt",
-    "saegenfraesen": "Garten & Baumarkt",
-    "samsung": "Smartphones & Mobiltelefone",
-    "samsung h1": "Smartphones & Mobiltelefone",
-    "samsungh1": "Smartphones & Mobiltelefone",
-    "saug und wischroboter": "Haushalt & Küche",
-    "saugroboter": "Haushalt & Küche",
-    "saugroboter wischroboter": "Haushalt & Küche",
-    "saugroboterwischroboter": "Haushalt & Küche",
-    "saugundwischroboter": "Haushalt & Küche",
-    "schaumweine": "Haushalt & Küche",
-    "scheren": "Haushalt & Küche",
-    "schleifen wetzen": "Haushalt & Küche",
-    "schleifenwetzen": "Haushalt & Küche",
-    "schmuck": "Uhren",
-    "schneidunterlagen": "Haushalt & Küche",
-    "schreibmaterial": "Bürobedarf & Schreibwaren",
-    "schuhe": "Garten & Baumarkt",
-    "science fiction": "Filme",
-    "sciencefiction": "Filme",
-    "sd speicherkarten": "TV & Video",
-    "sdspeicherkarten": "TV & Video",
-    "sensoren melder": "Garten & Baumarkt",
-    "sensorenmelder": "Garten & Baumarkt",
-    "shirts": "Garten & Baumarkt",
-    "sicherheit ueberwachung": "Garten & Baumarkt",
-    "sicherheit überwachung": "Garten & Baumarkt",
-    "sicherheitstechnik": "Garten & Baumarkt",
-    "sicherheitueberwachung": "Garten & Baumarkt",
-    "sicherheitüberwachung": "Garten & Baumarkt",
-    "sim racing flying": "Videogames",
-    "sim rigs rennsitze": "Videogames",
-    "simracingflying": "Videogames",
-    "simrigsrennsitze": "Videogames",
-    "simulationen": "Videogames",
-    "smart home": "Garten & Baumarkt",
-    "smart speaker": "HiFi & Audio",
-    "smarthome": "Garten & Baumarkt",
-    "smartphone zubeh&ouml;r": "Smartphones & Mobiltelefone",
-    "smartphones": "Smartphones & Mobiltelefone",
-    "smartphones &amp; mobiltelefone": "Smartphones & Mobiltelefone",
-    "smartphones mobiltelefone": "Smartphones & Mobiltelefone",
-    "smartphones&amp;mobiltelefone": "Smartphones & Mobiltelefone",
-    "smartphonesmobiltelefone": "Smartphones & Mobiltelefone",
-    "smartphonezubeh&ouml;r": "Smartphones & Mobiltelefone",
-    "smartspeaker": "HiFi & Audio",
-    "smartwatches": "Smartphones & Mobiltelefone",
-    "sofortbildkameras": "Foto & Video",
-    "solid state drive": "Computer & Zubehör",
-    "solidstatedrive": "Computer & Zubehör",
-    "sonstiges": "Smartphones & Mobiltelefone",
-    "sonstiges zubehoer fuer iphone": "Smartphones & Mobiltelefone",
-    "sonstiges zubehör für iphone": "Smartphones & Mobiltelefone",
-    "sonstigeszubehoerfueriphone": "Smartphones & Mobiltelefone",
-    "sonstigeszubehörfüriphone": "Smartphones & Mobiltelefone",
-    "soundbars": "HiFi & Audio",
-    "speicherkarten": "TV & Video",
-    "spiegelreflexkameras": "Foto & Video",
-    "spielwaren": "Spielwaren",
-    "spielwaren &amp; modellbau": "Spielwaren",
-    "spielwaren&amp;modellbau": "Spielwaren",
-    "spielzeugfiguren roboter": "Spielwaren",
-    "spielzeugfigurenroboter": "Spielwaren",
-    "spielzeugroboter": "Spielwaren",
-    "spirituosen": "Haushalt & Küche",
-    "sport &amp; freizeit": "Sport & Freizeit",
-    "sport freizeit": "Sport & Freizeit",
-    "sport pulsuhren": "Sport & Freizeit",
-    "sport&amp;freizeit": "Sport & Freizeit",
-    "sportfreizeit": "Sport & Freizeit",
-    "sportgeraete": "Sport & Freizeit",
-    "sportgeräte": "Sport & Freizeit",
-    "sportpulsuhren": "Sport & Freizeit",
-    "sportspiele": "Videogames",
-    "ssd": "Computer & Zubehör",
-    "ssds": "Computer & Zubehör",
-    "stative": "Foto & Video",
-    "stative studiozubehoer": "Foto & Video",
-    "stative studiozubehör": "Foto & Video",
-    "stativestudiozubehoer": "Foto & Video",
-    "stativestudiozubehör": "Foto & Video",
-    "staubsauger": "Haushalt & Küche",
-    "stempeln": "Bürobedarf & Schreibwaren",
-    "strategie  &amp; rollenspiele": "Spielwaren",
-    "strategie rollenspiele": "Spielwaren",
-    "strategie&amp;rollenspiele": "Spielwaren",
-    "strategierollenspiele": "Spielwaren",
-    "streaming audio": "HiFi & Audio",
-    "streamingaudio": "HiFi & Audio",
-    "subwoofer": "HiFi & Audio",
-    "systemkameras": "Foto & Video",
-    "sägen fräsen": "Garten & Baumarkt",
-    "sägenfräsen": "Garten & Baumarkt",
-    "tablets": "Computer & Zubehör",
-    "taschen &amp; cover f&uuml;r iphone": "Smartphones & Mobiltelefone",
-    "taschen cover": "Smartphones & Mobiltelefone",
-    "taschen cover fuer iphone": "Smartphones & Mobiltelefone",
-    "taschen cover für iphone": "Smartphones & Mobiltelefone",
-    "taschen&amp;coverf&uuml;riphone": "Smartphones & Mobiltelefone",
-    "taschencover": "Smartphones & Mobiltelefone",
-    "taschencoverfueriphone": "Smartphones & Mobiltelefone",
-    "taschencoverfüriphone": "Smartphones & Mobiltelefone",
-    "taschenmesser &amp; tools": "Sport & Freizeit",
-    "taschenmesser tools": "Sport & Freizeit",
-    "taschenmesser&amp;tools": "Sport & Freizeit",
-    "taschenmessertools": "Sport & Freizeit",
-    "taschenrechner": "Bürobedarf & Schreibwaren",
-    "telefon &amp; funk": "Smartphones & Mobiltelefone",
-    "telefon &amp; voip": "Smartphones & Mobiltelefone",
-    "telefon voip": "Smartphones & Mobiltelefone",
-    "telefon&amp;funk": "Smartphones & Mobiltelefone",
-    "telefon&amp;voip": "Smartphones & Mobiltelefone",
-    "telefone": "Smartphones & Mobiltelefone",
-    "telefonvoip": "Smartphones & Mobiltelefone",
-    "textilien": "Haushalt & Küche",
-    "thermometer": "Haushalt & Küche",
-    "thriller": "Filme",
-    "tmc receiver": "Computer & Zubehör",
-    "tmcreceiver": "Computer & Zubehör",
-    "toepfe": "Haushalt & Küche",
-    "topfdeckel": "Haushalt & Küche",
-    "topfsets": "Haushalt & Küche",
-    "tuner": "HiFi & Audio",
-    "tv &amp; video": "TV & Video",
-    "tv ger&auml;te": "TV & Video",
-    "tv geraete": "TV & Video",
-    "tv geraete zubehoer": "TV & Video",
-    "tv geräte": "TV & Video",
-    "tv geräte zubehör": "TV & Video",
-    "tv receiver": "TV & Video",
-    "tv video": "TV & Video",
-    "tv&amp;video": "TV & Video",
-    "tvger&auml;te": "TV & Video",
-    "tvgeraete": "TV & Video",
-    "tvgeraetezubehoer": "TV & Video",
-    "tvgeräte": "TV & Video",
-    "tvgerätezubehör": "TV & Video",
-    "tvreceiver": "TV & Video",
-    "tvvideo": "TV & Video",
-    "töpfe": "Haushalt & Küche",
-    "uhren": "Uhren",
-    "unisexd&uuml;fte": "Drogerie",
-    "unisexduefte": "Drogerie",
-    "unisexdüfte": "Drogerie",
-    "velos": "Sport & Freizeit",
-    "velotraeger": "Sport & Freizeit",
-    "veloträger": "Sport & Freizeit",
-    "ventilatoren heizgeraete": "Haushalt & Küche",
-    "ventilatoren heizgeräte": "Haushalt & Küche",
-    "ventilatorenheizgeraete": "Haushalt & Küche",
-    "ventilatorenheizgeräte": "Haushalt & Küche",
-    "verbrauchsmaterial": "Computer & Zubehör",
-    "verbrauchsmaterial fuer drucker": "Computer & Zubehör",
-    "verbrauchsmaterial für drucker": "Computer & Zubehör",
-    "verbrauchsmaterialfuerdrucker": "Computer & Zubehör",
-    "verbrauchsmaterialfürdrucker": "Computer & Zubehör",
-    "verpacken &amp; versand": "Bürobedarf & Schreibwaren",
-    "verpacken versand": "Bürobedarf & Schreibwaren",
-    "verpacken&amp;versand": "Bürobedarf & Schreibwaren",
-    "verpackenversand": "Bürobedarf & Schreibwaren",
-    "verst&auml;rker": "HiFi & Audio",
-    "verstaerker": "HiFi & Audio",
-    "verstärker": "HiFi & Audio",
-    "videogames": "Videogames",
-    "voice over ip voip": "Smartphones & Mobiltelefone",
-    "voiceoveripvoip": "Smartphones & Mobiltelefone",
-    "voip router": "Smartphones & Mobiltelefone",
-    "voip telefone": "Smartphones & Mobiltelefone",
-    "voiprouter": "Smartphones & Mobiltelefone",
-    "voiptelefone": "Smartphones & Mobiltelefone",
-    "vr brillen": "Smartphones & Mobiltelefone",
-    "vrbrillen": "Smartphones & Mobiltelefone",
-    "w&auml;sche": "Garten & Baumarkt",
-    "wecker": "Uhren",
-    "wein": "Haushalt & Küche",
-    "wein &amp; spirituosen": "Haushalt & Küche",
-    "wein spirituosen": "Haushalt & Küche",
-    "wein&amp;spirituosen": "Haushalt & Küche",
-    "weinspirituosen": "Haushalt & Küche",
-    "weissweine": "Haushalt & Küche",
-    "weitere...": "Garten & Baumarkt",
-    "werkstatt": "Garten & Baumarkt",
-    "werkzeuge &amp; werkstatt": "Garten & Baumarkt",
-    "werkzeuge werkstatt": "Garten & Baumarkt",
-    "werkzeuge&amp;werkstatt": "Garten & Baumarkt",
-    "werkzeugewerkstatt": "Garten & Baumarkt",
-    "western": "Filme",
-    "wheelbases": "Videogames",
-    "whiskey": "Haushalt & Küche",
-    "wischroboter": "Haushalt & Küche",
-    "wodka": "Haushalt & Küche",
-    "wohnen": "Garten & Baumarkt",
-    "wuerzen": "Haushalt & Küche",
-    "würzen": "Haushalt & Küche",
-    "xbox series x": "Videogames",
-    "xbox series x games": "Videogames",
-    "xboxseriesx": "Videogames",
-    "xboxseriesxgames": "Videogames",
-    "xiaomi": "Smartphones & Mobiltelefone",
-    "xiaomi h2460": "Smartphones & Mobiltelefone",
-    "xiaomih2460": "Smartphones & Mobiltelefone",
-    "xqd cfexpress speicherkarten": "TV & Video",
-    "xqdcfexpressspeicherkarten": "TV & Video",
-    "zentralen starter kits": "Garten & Baumarkt",
-    "zentralenstarterkits": "Garten & Baumarkt",
-    "zubeh&ouml;r": "Smartphones & Mobiltelefone",
-    "zubeh&ouml;r f&uuml;r iphone": "Smartphones & Mobiltelefone",
-    "zubeh&ouml;rf&uuml;riphone": "Smartphones & Mobiltelefone",
-    "zubehoer fuer festnetz telefone": "Smartphones & Mobiltelefone",
-    "zubehoer fuer funkgeraete": "Smartphones & Mobiltelefone",
-    "zubehoer fuer kochgeschirr": "Haushalt & Küche",
-    "zubehoer fuer mobiltelefone": "Smartphones & Mobiltelefone",
-    "zubehoer fuer nintendo switch": "Videogames",
-    "zubehoer fuer nintendo switch 2": "Videogames",
-    "zubehoer fuer rc modelle": "Spielwaren",
-    "zubehoer fuer sportgeraete": "Sport & Freizeit",
-    "zubehoerfuerfestnetztelefone": "Smartphones & Mobiltelefone",
-    "zubehoerfuerfunkgeraete": "Smartphones & Mobiltelefone",
-    "zubehoerfuerkochgeschirr": "Haushalt & Küche",
-    "zubehoerfuermobiltelefone": "Smartphones & Mobiltelefone",
-    "zubehoerfuernintendoswitch": "Videogames",
-    "zubehoerfuernintendoswitch2": "Videogames",
-    "zubehoerfuerrcmodelle": "Spielwaren",
-    "zubehoerfuersportgeraete": "Sport & Freizeit",
-    "zubehör für festnetz telefone": "Smartphones & Mobiltelefone",
-    "zubehör für funkgeräte": "Smartphones & Mobiltelefone",
-    "zubehör für kochgeschirr": "Haushalt & Küche",
-    "zubehör für mobiltelefone": "Smartphones & Mobiltelefone",
-    "zubehör für nintendo switch": "Videogames",
-    "zubehör für nintendo switch 2": "Videogames",
-    "zubehör für rc modelle": "Spielwaren",
-    "zubehör für sportgeräte": "Sport & Freizeit",
-    "zubehörfürfestnetztelefone": "Smartphones & Mobiltelefone",
-    "zubehörfürfunkgeräte": "Smartphones & Mobiltelefone",
-    "zubehörfürkochgeschirr": "Haushalt & Küche",
-    "zubehörfürmobiltelefone": "Smartphones & Mobiltelefone",
-    "zubehörfürnintendoswitch": "Videogames",
-    "zubehörfürnintendoswitch2": "Videogames",
-    "zubehörfürrcmodelle": "Spielwaren",
-    "zubehörfürsportgeräte": "Sport & Freizeit"
-};
-
-  let dynamicCatMap = _getValue('DYNAMIC_CAT_MAP', {});
-  let isDynamicMapDirty = false;
-
-  function flushDynamicMap() {
-    if (isDynamicMapDirty) {
-      saveConfigKey('DYNAMIC_CAT_MAP', dynamicCatMap);
-      isDynamicMapDirty = false;
-    }
-  }
-
-  function normalizeRootSlug(slug) {
-    if (!slug) return null;
-    const clean = slug.split('-c')[0].toLowerCase().trim();
-    const spaceSlug = clean.replace(/-/g, ' ');
-    const noHyphen = clean.replace(/-/g, '');
-    return CATEGORY_LOOKUP[clean] || CATEGORY_LOOKUP[spaceSlug] || CATEGORY_LOOKUP[noHyphen] || null;
-  }
-
-  function normalizeUmlautKey(str) {
-    if (!str) return '';
-    return str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  }
+  // Canonical Root Category Slug Mapping (Replaces static 785-line table)
+  const ROOT_SLUG_MAP = {
+    'computer-zubehoer': 'Computer & Zubehör',
+    'videogames': 'Videogames',
+    'tv-video': 'TV & Video',
+    'foto-video': 'Foto & Video',
+    'foto': 'Foto & Video',
+    'smartphones-mobiltelefone': 'Smartphones & Mobiltelefone',
+    'hifi-audio': 'HiFi & Audio',
+    'haushalt-kueche': 'Haushalt & Küche',
+    'drogerie': 'Drogerie',
+    'sport-freizeit': 'Sport & Freizeit',
+    'spielwaren': 'Spielwaren',
+    'buerobedarf-schreibwaren': 'Bürobedarf & Schreibwaren',
+    'haus-garten': 'Garten & Baumarkt',
+    'garten-baumarkt': 'Garten & Baumarkt',
+    'werkzeuge-werkstatt': 'Garten & Baumarkt',
+    'auto-motorrad': 'Auto & Motorrad',
+    'filme': 'Filme',
+    'uhren': 'Uhren',
+    'buecher-medien': 'Bücher & Medien',
+    'kleidung-mode': 'Kleidung & Mode',
+    'bekleidung-schuhe': 'Kleidung & Mode'
+  };
 
   const GROUP_EMOJIS = {
     'Filme': '🎬',
@@ -2057,108 +921,71 @@ const SHADOW_MODAL_STYLES = `
     return GROUP_EMOJIS[groupName] || '📦';
   }
 
-  function extractSubcatFromExclusionKey(key) {
-    if (!key) return null;
-    if (key.startsWith('GROUP:')) return null;
+  function normalizeRootSlug(slug) {
+    if (!slug) return null;
+    const clean = slug.split('-c')[0].toLowerCase().trim();
+    return ROOT_SLUG_MAP[clean] || null;
+  }
+
+  function extractCategoryDisplay(key) {
+    if (!key) return { label: '', group: '' };
+    if (key.startsWith('GROUP:')) {
+      const group = key.slice(6);
+      return { label: group, group };
+    }
     if (key.startsWith('PATH:')) {
       const parts = key.slice(5).split('/');
-      return parts.slice(1).join('/');
+      const group = parts[0] || '';
+      const cat = parts.slice(1).join('/') || group;
+      return { label: cat, group };
     }
-    return key;
+    return { label: key, group: '' };
   }
 
   const BRAND_RULES = [
-    { regex: /\b(lego|legos|playmobil|cobi|cada|mega construx|fischertechnik|ravensburger|schleich|barbie|hot wheels|action figuren|funko|nerf|amiibo|spielwaren|spielzeug|puppe|puppen|pluesch|plüsch|autorennbahn|rc modelle|multicopter|puzzles|gesellschaftsspiele|familienspiele|kartenspiele)\b/i, group: 'Spielwaren' },
-    { regex: /\b(fritteuse|fritteusen|heissluftfritteuse|heissluftfritteusen|vollautomat|vollautomaten|kaffee|espressomaschine|espressomaschinen|kaffeemuehle|kaffeemühle|kuechengeraet|kuechengeraete|küchengerät|küchengeräte|haushaltsgeraet|haushaltsgeraete|haushaltsgerät|haushaltsgeräte|staubsauger|saugroboter|wischroboter|fensterreinigungsroboter|mikrowelle|mikrowellen|backofen|herd|kuehlschrank|kühlschrank|gefrierschrank|geschirrspueler|geschirrspüler|waschmaschine|waschmaschinen|waeschetrockner|wäschetrockner|mixer|blender|wasserkocher|toaster|thermoskanne|abfallsystem|raumduft|dampfgarer|slowcooker|saftpresse|entsafter|geschirr|besteck|glaeser|gläser|topf|toepfe|töpfe|pfanne|pfannen|kochgeschirr|spirituosen|wein|whisky|gin|rum|vodka)\b/i, group: 'Haushalt & Küche' },
-    { regex: /\b(haarglaetter|haarglätter|glaetteisen|glätteisen|bartschneider|haarschneider|rasierer|elektrorasierer|epilierer|haartrockner|foehn|föhn|zahnbuerste|zahnbürste|zahnbuersten|zahnbürsten|elektrozahnbuerste|parfum|parfüm|duft|duefte|düfte|eau de|duschpflege|duschgel|shampoo|seife|geschenkset|geschenksets|hautpflege|koerperpflege|körperpflege|kosmetik|make-up|makeup|sonnenschutz|kontaktlinsen|hygiene)\b/i, group: 'Drogerie' },
-    { regex: /\b(usb|speicherstick|speichersticks|ssd|hdds?|solid state|festplatte|festplatten|grafikkarte|grafikkarten|notebook|notebooks|laptop|laptops|tablet|tablets|ebook|monitore|monitor|drucker|scanner|nas|mainboard|mainboards|prozessor|prozessoren|cpu|gpu|pc gehaeuse|netzteil|netzteile|ladegeraet|ladegerät|netzadapter|kabel|hub|dockingstation|tastatur|tastaturen|maus|maeuse|mäuse|mausmatte|webcam|headset|aktenvernichter|papierschredder|arbeitsspeicher|ram|netzwerk|wlan|router|switch|server|western digital)\b/i, group: 'Computer & Zubehör' },
-    { regex: /\b(smartphone|smartphones|mobiltelefon|mobiltelefone|handy|handys|iphone|galaxy|pixel|smartring|smartringe|smartwatch|smartwatches|activity tracker|huelle|huellen|hülle|hüllen|cover|schutzfolie|panzerglas|ladekabel|powerbank|powerbanks|magsafe|funktelefon|festnetz)\b/i, group: 'Smartphones & Mobiltelefone' },
-    { regex: /\b(kopfhoerer|kopfhörer|in-ear|earbuds|lautsprecher|bluetooth lautsprecher|soundbar|plattenspieler|receiver|av receiver|verstaerker|verstärker|hifi|radio|cd player|dac|subwoofer|mikrofon|musikinstrument|gitarre|piano|keyboard)\b/i, group: 'HiFi & Audio' },
-    { regex: /\b(tv|fernseher|beamer|projektor|home cinema|heimkino|blu-ray player|dvd player|actioncam|actionkamera|camcorder|media player|streaming stick|chromecast|apple tv)\b/i, group: 'TV & Video' },
+    { regex: /\b(game|games|spiel|spiele|nintendo|switch|playstation|ps5|ps4|ps3|xbox|pc spiele|konsole|konsolen|gamepad|controller|lenkrad|vr headset|amiibo|simulationen|rennspiel|actionspiele|tabletop spiele)\b/i, group: 'Videogames' },
+    { regex: /\b(lego|legos|playmobil|cobi|cada|mega construx|fischertechnik|ravensburger|schleich|barbie|hot wheels|action figuren|funko|nerf|spielwaren|spielzeug|puppe|puppen|pluesch|plüsch|autorennbahn|rc modelle|multicopter|puzzles|gesellschaftsspiele|familienspiele|kartenspiele|experimentierkaesten|bau konstruktionsspielzeug|outdoor spielzeug|spielzeugroboter)\b/i, group: 'Spielwaren' },
+    { regex: /\b(reifen|pneus|sommerreifen|winterreifen|allwetterreifen|felgen|dachbox|dachboxen|dachtraeger|dachträger|kindersitz|kindersitze|autozubehoer|car hifi|car video|motorradhelm|dashcam)\b/i, group: 'Auto & Motorrad' },
+    { regex: /\b(fritteuse|fritteusen|heissluftfritteuse|heissluftfritteusen|vollautomat|vollautomaten|kaffee|espressomaschine|espressomaschinen|kaffeemuehle|kaffeemühle|kuechengeraet|kuechengeraete|küchengerät|küchengeräte|haushaltsgeraet|haushaltsgeraete|haushaltsgerät|haushaltsgeräte|staubsauger|saugroboter|wischroboter|fensterreinigungsroboter|mikrowelle|mikrowellen|backofen|herd|kuehlschrank|kühlschrank|gefrierschrank|geschirrspueler|geschirrspüler|waschmaschine|waschmaschinen|waeschetrockner|wäschetrockner|mixer|blender|wasserkocher|toaster|thermoskanne|abfallsystem|raumduft|dampfgarer|slowcooker|saftpresse|entsafter|geschirr|besteck|glaeser|gläser|topf|toepfe|töpfe|pfanne|pfannen|kochgeschirr|spirituosen|wein|whisky|gin|rum|vodka|saug und wischroboter|klimageraete|senseo maschinen|sonstige kuechengeraete)\b/i, group: 'Haushalt & Küche' },
+    { regex: /\b(haarglaetter|haarglätter|glaetteisen|glätteisen|bartschneider|haarschneider|haar bartschneider|rasierer|elektrorasierer|epilierer|haartrockner|foehn|föhn|zahnbuerste|zahnbürste|zahnbuersten|zahnbürsten|elektrozahnbuersten|elektrozahnbuerste|parfum|parfüm|duft|duefte|düfte|eau de|duschpflege|duschgel|shampoo|seife|geschenkset|geschenksets|hautpflege|koerperpflege|körperpflege|kosmetik|make-up|makeup|sonnenschutz|kontaktlinsen|hygiene)\b/i, group: 'Drogerie' },
+    { regex: /\b(smartphone|smartphones|mobiltelefon|mobiltelefone|handy|handys|iphone|galaxy|pixel|smartring|smartringe|smartwatch|smartwatches|activity tracker|huelle|huellen|hülle|hüllen|cover|oberschalen cover|schutzfolie|panzerglas|ladekabel|powerbank|powerbanks|magsafe|funktelefon|festnetz)\b/i, group: 'Smartphones & Mobiltelefone' },
+    { regex: /\b(kopfhoerer|kopfhörer|in-ear|earbuds|lautsprecher|bluetooth lautsprecher|soundbar|plattenspieler|receiver|av receiver|home cinema av receiver|verstaerker|verstärker|hifi|radio|cd player|dac|subwoofer|mikrofon|musikinstrument|gitarre|piano|keyboard)\b/i, group: 'HiFi & Audio' },
+    { regex: /\b(tv|fernseher|tv geraete|beamer|projektor|home cinema|heimkino|blu-ray player|dvd player|actioncam|actionkamera|camcorder|media player|streaming stick|chromecast|apple tv)\b/i, group: 'TV & Video' },
     { regex: /\b(kamera|kameras|digitalkamera|spiegellose|dslr|objektiv|objektive|stativ|stative|blitz|fotostudio|drohne|sofortbildkamera)\b/i, group: 'Foto & Video' },
     { regex: /\b(dvd|blu-ray|blu ray|4k ultra hd|film|filme|kino|serie|tv serien|western|abenteuer|action|krimi|drama|komoedie|komödie|thriller|horror|anime|dokumentation)\b/i, group: 'Filme' },
-    { regex: /\b(game|games|spiel|spiele|nintendo|switch|playstation|ps5|ps4|ps3|xbox|pc spiele|konsole|konsolen|gamepad|controller|lenkrad|vr headset|amiibo|simulationen|rennspiel)\b/i, group: 'Videogames' },
-    { regex: /\b(crosstrainer|laufband|laufbaender|laufbänder|ergometer|rudergeraet|rudergerät|fitness|krafttraining|hantel|hanteln|matten|velo|velos|fahrrad|ebike|e-bike|velohelm|skibrille|skihelm|koffer|rucksack|taschenmesser|fernglas|camping|zelt|schlafsack|tretroller|scooter|inline skates|gps|navigation|navigations)\b/i, group: 'Sport & Freizeit' },
-    { regex: /\b(reifen|pneus|sommerreifen|winterreifen|allwetterreifen|felgen|dachbox|dachboxen|dachtraeger|dachträger|kindersitz|kindersitze|autozubehoer|car hifi|motorradhelm|dashcam)\b/i, group: 'Auto & Motorrad' },
-    { regex: /\b(rasenmaeher|rasenmäher|rasenroboter|grill|gasgrill|elektrogrill|holzkohlegrill|bohrmaschine|akkuschrauber|saege|säge|schleifer|schalter|taster|steckdose|lampe|lampen|leuchtmittel|led|smart home|gartenmoebel|gartenmöbel|hochdruckreiniger|werkzeug|werkzeuge)\b/i, group: 'Garten & Baumarkt' },
+    { regex: /\b(crosstrainer|laufband|laufbaender|laufbänder|ergometer|rudergeraet|rudergerät|fitness|krafttraining|fitness krafttraining|hantel|hanteln|matten|velo|velos|fahrrad|ebike|e-bike|velohelm|skihelme|skibrille|skihelm|koffer|rucksack|taschenmesser|fernglas|camping|zelt|schlafsack|tretroller|scooter|inline skates|gps|gps navigations geraete|navigation|navigations|activity tracker smartwatches)\b/i, group: 'Sport & Freizeit' },
+    { regex: /\b(rasenmaeher|rasenmäher|rasenroboter|grill|gasgrill|elektrogrill|holzkohlegrill|bohrmaschine|akkuschrauber|saege|säge|schleifer|schwingschleifer|schalter|taster|steckdose|lampe|lampen|leuchtmittel|led|smart home|gartenmoebel|gartenmöbel|hochdruckreiniger|werkzeug|werkzeuge)\b/i, group: 'Garten & Baumarkt' },
     { regex: /\b(uhr|uhren|armbanduhr|damenuhr|herrenuhr|chronograph|automatikuhr|wanduhr|wecker)\b/i, group: 'Uhren' },
     { regex: /\b(kleidung|bekleidung|jacke|jacken|hose|hosen|t-shirt|pullover|hemd|kleid|schuhe|sneaker|stiefel|tasche|taschen|handtasche|rucksack|sonnenbrille|sonnenbrillen|schmuck|ring|kette)\b/i, group: 'Kleidung & Mode' },
-    { regex: /\b(buch|buecher|bücher|roman|taschenbuch|sachbuch|hoerbuch|hörbuch|comic|manga|zeitschrift)\b/i, group: 'Bücher & Medien' }
+    { regex: /\b(buch|buecher|bücher|roman|taschenbuch|sachbuch|hoerbuch|hörbuch|comic|manga|zeitschrift)\b/i, group: 'Bücher & Medien' },
+    { regex: /\b(usb|speicherstick|speichersticks|ssd|hdds?|solid state|festplatte|festplatten|grafikkarte|grafikkarten|notebook|notebooks|laptop|laptops|tablet|tablets|ebook|monitore|monitor|drucker|scanner|nas|mainboard|mainboards|prozessor|prozessoren|cpu|gpu|pc gehaeuse|netzteil|netzteile|ladegeraet|ladegerät|netzadapter|ladegeraete netzadapter|kabel|hub|dockingstation|tastatur|tastaturen|maus|maeuse|mäuse|mausmatte|webcam|webcams|headset|aktenvernichter|papierschredder|arbeitsspeicher|ram|netzwerk|wlan|router|switch|server|western digital|externe solid state drives ssd|usb speichersticks)\b/i, group: 'Computer & Zubehör' }
   ];
 
-  function resolveCategoryPath(categoryName, card = null) {
-    if (!categoryName) return ['Sonstiges', 'Sonstiges', 'Sonstiges'];
-    const norm = categoryName.trim().toLowerCase();
-    const slug = norm.replace(/[^a-z0-9]/g, '');
-    const spaceSlug = norm.replace(/-/g, ' ');
-    const umlautNorm = normalizeUmlautKey(norm);
-
+  function resolveCategoryGroup(categoryName, card = null) {
     if (card) {
       const hrefs = getCardHrefs(card);
       for (const href of hrefs) {
         const match = href.match(/\/(?:preisvergleich|produktsuche)\/([^\/]+)\//i);
         if (match && match[1]) {
-          const rootSlug = match[1].split('-c')[0];
-          const canonicalRoot = normalizeRootSlug(rootSlug);
-          if (canonicalRoot) {
-            if (!dynamicCatMap[norm]) { dynamicCatMap[norm] = canonicalRoot; isDynamicMapDirty = true; }
-            if (!dynamicCatMap[slug]) { dynamicCatMap[slug] = canonicalRoot; isDynamicMapDirty = true; }
-            if (!dynamicCatMap[spaceSlug]) { dynamicCatMap[spaceSlug] = canonicalRoot; isDynamicMapDirty = true; }
-            return [canonicalRoot, categoryName, categoryName];
+          const segs = match[1].split('/').filter(Boolean);
+          for (const seg of segs) {
+            const canonical = normalizeRootSlug(seg);
+            if (canonical) return canonical;
+            const normSeg = seg.toLowerCase().replace(/-/g, ' ');
+            for (const rule of BRAND_RULES) {
+              if (rule.regex.test(normSeg)) return rule.group;
+            }
           }
         }
       }
     }
-
-    let root = CATEGORY_LOOKUP[norm] || CATEGORY_LOOKUP[slug] || CATEGORY_LOOKUP[spaceSlug] || CATEGORY_LOOKUP[umlautNorm];
-
-    if (!root) {
-      root = dynamicCatMap[norm] || dynamicCatMap[slug] || dynamicCatMap[spaceSlug] || dynamicCatMap[umlautNorm];
-    }
-
-    if (!root) {
+    if (categoryName) {
+      const norm = categoryName.toLowerCase();
       for (const rule of BRAND_RULES) {
-        if (rule.regex.test(norm) || rule.regex.test(spaceSlug)) {
-          root = rule.group;
-          break;
-        }
+        if (rule.regex.test(norm)) return rule.group;
       }
     }
-
-    if (!root) {
-      const words = norm.split(/\s+/);
-      for (let i = words.length - 1; i >= 1; i--) {
-        const prefixKey = words.slice(0, i).join(' ');
-        if (CATEGORY_LOOKUP[prefixKey]) {
-          root = CATEGORY_LOOKUP[prefixKey];
-          break;
-        }
-      }
-    }
-
-    if (!root) {
-      const pageBreadcrumb = document.querySelector('.breadcrumb, #Breadcrumb, [class*="breadcrumb"]');
-      if (pageBreadcrumb) {
-        const bcLink = pageBreadcrumb.querySelector('a[href*="/produktsuche/"], a[href*="/preisvergleich/"]');
-        if (bcLink) {
-          const href = bcLink.getAttribute('href') || '';
-          const match = href.match(/\/(?:produktsuche|preisvergleich)\/([^\/]+)\//i);
-          if (match && match[1]) {
-            const formattedRoot = normalizeRootSlug(match[1].split('-c')[0]);
-            if (formattedRoot) root = formattedRoot;
-          }
-        }
-      }
-    }
-
-    if (!root) root = 'Sonstiges';
-
-    return [root, categoryName, categoryName];
-  }
-
-  function resolveCategoryGroup(categoryName, card = null) {
-    const path = resolveCategoryPath(categoryName, card);
-    return path[0] || 'Sonstiges';
+    return 'Sonstiges';
   }
 
   function isPathExcluded(catName, rootGroup, excludedCats = []) {
@@ -2167,153 +994,6 @@ const SHADOW_MODAL_STYLES = `
     if (catName && excludedCats.includes(catName)) return true;
     if (catName && excludedCats.includes(`PATH:${rootGroup}/${catName}`)) return true;
     return false;
-  }
-
-  let activePopover = null;
-
-  function closeActivePopover() {
-    if (activePopover) {
-      activePopover.remove();
-      activePopover = null;
-    }
-  }
-
-  document.addEventListener('click', (e) => {
-    if (activePopover && !activePopover.contains(e.target) && !e.target.closest('.tp-group-pill')) {
-      closeActivePopover();
-    }
-  });
-
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && activePopover) {
-      closeActivePopover();
-    }
-  });
-
-  function toggleGroupPopover(anchorEl, rootGroup, subcats, getExcludedCats, updateExcludedCats, mountContainer = document.body) {
-    if (activePopover && activePopover.dataset.rootGroup === rootGroup) {
-      closeActivePopover();
-      return;
-    }
-    closeActivePopover();
-
-    const popover = document.createElement('div');
-    popover.className = 'tp-group-popover';
-    popover.dataset.rootGroup = rootGroup;
-
-    const popoverWidth = 320;
-    const isCustomMount = mountContainer && mountContainer !== document.body;
-
-    if (isCustomMount) {
-      const rect = anchorEl.getBoundingClientRect();
-      const containerRect = mountContainer.getBoundingClientRect();
-      popover.style.top = `${rect.bottom - containerRect.top + 6 + mountContainer.scrollTop}px`;
-      let left = rect.left - containerRect.left;
-      if (left + popoverWidth > containerRect.width - 16) {
-        left = Math.max(8, containerRect.width - popoverWidth - 16);
-      }
-      popover.style.left = `${left}px`;
-    } else {
-      const rect = anchorEl.getBoundingClientRect();
-      const topPos = rect.bottom + 6 + window.scrollY;
-      let leftPos = rect.left + window.scrollX;
-      if (rect.left + popoverWidth > window.innerWidth - 16) {
-        leftPos = Math.max(16, window.innerWidth - popoverWidth - 16 + window.scrollX);
-      }
-      popover.style.top = `${topPos}px`;
-      popover.style.left = `${leftPos}px`;
-    }
-
-    const header = document.createElement('div');
-    header.className = 'tp-popover-header';
-
-    const title = document.createElement('div');
-    title.className = 'tp-popover-title';
-    title.textContent = `${getGroupEmoji(rootGroup)} ${rootGroup} (${subcats.length})`;
-
-    const actions = document.createElement('div');
-    actions.className = 'tp-popover-actions';
-
-    const btnHideAll = document.createElement('button');
-    btnHideAll.className = 'tp-popover-btn';
-    btnHideAll.textContent = 'Alle ausblenden';
-    btnHideAll.title = `Alle Unterkategorien von "${rootGroup}" ausblenden`;
-    btnHideAll.onclick = (e) => {
-      e.stopPropagation();
-      const excluded = getExcludedCats();
-      const groupKey = `GROUP:${rootGroup}`;
-      const toAdd = subcats.map(sc => `PATH:${rootGroup}/${sc}`);
-      const updated = Array.from(new Set([...excluded, ...subcats, ...toAdd, groupKey]));
-      updateExcludedCats(updated);
-      renderPopoverBody();
-    };
-
-    const btnReset = document.createElement('button');
-    btnReset.className = 'tp-popover-btn';
-    btnReset.textContent = 'Reset';
-    btnReset.title = `Alle Unterkategorien von "${rootGroup}" wieder einblenden`;
-    btnReset.onclick = (e) => {
-      e.stopPropagation();
-      const excluded = getExcludedCats();
-      const updated = excluded.filter(c => !subcats.includes(c) && c !== `GROUP:${rootGroup}` && !c.startsWith(`PATH:${rootGroup}/`));
-      updateExcludedCats(updated);
-      renderPopoverBody();
-    };
-
-    actions.appendChild(btnHideAll);
-    actions.appendChild(btnReset);
-    header.appendChild(title);
-    header.appendChild(actions);
-    popover.appendChild(header);
-
-    const searchInput = document.createElement('input');
-    searchInput.type = 'text';
-    searchInput.placeholder = 'Kategorien filtern...';
-    searchInput.className = 'tp-popover-search';
-    searchInput.oninput = () => renderPopoverBody();
-    popover.appendChild(searchInput);
-
-    const body = document.createElement('div');
-    body.className = 'tp-popover-body';
-
-    function renderPopoverBody() {
-      body.innerHTML = '';
-      const excluded = getExcludedCats();
-      const isGroupExplicitlyBlocked = excluded.includes(`GROUP:${rootGroup}`);
-      const query = (searchInput.value || '').trim().toLowerCase();
-
-      const filteredSubcats = subcats.filter(sc => !query || sc.toLowerCase().includes(query));
-
-      filteredSubcats.forEach(cat => {
-        const isCatExcluded = isPathExcluded(cat, rootGroup, excluded);
-        const pill = document.createElement('div');
-        pill.className = `tp-cat-pill ${isCatExcluded ? 'tp-excluded' : ''}`;
-        pill.textContent = cat;
-        pill.title = isCatExcluded ? `Kategorie "${cat}" wieder einblenden` : `Kategorie "${cat}" ausblenden`;
-        pill.onclick = (e) => {
-          e.stopPropagation();
-          const curr = getExcludedCats();
-          let updated;
-          if (curr.includes(cat) || curr.includes(`PATH:${rootGroup}/${cat}`) || isGroupExplicitlyBlocked) {
-            const otherSubcatsToKeep = subcats.filter(sc => sc !== cat && isPathExcluded(sc, rootGroup, curr));
-            updated = curr.filter(c => c !== cat && c !== `PATH:${rootGroup}/${cat}` && c !== `GROUP:${rootGroup}`);
-            if (otherSubcatsToKeep.length > 0) {
-              updated = Array.from(new Set([...updated, ...otherSubcatsToKeep.map(sc => `PATH:${rootGroup}/${sc}`)]));
-            }
-          } else {
-            updated = [...curr, `PATH:${rootGroup}/${cat}`];
-          }
-          updateExcludedCats(updated);
-          renderPopoverBody();
-        };
-        body.appendChild(pill);
-      });
-    }
-
-    renderPopoverBody();
-    popover.appendChild(body);
-    mountContainer.appendChild(popover);
-    activePopover = popover;
   }
 
   function parsePrice(priceStr) {
@@ -2334,7 +1014,7 @@ const SHADOW_MODAL_STYLES = `
     const gridCards = new Set();
 
     productLinks.forEach(link => {
-      if (link.closest('header, nav, footer, .breadcrumb, #tp-quick-toolbar, #tp-inline-category-bar, #tp-inline-negative-bar')) return;
+      if (link.closest('header, nav, footer, .breadcrumb, #tp-suite-filter-bar')) return;
 
       let container = link.parentElement;
       while (container && container !== document.body && container.parentElement !== document.body) {
@@ -2363,23 +1043,20 @@ const SHADOW_MODAL_STYLES = `
     if (!card) return [];
     const hrefs = [];
 
-    // 1. If card itself is an <a> tag
     if (card.tagName && card.tagName.toLowerCase() === 'a') {
       const href = card.getAttribute('href') || card.href || '';
       if (href) hrefs.push(href);
     }
 
-    // 2. Nearest ancestor <a> tag
     const closestA = card.closest ? card.closest('a[href]') : null;
     if (closestA) {
       const href = closestA.getAttribute('href') || closestA.href || '';
       if (href && !hrefs.includes(href)) hrefs.push(href);
     }
 
-    // 3. Descendant <a> tags
     if (card.querySelectorAll) {
       card.querySelectorAll('a[href]').forEach(a => {
-        if (a.closest('header, nav, footer, .breadcrumb, #tp-quick-toolbar, #tp-suite-filter-bar')) return;
+        if (a.closest('header, nav, footer, .breadcrumb, #tp-suite-filter-bar')) return;
         const href = a.getAttribute('href') || a.href || '';
         if (href && !hrefs.includes(href)) hrefs.push(href);
       });
@@ -2402,23 +1079,6 @@ const SHADOW_MODAL_STYLES = `
       if (match && match[1]) {
         const segments = match[1].split('/').filter(Boolean);
         if (segments.length > 0) {
-          const canonicalRoot = normalizeRootSlug(segments[0]);
-          if (canonicalRoot) {
-            segments.forEach(seg => {
-              const formattedSeg = formatCategorySlug(seg);
-              if (formattedSeg) {
-                const norm = formattedSeg.trim().toLowerCase();
-                const slug = norm.replace(/[^a-z0-9]/g, '');
-                const spaceSlug = norm.replace(/-/g, ' ');
-                const umlautNorm = normalizeUmlautKey(norm);
-                if (!dynamicCatMap[norm]) { dynamicCatMap[norm] = canonicalRoot; isDynamicMapDirty = true; }
-                if (!dynamicCatMap[slug]) { dynamicCatMap[slug] = canonicalRoot; isDynamicMapDirty = true; }
-                if (!dynamicCatMap[spaceSlug]) { dynamicCatMap[spaceSlug] = canonicalRoot; isDynamicMapDirty = true; }
-                if (!dynamicCatMap[umlautNorm]) { dynamicCatMap[umlautNorm] = canonicalRoot; isDynamicMapDirty = true; }
-              }
-            });
-          }
-
           const subCat = segments[segments.length - 1];
           const formatted = formatCategorySlug(subCat);
           if (formatted) {
@@ -2454,7 +1114,7 @@ const SHADOW_MODAL_STYLES = `
       }
     }
 
-    // Tier 4: Fallback to Active Breadcrumb section (for single-category search result views)
+    // Tier 4: Fallback to Active Breadcrumb section
     if (!extracted) {
       const activeBreadcrumb = document.querySelector('.breadcrumb a:last-of-type, [class*="breadcrumb"] a:last-of-type');
       if (activeBreadcrumb) {
@@ -2483,7 +1143,7 @@ const SHADOW_MODAL_STYLES = `
     return count;
   }
 
-  // Helper: Check Negative Term Match (Checks visible innerText with word-boundary matching for short terms)
+  // Helper: Check Negative Term Match
   function matchesNegativeTerms(card, termsList) {
     if (!termsList || termsList.length === 0) return false;
     const visibleText = (card.innerText || card.textContent || '').toLowerCase();
@@ -2498,7 +1158,6 @@ const SHADOW_MODAL_STYLES = `
   }
 
   // ─── DISCOUNT HEATMAP ENGINE ────────────────────────────────────────────────
-  // Helper: Extract Discount Percentage from Card (Cached on dataset.tpDiscount)
   function extractCardDiscount(card) {
     if (card.dataset && card.dataset.tpDiscount !== undefined) {
       const cached = parseFloat(card.dataset.tpDiscount);
@@ -2506,7 +1165,6 @@ const SHADOW_MODAL_STYLES = `
     }
 
     let discount = null;
-    // 1. Primary target: Toppreise discount badge (.badge-dif, .badge)
     const badgeEl = card.querySelector('.badge-dif, .badge, [class*="badge-dif"]');
     if (badgeEl) {
       const match = badgeEl.textContent.match(/([+-]?\d+(?:[\.,]\d+)?)\s*%/);
@@ -2515,7 +1173,6 @@ const SHADOW_MODAL_STYLES = `
       }
     }
 
-    // 2. Fallback: Search inside card for discount pattern
     if (discount === null) {
       const match = card.textContent.match(/(?:Differenz|Rabatt|Discount)[\s\S]*?([+-]?\d+(?:[\.,]\d+)?)\s*%/i) ||
                     card.textContent.match(/-\s*(\d+(?:[\.,]\d+)?)\s*%/);
@@ -2548,7 +1205,6 @@ const SHADOW_MODAL_STYLES = `
     if (curve === 'linear') {
       t = clampedDiscount / 100;
     } else {
-      // Dynamic calibrated deal curve matching real-world feed dynamics (10% cold -> 50%+ blazing)
       if (clampedDiscount <= 10.0) {
         t = (clampedDiscount / 10.0) * 0.12;
       } else if (clampedDiscount >= 50.0) {
@@ -2558,12 +1214,6 @@ const SHADOW_MODAL_STYLES = `
       }
     }
 
-    // 5 High-Saturation, High-Vibrancy Thermal Anchor Stops:
-    // 0.00 (0-10%):  Vibrant Cobalt/Ice Blue
-    // 0.25 (15-20%): Vibrant Cyan / Teal
-    // 0.50 (28-35%): Warm Golden Amber
-    // 0.75 (40-48%): Fiery Hot Flame Orange
-    // 1.00 (50-100%): Blazing Volcanic Ruby Crimson
     const stops = [
       { t: 0.00, base: [18, 48, 88],   acc: [28, 92, 175],   border: [56, 140, 248, 0.70] },
       { t: 0.25, base: [12, 58, 64],   acc: [16, 130, 125],  border: [20, 210, 190, 0.75] },
@@ -2626,124 +1276,15 @@ const SHADOW_MODAL_STYLES = `
     showToast('Alle Filter zurückgesetzt');
   }
 
-  // Stable Quick-Control Pill Toolbar
-  function updateQuickToolbar(counts, pageHasOffers) {
-    if (!CONFIG.ENABLE_FILTER_COUNTER) {
-      const bar = document.getElementById('tp-quick-toolbar');
-      if (bar) bar.style.display = 'none';
-      return;
-    }
-
-    let bar = document.getElementById('tp-quick-toolbar');
-    const totalHidden = counts.neg + counts.cat + counts.min;
-    const isRevealed = document.body.classList.contains('tp-reveal-filtered');
-
-    if (!bar) {
-      bar = document.createElement('div');
-      bar.id = 'tp-quick-toolbar';
-      bar.innerHTML = `
-        <div class="tp-toolbar-group" title="Anzahl durch aktivierte Filter ausgeblendeter Produkte">
-          <span>🚫 <strong id="tp-tb-hidden-count">0</strong></span>
-          <button class="tp-toolbar-btn" id="tp-tb-reveal" title="Filter-Vorschau: Ausgeblendete Produkte gelb umrandet einblenden">
-            👁️ <span id="tp-tb-reveal-label">Einblenden</span>
-          </button>
-          <button class="tp-toolbar-btn" id="tp-tb-reset" title="Alle Filter (Ausschlüsse &amp; Kategorien) zurücksetzen">
-            🔄 Reset
-          </button>
-        </div>
-
-        <div class="tp-toolbar-divider"></div>
-
-        <div class="tp-toolbar-group">
-          <button class="tp-toolbar-btn" id="tp-tb-heatmap" title="Rabatt-Heatmap ein-/ausschalten (100% Heiß 🔥 | 0% Kalt ❄️)">
-            🔥 <span id="tp-tb-heat-label">Heatmap</span>
-          </button>
-        </div>
-
-        <div class="tp-toolbar-divider" id="tp-tb-divider-offers"></div>
-
-        <div class="tp-toolbar-group" id="tp-tb-min-group" title="Mindestanzahl benötigter Händler-Angebote pro Produkt (Produkte mit weniger Angeboten werden ausgeblendet)">
-          <span title="Filter für Mindestanzahl Angebote">Min. Angebote:</span>
-          <button class="tp-stepper-btn" id="tp-tb-min-minus" title="Mindestanzahl Angebote verringern">-</button>
-          <span id="tp-tb-min-val" title="Aktuelle Mindestanzahl Angebote" style="min-width: 16px; text-align: center;">0</span>
-          <button class="tp-stepper-btn" id="tp-tb-min-plus" title="Mindestanzahl Angebote erhöhen">+</button>
-        </div>
-      `;
-      document.body.appendChild(bar);
-
-      bar.querySelector('#tp-tb-reveal').onclick = () => {
-        document.body.classList.toggle('tp-reveal-filtered');
-        processListings();
-      };
-
-      bar.querySelector('#tp-tb-reset').onclick = resetAllFilters;
-
-      bar.querySelector('#tp-tb-heatmap').onclick = () => {
-        const nextState = !CONFIG.HEATMAP_ENABLED;
-        saveConfigKey('HEATMAP_ENABLED', nextState);
-        if (uiShadowRoot) {
-          const modalToggle = uiShadowRoot.getElementById('tp-heatmap-enabled-toggle');
-          if (modalToggle) modalToggle.checked = nextState;
-        }
-        processListings();
-      };
-
-      bar.querySelector('#tp-tb-min-minus').onclick = () => {
-        if (CONFIG.MIN_OFFERS > 0) {
-          saveConfigKey('MIN_OFFERS', CONFIG.MIN_OFFERS - 1);
-          if (uiShadowRoot) {
-            const modalVal = uiShadowRoot.getElementById('tp-min-offers-val');
-            const modalRange = uiShadowRoot.getElementById('tp-min-offers-range');
-            if (modalVal) modalVal.value = CONFIG.MIN_OFFERS;
-            if (modalRange) modalRange.value = CONFIG.MIN_OFFERS;
-          }
-          processListings();
-        }
-      };
-
-      bar.querySelector('#tp-tb-min-plus').onclick = () => {
-        saveConfigKey('MIN_OFFERS', CONFIG.MIN_OFFERS + 1);
-        if (uiShadowRoot) {
-          const modalVal = uiShadowRoot.getElementById('tp-min-offers-val');
-          const modalRange = uiShadowRoot.getElementById('tp-min-offers-range');
-          if (modalVal) modalVal.value = CONFIG.MIN_OFFERS;
-          if (modalRange) modalRange.value = CONFIG.MIN_OFFERS;
-        }
-        processListings();
-      };
-    }
-
-    bar.style.display = 'flex';
-    const countEl = bar.querySelector('#tp-tb-hidden-count');
-    const revealBtn = bar.querySelector('#tp-tb-reveal');
-    const revealLabel = bar.querySelector('#tp-tb-reveal-label');
-    const heatBtn = bar.querySelector('#tp-tb-heatmap');
-    const minValEl = bar.querySelector('#tp-tb-min-val');
-
-    const dividerOffers = bar.querySelector('#tp-tb-divider-offers');
-    const minOffersGroup = bar.querySelector('#tp-tb-min-group');
-
-    if (dividerOffers) dividerOffers.style.display = pageHasOffers ? 'block' : 'none';
-    if (minOffersGroup) minOffersGroup.style.display = pageHasOffers ? 'flex' : 'none';
-
-    if (countEl) countEl.textContent = totalHidden;
-    if (minValEl) minValEl.textContent = CONFIG.MIN_OFFERS;
-    if (revealBtn) revealBtn.classList.toggle('tp-active', isRevealed);
-    if (revealLabel) revealLabel.textContent = isRevealed ? 'Verbergen' : 'Einblenden';
-    if (heatBtn) heatBtn.classList.toggle('tp-active', CONFIG.HEATMAP_ENABLED !== false);
-  }
-
-  // Dedicated Power Filter Bar Target & Placement Selector
+  // Dedicated Power Filter Bar Placement Selector
   function getSuiteBarPlacement() {
     const bar = document.getElementById('tp-suite-filter-bar');
 
-    // Helper: Verify element is safe from native filter/header click capture & AJAX wiping
     const isSafe = (el) => {
       if (!el) return false;
       return !el.closest('.header, [class*="MainTopHead"], [class*="MainHead"], .f_filter_plugin, .filters, .filterBox, #tp-root, dialog');
     };
 
-    // 1. Primary: Main page product listing container on deals, search, and category pages
     const mainTargets = [
       '#Page_ListTopPriceReductionProducts',
       '#Page_ListTop100Products',
@@ -2763,7 +1304,6 @@ const SHADOW_MODAL_STYLES = `
       }
     }
 
-    // 2. Fallback: Main content area (FrameContent / pageContent)
     const contentContainers = [
       document.getElementById('FrameContent'),
       document.querySelector('#tpContent .pageContent'),
@@ -2783,22 +1323,18 @@ const SHADOW_MODAL_STYLES = `
       }
     }
 
-    // 3. Last-resort fallback: document.body
     return { container: document.body, reference: document.body.firstElementChild };
   }
 
-  // Unified Glassmorphic Power Filter Bar prepended to top of product content
-  function renderSuiteFilterBar() {
+  // Consolidated Top Filter Bar with Blocked Categories Overview
+  function renderSuiteFilterBar(counts = { neg: 0, cat: 0, min: 0 }, pageHasOffers = false) {
     const placement = getSuiteBarPlacement();
     if (!placement || !placement.container) return;
 
     let bar = document.getElementById('tp-suite-filter-bar');
     const excluded = CONFIG.EXCLUDED_CATEGORIES || [];
-    const allCats = new Set([
-      ...pageCategories,
-      ...excluded.map(extractSubcatFromExclusionKey).filter(Boolean)
-    ]);
-    const isExpanded = CONFIG.CATS_EXPANDED === true;
+    const isRevealed = document.body.classList.contains('tp-reveal-filtered');
+    const totalHidden = counts.neg + counts.cat + counts.min;
 
     const safeInsert = (container, node, ref) => {
       try {
@@ -2808,7 +1344,6 @@ const SHADOW_MODAL_STYLES = `
           container.appendChild(node);
         }
       } catch (e) {
-        log('DOM Insertion fallback:', e);
         container.appendChild(node);
       }
     };
@@ -2818,7 +1353,6 @@ const SHADOW_MODAL_STYLES = `
       bar.id = 'tp-suite-filter-bar';
       bar.innerHTML = `
         <div class="tp-filter-main-row">
-          
           <div class="tp-input-wrapper" title="Kommagetrennte Begriffe eingeben (z.B. Hülle, Refurbished, Gebraucht), um passende Produkte auszublenden">
             <span class="tp-filter-badge" title="Toppreise Power Filter">⚡</span>
             <span class="tp-input-label-inline">🚫 Negativ-Filter:</span>
@@ -2828,15 +1362,28 @@ const SHADOW_MODAL_STYLES = `
             </div>
           </div>
 
-          <button class="tp-btn-toggle ${isExpanded ? 'tp-active' : ''}" id="tp-toggle-cats-btn" title="Kategorien-Filter aus-/einblenden">
-            🏷️ <span id="tp-cat-btn-label">Kategorien (${allCats.size})</span> <span id="tp-cat-arrow">${isExpanded ? '▲' : '▼'}</span>
+          <button class="tp-bar-btn ${isRevealed ? 'tp-active' : ''}" id="tp-bar-reveal-btn" title="Ausgeblendete Produkte anzeigen/verbergen">
+            👁️ <span id="tp-bar-reveal-count">${totalHidden}</span>
           </button>
+
+          <button class="tp-bar-btn ${CONFIG.HEATMAP_ENABLED ? 'tp-active' : ''}" id="tp-bar-heat-btn" title="Rabatt-Heatmap ein-/ausschalten">
+            🔥 Heatmap
+          </button>
+
+          <div class="tp-bar-stepper-group" id="tp-bar-min-offers-group" style="display: ${pageHasOffers ? 'flex' : 'none'};" title="Mindestanzahl benötigter Händler-Angebote">
+            <span>Min:</span>
+            <button class="tp-stepper-btn" id="tp-bar-min-minus" title="Verringern">-</button>
+            <span id="tp-bar-min-val" style="min-width: 14px; text-align: center;">${CONFIG.MIN_OFFERS}</span>
+            <button class="tp-stepper-btn" id="tp-bar-min-plus" title="Erhöhen">+</button>
+          </div>
 
           <button class="tp-filter-bar-reset" id="tp-bar-reset-btn" title="Alle Filter (Text &amp; Kategorien) zurücksetzen">🔄 Reset</button>
         </div>
 
-        <div id="tp-collapsible-cat-row" class="tp-cat-collapsible-body" style="display: ${isExpanded ? 'block' : 'none'};">
-          <div id="tp-inline-category-pills" class="tp-cat-pills-row"></div>
+        <div id="tp-blocked-cats-container" class="tp-blocked-cats-row" style="display: ${excluded.length > 0 ? 'flex' : 'none'};">
+          <span class="tp-blocked-cats-label">🚫 Ausgeblendet (${excluded.length}):</span>
+          <div id="tp-blocked-chips-list" style="display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center;"></div>
+          <button class="tp-blocked-clear-all" id="tp-blocked-clear-all-btn" title="Alle blockierten Kategorien freigeben">Alle freigeben</button>
         </div>
       `;
 
@@ -2868,26 +1415,53 @@ const SHADOW_MODAL_STYLES = `
         };
       }
 
-      const toggleBtn = bar.querySelector('#tp-toggle-cats-btn');
-      const catRow = bar.querySelector('#tp-collapsible-cat-row');
-      toggleBtn.onclick = () => {
-        const nextState = !CONFIG.CATS_EXPANDED;
-        saveConfigKey('CATS_EXPANDED', nextState);
-        catRow.style.display = nextState ? 'block' : 'none';
-        toggleBtn.classList.toggle('tp-active', nextState);
-        const arrow = bar.querySelector('#tp-cat-arrow');
-        if (arrow) arrow.textContent = nextState ? '▲' : '▼';
+      bar.querySelector('#tp-bar-reveal-btn').onclick = () => {
+        document.body.classList.toggle('tp-reveal-filtered');
+        processListings();
       };
 
+      bar.querySelector('#tp-bar-heat-btn').onclick = () => {
+        const nextState = !CONFIG.HEATMAP_ENABLED;
+        saveConfigKey('HEATMAP_ENABLED', nextState);
+        if (uiShadowRoot) {
+          const modalToggle = uiShadowRoot.getElementById('tp-heatmap-enabled-toggle');
+          if (modalToggle) modalToggle.checked = nextState;
+        }
+        processListings();
+      };
+
+      const updateMinOffers = (delta) => {
+        const next = Math.max(0, CONFIG.MIN_OFFERS + delta);
+        if (next !== CONFIG.MIN_OFFERS) {
+          saveConfigKey('MIN_OFFERS', next);
+          if (uiShadowRoot) {
+            const modalVal = uiShadowRoot.getElementById('tp-min-offers-val');
+            const modalRange = uiShadowRoot.getElementById('tp-min-offers-range');
+            if (modalVal) modalVal.value = next;
+            if (modalRange) modalRange.value = next;
+          }
+          processListings();
+        }
+      };
+
+      bar.querySelector('#tp-bar-min-minus').onclick = () => updateMinOffers(-1);
+      bar.querySelector('#tp-bar-min-plus').onclick = () => updateMinOffers(1);
+
       bar.querySelector('#tp-bar-reset-btn').onclick = resetAllFilters;
+
+      bar.querySelector('#tp-blocked-clear-all-btn').onclick = () => {
+        saveConfigKey('EXCLUDED_CATEGORIES', []);
+        processListings();
+        showToast('Alle blockierten Kategorien freigegeben');
+      };
     } else {
-      // Re-anchor to target if detached or moved
       if (bar.parentElement !== placement.container || (bar.nextSibling !== placement.reference && placement.reference !== bar)) {
         safeInsert(placement.container, bar, placement.reference);
       }
     }
 
     bar.style.display = 'flex';
+
     const input = bar.querySelector('#tp-inline-negative-input');
     const clearBtn = bar.querySelector('#tp-clear-neg-btn');
     if (input && document.activeElement !== input) {
@@ -2895,129 +1469,47 @@ const SHADOW_MODAL_STYLES = `
       if (clearBtn) clearBtn.style.display = CONFIG.NEGATIVE_TERMS ? 'block' : 'none';
     }
 
-    const toggleBtn = bar.querySelector('#tp-toggle-cats-btn');
-    const catLabel = bar.querySelector('#tp-cat-btn-label');
-    const catArrow = bar.querySelector('#tp-cat-arrow');
-    const catRow = bar.querySelector('#tp-collapsible-cat-row');
+    const revealBtn = bar.querySelector('#tp-bar-reveal-btn');
+    const revealCount = bar.querySelector('#tp-bar-reveal-count');
+    if (revealBtn) revealBtn.classList.toggle('tp-active', isRevealed);
+    if (revealCount) revealCount.textContent = totalHidden > 0 ? `${totalHidden}` : '0';
 
-    if (catLabel) catLabel.textContent = `Kategorien (${allCats.size})`;
-    if (catArrow) catArrow.textContent = isExpanded ? '▲' : '▼';
-    if (toggleBtn) toggleBtn.classList.toggle('tp-active', isExpanded);
-    if (catRow) catRow.style.display = isExpanded ? 'block' : 'none';
+    const heatBtn = bar.querySelector('#tp-bar-heat-btn');
+    if (heatBtn) heatBtn.classList.toggle('tp-active', CONFIG.HEATMAP_ENABLED !== false);
 
-    // Reconcile category pills & Group Pills (In-place DOM Reconciliation to prevent pulsing)
-    const pillsHolder = bar.querySelector('#tp-inline-category-pills');
-    if (pillsHolder && isExpanded) {
-      if (allCats.size === 0) {
-        if (!pillsHolder.querySelector('.tp-empty-msg')) {
-          pillsHolder.innerHTML = '<span class="tp-empty-msg" style="font-size:11px; color:#64748b;">(Keine Kategorien auf aktueller Ansicht)</span>';
-        }
+    const minGroup = bar.querySelector('#tp-bar-min-offers-group');
+    const minVal = bar.querySelector('#tp-bar-min-val');
+    if (minGroup) minGroup.style.display = pageHasOffers ? 'flex' : 'none';
+    if (minVal) minVal.textContent = CONFIG.MIN_OFFERS;
+
+    // Render blocked category chips
+    const blockedContainer = bar.querySelector('#tp-blocked-cats-container');
+    const chipsList = bar.querySelector('#tp-blocked-chips-list');
+    if (blockedContainer && chipsList) {
+      if (excluded.length === 0) {
+        blockedContainer.style.display = 'none';
+        chipsList.innerHTML = '';
       } else {
-        const emptyMsg = pillsHolder.querySelector('.tp-empty-msg');
-        if (emptyMsg) emptyMsg.remove();
+        blockedContainer.style.display = 'flex';
+        chipsList.innerHTML = '';
+        const labelEl = blockedContainer.querySelector('.tp-blocked-cats-label');
+        if (labelEl) labelEl.textContent = `🚫 Ausgeblendet (${excluded.length}):`;
 
-        // Group detected pageCategories by Root Category Group
-        const groups = new Map();
-        allCats.forEach(cat => {
-          const root = resolveCategoryGroup(cat);
-          if (!groups.has(root)) groups.set(root, []);
-          groups.get(root).push(cat);
-        });
-
-        if (!window._tpExpandedGroups) window._tpExpandedGroups = new Set();
-
-        // Track existing group wrappers in DOM for in-place reconciliation
-        const existingGroupWrappers = new Map();
-        pillsHolder.querySelectorAll('.tp-group-wrapper').forEach(wrapper => {
-          if (wrapper.dataset.rootGroup) {
-            existingGroupWrappers.set(wrapper.dataset.rootGroup, wrapper);
-          }
-        });
-
-        groups.forEach((subcats, rootGroup) => {
-          const isGroupExplicitlyBlocked = excluded.includes(`GROUP:${rootGroup}`);
-          const allSubcatsExcluded = subcats.every(sc => excluded.includes(sc) || isGroupExplicitlyBlocked);
-          const someSubcatsExcluded = subcats.some(sc => excluded.includes(sc) || isGroupExplicitlyBlocked);
-
-          let groupWrapper = existingGroupWrappers.get(rootGroup);
-          let groupPill, titleSpan, chevronBtn;
-
-          if (!groupWrapper) {
-            groupWrapper = document.createElement('div');
-            groupWrapper.className = 'tp-group-wrapper';
-            groupWrapper.dataset.rootGroup = rootGroup;
-
-            groupPill = document.createElement('div');
-            groupPill.className = 'tp-group-pill';
-
-            titleSpan = document.createElement('span');
-            titleSpan.className = 'tp-group-title';
-
-            chevronBtn = document.createElement('span');
-            chevronBtn.className = 'tp-group-chevron';
-
-            groupPill.appendChild(titleSpan);
-            groupPill.appendChild(chevronBtn);
-            groupWrapper.appendChild(groupPill);
-            pillsHolder.appendChild(groupWrapper);
-          } else {
-            existingGroupWrappers.delete(rootGroup);
-            groupPill = groupWrapper.querySelector('.tp-group-pill');
-            titleSpan = groupWrapper.querySelector('.tp-group-title');
-            chevronBtn = groupWrapper.querySelector('.tp-group-chevron');
-          }
-
-          // Update Group Pill in-place with semantic distinction
-          let stateClass = '';
-          if (isGroupExplicitlyBlocked) {
-            stateClass = 'tp-excluded-all';
-          } else if (allSubcatsExcluded) {
-            stateClass = 'tp-excluded-individual';
-          } else if (someSubcatsExcluded) {
-            stateClass = 'tp-partial';
-          }
-
-          const newPillClass = `tp-group-pill ${stateClass}`.trim();
-          if (groupPill.className !== newPillClass) groupPill.className = newPillClass;
-
-          const newTitleText = `${getGroupEmoji(rootGroup)} ${rootGroup} (${subcats.length})`;
-          if (titleSpan.textContent !== newTitleText) titleSpan.textContent = newTitleText;
-
-          titleSpan.title = `Klick: Gesamte Gruppe "${rootGroup}" ausblenden/einblenden | ▼: Unterkategorien`;
-          titleSpan.onclick = (e) => {
+        excluded.forEach(key => {
+          const info = extractCategoryDisplay(key);
+          const emoji = getGroupEmoji(info.group);
+          const chip = document.createElement('span');
+          chip.className = 'tp-blocked-chip';
+          chip.innerHTML = `${emoji} <span>${info.label}</span> <span class="tp-blocked-chip-remove" title="Wieder einblenden">✕</span>`;
+          chip.querySelector('.tp-blocked-chip-remove').onclick = (e) => {
             e.stopPropagation();
-            const curr = CONFIG.EXCLUDED_CATEGORIES || [];
-            const groupKey = `GROUP:${rootGroup}`;
-            let updated;
-            if (curr.includes(groupKey)) {
-              updated = curr.filter(c => c !== groupKey);
-            } else {
-              updated = Array.from(new Set([...curr, groupKey]));
-            }
+            const updated = (CONFIG.EXCLUDED_CATEGORIES || []).filter(c => c !== key);
             saveConfigKey('EXCLUDED_CATEGORIES', updated);
             processListings();
+            showToast(`Kategorie "${info.label}" wieder eingeblendet`);
           };
-
-          const newChevronText = '▼';
-          if (chevronBtn.textContent !== newChevronText) chevronBtn.textContent = newChevronText;
-          chevronBtn.title = `Unterkategorien von "${rootGroup}" anzeigen & verwalten`;
-          chevronBtn.onclick = (e) => {
-            e.stopPropagation();
-            toggleGroupPopover(
-              groupPill,
-              rootGroup,
-              subcats,
-              () => CONFIG.EXCLUDED_CATEGORIES || [],
-              (updated) => {
-                saveConfigKey('EXCLUDED_CATEGORIES', updated);
-                processListings();
-              }
-            );
-          };
+          chipsList.appendChild(chip);
         });
-
-        // Remove obsolete groups no longer present on page
-        existingGroupWrappers.forEach(obsoleteWrapper => obsoleteWrapper.remove());
       }
     }
   }
@@ -3035,21 +1527,17 @@ const SHADOW_MODAL_STYLES = `
            !!document.getElementById('Page_ListTopPriceReductionProducts');
   }
 
-  let listingRunId = 0;
+  let isModifyingDOM = false;
 
-  async function processListings() {
+  function processListings() {
     if (isModifyingDOM) return;
     isModifyingDOM = true;
-    const runId = ++listingRunId;
     try {
       log('Processing product listings...');
 
-      pageCategories.clear();
-
       const cards = getProductCards();
-
       if (cards.length === 0) {
-        renderSuiteFilterBar();
+        renderSuiteFilterBar({ neg: 0, cat: 0, min: 0 }, false);
         return;
       }
 
@@ -3069,139 +1557,126 @@ const SHADOW_MODAL_STYLES = `
       let pageHasOffers = false;
       const isNeueFeed = isNeueToppreisePage();
 
-      const batchSize = 20;
-      for (let i = 0; i < cards.length; i += batchSize) {
-        if (runId !== listingRunId) return;
+      for (const card of cards) {
+        // 0. Discount Heatmap Highlighting
+        const discountVal = extractCardDiscount(card);
+        if (CONFIG.HEATMAP_ENABLED && discountVal !== null) {
+          const heatStyles = getHeatmapStyles(discountVal, CONFIG.HEATMAP_INTENSITY, CONFIG.HEATMAP_CURVE);
+          card.style.setProperty('--tp-heat-bg', heatStyles.bg);
+          card.style.setProperty('--tp-heat-border', heatStyles.border);
+          card.style.setProperty('--tp-heat-glow', heatStyles.glow);
+          card.classList.add('tp-heatmap-active');
+        } else {
+          card.classList.remove('tp-heatmap-active');
+          card.style.removeProperty('--tp-heat-bg');
+          card.style.removeProperty('--tp-heat-border');
+          card.style.removeProperty('--tp-heat-glow');
+        }
 
-        const chunk = cards.slice(i, i + batchSize);
-        for (const card of chunk) {
-          // 0. Discount Heatmap Highlighting
-          const discountVal = extractCardDiscount(card);
-          if (CONFIG.HEATMAP_ENABLED && discountVal !== null) {
-            const heatStyles = getHeatmapStyles(discountVal, CONFIG.HEATMAP_INTENSITY, CONFIG.HEATMAP_CURVE);
-            card.style.setProperty('--tp-heat-bg', heatStyles.bg);
-            card.style.setProperty('--tp-heat-border', heatStyles.border);
-            card.style.setProperty('--tp-heat-glow', heatStyles.glow);
-            card.classList.add('tp-heatmap-active');
-          } else {
-            card.classList.remove('tp-heatmap-active');
-            card.style.removeProperty('--tp-heat-bg');
-            card.style.removeProperty('--tp-heat-border');
-            card.style.removeProperty('--tp-heat-glow');
-          }
+        // 1. Category extraction
+        const catName = extractCardCategory(card);
+        const rootGroup = resolveCategoryGroup(catName, card);
 
-          // 1. Category extraction (cached on dataset.tpCategory)
-          const catName = extractCardCategory(card);
-          if (catName) pageCategories.add(catName);
-
-          const rootGroup = resolveCategoryGroup(catName, card);
-
-          // 1b. Inject 1-Click Card Quick-Block Action Button (Only on Neue Toppreise feed)
-          if (isNeueFeed) {
-            if (catName && !card.querySelector('.tp-card-quick-block')) {
-              const quickBlockBtn = document.createElement('button');
-              quickBlockBtn.type = 'button';
-              quickBlockBtn.className = 'tp-card-quick-block';
-              quickBlockBtn.title = `Kategorie "${catName}" (${rootGroup}) ausblenden`;
-              quickBlockBtn.innerHTML = `🚫 <span>${catName}</span>`;
-              quickBlockBtn.onclick = (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                e.stopImmediatePropagation();
-                const curr = CONFIG.EXCLUDED_CATEGORIES || [];
-                const key = `PATH:${rootGroup}/${catName}`;
-                if (!curr.includes(key) && !curr.includes(catName)) {
-                  const updated = [...curr, key];
-                  saveConfigKey('EXCLUDED_CATEGORIES', updated);
+        // 1b. Inject 1-Click Card Quick-Block Action Button (on Neue Toppreise feed)
+        if (isNeueFeed) {
+          if (catName && !card.querySelector('.tp-card-quick-block')) {
+            const quickBlockBtn = document.createElement('button');
+            quickBlockBtn.type = 'button';
+            quickBlockBtn.className = 'tp-card-quick-block';
+            quickBlockBtn.title = `Kategorie "${catName}" (${rootGroup}) ausblenden`;
+            quickBlockBtn.innerHTML = `🚫 <span>${catName}</span>`;
+            quickBlockBtn.onclick = (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              e.stopImmediatePropagation();
+              const curr = CONFIG.EXCLUDED_CATEGORIES || [];
+              const key = `PATH:${rootGroup}/${catName}`;
+              if (!curr.includes(key) && !curr.includes(catName)) {
+                const updated = [...curr, key];
+                saveConfigKey('EXCLUDED_CATEGORIES', updated);
+                processListings();
+                showToast(`Kategorie "${catName}" ausgeblendet`, 4000, 'Rückgängig', () => {
+                  const restored = (CONFIG.EXCLUDED_CATEGORIES || []).filter(c => c !== key && c !== catName);
+                  saveConfigKey('EXCLUDED_CATEGORIES', restored);
                   processListings();
-                  showToast(`Kategorie "${catName}" ausgeblendet`, 4000, 'Rückgängig', () => {
-                    const restored = (CONFIG.EXCLUDED_CATEGORIES || []).filter(c => c !== key && c !== catName);
-                    saveConfigKey('EXCLUDED_CATEGORIES', restored);
-                    processListings();
-                    showToast(`Kategorie "${catName}" wieder eingeblendet`);
-                  });
-                }
-              };
-              card.appendChild(quickBlockBtn);
-            }
-          } else {
-            const existingQuickBlock = card.querySelector('.tp-card-quick-block');
-            if (existingQuickBlock) existingQuickBlock.remove();
+                  showToast(`Kategorie "${catName}" wieder eingeblendet`);
+                });
+              }
+            };
+            card.appendChild(quickBlockBtn);
           }
+        } else {
+          const existingQuickBlock = card.querySelector('.tp-card-quick-block');
+          if (existingQuickBlock) existingQuickBlock.remove();
+        }
 
-          // 2. Negative Text Filter (Strictly checks full card text content)
-          const isNeg = matchesNegativeTerms(card, termsList);
-          card.classList.toggle('tp-negative-filtered', isNeg);
-          if (isNeg) counts.neg++;
+        // 2. Negative Text Filter
+        const isNeg = matchesNegativeTerms(card, termsList);
+        card.classList.toggle('tp-negative-filtered', isNeg);
+        if (isNeg) counts.neg++;
 
-          // 3. Category Filter
-          const isCatExcluded = catName && isPathExcluded(catName, rootGroup, excludedCats);
-          card.classList.toggle('tp-category-filtered', isCatExcluded);
-          if (isCatExcluded) counts.cat++;
+        // 3. Category Filter
+        const isCatExcluded = catName && isPathExcluded(catName, rootGroup, excludedCats);
+        card.classList.toggle('tp-category-filtered', isCatExcluded);
+        if (isCatExcluded) counts.cat++;
 
-          // 4. Offer Count Filter (cached on dataset.tpOfferCount)
-          const offerCount = extractOfferCount(card);
-          if (offerCount > 0) pageHasOffers = true;
+        // 4. Offer Count Filter
+        const offerCount = extractOfferCount(card);
+        if (offerCount > 0) pageHasOffers = true;
 
-          const isLowOffers = pageHasOffers && CONFIG.MIN_OFFERS > 0 && offerCount < CONFIG.MIN_OFFERS;
-          card.classList.toggle('tp-min-offers-filtered', isLowOffers);
-          if (isLowOffers) counts.min++;
+        const isLowOffers = pageHasOffers && CONFIG.MIN_OFFERS > 0 && offerCount < CONFIG.MIN_OFFERS;
+        card.classList.toggle('tp-min-offers-filtered', isLowOffers);
+        if (isLowOffers) counts.min++;
 
-          // 5. Best Price Highlighting / Dimming
-          if (activeStores.length === 0) {
-            card.classList.remove('tp-is-cheapest', 'tp-not-cheapest', 'tp-no-store-offer');
-            const badge = card.querySelector('.tp-best-price-badge');
-            if (badge) badge.remove();
-          } else {
-            const dealerRows = card.querySelectorAll('.Plugin_DealerRelProdPriceInfo');
-            let matchedRow = null;
+        // 5. Best Price Highlighting / Dimming
+        if (activeStores.length === 0) {
+          card.classList.remove('tp-is-cheapest', 'tp-not-cheapest', 'tp-no-store-offer');
+          const badge = card.querySelector('.tp-best-price-badge');
+          if (badge) badge.remove();
+        } else {
+          const dealerRows = card.querySelectorAll('.Plugin_DealerRelProdPriceInfo');
+          let matchedRow = null;
 
-            for (const row of dealerRows) {
-              const titleEl = row.querySelector('.title');
-              if (titleEl) {
-                const rowStoreNormalized = normalizeName(titleEl.textContent);
-                if (activeStores.some(store => rowStoreNormalized.includes(store) || store.includes(rowStoreNormalized))) {
-                  matchedRow = row;
-                  break;
-                }
+          for (const row of dealerRows) {
+            const titleEl = row.querySelector('.title');
+            if (titleEl) {
+              const rowStoreNormalized = normalizeName(titleEl.textContent);
+              if (activeStores.some(store => rowStoreNormalized.includes(store) || store.includes(rowStoreNormalized))) {
+                matchedRow = row;
+                break;
               }
             }
+          }
 
-            if (matchedRow) {
-              const storePriceEl = CONFIG.USE_SHIPPING_PRICE
-                ? (matchedRow.querySelector('.shippingPrice .Plugin_Price') || matchedRow.querySelector('.productPrice .Plugin_Price'))
-                : (matchedRow.querySelector('.productPrice .Plugin_Price') || matchedRow.querySelector('.shippingPrice .Plugin_Price'));
-              const storePrice = storePriceEl ? parsePrice(storePriceEl.textContent) : 0;
+          if (matchedRow) {
+            const storePriceEl = CONFIG.USE_SHIPPING_PRICE
+              ? (matchedRow.querySelector('.shippingPrice .Plugin_Price') || matchedRow.querySelector('.productPrice .Plugin_Price'))
+              : (matchedRow.querySelector('.productPrice .Plugin_Price') || matchedRow.querySelector('.shippingPrice .Plugin_Price'));
+            const storePrice = storePriceEl ? parsePrice(storePriceEl.textContent) : 0;
 
-              const bestPriceEl = CONFIG.USE_SHIPPING_PRICE
-                ? (card.querySelector('.price_information_product .shippingPrice .Plugin_Price') || card.querySelector('.price_information_product .productPrice .Plugin_Price'))
-                : (card.querySelector('.price_information_product .productPrice .Plugin_Price') || card.querySelector('.price_information_product .shippingPrice .Plugin_Price'));
-              const bestPrice = bestPriceEl ? parsePrice(bestPriceEl.textContent) : 0;
+            const bestPriceEl = CONFIG.USE_SHIPPING_PRICE
+              ? (card.querySelector('.price_information_product .shippingPrice .Plugin_Price') || card.querySelector('.price_information_product .productPrice .Plugin_Price'))
+              : (card.querySelector('.price_information_product .productPrice .Plugin_Price') || card.querySelector('.price_information_product .shippingPrice .Plugin_Price'));
+            const bestPrice = bestPriceEl ? parsePrice(bestPriceEl.textContent) : 0;
 
-              if (storePrice > 0 && bestPrice > 0) {
-                const threshold = bestPrice * (1 + CONFIG.MARGIN_PERCENT / 100);
-                const isCheapest = storePrice <= threshold;
+            if (storePrice > 0 && bestPrice > 0) {
+              const threshold = bestPrice * (1 + CONFIG.MARGIN_PERCENT / 100);
+              const isCheapest = storePrice <= threshold;
 
-                if (isCheapest) {
-                  card.classList.add('tp-is-cheapest');
-                  card.classList.remove('tp-not-cheapest', 'tp-no-store-offer');
+              if (isCheapest) {
+                card.classList.add('tp-is-cheapest');
+                card.classList.remove('tp-not-cheapest', 'tp-no-store-offer');
 
-                  let badge = card.querySelector('.tp-best-price-badge');
-                  if (!badge) {
-                    badge = document.createElement('div');
-                    badge.className = 'tp-best-price-badge';
-                    badge.textContent = 'Best Price';
-                    card.appendChild(badge);
-                  }
-                } else {
-                  card.classList.add('tp-not-cheapest');
-                  card.classList.remove('tp-is-cheapest', 'tp-no-store-offer');
-                  const badge = card.querySelector('.tp-best-price-badge');
-                  if (badge) badge.remove();
+                let badge = card.querySelector('.tp-best-price-badge');
+                if (!badge) {
+                  badge = document.createElement('div');
+                  badge.className = 'tp-best-price-badge';
+                  badge.textContent = 'Best Price';
+                  card.appendChild(badge);
                 }
               } else {
-                card.classList.add('tp-no-store-offer');
-                card.classList.remove('tp-is-cheapest', 'tp-not-cheapest');
+                card.classList.add('tp-not-cheapest');
+                card.classList.remove('tp-is-cheapest', 'tp-no-store-offer');
                 const badge = card.querySelector('.tp-best-price-badge');
                 if (badge) badge.remove();
               }
@@ -3211,16 +1686,14 @@ const SHADOW_MODAL_STYLES = `
               const badge = card.querySelector('.tp-best-price-badge');
               if (badge) badge.remove();
             }
+          } else {
+            card.classList.add('tp-no-store-offer');
+            card.classList.remove('tp-is-cheapest', 'tp-not-cheapest');
+            const badge = card.querySelector('.tp-best-price-badge');
+            if (badge) badge.remove();
           }
         }
-
-        if (i + batchSize < cards.length) {
-          await new Promise(resolve => requestAnimationFrame(resolve));
-          if (globalThis.scheduler?.yield) await globalThis.scheduler.yield();
-        }
       }
-
-      if (runId !== listingRunId) return;
 
       // 6. Re-sorting by Offer Count or Discount
       if (CONFIG.SORT_BY_OFFERS === 'discount-desc' && cards.length > 1) {
@@ -3247,10 +1720,8 @@ const SHADOW_MODAL_STYLES = `
         }
       }
 
-      // 7. Render UI Modules
-      flushDynamicMap();
-      updateQuickToolbar(counts, pageHasOffers);
-      renderSuiteFilterBar();
+      // 7. Render UI Top Filter Bar
+      renderSuiteFilterBar(counts, pageHasOffers);
     } finally {
       isModifyingDOM = false;
     }
@@ -3392,8 +1863,8 @@ const SHADOW_MODAL_STYLES = `
             <!-- Dynamic settings sections -->
           </div>
           <div class="tp-modal-actions">
-            <button type="button" class="tp-btn tp-btn-secondary" id="tp-btn-close" title="Einstellungen abbrechen ohne Speichern">Abbrechen</button>
-            <button type="button" class="tp-btn tp-btn-primary" id="tp-btn-save" title="Einstellungen dauerhaft speichern">Speichern</button>
+            <button type="button" class="tp-btn tp-btn-secondary" id="tp-btn-close" title="Einstellungen abbrechen">Abbrechen</button>
+            <button type="button" class="tp-btn tp-btn-primary" id="tp-btn-save" title="Einstellungen speichern">Speichern</button>
           </div>
         </dialog>
         <div id="tp-toast-container"></div>
@@ -3501,17 +1972,8 @@ const SHADOW_MODAL_STYLES = `
             <textarea id="tp-negative-terms-input" class="tp-textarea" placeholder="z. B. Hülle, Case, Refurbished, Gebraucht"></textarea>
           </div>
 
-          <!-- Section 3: Kategorien Filter -->
-          <div class="tp-section-header">3. Kategorien-Filter (Neue Toppreise)</div>
-          <div class="tp-settings-group">
-            <label title="Erkannte Kategorien anklicken, um sie dauerhaft auszublenden">Erkannte Kategorien (Klicken zum Ausblenden):</label>
-            <div id="tp-category-pills" class="tp-cat-pills-container">
-              <!-- Rendered dynamically -->
-            </div>
-          </div>
-
-          <!-- Section 4: Angebote & Sortierung -->
-          <div class="tp-section-header">4. Angebote & Sortierung</div>
+          <!-- Section 3: Angebote & Sortierung -->
+          <div class="tp-section-header">3. Angebote & Sortierung</div>
           <div class="tp-settings-group">
             <label title="Produkte mit weniger als N Angeboten ausblenden">Mindestanzahl Angebote (0 = Aus)</label>
             <div class="tp-range-container">
@@ -3537,18 +1999,8 @@ const SHADOW_MODAL_STYLES = `
             </div>
           </div>
 
-          <div class="tp-settings-group tp-switch-container">
-            <div class="tp-switch-label">
-              <label title="Statusleiste am unteren Bildschirmrand anzeigen">Filter-Zähler Statusleiste anzeigen</label>
-            </div>
-            <label class="tp-switch">
-              <input type="checkbox" id="tp-counter-toggle">
-              <span class="tp-slider"></span>
-            </label>
-          </div>
-
-          <!-- Section 5: Preisalarm Auto-Filler -->
-          <div class="tp-section-header" style="color: #3b82f6;">5. Preisalarm Auto-Filler</div>
+          <!-- Section 4: Preisalarm Auto-Filler -->
+          <div class="tp-section-header" style="color: #3b82f6;">4. Preisalarm Auto-Filler</div>
           
           <div class="tp-settings-group tp-switch-container">
             <div class="tp-switch-label">
@@ -3597,8 +2049,8 @@ const SHADOW_MODAL_STYLES = `
             </label>
           </div>
 
-          <!-- Section 6: Rabatt-Heatmap (Neue Toppreise) -->
-          <div class="tp-section-header" style="color: #f43f5e;">6. Rabatt-Heatmap (Neue Toppreise)</div>
+          <!-- Section 5: Rabatt-Heatmap -->
+          <div class="tp-section-header" style="color: #f43f5e;">5. Rabatt-Heatmap</div>
           
           <div class="tp-settings-group tp-switch-container">
             <div class="tp-switch-label">
@@ -3625,7 +2077,6 @@ const SHADOW_MODAL_STYLES = `
       sectionsHolder.appendChild(section);
     }
 
-    // Form Field References from Shadow DOM
     const modeHighlight = shadow.getElementById('tp-mode-highlight-only');
     const modeDim = shadow.getElementById('tp-mode-dim');
     const modeHide = shadow.getElementById('tp-mode-hide');
@@ -3636,7 +2087,6 @@ const SHADOW_MODAL_STYLES = `
     const shippingToggle = shadow.getElementById('tp-shipping-toggle');
 
     const negTermsInput = shadow.getElementById('tp-negative-terms-input');
-    const catPillsContainer = shadow.getElementById('tp-category-pills');
 
     const minOffersRange = shadow.getElementById('tp-min-offers-range');
     const minOffersVal = shadow.getElementById('tp-min-offers-val');
@@ -3645,8 +2095,6 @@ const SHADOW_MODAL_STYLES = `
     const sortDesc = shadow.getElementById('tp-sort-desc');
     const sortAsc = shadow.getElementById('tp-sort-asc');
     const sortDiscount = shadow.getElementById('tp-sort-discount');
-
-    const counterToggle = shadow.getElementById('tp-counter-toggle');
 
     const alarmEnabledToggle = shadow.getElementById('tp-alarm-enabled-toggle');
     const alarmTargetRange = shadow.getElementById('tp-alarm-target-range');
@@ -3661,130 +2109,6 @@ const SHADOW_MODAL_STYLES = `
     const dur180 = shadow.getElementById('tp-dur-180');
     const dur365 = shadow.getElementById('tp-dur-365');
     const dur730 = shadow.getElementById('tp-dur-730');
-
-    let currentExcludedCats = [...(CONFIG.EXCLUDED_CATEGORIES || [])];
-
-    function renderCategoryPills() {
-      const allCats = new Set([...pageCategories]);
-      currentExcludedCats.forEach(c => {
-        const sub = extractSubcatFromExclusionKey(c);
-        if (sub) allCats.add(sub);
-      });
-
-      if (allCats.size === 0) {
-        if (!catPillsContainer.querySelector('.tp-empty-msg')) {
-          catPillsContainer.innerHTML = '<span class="tp-empty-msg" style="font-size:11px; color:#64748b; padding:4px;">Keine Kategorien auf Seite erkannt</span>';
-        }
-        return;
-      }
-
-      const emptyMsg = catPillsContainer.querySelector('.tp-empty-msg');
-      if (emptyMsg) emptyMsg.remove();
-
-      const groups = new Map();
-      allCats.forEach(cat => {
-        const root = resolveCategoryGroup(cat);
-        if (!groups.has(root)) groups.set(root, []);
-        groups.get(root).push(cat);
-      });
-
-      if (!window._tpModalExpandedGroups) window._tpModalExpandedGroups = new Set();
-
-      const existingGroupWrappers = new Map();
-      catPillsContainer.querySelectorAll('.tp-group-wrapper').forEach(wrapper => {
-        if (wrapper.dataset.rootGroup) {
-          existingGroupWrappers.set(wrapper.dataset.rootGroup, wrapper);
-        }
-      });
-
-      groups.forEach((subcats, rootGroup) => {
-        const isGroupExplicitlyBlocked = currentExcludedCats.includes(`GROUP:${rootGroup}`);
-        const allSubcatsExcluded = subcats.every(sc => currentExcludedCats.includes(sc) || isGroupExplicitlyBlocked);
-        const someSubcatsExcluded = subcats.some(sc => currentExcludedCats.includes(sc) || isGroupExplicitlyBlocked);
-
-        let groupWrapper = existingGroupWrappers.get(rootGroup);
-        let groupPill, titleSpan, chevronBtn;
-
-        if (!groupWrapper) {
-          groupWrapper = document.createElement('div');
-          groupWrapper.className = 'tp-group-wrapper';
-          groupWrapper.dataset.rootGroup = rootGroup;
-
-          groupPill = document.createElement('div');
-          groupPill.className = 'tp-group-pill';
-
-          titleSpan = document.createElement('span');
-          titleSpan.className = 'tp-group-title';
-
-          chevronBtn = document.createElement('span');
-          chevronBtn.className = 'tp-group-chevron';
-
-          groupPill.appendChild(titleSpan);
-          groupPill.appendChild(chevronBtn);
-          groupWrapper.appendChild(groupPill);
-          catPillsContainer.appendChild(groupWrapper);
-        } else {
-          existingGroupWrappers.delete(rootGroup);
-          groupPill = groupWrapper.querySelector('.tp-group-pill');
-          titleSpan = groupWrapper.querySelector('.tp-group-title');
-          chevronBtn = groupWrapper.querySelector('.tp-group-chevron');
-        }
-
-        let stateClass = '';
-        if (isGroupExplicitlyBlocked) {
-          stateClass = 'tp-excluded-all';
-        } else if (allSubcatsExcluded) {
-          stateClass = 'tp-excluded-individual';
-        } else if (someSubcatsExcluded) {
-          stateClass = 'tp-partial';
-        }
-
-        const newPillClass = `tp-group-pill ${stateClass}`.trim();
-        if (groupPill.className !== newPillClass) groupPill.className = newPillClass;
-
-        const newTitleText = `${getGroupEmoji(rootGroup)} ${rootGroup} (${subcats.length})`;
-        if (titleSpan.textContent !== newTitleText) titleSpan.textContent = newTitleText;
-
-        titleSpan.title = `Klick: Gesamte Gruppe "${rootGroup}" ausblenden/einblenden | ▼: Unterkategorien`;
-        titleSpan.onclick = (e) => {
-          e.stopPropagation();
-          const groupKey = `GROUP:${rootGroup}`;
-          if (currentExcludedCats.includes(groupKey)) {
-            currentExcludedCats = currentExcludedCats.filter(c => c !== groupKey);
-          } else {
-            currentExcludedCats = Array.from(new Set([...currentExcludedCats, groupKey]));
-          }
-          renderCategoryPills();
-        };
-
-        const newChevronText = '▼';
-        if (chevronBtn.textContent !== newChevronText) chevronBtn.textContent = newChevronText;
-        chevronBtn.title = `Unterkategorien von "${rootGroup}" anzeigen & verwalten`;
-        chevronBtn.onclick = (e) => {
-          e.stopPropagation();
-          const dialogEl = shadow.getElementById('tp-settings-dialog');
-          toggleGroupPopover(
-            groupPill,
-            rootGroup,
-            subcats,
-            () => currentExcludedCats,
-            (updated) => {
-              currentExcludedCats = updated;
-              renderCategoryPills();
-            },
-            dialogEl || shadow
-          );
-        };
-      });
-
-      existingGroupWrappers.forEach(obsoleteWrapper => obsoleteWrapper.remove());
-    }
-
-    shadow.addEventListener('click', (e) => {
-      if (activePopover && !activePopover.contains(e.target) && !e.target.closest('.tp-group-pill')) {
-        closeActivePopover();
-      }
-    });
 
     function syncFieldsFromConfig() {
       const mode = CONFIG.MODE;
@@ -3802,9 +2126,6 @@ const SHADOW_MODAL_STYLES = `
 
       negTermsInput.value = CONFIG.NEGATIVE_TERMS || '';
 
-      currentExcludedCats = [...(CONFIG.EXCLUDED_CATEGORIES || [])];
-      renderCategoryPills();
-
       minOffersRange.value = CONFIG.MIN_OFFERS || 0;
       minOffersVal.value = CONFIG.MIN_OFFERS || 0;
 
@@ -3813,8 +2134,6 @@ const SHADOW_MODAL_STYLES = `
       else if (sort === 'asc') sortAsc.checked = true;
       else if (sort === 'discount-desc') sortDiscount.checked = true;
       else sortNone.checked = true;
-
-      counterToggle.checked = CONFIG.ENABLE_FILTER_COUNTER !== false;
 
       alarmEnabledToggle.checked = CONFIG.ALARM_ENABLED !== false;
       const targetPct = Math.round(CONFIG.ALARM_TARGET_PERCENT * 100);
@@ -3833,17 +2152,6 @@ const SHADOW_MODAL_STYLES = `
       const heatIntensityPct = Math.round((CONFIG.HEATMAP_INTENSITY ?? 1.0) * 100);
       heatmapIntensityRange.value = heatIntensityPct;
       heatmapIntensityVal.value = heatIntensityPct;
-
-      updateOpacityState(mode);
-    }
-
-    function updateOpacityState(selectedMode) {
-      const opacityGroup = shadow.getElementById('tp-dim-opacity-group');
-      if (opacityGroup) {
-        opacityGroup.style.opacity = '1';
-        opacityRange.disabled = false;
-        opacityVal.disabled = false;
-      }
     }
 
     // Range Bindings
@@ -3870,13 +2178,6 @@ const SHADOW_MODAL_STYLES = `
     heatmapIntensityRange.addEventListener('input', (e) => heatmapIntensityVal.value = e.target.value);
     heatmapIntensityVal.addEventListener('input', (e) => heatmapIntensityRange.value = parseInt(e.target.value) || 100);
 
-    [modeHighlight, modeDim, modeHide].forEach(radio => {
-      radio.addEventListener('change', () => {
-        const selectedMode = shadow.querySelector('input[name="tp-mode"]:checked').value;
-        updateOpacityState(selectedMode);
-      });
-    });
-
     document.addEventListener('tp-settings-open', () => {
       syncFieldsFromConfig();
     });
@@ -3891,13 +2192,10 @@ const SHADOW_MODAL_STYLES = `
       saveConfigKey('USE_SHIPPING_PRICE', shippingToggle.checked);
 
       saveConfigKey('NEGATIVE_TERMS', negTermsInput.value.trim());
-      saveConfigKey('EXCLUDED_CATEGORIES', currentExcludedCats);
       saveConfigKey('MIN_OFFERS', Math.max(0, parseInt(minOffersVal.value) || 0));
 
       const checkedSort = shadow.querySelector('input[name="tp-sort-offers"]:checked');
       if (checkedSort) saveConfigKey('SORT_BY_OFFERS', checkedSort.value);
-
-      saveConfigKey('ENABLE_FILTER_COUNTER', counterToggle.checked);
 
       saveConfigKey('ALARM_ENABLED', alarmEnabledToggle.checked);
       saveConfigKey('ALARM_TARGET_PERCENT', Math.max(0.05, Math.min(0.99, (parseInt(alarmTargetVal.value) || 60) / 100)));
@@ -3918,7 +2216,6 @@ const SHADOW_MODAL_STYLES = `
 
   // ─── OBSERVER & INITIALIZATION ───────────────────────────────────────────────
   let debounceTimer = null;
-  let isModifyingDOM = false;
 
   const observer = new MutationObserver((mutations) => {
     if (isModifyingDOM) return;
