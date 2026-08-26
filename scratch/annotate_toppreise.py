@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Annotate Toppreise screenshot focusing strictly on features visible on neue-toppreise:
-1. Power Filter Toolbar (Negative keyword filtering, Min offers, Counters)
-2. Rabatt-Heatmap (Dynamic thermal deal shading)
-3. 1-Click Category Quick-Block & Smart Taxonomy Tooltip
+Annotate Toppreise screenshot (wide 1024x954) focusing strictly on visible features:
+1. Unified Power Filter Bar
+2. Dynamic Deal Discount Heatmap
+3. 1-Click Category Quick-Block & Smart Taxonomy
 """
 
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
@@ -46,28 +46,28 @@ def draw_vector_icon(draw, icon_type, x, y, size, color):
 
 def create_annotated_screenshot(src_path, output_png, output_webp):
     orig = Image.open(src_path).convert("RGBA")
-    orig_w, orig_h = orig.size  # 746 x 1024
+    orig_w, orig_h = orig.size  # 1024 x 954
 
     # Canvas dimensions
-    canvas_w = 1260
-    canvas_h = 1080
+    canvas_w = 1560
+    canvas_h = 1060
     
     # Base dark background
     canvas = Image.new("RGBA", (canvas_w, canvas_h), (10, 14, 23, 255))
     
-    # Subtle ambient glows
+    # Ambient glows
     glow_overlay = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
     glow_draw = ImageDraw.Draw(glow_overlay)
     
-    for r in range(450, 0, -15):
-        alpha = int(22 * (1 - r / 450))
-        glow_draw.ellipse([920 - r, 200 - r, 920 + r, 200 + r], fill=(6, 182, 212, alpha))
-    for r in range(450, 0, -15):
-        alpha = int(24 * (1 - r / 450))
-        glow_draw.ellipse([950 - r, 510 - r, 950 + r, 510 + r], fill=(245, 158, 11, alpha))
-    for r in range(450, 0, -15):
-        alpha = int(24 * (1 - r / 450))
-        glow_draw.ellipse([920 - r, 820 - r, 920 + r, 820 + r], fill=(244, 63, 94, alpha))
+    for r in range(480, 0, -15):
+        alpha = int(22 * (1 - r / 480))
+        glow_draw.ellipse([1200 - r, 200 - r, 1200 + r, 200 + r], fill=(6, 182, 212, alpha))
+    for r in range(480, 0, -15):
+        alpha = int(24 * (1 - r / 480))
+        glow_draw.ellipse([1220 - r, 510 - r, 1220 + r, 510 + r], fill=(245, 158, 11, alpha))
+    for r in range(480, 0, -15):
+        alpha = int(24 * (1 - r / 480))
+        glow_draw.ellipse([1200 - r, 820 - r, 1200 + r, 820 + r], fill=(244, 63, 94, alpha))
 
     canvas = Image.alpha_composite(canvas, glow_overlay)
     draw = ImageDraw.Draw(canvas)
@@ -176,9 +176,9 @@ def create_annotated_screenshot(src_path, output_png, output_webp):
 
         canvas.paste(card_img, (x, y), card_img)
 
-    # 1. Unified Filter Toolbar (Target: Negativ-Filter input & toolbar controls at sc_x + 645, sc_y + 220)
+    # 1. Unified Filter Toolbar (Target: Reset & Toolbar controls at sc_x + 648, sc_y + 318)
     draw_callout_box(
-        x=830, y=90, w=390, h=235,
+        x=1110, y=80, w=410, h=240,
         icon_name="bolt",
         tag="POWER TOOLBAR",
         tag_color=(6, 182, 212, 255),
@@ -190,13 +190,13 @@ def create_annotated_screenshot(src_path, output_png, output_webp):
             "Heatmap Toggle: 1-Click dynamic thermal coloring",
             "Reset: Restore default feed view instantly"
         ],
-        pointer_target=(sc_x + 645, sc_y + 220),
+        pointer_target=(sc_x + 648, sc_y + 318),
         line_color=(6, 182, 212, 255)
     )
 
-    # 2. Rabatt-Heatmap (Target: -39% glowing amber background at sc_x + 295, sc_y + 490)
+    # 2. Rabatt-Heatmap (Target: -39% discount badge & glowing amber background at sc_x + 330, sc_y + 560)
     draw_callout_box(
-        x=830, y=390, w=390, h=235,
+        x=1110, y=380, w=410, h=240,
         icon_name="flame",
         tag="THERMAL SHADING",
         tag_color=(245, 158, 11, 255),
@@ -208,13 +208,13 @@ def create_annotated_screenshot(src_path, output_png, output_webp):
             "  - 35%: Warm Amber (Strong discounts)",
             "  - 70%+: Volcanic Ruby Red (Massive savings)"
         ],
-        pointer_target=(sc_x + 295, sc_y + 490),
+        pointer_target=(sc_x + 330, sc_y + 560),
         line_color=(245, 158, 11, 255)
     )
 
-    # 3. 1-Click Inline Category Quick-Block & Tooltip (Target: Pink 'Eau De Parfum' pill button at sc_x + 110, sc_y + 578)
+    # 3. 1-Click Inline Category Quick-Block & Tooltip (Target: Pink 'Eau De Parfum' pill button at sc_x + 95, sc_y + 655)
     draw_callout_box(
-        x=830, y=690, w=390, h=245,
+        x=1110, y=680, w=410, h=250,
         icon_name="ban",
         tag="CATEGORY BLOCKING",
         tag_color=(244, 63, 94, 255),
@@ -226,17 +226,17 @@ def create_annotated_screenshot(src_path, output_png, output_webp):
             "Hover preview tooltip confirms root category",
             "Non-blocking glassmorphic Toast Undo notification"
         ],
-        pointer_target=(sc_x + 110, sc_y + 578),
+        pointer_target=(sc_x + 95, sc_y + 655),
         line_color=(244, 63, 94, 255)
     )
 
     # Save output
     canvas.save(output_png, "PNG", optimize=True)
     canvas.save(output_webp, "WEBP", quality=92, method=6)
-    print(f"Successfully regenerated focused screenshot infographic:\n- {output_png}\n- {output_webp}")
+    print(f"Successfully generated wide screenshot infographic:\n- {output_png}\n- {output_webp}")
 
 if __name__ == "__main__":
-    src = "/home/tazztone/.gemini/antigravity-ide/brain/d8407f79-485a-4ba0-bf03-ae441b553729/.user_uploaded/media_1787738061497.png"
+    src = "/home/tazztone/.gemini/antigravity-ide/brain/d8407f79-485a-4ba0-bf03-ae441b553729/.user_uploaded/media_1787743263048.png"
     out_png = "/home/tazztone/_coding/scripts/userscripts/toppreise/Screenshot.png"
     out_webp = "/home/tazztone/_coding/scripts/userscripts/toppreise/Screenshot.webp"
     create_annotated_screenshot(src, out_png, out_webp)
