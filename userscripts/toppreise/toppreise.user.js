@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.11.6
+// @version      2.11.8
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -36,13 +36,30 @@ const DEFAULTS = {
 
 // ─── STYLES ──────────────────────────────────────────────────────────────────
 const STYLES = `
+  /* ─── HEATMAP CARD STYLES & DARKREADER DYNAMIC COMPATIBILITY ─── */
   .tp-heatmap-active,
   .Plugin_Product.tp-heatmap-active,
-  .mixedBrowsingListProduct.tp-heatmap-active {
+  .mixedBrowsingListProduct.tp-heatmap-active,
+  .tp-heatmap-active[data-darkreader-inline-bgcolor],
+  .Plugin_Product.tp-heatmap-active[data-darkreader-inline-bgcolor],
+  .mixedBrowsingListProduct.tp-heatmap-active[data-darkreader-inline-bgcolor],
+  .tp-heatmap-active[data-darkreader-inline-bgimage],
+  .Plugin_Product.tp-heatmap-active[data-darkreader-inline-bgimage],
+  .mixedBrowsingListProduct.tp-heatmap-active[data-darkreader-inline-bgimage] {
     background: var(--tp-heat-bg) !important;
+    background-color: transparent !important;
+    background-image: var(--tp-heat-bg) !important;
     border: 1.5px solid var(--tp-heat-border) !important;
+    border-color: var(--tp-heat-border) !important;
     box-shadow: var(--tp-heat-glow, 0 2px 8px rgba(0,0,0,0.25)) !important;
     transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, transform 0.2s ease, filter 0.2s ease !important;
+    --darkreader-inline-bgcolor: transparent !important;
+    --darkreader-inline-bgimage: var(--tp-heat-bg) !important;
+    --darkreader-inline-border: var(--tp-heat-border) !important;
+    --darkreader-inline-border-top: var(--tp-heat-border) !important;
+    --darkreader-inline-border-right: var(--tp-heat-border) !important;
+    --darkreader-inline-border-bottom: var(--tp-heat-border) !important;
+    --darkreader-inline-border-left: var(--tp-heat-border) !important;
   }
   .tp-heatmap-active:hover,
   .Plugin_Product.tp-heatmap-active:hover,
@@ -56,18 +73,50 @@ const STYLES = `
     box-shadow: 0 2px 8px rgba(0,0,0,0.4), 0 0 10px var(--tp-heat-border) !important;
   }
   .tp-heatmap-active .product-name,
+  .tp-heatmap-active .product-name[data-darkreader-inline-bgcolor],
   .tp-heatmap-active .productDetails,
+  .tp-heatmap-active .productDetails[data-darkreader-inline-bgcolor],
   .tp-heatmap-active .price_information_product,
+  .tp-heatmap-active .price_information_product[data-darkreader-inline-bgcolor],
   .tp-heatmap-active .Plugin_PriceInformation,
-  .tp-heatmap-active .f_product_info {
+  .tp-heatmap-active .Plugin_PriceInformation[data-darkreader-inline-bgcolor],
+  .tp-heatmap-active .f_product_info,
+  .tp-heatmap-active .f_product_info[data-darkreader-inline-bgcolor],
+  .tp-heatmap-active .productDescription,
+  .tp-heatmap-active .productDescription[data-darkreader-inline-bgcolor],
+  .tp-heatmap-active .productDetailsDescription,
+  .tp-heatmap-active .productDetailsDescription[data-darkreader-inline-bgcolor],
+  .tp-heatmap-active .product-details,
+  .tp-heatmap-active .product-details[data-darkreader-inline-bgcolor],
+  .tp-heatmap-active .f_product_container,
+  .tp-heatmap-active .f_product_container[data-darkreader-inline-bgcolor],
+  .tp-heatmap-active .product-image,
+  .tp-heatmap-active .product-image[data-darkreader-inline-bgcolor],
+  .tp-heatmap-active .productImage,
+  .tp-heatmap-active .productImage[data-darkreader-inline-bgcolor],
+  .tp-heatmap-active .image_container,
+  .tp-heatmap-active .image_container[data-darkreader-inline-bgcolor] {
     background: transparent !important;
+    background-color: transparent !important;
+    --darkreader-inline-bgcolor: transparent !important;
+    --darkreader-inline-bgimage: none !important;
   }
-  .Plugin_Product.mixedBrowsingList.tp-is-cheapest {
+  .Plugin_Product.mixedBrowsingList.tp-is-cheapest,
+  .Plugin_Product.mixedBrowsingList.tp-is-cheapest[data-darkreader-inline-border-top],
+  .Plugin_Product.mixedBrowsingList.tp-is-cheapest[data-darkreader-inline-border-right],
+  .Plugin_Product.mixedBrowsingList.tp-is-cheapest[data-darkreader-inline-border-bottom],
+  .Plugin_Product.mixedBrowsingList.tp-is-cheapest[data-darkreader-inline-border-left] {
     border: 2px solid #10b981 !important;
+    border-color: #10b981 !important;
     border-radius: 8px !important;
     position: relative !important;
     box-shadow: 0 4px 20px rgba(16,185,129,0.15) !important;
     transition: all 0.3s ease !important;
+    --darkreader-inline-border: #10b981 !important;
+    --darkreader-inline-border-top: #10b981 !important;
+    --darkreader-inline-border-right: #10b981 !important;
+    --darkreader-inline-border-bottom: #10b981 !important;
+    --darkreader-inline-border-left: #10b981 !important;
   }
   .Plugin_Product.mixedBrowsingList.tp-is-cheapest.tp-heatmap-active {
     box-shadow: 0 4px 20px rgba(16,185,129,0.25), var(--tp-heat-glow, none) !important;
@@ -1040,12 +1089,54 @@ const SHADOW_MODAL_STYLES = `
           card.style.setProperty('--tp-heat-bg', heatStyles.bg);
           card.style.setProperty('--tp-heat-border', heatStyles.border);
           card.style.setProperty('--tp-heat-glow', heatStyles.glow);
+
+          // DarkReader Dynamic Theme compatibility:
+          // In Dynamic mode, DarkReader stamps data-darkreader-inline-bgcolor/bgimage on initial page load,
+          // replacing custom gradients with solid dark grays. We set darkreader variables and direct inline
+          // important styles to prevent clobbering before or between user filter clicks.
+          card.style.setProperty('--darkreader-inline-bgimage', heatStyles.bg);
+          card.style.setProperty('--darkreader-inline-bgcolor', 'transparent');
+          card.style.setProperty('--darkreader-inline-border', heatStyles.border);
+          card.style.setProperty('--darkreader-inline-border-top', heatStyles.border);
+          card.style.setProperty('--darkreader-inline-border-right', heatStyles.border);
+          card.style.setProperty('--darkreader-inline-border-bottom', heatStyles.border);
+          card.style.setProperty('--darkreader-inline-border-left', heatStyles.border);
+          card.style.setProperty('background', heatStyles.bg, 'important');
+          card.style.setProperty('background-image', heatStyles.bg, 'important');
+          card.style.setProperty('background-color', 'transparent', 'important');
+          card.style.setProperty('border-color', heatStyles.border, 'important');
+
+          card.removeAttribute('data-darkreader-inline-bgcolor');
+          card.removeAttribute('data-darkreader-inline-bgimage');
+
+          const subElements = card.querySelectorAll('.product-name, .productDetails, .price_information_product, .Plugin_PriceInformation, .f_product_info, .productDescription, .productDetailsDescription');
+          for (let s = 0; s < subElements.length; s++) {
+            const sub = subElements[s];
+            sub.removeAttribute('data-darkreader-inline-bgcolor');
+            sub.removeAttribute('data-darkreader-inline-bgimage');
+            sub.style.setProperty('background-color', 'transparent', 'important');
+            sub.style.setProperty('background', 'transparent', 'important');
+            sub.style.setProperty('--darkreader-inline-bgcolor', 'transparent');
+            sub.style.setProperty('--darkreader-inline-bgimage', 'none');
+          }
+
           card.classList.add('tp-heatmap-active');
         } else {
           card.classList.remove('tp-heatmap-active');
           card.style.removeProperty('--tp-heat-bg');
           card.style.removeProperty('--tp-heat-border');
           card.style.removeProperty('--tp-heat-glow');
+          card.style.removeProperty('--darkreader-inline-bgimage');
+          card.style.removeProperty('--darkreader-inline-bgcolor');
+          card.style.removeProperty('--darkreader-inline-border');
+          card.style.removeProperty('--darkreader-inline-border-top');
+          card.style.removeProperty('--darkreader-inline-border-right');
+          card.style.removeProperty('--darkreader-inline-border-bottom');
+          card.style.removeProperty('--darkreader-inline-border-left');
+          card.style.removeProperty('background');
+          card.style.removeProperty('background-image');
+          card.style.removeProperty('background-color');
+          card.style.removeProperty('border-color');
         }
 
         // 1. Category extraction & Quick-block
