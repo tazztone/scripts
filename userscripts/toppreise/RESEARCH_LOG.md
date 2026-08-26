@@ -30,7 +30,7 @@ This document details the DOM selectors, event management, and filter logic for 
 ## 2. UI Encapsulation & Shadow DOM Architecture
 
 - **Root Container**: `<div id="tp-root">` attached to `document.body` with an open Shadow Root.
-- **Top Layer Dialog**: `<dialog id="tp-settings-dialog" popover="auto">` renders inside the Top Layer, bypassing host site stacking contexts and `z-index` collisions.
+- **Top Layer Dialog**: `<dialog id="tp-settings-dialog">` renders inside the Top Layer via `showModal()`, bypassing host site stacking contexts and `z-index` collisions.
 - **Dual-Layer Style Separation**:
   - Host document styles (`.Plugin_Product.mixedBrowsingList.tp-is-cheapest`, `.tp-negative-filtered`, `#tp-suite-filter-bar`, `#tp-quick-toolbar`) live in a host `<style>` tag.
   - Settings dialog and FAB styles live strictly inside the `#tp-root` Shadow Root (`SHADOW_MODAL_STYLES`).
