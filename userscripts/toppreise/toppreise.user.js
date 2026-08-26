@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.11.5
+// @version      2.11.6
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -268,12 +268,17 @@ const STYLES = `
   .tp-blocked-cats-row {
     border-top: 1px solid rgba(255,255,255,0.08) !important;
     padding-top: 6px !important;
-    display: flex !important;
     align-items: center !important;
     gap: 6px !important;
     flex-wrap: wrap !important;
     max-height: 140px !important;
     overflow-y: auto !important;
+  }
+  .tp-blocked-cats-row.tp-collapsed {
+    display: none !important;
+  }
+  .tp-blocked-cats-row.tp-expanded {
+    display: flex !important;
   }
   .tp-blocked-cats-label {
     font-size: 11px !important;
@@ -965,11 +970,10 @@ const SHADOW_MODAL_STYLES = `
     const blockedContainer = bar.querySelector('#tp-blocked-cats-container');
     const chipsList = bar.querySelector('#tp-blocked-chips-list');
     if (blockedContainer && chipsList) {
-      if (excluded.length === 0 || !isBlockedCatsOpen) {
-        blockedContainer.style.display = 'none';
-      } else {
-        blockedContainer.style.display = 'flex';
-      }
+      const showDrawer = excluded.length > 0 && isBlockedCatsOpen;
+      blockedContainer.classList.toggle('tp-expanded', showDrawer);
+      blockedContainer.classList.toggle('tp-collapsed', !showDrawer);
+      blockedContainer.style.setProperty('display', showDrawer ? 'flex' : 'none', 'important');
 
       if (excluded.length > 0) {
         chipsList.innerHTML = '';

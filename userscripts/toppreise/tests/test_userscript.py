@@ -284,3 +284,29 @@ def test_sort_by_discount(page: Page):
     second_id = cards.nth(1).get_attribute('id')
     assert first_id == 'card-cheapest'  # 67%
     assert second_id == 'card-cat-excluded'  # 50%
+
+
+def test_blocked_categories_collapse_and_expand(page: Page):
+    # Quick block cheapest card to add category
+    page.wait_for_selector('#card-cheapest .tp-card-quick-block')
+    page.click('#card-cheapest .tp-card-quick-block')
+
+    # Drawer should be visible (auto-expanded on block action)
+    drawer = page.locator('#tp-blocked-cats-container')
+    page.wait_for_selector('#tp-blocked-cats-container', state='visible')
+    assert drawer.is_visible()
+
+    # Click toggle button in top bar to collapse
+    toggle_btn = page.locator('#tp-bar-cats-toggle')
+    assert toggle_btn.is_visible()
+    toggle_btn.click()
+
+    # Drawer should now be hidden
+    page.wait_for_selector('#tp-blocked-cats-container', state='hidden')
+    assert not drawer.is_visible()
+
+    # Click toggle button again to expand
+    toggle_btn.click()
+    page.wait_for_selector('#tp-blocked-cats-container', state='visible')
+    assert drawer.is_visible()
+
