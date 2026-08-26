@@ -2,6 +2,8 @@
 
 All-in-one userscript for Toppreise.ch that highlights best price offers, excludes unwanted negative keywords, provides 1-click inline category blocking with overview chips, sorts/filters by offer count, renders dynamic deal discount heatmaps, and automates price alarm creation.
 
+![Toppreise.ch Suite: Features Walkthrough on neue-toppreise](Screenshot.webp)
+
 ## 🚀 Installation
 
 Requires Violentmonkey (or a compatible userscript manager):
