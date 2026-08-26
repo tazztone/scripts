@@ -79,14 +79,17 @@ Each subdirectory contains its own documentation:
 
 ### Running Tests
 
-Run the test suite from the repository root:
+Run the test suite from the repository root using the workspace virtualenv:
 
 ```bash
-# Run all Python tests
-python3 python/run_tests.py
+# Run all tests (Python & Userscripts)
+userscripts/venv/bin/pytest
 
-# Or run pytest directly
-pytest
+# Run only Python tests
+userscripts/venv/bin/pytest python
+
+# Run only Userscript browser tests
+userscripts/venv/bin/pytest userscripts
 ```
 
 ## License
