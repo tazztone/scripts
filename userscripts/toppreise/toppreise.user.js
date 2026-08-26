@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.11.4
+// @version      2.11.5
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -36,19 +36,31 @@ const DEFAULTS = {
 
 // ─── STYLES ──────────────────────────────────────────────────────────────────
 const STYLES = `
-  .Plugin_Product.tp-heatmap-active {
+  .tp-heatmap-active,
+  .Plugin_Product.tp-heatmap-active,
+  .mixedBrowsingListProduct.tp-heatmap-active {
     background: var(--tp-heat-bg) !important;
     border: 1.5px solid var(--tp-heat-border) !important;
     box-shadow: var(--tp-heat-glow, 0 2px 8px rgba(0,0,0,0.25)) !important;
     transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, transform 0.2s ease, filter 0.2s ease !important;
   }
-  .Plugin_Product.tp-heatmap-active:hover {
+  .tp-heatmap-active:hover,
+  .Plugin_Product.tp-heatmap-active:hover,
+  .mixedBrowsingListProduct.tp-heatmap-active:hover {
     filter: brightness(1.15) !important;
     transform: translateY(-2px) !important;
     box-shadow: 0 6px 20px rgba(0,0,0,0.35), var(--tp-heat-glow, none) !important;
   }
+  .tp-heatmap-active .badge.badge-dif,
   .Plugin_Product.tp-heatmap-active .badge.badge-dif {
     box-shadow: 0 2px 8px rgba(0,0,0,0.4), 0 0 10px var(--tp-heat-border) !important;
+  }
+  .tp-heatmap-active .product-name,
+  .tp-heatmap-active .productDetails,
+  .tp-heatmap-active .price_information_product,
+  .tp-heatmap-active .Plugin_PriceInformation,
+  .tp-heatmap-active .f_product_info {
+    background: transparent !important;
   }
   .Plugin_Product.mixedBrowsingList.tp-is-cheapest {
     border: 2px solid #10b981 !important;
@@ -260,6 +272,8 @@ const STYLES = `
     align-items: center !important;
     gap: 6px !important;
     flex-wrap: wrap !important;
+    max-height: 140px !important;
+    overflow-y: auto !important;
   }
   .tp-blocked-cats-label {
     font-size: 11px !important;
@@ -538,6 +552,8 @@ const SHADOW_MODAL_STYLES = `
     document.head.appendChild(styleEl);
   }
 
+  let isBlockedCatsOpen = false;
+
   function updateBodyClasses() {
     document.body.classList.remove('tp-mode-dim', 'tp-mode-hide', 'tp-mode-highlight-only');
     document.body.classList.add(`tp-mode-${CONFIG.MODE}`);
@@ -623,8 +639,11 @@ const SHADOW_MODAL_STYLES = `
   const parsePrice = str => str ? parseFloat(str.replace(/[.–\-]\s*$/g, '.00').replace(/[^\d,.]/g, '').replace("'", '').replace(',', '.')) || 0 : 0;
 
   function getProductCards() {
-    const standardCards = Array.from(document.querySelectorAll('.Plugin_Product, .mixedBrowsingListProduct'));
-    if (standardCards.length > 0) return standardCards.filter(c => !c.parentElement.closest('.Plugin_Product'));
+    const standardCards = Array.from(document.querySelectorAll('a.Plugin_Product, .Plugin_Product.medium-box, .Plugin_Product.mixedBrowsingList, .mixedBrowsingListProduct, .Plugin_Product'));
+    if (standardCards.length > 0) {
+      const leafCards = standardCards.filter(c => !c.querySelector('.Plugin_Product, .mixedBrowsingListProduct'));
+      if (leafCards.length > 0) return leafCards;
+    }
 
     const gridCards = new Set();
     document.querySelectorAll('a[href*="/preisvergleich/"]').forEach(link => {
@@ -819,6 +838,9 @@ const SHADOW_MODAL_STYLES = `
             👁️ <span id="tp-bar-reveal-count">${totalHidden}</span>
           </button>
           <button class="tp-bar-btn ${CONFIG.HEATMAP_ENABLED ? 'tp-active' : ''}" id="tp-bar-heat-btn" title="Rabatt-Heatmap ein-/ausschalten">🔥 Heatmap</button>
+          <button class="tp-bar-btn ${isBlockedCatsOpen ? 'tp-active' : ''}" id="tp-bar-cats-toggle" style="display: ${excluded.length > 0 ? 'flex' : 'none'};" title="Ausgeblendete Kategorien anzeigen/verbergen">
+            🚫 <span id="tp-bar-cats-count">${excluded.length}</span> ${isBlockedCatsOpen ? '▴' : '▾'}
+          </button>
           <div class="tp-bar-stepper-group" id="tp-bar-min-offers-group" style="display: ${pageHasOffers ? 'flex' : 'none'};">
             <span>Min:</span>
             <button class="tp-stepper-btn" id="tp-bar-min-minus">-</button>
@@ -827,7 +849,7 @@ const SHADOW_MODAL_STYLES = `
           </div>
           <button class="tp-filter-bar-reset" id="tp-bar-reset-btn">🔄 Reset</button>
         </div>
-        <div id="tp-blocked-cats-container" class="tp-blocked-cats-row" style="display: ${excluded.length > 0 ? 'flex' : 'none'};">
+        <div id="tp-blocked-cats-container" class="tp-blocked-cats-row" style="display: ${excluded.length > 0 && isBlockedCatsOpen ? 'flex' : 'none'};">
           <span class="tp-blocked-cats-label">🚫 Ausgeblendet (${excluded.length}):</span>
           <div id="tp-blocked-chips-list" style="display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center;"></div>
           <button class="tp-blocked-clear-all" id="tp-blocked-clear-all-btn">Alle freigeben</button>
@@ -879,6 +901,11 @@ const SHADOW_MODAL_STYLES = `
         processListings();
       };
 
+      bar.querySelector('#tp-bar-cats-toggle').onclick = () => {
+        isBlockedCatsOpen = !isBlockedCatsOpen;
+        processListings();
+      };
+
       const updateMinOffers = delta => {
         const next = Math.max(0, CONFIG.MIN_OFFERS + delta);
         if (next !== CONFIG.MIN_OFFERS) {
@@ -922,6 +949,14 @@ const SHADOW_MODAL_STYLES = `
     if (revealCount) revealCount.textContent = totalHidden > 0 ? `${totalHidden}` : '0';
 
     bar.querySelector('#tp-bar-heat-btn')?.classList.toggle('tp-active', CONFIG.HEATMAP_ENABLED !== false);
+
+    const catsToggleBtn = bar.querySelector('#tp-bar-cats-toggle');
+    if (catsToggleBtn) {
+      catsToggleBtn.style.display = excluded.length > 0 ? 'flex' : 'none';
+      catsToggleBtn.classList.toggle('tp-active', isBlockedCatsOpen);
+      catsToggleBtn.innerHTML = `🚫 <span id="tp-bar-cats-count">${excluded.length}</span> ${isBlockedCatsOpen ? '▴' : '▾'}`;
+    }
+
     const minGroup = bar.querySelector('#tp-bar-min-offers-group');
     if (minGroup) minGroup.style.display = pageHasOffers ? 'flex' : 'none';
     const minVal = bar.querySelector('#tp-bar-min-val');
@@ -930,11 +965,13 @@ const SHADOW_MODAL_STYLES = `
     const blockedContainer = bar.querySelector('#tp-blocked-cats-container');
     const chipsList = bar.querySelector('#tp-blocked-chips-list');
     if (blockedContainer && chipsList) {
-      if (excluded.length === 0) {
+      if (excluded.length === 0 || !isBlockedCatsOpen) {
         blockedContainer.style.display = 'none';
-        chipsList.innerHTML = '';
       } else {
         blockedContainer.style.display = 'flex';
+      }
+
+      if (excluded.length > 0) {
         chipsList.innerHTML = '';
         const labelEl = blockedContainer.querySelector('.tp-blocked-cats-label');
         if (labelEl) labelEl.textContent = `🚫 Ausgeblendet (${excluded.length}):`;
@@ -952,6 +989,8 @@ const SHADOW_MODAL_STYLES = `
           };
           chipsList.appendChild(chip);
         });
+      } else {
+        chipsList.innerHTML = '';
       }
     }
   }
@@ -1023,6 +1062,7 @@ const SHADOW_MODAL_STYLES = `
               const curr = CONFIG.EXCLUDED_CATEGORIES || [];
               const key = `PATH:${rootGroup}/${catName}`;
               if (!curr.includes(key) && !curr.includes(catName)) {
+                isBlockedCatsOpen = true;
                 saveConfigKey('EXCLUDED_CATEGORIES', [...curr, key]);
                 processListings();
                 showToast(`Kategorie "${catName}" ausgeblendet`, 4000, 'Rückgängig', () => {
