@@ -100,6 +100,10 @@ This document details the DOM selectors, event management, and filter logic for 
     - *Gotcha*: Anchoring the filter bar inside `.f_filter_plugin` or `.filters` caused Toppreise's native `standard.js` AJAX replacement and jQuery event capture to intercept clicks and wipe the bar on filter changes. Anchoring inside the site header placed it beneath backdrop overlays.
     - *Rule*: Always mount `#tp-suite-filter-bar` as a direct child of `#FrameContent` / `.pageContent` directly preceding the primary product browsing container (`#Page_List...`, `#Page_Browsing`, `.f_browsingListContainer`, `#Plugin_MixedBrowsingList`), and strictly verify `parentElement` is not an unsafe container.
 
+13. **Price Alarm Auto-Submit AJAX Lifecycle & Dialog Teardown**:
+    - *Gotcha*: Synchronously clicking `.AbstractDialog_CloseButton` immediately after `input.f_submitbtn.click()` tears down the modal container (`AbstractDialog_hide()`) while Toppreise's AJAX POST request to `/plugins/infomails/NewInfoMailForm` is still in-flight, causing the request to abort and raising *"Es ist ein unerwarteter Fehler aufgetreten. Bitte versuchen Sie es noch einmal."* Furthermore, submitting in 0ms raced with Toppreise's internal duration dropdown and input validator event binding.
+    - *Rule*: Always stage auto-submit asynchronously with a 300ms pre-submit settle delay and an 800ms post-submit grace period before closing the modal dialog container.
+
 ---
 
 ## 6. Comprehensive Category Taxonomy & Resolution Engine (v2.8.12)

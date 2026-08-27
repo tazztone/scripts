@@ -127,5 +127,24 @@
       <input type="submit" class="f_submitbtn" value="Speichern" />
     </div>
   </div>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const closeBtn = document.querySelector('#mock-alarm-dialog .AbstractDialog_CloseButton');
+      if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+          document.querySelector('#mock-alarm-dialog').style.display = 'none';
+          document.querySelector('#mock-alarm-dialog').dataset.dialogClosed = 'true';
+        });
+      }
+      const submitBtn = document.querySelector('#mock-alarm-dialog input.f_submitbtn');
+      if (submitBtn) {
+        submitBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          document.querySelector('#mock-alarm-dialog').dataset.submitted = 'true';
+          document.querySelector('#mock-alarm-dialog').dataset.submittedAt = Date.now();
+        });
+      }
+    });
+  </script>
 </body>
 </html>

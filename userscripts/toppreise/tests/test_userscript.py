@@ -75,12 +75,21 @@ def test_price_alarm_automation(page: Page):
     page.evaluate("""() => {
       document.querySelector('#mock-alarm-dialog').style.display = 'block';
     }""")
-    page.wait_for_timeout(350)
+    page.wait_for_timeout(250)
 
     price_val = page.locator('#f_NewInfoMailForm_priceFrom').input_value()
     # 60% of CHF 1000.00 = 600.00
     assert price_val == '600.00'
     assert page.locator('#im_nimf_prtrm').is_checked()
+
+    # Pre-submit delay (300ms): after 450ms total, it should have submitted
+    page.wait_for_timeout(250)
+    assert page.locator('#mock-alarm-dialog').get_attribute('data-submitted') == 'true'
+
+    # Grace period before closing (800ms after submit): wait until 1300ms total
+    page.wait_for_timeout(900)
+    assert page.locator('#mock-alarm-dialog').get_attribute('data-dialog-closed') == 'true'
+    assert not page.locator('#mock-alarm-dialog').is_visible()
 
 
 def test_suite_filter_bar_and_category_pill_styles(page: Page):

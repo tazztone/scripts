@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.11.8
+// @version      2.11.10
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -1294,9 +1294,18 @@ const SHADOW_MODAL_STYLES = `
     }
 
     if (CONFIG.ALARM_AUTO_SUBMIT) {
-      modalContainer.querySelector('input.f_submitbtn')?.click();
-      const closeBtn = modalContainer.closest('.AbstractDialog')?.querySelector('.AbstractDialog_CloseButton');
-      if (closeBtn) closeBtn.click();
+      setTimeout(() => {
+        const submitBtn = modalContainer.querySelector('input.f_submitbtn');
+        if (submitBtn) {
+          submitBtn.click();
+          // Allow in-flight AJAX request to complete before closing the dialog container
+          setTimeout(() => {
+            const closeBtn = modalContainer.closest('.AbstractDialog')?.querySelector('.AbstractDialog_CloseButton') ||
+                             document.querySelector('#tmpAbstractDialogContainer .AbstractDialog_CloseButton');
+            if (closeBtn) closeBtn.click();
+          }, 800);
+        }
+      }, 300);
     }
   }
 
