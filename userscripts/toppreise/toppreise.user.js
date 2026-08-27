@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.11.10
+// @version      2.11.11
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -30,6 +30,8 @@ const DEFAULTS = {
   ALARM_TARGET_PERCENT: 0.60,
   ALARM_DURATION_DAYS: "730",
   ALARM_AUTO_SUBMIT: true,
+  ALARM_SUBMIT_DELAY_MS: 300,
+  ALARM_CLOSE_DELAY_MS: 800,
   OBSERVER_DEBOUNCE_MS: 200,
   DEBUG: true
 };
@@ -588,6 +590,8 @@ const SHADOW_MODAL_STYLES = `
     ALARM_TARGET_PERCENT: parseFloat(_getValue('ALARM_TARGET_PERCENT', DEFAULTS.ALARM_TARGET_PERCENT)),
     ALARM_DURATION_DAYS: String(_getValue('ALARM_DURATION_DAYS', DEFAULTS.ALARM_DURATION_DAYS)),
     ALARM_AUTO_SUBMIT: _getValue('ALARM_AUTO_SUBMIT', DEFAULTS.ALARM_AUTO_SUBMIT),
+    ALARM_SUBMIT_DELAY_MS: parseInt(_getValue('ALARM_SUBMIT_DELAY_MS', DEFAULTS.ALARM_SUBMIT_DELAY_MS)),
+    ALARM_CLOSE_DELAY_MS: parseInt(_getValue('ALARM_CLOSE_DELAY_MS', DEFAULTS.ALARM_CLOSE_DELAY_MS)),
     OBSERVER_DEBOUNCE_MS: parseInt(_getValue('OBSERVER_DEBOUNCE_MS', DEFAULTS.OBSERVER_DEBOUNCE_MS)),
     DEBUG: _getValue('DEBUG', DEFAULTS.DEBUG)
   };
@@ -1294,6 +1298,8 @@ const SHADOW_MODAL_STYLES = `
     }
 
     if (CONFIG.ALARM_AUTO_SUBMIT) {
+      const submitDelay = Math.max(0, CONFIG.ALARM_SUBMIT_DELAY_MS ?? 300);
+      const closeDelay = Math.max(0, CONFIG.ALARM_CLOSE_DELAY_MS ?? 800);
       setTimeout(() => {
         const submitBtn = modalContainer.querySelector('input.f_submitbtn');
         if (submitBtn) {
@@ -1303,9 +1309,9 @@ const SHADOW_MODAL_STYLES = `
             const closeBtn = modalContainer.closest('.AbstractDialog')?.querySelector('.AbstractDialog_CloseButton') ||
                              document.querySelector('#tmpAbstractDialogContainer .AbstractDialog_CloseButton');
             if (closeBtn) closeBtn.click();
-          }, 800);
+          }, closeDelay);
         }
-      }, 300);
+      }, submitDelay);
     }
   }
 
@@ -1480,6 +1486,18 @@ const SHADOW_MODAL_STYLES = `
               <span class="tp-slider"></span>
             </label>
           </div>
+          <div class="tp-settings-group" id="tp-alarm-delays-group">
+            <label>Submit-Verzögerung (ms)</label>
+            <div class="tp-range-container tp-blue">
+              <input type="range" id="tp-alarm-submit-delay-range" min="0" max="2000" step="50" value="300">
+              <input type="number" id="tp-alarm-submit-delay-val" min="0" max="5000" step="50" value="300">
+            </div>
+            <label style="margin-top: 8px;">Schließ-Verzögerung nach Submit (ms)</label>
+            <div class="tp-range-container tp-blue">
+              <input type="range" id="tp-alarm-close-delay-range" min="0" max="3000" step="50" value="800">
+              <input type="number" id="tp-alarm-close-delay-val" min="0" max="10000" step="50" value="800">
+            </div>
+          </div>
           <div class="tp-section-header" style="color: #f43f5e;">5. Rabatt-Heatmap</div>
           <div class="tp-settings-group tp-switch-container">
             <div class="tp-switch-label">
@@ -1528,6 +1546,11 @@ const SHADOW_MODAL_STYLES = `
     const alarmTargetRange = shadow.getElementById('tp-alarm-target-range');
     const alarmTargetVal = shadow.getElementById('tp-alarm-target-val');
     const alarmAutoSubmitToggle = shadow.getElementById('tp-alarm-autosubmit-toggle');
+    const alarmSubmitDelayRange = shadow.getElementById('tp-alarm-submit-delay-range');
+    const alarmSubmitDelayVal = shadow.getElementById('tp-alarm-submit-delay-val');
+    const alarmCloseDelayRange = shadow.getElementById('tp-alarm-close-delay-range');
+    const alarmCloseDelayVal = shadow.getElementById('tp-alarm-close-delay-val');
+    const alarmDelaysGroup = shadow.getElementById('tp-alarm-delays-group');
     const heatmapEnabledToggle = shadow.getElementById('tp-heatmap-enabled-toggle');
     const heatmapIntensityRange = shadow.getElementById('tp-heatmap-intensity-range');
     const heatmapIntensityVal = shadow.getElementById('tp-heatmap-intensity-val');
@@ -1567,6 +1590,18 @@ const SHADOW_MODAL_STYLES = `
       else dur730.checked = true;
 
       alarmAutoSubmitToggle.checked = CONFIG.ALARM_AUTO_SUBMIT !== false;
+      if (alarmSubmitDelayRange && alarmSubmitDelayVal) {
+        alarmSubmitDelayRange.value = CONFIG.ALARM_SUBMIT_DELAY_MS ?? 300;
+        alarmSubmitDelayVal.value = CONFIG.ALARM_SUBMIT_DELAY_MS ?? 300;
+      }
+      if (alarmCloseDelayRange && alarmCloseDelayVal) {
+        alarmCloseDelayRange.value = CONFIG.ALARM_CLOSE_DELAY_MS ?? 800;
+        alarmCloseDelayVal.value = CONFIG.ALARM_CLOSE_DELAY_MS ?? 800;
+      }
+      if (alarmDelaysGroup) {
+        alarmDelaysGroup.style.display = alarmAutoSubmitToggle.checked ? 'block' : 'none';
+      }
+
       heatmapEnabledToggle.checked = CONFIG.HEATMAP_ENABLED !== false;
       const heatIntensityPct = Math.round((CONFIG.HEATMAP_INTENSITY ?? 1.0) * 100);
       heatmapIntensityRange.value = heatIntensityPct;
@@ -1574,6 +1609,7 @@ const SHADOW_MODAL_STYLES = `
     }
 
     const bindDual = (rangeEl, numEl, scale = 1, onInput = null) => {
+      if (!rangeEl || !numEl) return;
       rangeEl.addEventListener('input', e => {
         numEl.value = Math.round(parseFloat(e.target.value) * scale);
         onInput?.(parseFloat(e.target.value));
@@ -1589,7 +1625,15 @@ const SHADOW_MODAL_STYLES = `
     bindDual(opacityRange, opacityVal, 100, val => document.documentElement.style.setProperty('--tp-dim-opacity', val));
     bindDual(minOffersRange, minOffersVal, 1);
     bindDual(alarmTargetRange, alarmTargetVal, 1);
+    bindDual(alarmSubmitDelayRange, alarmSubmitDelayVal, 1);
+    bindDual(alarmCloseDelayRange, alarmCloseDelayVal, 1);
     bindDual(heatmapIntensityRange, heatmapIntensityVal, 1);
+
+    alarmAutoSubmitToggle?.addEventListener('change', () => {
+      if (alarmDelaysGroup) {
+        alarmDelaysGroup.style.display = alarmAutoSubmitToggle.checked ? 'block' : 'none';
+      }
+    });
 
     const openModal = () => {
       syncFieldsFromConfig();
@@ -1627,6 +1671,12 @@ const SHADOW_MODAL_STYLES = `
       if (checkedDur) saveConfigKey('ALARM_DURATION_DAYS', checkedDur.value);
 
       saveConfigKey('ALARM_AUTO_SUBMIT', alarmAutoSubmitToggle.checked);
+      if (alarmSubmitDelayVal) {
+        saveConfigKey('ALARM_SUBMIT_DELAY_MS', Math.max(0, parseInt(alarmSubmitDelayVal.value) ?? 300));
+      }
+      if (alarmCloseDelayVal) {
+        saveConfigKey('ALARM_CLOSE_DELAY_MS', Math.max(0, parseInt(alarmCloseDelayVal.value) ?? 800));
+      }
       saveConfigKey('HEATMAP_ENABLED', heatmapEnabledToggle.checked);
       saveConfigKey('HEATMAP_INTENSITY', Math.max(0.2, Math.min(1.0, (parseInt(heatmapIntensityVal.value) || 100) / 100)));
 
