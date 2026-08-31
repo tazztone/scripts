@@ -27,14 +27,24 @@ fi
 log "2. Creating wrapper scripts for Profile 2..."
 
 # Profile 2 directories and token symlink
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/.env" ]; then
+  # shellcheck disable=SC1090
+  source "$SCRIPT_DIR/.env"
+fi
+
+GOOGLE_OAUTH_CLIENT_ID="${GOOGLE_OAUTH_CLIENT_ID:-}"
+GOOGLE_OAUTH_CLIENT_SECRET="${GOOGLE_OAUTH_CLIENT_SECRET:-}"
+PROFILE2_EMAIL="${PROFILE2_EMAIL:-}"
+
 ACCOUNT2_GEMINI="$REAL_HOME/.antigravity-cli-account2/.gemini"
 mkdir -p "$ACCOUNT2_GEMINI/antigravity" "$ACCOUNT2_GEMINI/antigravity-cli" "$ACCOUNT2_GEMINI/config"
 ln -sf "../antigravity-cli/antigravity-oauth-token" "$ACCOUNT2_GEMINI/antigravity/antigravity-oauth-token"
 
-if [ ! -f "$ACCOUNT2_GEMINI/google_accounts.json" ]; then
-  cat > "$ACCOUNT2_GEMINI/google_accounts.json" <<'JSON'
+if [ -n "$PROFILE2_EMAIL" ] && [ ! -f "$ACCOUNT2_GEMINI/google_accounts.json" ]; then
+  cat > "$ACCOUNT2_GEMINI/google_accounts.json" <<JSON
 {
-  "active": "nataliegemini91@gmail.com",
+  "active": "$PROFILE2_EMAIL",
   "old": []
 }
 JSON
@@ -43,19 +53,61 @@ fi
 # Seed oauth_creds.json from Account 2 CLI token if present
 CLI_TOKEN_FILE="$ACCOUNT2_GEMINI/antigravity-cli/antigravity-oauth-token"
 if [ -f "$CLI_TOKEN_FILE" ]; then
+  GOOGLE_OAUTH_CLIENT_ID="$GOOGLE_OAUTH_CLIENT_ID" \
+  GOOGLE_OAUTH_CLIENT_SECRET="$GOOGLE_OAUTH_CLIENT_SECRET" \
   python3 -c "
-import json
+import os, urllib.request, urllib.parse, json, time
+
 try:
     with open('$CLI_TOKEN_FILE') as f:
         tok = json.load(f).get('token', {})
-    creds = {
-        'access_token': tok.get('access_token', ''),
-        'scope': 'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email openid https://www.googleapis.com/auth/cloud-platform',
-        'token_type': tok.get('token_type', 'Bearer'),
-        'refresh_token': tok.get('refresh_token', '')
-    }
-    with open('$ACCOUNT2_GEMINI/oauth_creds.json', 'w') as f:
-        json.dump(creds, f, indent=2)
+    ref_tok = tok.get('refresh_token', '')
+    acc_tok = tok.get('access_token', '')
+
+    creds = {}
+    creds_path = '$ACCOUNT2_GEMINI/oauth_creds.json'
+    try:
+        with open(creds_path) as f:
+            creds = json.load(f)
+    except Exception:
+        pass
+
+    cid = os.environ.get('GOOGLE_OAUTH_CLIENT_ID', '').strip()
+    sec = os.environ.get('GOOGLE_OAUTH_CLIENT_SECRET', '').strip()
+
+    if not creds.get('id_token') and ref_tok and cid and sec:
+        data = urllib.parse.urlencode({
+            'client_id': cid,
+            'client_secret': sec,
+            'refresh_token': ref_tok,
+            'grant_type': 'refresh_token'
+        }).encode('utf-8')
+        req = urllib.request.Request('https://oauth2.googleapis.com/token', data=data)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            res = json.loads(resp.read().decode())
+            creds = {
+                'access_token': res.get('access_token', acc_tok),
+                'scope': res.get('scope', 'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email openid https://www.googleapis.com/auth/cloud-platform'),
+                'token_type': res.get('token_type', 'Bearer'),
+                'id_token': res.get('id_token', ''),
+                'expiry_date': int(time.time() + res.get('expires_in', 3600)) * 1000,
+                'refresh_token': ref_tok,
+            }
+            with open(creds_path, 'w') as f:
+                json.dump(creds, f, indent=2)
+            # Also ensure CLI token file has id_token
+            cli_data = {
+                'token': {
+                    'access_token': creds['access_token'],
+                    'token_type': 'Bearer',
+                    'refresh_token': ref_tok,
+                    'id_token': creds['id_token'],
+                    'expiry': time.strftime('%Y-%m-%dT%H:%M:%S.000000000+02:00', time.localtime(time.time() + 3600))
+                },
+                'auth_method': 'consumer'
+            }
+            with open('$CLI_TOKEN_FILE', 'w') as f:
+                json.dump(cli_data, f)
 except Exception:
     pass
 " 2>/dev/null || true
@@ -71,6 +123,7 @@ mkdir -p "\$ACCOUNT2_GEMINI" "\$HOME/.config/antigravity-profile2"
 exec bwrap \\
   --dev-bind / / \\
   --bind "\$ACCOUNT2_GEMINI" "\$HOME/.gemini" \\
+  --setenv DBUS_SESSION_BUS_ADDRESS "unix:path=/dev/null" \\
   --setenv GH_CONFIG_DIR "\$HOME/.config/gh" \\
   --setenv GIT_CONFIG_GLOBAL "\$HOME/.gitconfig" \\
   --setenv GOOGLE_API_KEY "" \\

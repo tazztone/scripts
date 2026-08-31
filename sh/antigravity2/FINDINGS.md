@@ -80,11 +80,10 @@ When `antigravity-profile2` was launched previously:
 
 To achieve full isolation without over-engineering:
 
-### 1. D-Bus Neutralization for CLI
-Set `--setenv DBUS_SESSION_BUS_ADDRESS "unix:path=/dev/null"` inside Bubblewrap for `agy2`.
+### 1. D-Bus Neutralization & Secret Service Isolation
+Set `--setenv DBUS_SESSION_BUS_ADDRESS "unix:path=/dev/null"` inside Bubblewrap for both `agy2` and `antigravity-profile2`.
 * `keyring_detector_dbus` immediately detects that D-Bus is unavailable.
-* `CompositeTokenStorage` bypasses the host GNOME Keyring and forces `FileTokenStorage` mode for the CLI daemon.
-* For the Desktop application (`antigravity-profile2`), D-Bus remains connected so Electron's `shell.openExternal` can communicate with the FreeDesktop Desktop Portal (`org.freedesktop.portal.OpenURI`) to launch the user's browser for Google OAuth sign-in and open external URLs.
+* `CompositeTokenStorage` bypasses the host GNOME Keyring and forces `FileTokenStorage` mode for the backend daemon, completely preventing host Account 1 keyring credentials from leaking into Profile 2.
 
 ### 2. Chromium Password Storage Flag
 Pass `--password-store=basic` to the Electron binary.
@@ -121,3 +120,31 @@ The Desktop application's `language_server` reads top-level `~/.gemini/oauth_cre
 | **CLI** | `agy` / `agy2` | Native `~/.gemini/antigravity-cli/` + Keyring | Bwrap `~/.antigravity-cli-account2/.gemini/` + D-Bus null |
 | **IDE** | `antigravity-ide` / `...-profile2` | Native `~/.config/Antigravity-IDE` | Native `--user-data-dir=~/.config/Antigravity-IDE-profile2` |
 | **Desktop** | `antigravity` / `...-profile2` | Native `~/.config/Antigravity` + Keyring | Bwrap `~/.antigravity-cli-account2/.gemini/` + basic store + isolated data dir |
+
+---
+
+## 6. Investigation Log & Solved Roadblocks
+
+During development and testing of the multi-profile architecture, several non-obvious roadblocks were diagnosed and solved:
+
+### A. The "Awaiting Authentication..." Hang (D-Bus Over-Isolation)
+* **Symptom:** When clicking "Sign in" on `antigravity-profile2`, the UI hung indefinitely on *"Awaiting Authentication..."*.
+* **Root Cause:** In Electron on Linux, `electron.shell.openExternal(url)` relies on the FreeDesktop D-Bus Desktop Portal (`org.freedesktop.portal.OpenURI`) to launch the external web browser for Google OAuth. When `DBUS_SESSION_BUS_ADDRESS="unix:path=/dev/null"` was set on the wrapper, the D-Bus connection failed with `Connection refused`, preventing the browser from launching. The UI remained spinning waiting for an OAuth callback from a browser that never opened.
+* **Resolution:** Keep D-Bus connected on the Desktop launcher wrapper so browser launches and portal actions succeed, while relying on `--password-store=basic` and `--user-data-dir` for session partition.
+
+### B. The `shellEnvSync()` Environment Override
+* **Discovery in `app.asar/dist/languageServer.js`:**
+  ```javascript
+  const env = { ...process.env, ...(0, shell_env_1.shellEnvSync)() };
+  ```
+* **Implication:** Electron explicitly invokes a login shell (`$SHELL -l`) to query the environment before spawning `language_server`. This means environment variables stripped only at the wrapper level get repopulated from the user's login shell.
+
+### C. `parseIDToken` vs CLI Token Formats
+* **Discovery:** The Go backend daemon `language_server` has a `parseIDToken` routine in `codeassistclient` that parses a signed Google JWT `id_token` (extracting email and identity claims).
+* **CLI Difference:** The CLI offline token file (`antigravity-oauth-token`) only stores `access_token` and `refresh_token`. An offline synthesized `oauth_creds.json` lacking an `id_token` is rejected by `FileTokenStorage` with `error getting token source: You are not logged into Antigravity`.
+* **Resolution:** The user completes the initial browser sign-in in the Desktop UI once, which receives the full OAuth payload (including `id_token`), permanently caching it in the isolated profile directory.
+
+### D. Dual-Layer Auth Isolation Contract
+* **Layer 1 (Go Backend RPC):** Isolated by Bubblewrap namespace mount of `~/.antigravity-cli-account2/.gemini` over `~/.gemini`.
+* **Layer 2 (Electron / Chromium Web Session):** Isolated by `--user-data-dir="$HOME/.config/antigravity-profile2"` with `--password-store=basic`.
+* **Dock Grouping:** Separated via `--class="antigravity-profile2"` and `StartupWMClass=antigravity-profile2`.
