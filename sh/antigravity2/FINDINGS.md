@@ -80,10 +80,11 @@ When `antigravity-profile2` was launched previously:
 
 To achieve full isolation without over-engineering:
 
-### 1. D-Bus Neutralization
-Set `--setenv DBUS_SESSION_BUS_ADDRESS "unix:path=/dev/null"` inside Bubblewrap.
+### 1. D-Bus Neutralization for CLI
+Set `--setenv DBUS_SESSION_BUS_ADDRESS "unix:path=/dev/null"` inside Bubblewrap for `agy2`.
 * `keyring_detector_dbus` immediately detects that D-Bus is unavailable.
-* `CompositeTokenStorage` bypasses the host GNOME Keyring and forces `FileTokenStorage` mode.
+* `CompositeTokenStorage` bypasses the host GNOME Keyring and forces `FileTokenStorage` mode for the CLI daemon.
+* For the Desktop application (`antigravity-profile2`), D-Bus remains connected so Electron's `shell.openExternal` can communicate with the FreeDesktop Desktop Portal (`org.freedesktop.portal.OpenURI`) to launch the user's browser for Google OAuth sign-in and open external URLs.
 
 ### 2. Chromium Password Storage Flag
 Pass `--password-store=basic` to the Electron binary.
@@ -109,8 +110,7 @@ Pass `GH_CONFIG_DIR="$HOME/.config/gh"` and `GIT_CONFIG_GLOBAL="$HOME/.gitconfig
 
 ### 6. OAuth Credential Seeding (`oauth_creds.json`)
 The Desktop application's `language_server` reads top-level `~/.gemini/oauth_creds.json` in addition to `antigravity/antigravity-oauth-token`.
-* `setup-profile2.sh` and `/usr/local/bin/antigravity-profile2` automatically extract and format credentials from `antigravity-cli/antigravity-oauth-token` into `~/.antigravity-cli-account2/.gemini/oauth_creds.json`.
-* This boots the Desktop directly into authenticated state under Account 2 without prompting for web login or triggering D-Bus Portal browser calls.
+* `setup-profile2.sh` automatically seeds `~/.antigravity-cli-account2/.gemini/oauth_creds.json` from `antigravity-cli/antigravity-oauth-token`.
 
 ---
 
@@ -120,4 +120,4 @@ The Desktop application's `language_server` reads top-level `~/.gemini/oauth_cre
 | :--- | :--- | :--- | :--- |
 | **CLI** | `agy` / `agy2` | Native `~/.gemini/antigravity-cli/` + Keyring | Bwrap `~/.antigravity-cli-account2/.gemini/` + D-Bus null |
 | **IDE** | `antigravity-ide` / `...-profile2` | Native `~/.config/Antigravity-IDE` | Native `--user-data-dir=~/.config/Antigravity-IDE-profile2` |
-| **Desktop** | `antigravity` / `...-profile2` | Native `~/.config/Antigravity` + Keyring | Bwrap `~/.antigravity-cli-account2/.gemini/` + D-Bus null + basic store |
+| **Desktop** | `antigravity` / `...-profile2` | Native `~/.config/Antigravity` + Keyring | Bwrap `~/.antigravity-cli-account2/.gemini/` + basic store + isolated data dir |
