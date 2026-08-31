@@ -407,20 +407,25 @@ def test_real_deal_on_demand_check_and_badges(page: Page):
     page.wait_for_selector('#card-cheapest .tp-card-check-deal-btn')
     page.click('#card-cheapest .tp-card-check-deal-btn')
 
-    # Verify badge transforms into Allzeit-Tiefstpreis
+    # Verify badge transforms into Allzeit-Tiefstpreis and has no extra subtitle
     page.wait_for_selector('#card-cheapest .tp-real-deal-sub-badge.tp-is-alltime-low')
     badge1 = page.locator('#card-cheapest .tp-real-deal-sub-badge.tp-is-alltime-low')
     assert 'Allzeit-Tiefstpreis' in (badge1.text_content() or '')
+    assert not page.locator('#card-cheapest .tp-card-historical-price').is_visible()
 
     # 2. On Card 3 (Silikon Case, 15.00 CHF): click on-demand Tiefstpreis button
     page.wait_for_selector('#card-negative .tp-card-check-deal-btn')
     page.click('#card-negative .tp-card-check-deal-btn')
 
-    # Verify badge transforms into Non-Bestpreis warning with markup %
+    # Verify badge transforms into enlarged Non-Bestpreis warning with markup %
     page.wait_for_selector('#card-negative .tp-real-deal-sub-badge.tp-is-not-low')
     badge3 = page.locator('#card-negative .tp-real-deal-sub-badge.tp-is-not-low')
-    assert '10.00' in (badge3.text_content() or '')
     assert '+50%' in (badge3.text_content() or '')
+
+    # Verify separated Tiefstpreis subtitle below current price
+    page.wait_for_selector('#card-negative .tp-card-historical-price')
+    hist_price3 = page.locator('#card-negative .tp-card-historical-price')
+    assert 'Tiefstpreis: CHF 10.00' in (hist_price3.text_content() or '')
 
 
 def test_real_deal_filter_non_bestpreis_toggle(page: Page):

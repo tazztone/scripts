@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.12.3
+// @version      2.12.4
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, checks real all-time Tiefstpreise, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -241,7 +241,25 @@ const STYLES = `
     background: linear-gradient(135deg, rgba(245, 158, 11, 0.95) 0%, rgba(217, 119, 6, 0.95) 100%) !important;
     border: 1px solid #fbbf24 !important;
     color: #ffffff !important;
+    font-size: 12.5px !important;
+    font-weight: 800 !important;
+    padding: 3px 8px !important;
     box-shadow: 0 2px 10px rgba(245, 158, 11, 0.4) !important;
+  }
+  .tp-real-deal-sub-badge.tp-is-severe-markup {
+    background: linear-gradient(135deg, rgba(225, 29, 72, 0.95) 0%, rgba(190, 18, 60, 0.95)) !important;
+    border: 1px solid #f43f5e !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 10px rgba(225, 29, 72, 0.45) !important;
+  }
+  .tp-card-historical-price {
+    font: 500 11px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    color: #94a3b8 !important;
+    text-align: right !important;
+    margin-top: 2px !important;
+    white-space: nowrap !important;
+    user-select: none !important;
+    pointer-events: auto !important;
   }
   .tp-bar-btn.tp-batch-active {
     background: rgba(245, 158, 11, 0.25) !important;
@@ -1652,11 +1670,10 @@ const SHADOW_MODAL_STYLES = `
             realDealWrapper.innerHTML = '';
 
             const badge = document.createElement('div');
-            badge.className = `tp-real-deal-sub-badge ${isAllTimeLow ? 'tp-is-alltime-low' : 'tp-is-not-low'}`;
-
             const hasSignificantPeak = stats.hoechstpreis && stats.hoechstpreis > stats.tiefstpreis * 1.02;
 
             if (isAllTimeLow) {
+              badge.className = 'tp-real-deal-sub-badge tp-is-alltime-low';
               let peakContext = '';
               if (hasSignificantPeak) {
                 const peakDropPct = Math.round(((stats.hoechstpreis - cardPrice) / stats.hoechstpreis) * 100);
@@ -1666,14 +1683,35 @@ const SHADOW_MODAL_STYLES = `
               badge.innerHTML = `🌟 Allzeit-Tiefstpreis`;
             } else {
               const markupPct = Math.round(((cardPrice - stats.tiefstpreis) / stats.tiefstpreis) * 100);
+              const isSevere = markupPct >= 50;
+              badge.className = `tp-real-deal-sub-badge tp-is-not-low ${isSevere ? 'tp-is-severe-markup' : ''}`;
               const peakContext = hasSignificantPeak ? ` | Höchstpreis: CHF ${stats.hoechstpreis.toFixed(2)}` : '';
               badge.title = `Historischer Tiefstpreis lag bei CHF ${stats.tiefstpreis.toFixed(2)} (+${markupPct}% Aufschlag)${peakContext}`;
-              badge.innerHTML = `⚠️ TP: CHF ${stats.tiefstpreis.toFixed(2)} (+${markupPct}%)`;
+              badge.innerHTML = `⚠️ +${markupPct}%`;
             }
             realDealWrapper.appendChild(badge);
           }
+
+          // Historical Tiefstpreis display right below current price
+          let histPriceEl = card.querySelector('.tp-card-historical-price');
+          if (isNonBest) {
+            if (!histPriceEl) {
+              histPriceEl = document.createElement('div');
+              histPriceEl.className = 'tp-card-historical-price';
+              const priceContainer = card.querySelector('.Plugin_PriceInformation, .price_information_product') ||
+                                     cardPriceEl?.closest('.priceContainer, .Plugin_PriceInformation, .price_information_product') ||
+                                     cardPriceEl?.parentElement ||
+                                     card;
+              priceContainer.appendChild(histPriceEl);
+            }
+            histPriceEl.textContent = `Tiefstpreis: CHF ${stats.tiefstpreis.toFixed(2)}`;
+            histPriceEl.title = `Historischer Tiefstpreis lag bei CHF ${stats.tiefstpreis.toFixed(2)}`;
+          } else if (histPriceEl) {
+            histPriceEl.remove();
+          }
         } else {
           card.classList.remove('tp-non-bestpreis-filtered');
+          card.querySelector('.tp-card-historical-price')?.remove();
           if (pid && (isNeueFeed || badgeDifEl)) {
             if (!realDealWrapper) {
               realDealWrapper = document.createElement('div');
