@@ -50,7 +50,7 @@ Both profiles share the core application binaries from the original installation
 
 * **Desktop App (Profile 2):** Launched with `--user-data-dir="$HOME/.config/antigravity-profile2"` to isolate login sessions and application state.
 * **IDE App (Profile 2):** Launched with `--user-data-dir="$HOME/.config/Antigravity-IDE-profile2"`. It shares installed extensions with Profile 1 (stored in `~/.antigravity-ide/extensions`) while keeping settings, workspace states, and auth sessions completely separate.
-* **CLI App (Profile 2):** Launched with `env HOME="$HOME/.antigravity-cli-account2"`, `DBUS_SESSION_BUS_ADDRESS="unix:path=/dev/null"` (disabling GNOME Keyring access by blocking D-Bus fallbacks, forcing token storage inside the isolated home folder), and `GOOGLE_API_KEY=""` (forcing the OAuth flow).
+* **CLI App (Profile 2):** Launched via `bwrap` (Bubblewrap) to mount `~/.antigravity-cli-account2/.gemini` over `~/.gemini` in an isolated user namespace, keeping `$HOME`, dotfiles, `.ssh`, `.gitconfig`, and desktop keyring / D-Bus access intact for developer tools like `gh` and `git`.
 
 This prevents configuration/login collisions and allows both sessions to run simultaneously.
 
