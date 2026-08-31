@@ -107,8 +107,16 @@ Pass `--class="antigravity-profile2"` to Electron and set `StartupWMClass=antigr
 Pass `GH_CONFIG_DIR="$HOME/.config/gh"` and `GIT_CONFIG_GLOBAL="$HOME/.gitconfig"`.
 * Embedded terminals and background coding agents in Desktop Profile 2 can authenticate against host Git and GitHub accounts without re-login.
 
-### 6. OAuth Credential Seeding (`oauth_creds.json`)
-The Desktop application's `language_server` reads top-level `~/.gemini/oauth_creds.json` in addition to `antigravity/antigravity-oauth-token`.
+### 6. Legacy Standalone Token Symlink (`jetski-standalone-oauth-token`)
+The `language_server` in `--standalone` mode reads the legacy token path `~/.gemini/jetski-standalone-oauth-token`, **not** `antigravity/antigravity-oauth-token` as previously assumed.
+* `strace` confirmed that `FileTokenStorage.LoadStoredToken` opens `jetski-standalone-oauth-token` — without it, the daemon silently reports `You are not logged into Antigravity`.
+* `setup-profile2.sh` creates a relative symlink:
+  ```bash
+  ln -sf "antigravity-cli/antigravity-oauth-token" "$ACCOUNT2_GEMINI/jetski-standalone-oauth-token"
+  ```
+
+### 7. OAuth Credential Seeding (`oauth_creds.json`)
+The Desktop application's `language_server` reads top-level `~/.gemini/oauth_creds.json` in addition to the standalone token.
 * `setup-profile2.sh` automatically seeds `~/.antigravity-cli-account2/.gemini/oauth_creds.json` from `antigravity-cli/antigravity-oauth-token`.
 
 ---
@@ -141,10 +149,15 @@ During development and testing of the multi-profile architecture, several non-ob
 
 ### C. `parseIDToken` vs CLI Token Formats
 * **Discovery:** The Go backend daemon `language_server` has a `parseIDToken` routine in `codeassistclient` that parses a signed Google JWT `id_token` (extracting email and identity claims).
-* **CLI Difference:** The CLI offline token file (`antigravity-oauth-token`) only stores `access_token` and `refresh_token`. An offline synthesized `oauth_creds.json` lacking an `id_token` is rejected by `FileTokenStorage` with `error getting token source: You are not logged into Antigravity`.
-* **Resolution:** The user completes the initial browser sign-in in the Desktop UI once, which receives the full OAuth payload (including `id_token`), permanently caching it in the isolated profile directory.
+* **CLI Difference:** By default the CLI offline token file (`antigravity-oauth-token`) only stores `access_token` and `refresh_token`. A token lacking `id_token` is rejected by `FileTokenStorage` with `error getting token source: You are not logged into Antigravity`.
+* **Resolution:** `setup-profile2.sh` uses Google's `oauth2.googleapis.com/token` endpoint to exchange the `refresh_token` for a full OAuth payload including `id_token`, and writes it back to the CLI token file.
 
-### D. Dual-Layer Auth Isolation Contract
+### D. Missing Legacy Token Path (`jetski-standalone-oauth-token`)
+* **Symptom:** Despite having valid tokens with `id_token` at `antigravity/antigravity-oauth-token` and `oauth_creds.json`, language_server still reported `You are not logged into Antigravity`.
+* **Root Cause (strace-verified):** In `--standalone` mode, `FileTokenStorage.LoadStoredToken` reads `~/.gemini/jetski-standalone-oauth-token` — the legacy standalone token path — **not** `antigravity/antigravity-oauth-token`. Without this file, the fallback chain was: Keyring (fails, D-Bus null'd) → File (reads wrong path, finds nothing) → "Not logged in".
+* **Resolution:** Add a symlink: `~/.gemini/jetski-standalone-oauth-token → antigravity-cli/antigravity-oauth-token`. Strace confirmed this fixes auth: `"Auth succeeded, refreshing features and managers"`.
+
+### E. Dual-Layer Auth Isolation Contract
 * **Layer 1 (Go Backend RPC):** Isolated by Bubblewrap namespace mount of `~/.antigravity-cli-account2/.gemini` over `~/.gemini`.
 * **Layer 2 (Electron / Chromium Web Session):** Isolated by `--user-data-dir="$HOME/.config/antigravity-profile2"` with `--password-store=basic`.
 * **Dock Grouping:** Separated via `--class="antigravity-profile2"` and `StartupWMClass=antigravity-profile2`.
