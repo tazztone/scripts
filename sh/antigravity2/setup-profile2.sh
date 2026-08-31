@@ -40,6 +40,10 @@ PROFILE2_EMAIL="${PROFILE2_EMAIL:-}"
 ACCOUNT2_GEMINI="$REAL_HOME/.antigravity-cli-account2/.gemini"
 mkdir -p "$ACCOUNT2_GEMINI/antigravity" "$ACCOUNT2_GEMINI/antigravity-cli" "$ACCOUNT2_GEMINI/config"
 ln -sf "../antigravity-cli/antigravity-oauth-token" "$ACCOUNT2_GEMINI/antigravity/antigravity-oauth-token"
+# The standalone language_server reads the legacy token path ~/.gemini/jetski-standalone-oauth-token
+# (not antigravity/antigravity-oauth-token). Without this symlink, FileTokenStorage silently
+# finds no token and reports "You are not logged into Antigravity."
+ln -sf "antigravity-cli/antigravity-oauth-token" "$ACCOUNT2_GEMINI/jetski-standalone-oauth-token"
 
 if [ -n "$PROFILE2_EMAIL" ] && [ ! -f "$ACCOUNT2_GEMINI/google_accounts.json" ]; then
   cat > "$ACCOUNT2_GEMINI/google_accounts.json" <<JSON
