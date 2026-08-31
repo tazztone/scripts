@@ -50,19 +50,27 @@ chmod +x /usr/local/bin/antigravity-ide-profile2
 
 # CLI app wrapper
 AGY_BIN="$REAL_HOME/.local/bin/agy"
-ACCOUNT2_HOME="$REAL_HOME/.antigravity-cli-account2"
+ACCOUNT2_GEMINI="$REAL_HOME/.antigravity-cli-account2/.gemini"
 
 if [ -f "$AGY_BIN" ]; then
+  mkdir -p "$ACCOUNT2_GEMINI"
+  chown -R "$REAL_USER:$REAL_USER" "$REAL_HOME/.antigravity-cli-account2" 2>/dev/null || true
+
   cat > /usr/local/bin/agy2 <<EOF
 #!/usr/bin/env bash
-# Run original Antigravity CLI with Profile 2 configuration (no global API key, isolated keyring)
-exec env HOME="$ACCOUNT2_HOME" \\
-         DBUS_SESSION_BUS_ADDRESS="unix:path=/dev/null" \\
-         GOOGLE_API_KEY="" \\
-         "$AGY_BIN" "\$@"
+# Run original Antigravity CLI with Profile 2 configuration via Bubblewrap namespace mount
+ACCOUNT2_GEMINI="\$HOME/.antigravity-cli-account2/.gemini"
+mkdir -p "\$ACCOUNT2_GEMINI" "\$HOME/.gemini"
+
+exec bwrap \\
+  --dev-bind / / \\
+  --bind "\$ACCOUNT2_GEMINI" "\$HOME/.gemini" \\
+  --setenv GOOGLE_API_KEY "" \\
+  "$AGY_BIN" "\$@"
 EOF
   chmod +x /usr/local/bin/agy2
 fi
+
 
 
 log "3. Creating desktop entries for Profile 2..."
