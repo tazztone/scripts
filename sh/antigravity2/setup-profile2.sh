@@ -35,7 +35,7 @@ log "2. Creating wrapper scripts for Profile 2..."
 # Desktop app wrapper
 cat > /usr/local/bin/antigravity-profile2 <<'EOF'
 #!/usr/bin/env bash
-# Run original Antigravity with Profile 2 configuration folder
+# Run original Antigravity Desktop with Profile 2 configuration folder
 exec "/usr/local/bin/antigravity" --user-data-dir="$HOME/.config/antigravity-profile2" "$@"
 EOF
 chmod +x /usr/local/bin/antigravity-profile2
@@ -52,10 +52,10 @@ chmod +x /usr/local/bin/antigravity-ide-profile2
 AGY_BIN="$REAL_HOME/.local/bin/agy"
 ACCOUNT2_GEMINI="$REAL_HOME/.antigravity-cli-account2/.gemini"
 
-if [ -f "$AGY_BIN" ]; then
-  mkdir -p "$ACCOUNT2_GEMINI"
-  chown -R "$REAL_USER:$REAL_USER" "$REAL_HOME/.antigravity-cli-account2" 2>/dev/null || true
+mkdir -p "$ACCOUNT2_GEMINI"
+chown -R "$REAL_USER:$REAL_USER" "$REAL_HOME/.antigravity-cli-account2" 2>/dev/null || true
 
+if [ -f "$AGY_BIN" ]; then
   cat > /usr/local/bin/agy2 <<EOF
 #!/usr/bin/env bash
 # Run original Antigravity CLI with Profile 2 configuration via Bubblewrap namespace mount
@@ -65,6 +65,10 @@ mkdir -p "\$ACCOUNT2_GEMINI" "\$HOME/.gemini"
 exec bwrap \\
   --dev-bind / / \\
   --bind "\$ACCOUNT2_GEMINI" "\$HOME/.gemini" \\
+  --setenv DBUS_SESSION_BUS_ADDRESS "unix:path=/dev/null" \\
+  --setenv REAL_DBUS_SESSION_BUS_ADDRESS "\$DBUS_SESSION_BUS_ADDRESS" \\
+  --setenv GH_CONFIG_DIR "\$HOME/.config/gh" \\
+  --setenv GIT_CONFIG_GLOBAL "\$HOME/.gitconfig" \\
   --setenv GOOGLE_API_KEY "" \\
   "$AGY_BIN" "\$@"
 EOF
