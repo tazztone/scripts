@@ -147,3 +147,44 @@ Subcategories appear in two distinct patterns across the site:
 - **Feed-Calibrated Curve**: Dynamic piecewise interpolation anchored to real-world Toppreise feed discount ranges (10% cold base $\rightarrow$ 35% warm amber $\rightarrow$ 50%+ blazing flame/crimson) with high saturation and luminous badge/border accents.
 - **State Marker**: `.Plugin_Product.tp-heatmap-active` with CSS properties `--tp-heat-bg`, `--tp-heat-border`, and `--tp-heat-glow`.
 
+---
+
+## 8. Price History, All-Time Low (Tiefstpreis) & Real Deal Engine
+
+### 1. Product Page DOM Elements & Selectors
+- **Preischart Button Wrapper**: `.Plugin_PriceChartButton` (parent container in the product header row).
+- **Dialog Trigger Anchor/Div**: `.f_showPriceChartDialog` (contains `data-ajax-form-url="/plugins/product/pricechart?p_pc_pid=..."` and `data-trend-ajax-form-url="/plugins/product/pricecharttrend?p_pct_pid=..."`).
+- **Thumbnail Chart Preview**: `.Plugin_PriceChart_Preview` (child `.highchartContainer.f_scrollToFullChart`, renders SVG/Highcharts).
+- **Product ID Attribute**: Card element `data-entity-id="NNNNNN"` or URL match `/-p(\d+)/`.
+
+### 2. Dual-Endpoint Architecture for Price History
+
+#### Endpoint A: Direct Dialog HTML (`GET /plugins/product/pricechart?p_pc_pid={productId}`)
+- **Method**: `GET`
+- **Required Header**: `X-Requested-With: XMLHttpRequest`
+- **Response**: Pre-rendered modal HTML containing calculated aggregates without needing client-side time-series reduction:
+  - **Tiefstpreis (All-Time Low)**: Pre-calculated value inside `.PriceChartLegend` following `<div class="title">Tiefstpreis</div>` $\rightarrow$ `.Plugin_Price` (both shipping-inclusive and product-only).
+  - **Aktueller Toppreis**: Pre-calculated value following `<div class="title">aktueller Toppreis</div>`.
+  - **Höchstpreis (All-Time High)**: Pre-calculated value following `<div class="title">Höchstpreis</div>`.
+  - **Time Range Windows**: `.PriceChartTabList .f_tabItem` with `data-minTimeRange` millisecond timestamps for 1M, 3M, 6M, 1Y, and All-Time.
+
+#### Endpoint B: Raw Time-Series JSON (`POST /plugins/product/pricechart`)
+- **Method**: `POST`
+- **Content-Type**: `application/x-www-form-urlencoded`
+- **Required Header**: `X-Requested-With: XMLHttpRequest`
+- **Form Body**: `pcspagdpi={productId}&pcspagdfdt=0000-00-00&pcspagdtd=&p_pc_ch=&lang=de`
+- **Response Payload**: JSON Array of 2 time-series:
+  - `data[0]`: Array of `[timestamp_ms, price_without_shipping]` tuples spanning the entire tracked product lifetime.
+  - `data[1]`: Array of `[timestamp_ms, price_with_shipping]` tuples.
+- **Use Cases**: Custom window slicing (e.g. 30-day / 90-day lowest price), historical median/average pricing, or sparkline rendering.
+
+### 3. Real Deal vs Feed-Diff Discrepancy & Validation Logic
+- **Feed Badge Discrepancy**: The `-XX%` badge on `/neue-toppreise` (`.badge-dif`) represents only the immediate price drop compared to the previous or baseline listing. It frequently tags non-bestpreise as massive discounts even when earlier historical prices were far lower.
+- **Validation Formulas**:
+  - **Is All-Time Bestpreis**: $\text{CurrentPrice} \le \text{Tiefstpreis} + 0.05$
+  - **Real Deal Discount % (vs Historical High)**: $\frac{\text{Höchstpreis} - \text{CurrentPrice}}{\text{Höchstpreis}} \times 100$
+  - **Inflation Gap % (vs Historical Low)**: $\frac{\text{CurrentPrice} - \text{Tiefstpreis}}{\text{Tiefstpreis}} \times 100$
+- **Caching & Rate-Limiting Strategy**:
+  - Cache responses in `sessionStorage` / `localStorage` under `tp_hist_{productId}` with a 6-hour TTL to prevent redundant network queries.
+  - Query in background batches prioritized for cards with high feed discount thresholds ($\ge 35\%$).
+

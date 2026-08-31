@@ -365,3 +365,127 @@ def test_price_alarm_settings_configurable_delays(page: Page):
     assert not page.locator('#tp-root >> #tp-alarm-delays-group').is_visible()
     page.click('#tp-root >> #tp-btn-close')
 
+
+def test_real_deal_on_demand_check_and_badges(page: Page):
+    # Setup mock network route for price chart HTML
+    def handle_pricechart(route):
+        url = route.request.url
+        if 'p_pc_pid=797571' in url:
+            # Card 1 (1800.00 CHF) -> Tiefstpreis is 1800.00 CHF (All-time low)
+            route.fulfill(
+                status=200,
+                headers={'access-control-allow-origin': '*'},
+                content_type='text/html',
+                body='''
+                <div class="PriceChartLegend">
+                  <div class="col-4"><div class="title">aktueller Toppreis</div><div class="Plugin_Price">1800.00</div></div>
+                  <div class="col-4"><div class="title">Tiefstpreis</div><div class="Plugin_Price">1800.00</div></div>
+                  <div class="col-4"><div class="title">Höchstpreis</div><div class="Plugin_Price">2400.00</div></div>
+                </div>
+                '''
+            )
+        elif 'p_pc_pid=797573' in url:
+            # Card 3 (15.00 CHF) -> Tiefstpreis was 10.00 CHF (Non-bestpreis)
+            route.fulfill(
+                status=200,
+                headers={'access-control-allow-origin': '*'},
+                content_type='text/html',
+                body='''
+                <div class="PriceChartLegend">
+                  <div class="col-4"><div class="title">aktueller Toppreis</div><div class="Plugin_Price">15.00</div></div>
+                  <div class="col-4"><div class="title">Tiefstpreis</div><div class="Plugin_Price">10.00</div></div>
+                  <div class="col-4"><div class="title">Höchstpreis</div><div class="Plugin_Price">25.00</div></div>
+                </div>
+                '''
+            )
+        else:
+            route.fulfill(status=404, headers={'access-control-allow-origin': '*'}, body='Not Found')
+
+    page.route('**/plugins/product/pricechart*', handle_pricechart)
+
+    # 1. On Card 1 (RTX 4090, 1800.00 CHF): click on-demand Tiefstpreis button
+    page.wait_for_selector('#card-cheapest .tp-card-check-deal-btn')
+    page.click('#card-cheapest .tp-card-check-deal-btn')
+
+    # Verify badge transforms into Allzeit-Tiefstpreis
+    page.wait_for_selector('#card-cheapest .tp-real-deal-sub-badge.tp-is-alltime-low')
+    badge1 = page.locator('#card-cheapest .tp-real-deal-sub-badge.tp-is-alltime-low')
+    assert 'Allzeit-Tiefstpreis' in (badge1.text_content() or '')
+
+    # 2. On Card 3 (Silikon Case, 15.00 CHF): click on-demand Tiefstpreis button
+    page.wait_for_selector('#card-negative .tp-card-check-deal-btn')
+    page.click('#card-negative .tp-card-check-deal-btn')
+
+    # Verify badge transforms into Non-Bestpreis warning with markup %
+    page.wait_for_selector('#card-negative .tp-real-deal-sub-badge.tp-is-not-low')
+    badge3 = page.locator('#card-negative .tp-real-deal-sub-badge.tp-is-not-low')
+    assert '10.00' in (badge3.text_content() or '')
+    assert '+50%' in (badge3.text_content() or '')
+
+
+def test_real_deal_filter_non_bestpreis_toggle(page: Page):
+    # Mock routes
+    def handle_pricechart(route):
+        url = route.request.url
+        if 'p_pc_pid=797571' in url:
+            route.fulfill(status=200, headers={'access-control-allow-origin': '*'}, content_type='text/html', body='<div class="PriceChartLegend"><div class="title">Tiefstpreis</div><div class="Plugin_Price">1800.00</div></div>')
+        elif 'p_pc_pid=797573' in url:
+            route.fulfill(status=200, headers={'access-control-allow-origin': '*'}, content_type='text/html', body='<div class="PriceChartLegend"><div class="title">Tiefstpreis</div><div class="Plugin_Price">10.00</div></div>')
+        else:
+            route.fulfill(status=200, headers={'access-control-allow-origin': '*'}, content_type='text/html', body='<div class="PriceChartLegend"><div class="title">Tiefstpreis</div><div class="Plugin_Price">999.00</div></div>')
+
+    page.route('**/plugins/product/pricechart*', handle_pricechart)
+
+    # Check both cards
+    page.wait_for_selector('#card-cheapest .tp-card-check-deal-btn')
+    page.click('#card-cheapest .tp-card-check-deal-btn')
+    page.wait_for_selector('#card-cheapest .tp-real-deal-sub-badge')
+
+    page.wait_for_selector('#card-negative .tp-card-check-deal-btn')
+    page.click('#card-negative .tp-card-check-deal-btn')
+    page.wait_for_selector('#card-negative .tp-real-deal-sub-badge')
+
+    # Now click filter bar toggle "🌟 Nur Tiefstpreise"
+    real_deal_toggle = page.locator('#tp-bar-real-deal-btn')
+    assert real_deal_toggle.is_visible()
+    real_deal_toggle.click()
+
+    # Card 3 (non-bestpreis) should be hidden with .tp-non-bestpreis-filtered
+    page.wait_for_selector('#card-negative.tp-non-bestpreis-filtered', state='attached')
+    assert 'tp-non-bestpreis-filtered' in (page.locator('#card-negative').get_attribute('class') or '')
+    assert not page.locator('#card-negative').is_visible()
+
+    # Card 1 (all-time low) should still be visible
+    assert page.locator('#card-cheapest').is_visible()
+
+    # Click reveal button (👁️) and verify card-negative is shown with outline
+    page.click('#tp-bar-reveal-btn')
+    assert page.locator('#card-negative').is_visible()
+
+
+def test_real_deal_settings_modal_controls(page: Page):
+    # Open settings dialog
+    page.click('#tp-root >> #tp-settings-fab')
+    page.wait_for_selector('#tp-root >> #tp-settings-dialog', state='visible')
+
+    # Verify Section 6 controls exist
+    real_deal_toggle = page.locator('#tp-root >> #tp-real-deal-filter-toggle')
+    min_discount_input = page.locator('#tp-root >> #tp-real-deal-min-val')
+    assert not real_deal_toggle.is_checked()
+    assert min_discount_input.input_value() == '30'
+
+    # Toggle filter on and set threshold to 40
+    page.click('#tp-root >> #tp-real-deal-filter-toggle + .tp-slider')
+    min_discount_input.fill('40')
+    page.click('#tp-root >> #tp-btn-save')
+    page.wait_for_selector('#tp-root >> #tp-settings-dialog', state='hidden')
+
+    # Re-open dialog and verify settings persisted
+    page.click('#tp-root >> #tp-settings-fab')
+    page.wait_for_selector('#tp-root >> #tp-settings-dialog', state='visible')
+    assert page.locator('#tp-root >> #tp-real-deal-filter-toggle').is_checked()
+    assert page.locator('#tp-root >> #tp-real-deal-min-val').input_value() == '40'
+    page.click('#tp-root >> #tp-btn-close')
+
+
+
