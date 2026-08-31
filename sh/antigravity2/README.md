@@ -49,8 +49,8 @@ The `setup-profile2.sh` script configures wrapper launchers and desktop menu ent
 Both profiles share the core application binaries from the original installation. When launching Profile 2, the wrapper scripts pass parameters to isolate user data:
 
 * **Desktop App (Profile 2):** Launched with `--user-data-dir="$HOME/.config/antigravity-profile2"` to isolate login sessions and application state.
-* **IDE App (Profile 2):** Launched with `--user-data-dir="$HOME/.config/Antigravity-IDE-profile2"`. It shares installed extensions with Profile 1 (stored in `~/.antigravity-ide/extensions`) while keeping settings, workspace states, and auth sessions completely separate.
-* **CLI App (Profile 2):** Launched via `bwrap` (Bubblewrap) to mount `~/.antigravity-cli-account2/.gemini` over `~/.gemini` in an isolated user namespace, keeping `$HOME`, dotfiles, `.ssh`, `.gitconfig`, and desktop keyring / D-Bus access intact for developer tools like `gh` and `git`.
+* **IDE App (Profile 2):** Launched with `--user-data-dir="$HOME/.config/Antigravity-IDE-profile2"`. It shares installed extensions with Profile 1 (`~/.antigravity-ide/extensions`) while keeping settings, workspaces, and auth completely separate.
+* **CLI App (Profile 2):** Launched via `bwrap` to mount `~/.antigravity-cli-account2/.gemini` over `~/.gemini`, keeping `$HOME`, dotfiles, `.ssh`, `.gitconfig`, and desktop keyring / D-Bus access intact for developer tools like `gh` and `git`.
 
 This prevents configuration/login collisions and allows both sessions to run simultaneously.
 
