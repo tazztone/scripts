@@ -107,6 +107,11 @@ Pass `--class="antigravity-profile2"` to Electron and set `StartupWMClass=antigr
 Pass `GH_CONFIG_DIR="$HOME/.config/gh"` and `GIT_CONFIG_GLOBAL="$HOME/.gitconfig"`.
 * Embedded terminals and background coding agents in Desktop Profile 2 can authenticate against host Git and GitHub accounts without re-login.
 
+### 6. OAuth Credential Seeding (`oauth_creds.json`)
+The Desktop application's `language_server` reads top-level `~/.gemini/oauth_creds.json` in addition to `antigravity/antigravity-oauth-token`.
+* `setup-profile2.sh` and `/usr/local/bin/antigravity-profile2` automatically extract and format credentials from `antigravity-cli/antigravity-oauth-token` into `~/.antigravity-cli-account2/.gemini/oauth_creds.json`.
+* This boots the Desktop directly into authenticated state under Account 2 without prompting for web login or triggering D-Bus Portal browser calls.
+
 ---
 
 ## 5. Profile & Tool Matrix
