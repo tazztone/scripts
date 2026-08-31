@@ -488,4 +488,97 @@ def test_real_deal_settings_modal_controls(page: Page):
     page.click('#tp-root >> #tp-btn-close')
 
 
+def test_real_deal_rich_tooltips_with_peak_context(page: Page):
+    def handle_pricechart(route):
+        url = route.request.url
+        if 'p_pc_pid=797571' in url:
+            # Card 1 (1800.00 CHF, Tiefstpreis 1800.00 CHF, Höchstpreis 2400.00 CHF -> -25% drop)
+            route.fulfill(
+                status=200,
+                headers={'access-control-allow-origin': '*'},
+                content_type='text/html',
+                body='''
+                <div class="PriceChartLegend">
+                  <div class="col-4"><div class="title">aktueller Toppreis</div><div class="Plugin_Price">1800.00</div></div>
+                  <div class="col-4"><div class="title">Tiefstpreis</div><div class="Plugin_Price">1800.00</div></div>
+                  <div class="col-4"><div class="title">Höchstpreis</div><div class="Plugin_Price">2400.00</div></div>
+                </div>
+                '''
+            )
+        elif 'p_pc_pid=797573' in url:
+            # Card 3 (15.00 CHF, Tiefstpreis 10.00 CHF, Höchstpreis 25.00 CHF)
+            route.fulfill(
+                status=200,
+                headers={'access-control-allow-origin': '*'},
+                content_type='text/html',
+                body='''
+                <div class="PriceChartLegend">
+                  <div class="col-4"><div class="title">aktueller Toppreis</div><div class="Plugin_Price">15.00</div></div>
+                  <div class="col-4"><div class="title">Tiefstpreis</div><div class="Plugin_Price">10.00</div></div>
+                  <div class="col-4"><div class="title">Höchstpreis</div><div class="Plugin_Price">25.00</div></div>
+                </div>
+                '''
+            )
+        else:
+            route.fulfill(status=404, headers={'access-control-allow-origin': '*'}, body='Not Found')
+
+    page.route('**/plugins/product/pricechart*', handle_pricechart)
+
+    # Check Card 1
+    page.wait_for_selector('#card-cheapest .tp-card-check-deal-btn')
+    page.click('#card-cheapest .tp-card-check-deal-btn')
+    page.wait_for_selector('#card-cheapest .tp-real-deal-sub-badge.tp-is-alltime-low')
+
+    badge1 = page.locator('#card-cheapest .tp-real-deal-sub-badge.tp-is-alltime-low')
+    title1 = badge1.get_attribute('title') or ''
+    assert 'Allzeit-Tiefstpreis' in title1
+    assert '-25% vom Höchstpreis CHF 2400.00' in title1
+
+    # Check Card 3
+    page.wait_for_selector('#card-negative .tp-card-check-deal-btn')
+    page.click('#card-negative .tp-card-check-deal-btn')
+    page.wait_for_selector('#card-negative .tp-real-deal-sub-badge.tp-is-not-low')
+
+    badge3 = page.locator('#card-negative .tp-real-deal-sub-badge.tp-is-not-low')
+    title3 = badge3.get_attribute('title') or ''
+    assert 'Historischer Tiefstpreis lag bei CHF 10.00 (+50% Aufschlag)' in title3
+    assert 'Höchstpreis: CHF 25.00' in title3
+
+
+def test_real_deal_dom_memoization_and_cache_pruning(page: Page):
+    # Test cache pruning in localStorage
+    page.evaluate('''() => {
+        const now = Date.now();
+        const staleTime = now - (15 * 24 * 3600 * 1000); // 15 days ago (expired)
+        const freshTime = now - (1 * 3600 * 1000);       // 1 hour ago (fresh)
+        localStorage.setItem('tp_hist_v1_stale999', JSON.stringify({ tiefstpreis: 50, hoechstpreis: 100, time: staleTime }));
+        localStorage.setItem('tp_hist_v1_fresh999', JSON.stringify({ tiefstpreis: 80, hoechstpreis: 120, time: freshTime }));
+    }''')
+
+    # Trigger setCachedPriceStats by mocking a route and clicking check button
+    page.route('**/plugins/product/pricechart*', lambda route: route.fulfill(
+        status=200,
+        headers={'access-control-allow-origin': '*'},
+        content_type='text/html',
+        body='<div class="PriceChartLegend"><div class="title">Tiefstpreis</div><div class="Plugin_Price">1800.00</div></div>'
+    ))
+
+    page.wait_for_selector('#card-cheapest .tp-card-check-deal-btn')
+    page.click('#card-cheapest .tp-card-check-deal-btn')
+    page.wait_for_selector('#card-cheapest .tp-real-deal-sub-badge')
+
+    # Verify wrapper dataset memoization attributes
+    wrapper = page.locator('#card-cheapest .tp-real-deal-wrapper')
+    assert wrapper.get_attribute('data-tp-status') == 'low'
+    assert wrapper.get_attribute('data-tp-pid') == '797571'
+    assert wrapper.get_attribute('data-tp-price') == '1800.00'
+
+    # Stale item should be pruned, fresh item preserved
+    stale_exists = page.evaluate("() => localStorage.getItem('tp_hist_v1_stale999') !== null")
+    fresh_exists = page.evaluate("() => localStorage.getItem('tp_hist_v1_fresh999') !== null")
+    assert not stale_exists
+    assert fresh_exists
+
+
+
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.12.2
+// @version      2.12.3
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, checks real all-time Tiefstpreise, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -779,7 +779,17 @@ const SHADOW_MODAL_STYLES = `
   const isPathExcluded = (catName, rootGroup, excludedCats = []) =>
     excludedCats.includes(`GROUP:${rootGroup}`) || (catName && (excludedCats.includes(catName) || excludedCats.includes(`PATH:${rootGroup}/${catName}`)));
 
-  const parsePrice = str => str ? parseFloat(str.replace(/[.–\-]\s*$/g, '.00').replace(/[^\d,.]/g, '').replace("'", '').replace(',', '.')) || 0 : 0;
+  const parsePrice = str => {
+    if (!str) return 0;
+    let clean = str.replace(/[.–\-]\s*$/g, '.00');
+    clean = clean.replace(/[^\d,.]/g, '').replace(/['’\s]/g, '');
+    if (/\d+\.\d{3},\d{2}/.test(clean)) {
+      clean = clean.replace(/\./g, '').replace(',', '.');
+    } else {
+      clean = clean.replace(',', '.');
+    }
+    return parseFloat(clean) || 0;
+  };
 
   function getProductCards() {
     const standardCards = Array.from(document.querySelectorAll('a.Plugin_Product, .Plugin_Product.medium-box, .Plugin_Product.mixedBrowsingList, .mixedBrowsingListProduct, .Plugin_Product'));
@@ -933,6 +943,45 @@ const SHADOW_MODAL_STYLES = `
     return null;
   }
 
+  let lastPruneTimestamp = 0;
+
+  function prunePriceStatsCache(force = false) {
+    if (!window.localStorage) return;
+    const now = Date.now();
+    if (!force && now - lastPruneTimestamp < 10 * 60 * 1000) return;
+    lastPruneTimestamp = now;
+
+    try {
+      const maxAgeMs = 14 * 24 * 3600 * 1000;
+      const entries = [];
+      const keysToRemove = [];
+
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i);
+        if (key && key.startsWith(STATS_CACHE_PREFIX)) {
+          try {
+            const val = JSON.parse(window.localStorage.getItem(key) || '{}');
+            const age = now - (val.time || 0);
+            if (!val.time || age > maxAgeMs) {
+              keysToRemove.push(key);
+            } else {
+              entries.push({ key, time: val.time });
+            }
+          } catch (e) {
+            keysToRemove.push(key);
+          }
+        }
+      }
+
+      keysToRemove.forEach(k => window.localStorage.removeItem(k));
+
+      if (entries.length > 300) {
+        entries.sort((a, b) => a.time - b.time);
+        entries.slice(0, entries.length - 250).forEach(e => window.localStorage.removeItem(e.key));
+      }
+    } catch (e) {}
+  }
+
   function getCachedPriceStats(productId) {
     if (!productId) return null;
     try {
@@ -950,9 +999,16 @@ const SHADOW_MODAL_STYLES = `
   function setCachedPriceStats(productId, stats) {
     if (!productId || !stats) return;
     try {
+      prunePriceStatsCache();
       const payload = { ...stats, time: Date.now() };
       window.localStorage?.setItem(STATS_CACHE_PREFIX + productId, JSON.stringify(payload));
-    } catch (e) {}
+    } catch (e) {
+      try {
+        prunePriceStatsCache(true);
+        const payload = { ...stats, time: Date.now() };
+        window.localStorage?.setItem(STATS_CACHE_PREFIX + productId, JSON.stringify(payload));
+      } catch (err) {}
+    }
   }
 
   function parsePriceStatsFromHtml(html) {
@@ -1585,19 +1641,37 @@ const SHADOW_MODAL_STYLES = `
             }
           }
 
-          realDealWrapper.innerHTML = '';
-          const badge = document.createElement('div');
-          badge.className = `tp-real-deal-sub-badge ${isAllTimeLow ? 'tp-is-alltime-low' : 'tp-is-not-low'}`;
+          const targetStatus = isAllTimeLow ? 'low' : 'not-low';
+          const priceStr = cardPrice.toFixed(2);
 
-          if (isAllTimeLow) {
-            badge.title = `Aktueller Preis (CHF ${cardPrice.toFixed(2)}) ist der historische Allzeit-Tiefstpreis!`;
-            badge.innerHTML = `🌟 Allzeit-Tiefstpreis`;
-          } else {
-            const markupPct = Math.round(((cardPrice - stats.tiefstpreis) / stats.tiefstpreis) * 100);
-            badge.title = `Historischer Tiefstpreis lag bei CHF ${stats.tiefstpreis.toFixed(2)} (+${markupPct}% Aufschlag)`;
-            badge.innerHTML = `⚠️ TP: CHF ${stats.tiefstpreis.toFixed(2)} (+${markupPct}%)`;
+          // DOM Memoization: only re-render if status, pid, or price changed
+          if (realDealWrapper.dataset.tpPid !== pid || realDealWrapper.dataset.tpStatus !== targetStatus || realDealWrapper.dataset.tpPrice !== priceStr) {
+            realDealWrapper.dataset.tpPid = pid;
+            realDealWrapper.dataset.tpStatus = targetStatus;
+            realDealWrapper.dataset.tpPrice = priceStr;
+            realDealWrapper.innerHTML = '';
+
+            const badge = document.createElement('div');
+            badge.className = `tp-real-deal-sub-badge ${isAllTimeLow ? 'tp-is-alltime-low' : 'tp-is-not-low'}`;
+
+            const hasSignificantPeak = stats.hoechstpreis && stats.hoechstpreis > stats.tiefstpreis * 1.02;
+
+            if (isAllTimeLow) {
+              let peakContext = '';
+              if (hasSignificantPeak) {
+                const peakDropPct = Math.round(((stats.hoechstpreis - cardPrice) / stats.hoechstpreis) * 100);
+                peakContext = ` (-${peakDropPct}% vom Höchstpreis CHF ${stats.hoechstpreis.toFixed(2)})`;
+              }
+              badge.title = `Aktueller Preis (CHF ${priceStr}) ist der historische Allzeit-Tiefstpreis!${peakContext}`;
+              badge.innerHTML = `🌟 Allzeit-Tiefstpreis`;
+            } else {
+              const markupPct = Math.round(((cardPrice - stats.tiefstpreis) / stats.tiefstpreis) * 100);
+              const peakContext = hasSignificantPeak ? ` | Höchstpreis: CHF ${stats.hoechstpreis.toFixed(2)}` : '';
+              badge.title = `Historischer Tiefstpreis lag bei CHF ${stats.tiefstpreis.toFixed(2)} (+${markupPct}% Aufschlag)${peakContext}`;
+              badge.innerHTML = `⚠️ TP: CHF ${stats.tiefstpreis.toFixed(2)} (+${markupPct}%)`;
+            }
+            realDealWrapper.appendChild(badge);
           }
-          realDealWrapper.appendChild(badge);
         } else {
           card.classList.remove('tp-non-bestpreis-filtered');
           if (pid && (isNeueFeed || badgeDifEl)) {
@@ -1611,7 +1685,10 @@ const SHADOW_MODAL_STYLES = `
               }
             }
 
-            if (!realDealWrapper.querySelector('.tp-card-check-deal-btn') && !realDealWrapper.querySelector('.tp-real-deal-sub-badge')) {
+            if (realDealWrapper.dataset.tpStatus !== 'unchecked' || (!realDealWrapper.querySelector('.tp-card-check-deal-btn') && !realDealWrapper.querySelector('.tp-real-deal-sub-badge'))) {
+              realDealWrapper.dataset.tpPid = pid;
+              realDealWrapper.dataset.tpStatus = 'unchecked';
+              realDealWrapper.removeAttribute('data-tp-price');
               realDealWrapper.innerHTML = '';
               const checkBtn = document.createElement('button');
               checkBtn.type = 'button';
