@@ -615,6 +615,43 @@ def test_real_deal_removes_heatmap_on_non_bestpreis(page: Page):
     assert 'tp-heatmap-active' not in (card3.get_attribute('class') or '')
 
 
+def test_real_deal_batch_check_button_counter_and_run(page: Page):
+    batch_btn = page.locator('#tp-bar-batch-check-btn')
+    assert batch_btn.is_visible()
+
+    # In mock_toppreise.html, 3 cards have >= 30% discount (-67%, -35%, -50%)
+    assert 'Check Deals (3)' in (batch_btn.text_content() or '')
+
+    # Mock routes
+    def handle_pricechart(route):
+        route.fulfill(
+            status=200,
+            headers={'access-control-allow-origin': '*'},
+            content_type='text/html',
+            body='<div class="PriceChartLegend"><div class="title">Tiefstpreis</div><div class="Plugin_Price">500.00</div></div>'
+        )
+
+    page.route('**/plugins/product/pricechart*', handle_pricechart)
+
+    # 1. Checking one card individually reduces the batch count from (3) to (2)
+    page.click('#card-cheapest .tp-card-check-deal-btn')
+    page.wait_for_selector('#card-cheapest .tp-real-deal-sub-badge')
+    assert 'Check Deals (2)' in (batch_btn.text_content() or '')
+
+    # 2. Clicking batch button runs the batch check for remaining cards
+    batch_btn.click()
+    page.wait_for_selector('#card-negative .tp-real-deal-sub-badge')
+    page.wait_for_selector('#card-cat-excluded .tp-real-deal-sub-badge')
+
+    # Wait for batch run to complete (tp-batch-active removed)
+    page.wait_for_function("() => !document.querySelector('#tp-bar-batch-check-btn').classList.contains('tp-batch-active')")
+
+    # Once finished, remaining unchecked deals should be 0 or show completion status
+    btn_text = batch_btn.text_content() or ''
+    assert 'Check Deals (0)' in btn_text or 'geprüft' in btn_text
+
+
+
 
 
 
