@@ -48,9 +48,13 @@ The `setup-profile2.sh` script configures wrapper launchers and desktop menu ent
 
 Both profiles share the core application binaries from the original installation. When launching Profile 2, the wrapper scripts pass parameters to isolate user data:
 
-* **Desktop App (Profile 2):** Launched with `--user-data-dir="$HOME/.config/antigravity-profile2"` to isolate login sessions and application state.
+* **Desktop App (Profile 2):** Launched via `bwrap` with `--no-sandbox` and `~/.antigravity-cli-account2/.gemini` mounted over `~/.gemini`.
+  * `DBUS_SESSION_BUS_ADDRESS="unix:path=/dev/null"` isolates Secret Service queries, forcing `language_server` to fall back to file-based OAuth token storage.
+  * `--password-store=basic` enables plaintext local encryption for Chromium cookies, eliminating GNOME Keyring crypto warnings and startup timeouts.
+  * `--class="antigravity-profile2"` pairs with `StartupWMClass=antigravity-profile2` in the desktop entry to keep dock and taskbar icons grouped separately from Profile 1.
+  * A relative symlink (`antigravity/antigravity-oauth-token` → `../antigravity-cli/antigravity-oauth-token`) shares refreshed credentials automatically between Desktop and CLI.
 * **IDE App (Profile 2):** Launched with `--user-data-dir="$HOME/.config/Antigravity-IDE-profile2"`. It shares installed extensions with Profile 1 (`~/.antigravity-ide/extensions`) while keeping settings, workspaces, and auth completely separate.
-* **CLI App (Profile 2):** Launched via `bwrap` to mount `~/.antigravity-cli-account2/.gemini` over `~/.gemini`, keeping `$HOME`, dotfiles, `.ssh`, `.gitconfig`, and desktop keyring / D-Bus access intact for developer tools like `gh` and `git`.
+* **CLI App (Profile 2):** Launched via `bwrap` with `DBUS_SESSION_BUS_ADDRESS="unix:path=/dev/null"`, mounting `~/.antigravity-cli-account2/.gemini` over `~/.gemini` while preserving `$HOME`, dotfiles, `.ssh`, `.gitconfig`, and developer tools (`gh`, `git`).
 
 This prevents configuration/login collisions and allows both sessions to run simultaneously.
 

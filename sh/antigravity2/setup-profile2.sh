@@ -4,13 +4,7 @@
 # to run with a second independent profile side-by-side.
 set -euo pipefail
 
-if [ "$(id -u)" -eq 0 ]; then
-  # If already root, continue
-  true
-else
-  # Rerun as root
-  exec sudo bash "$0" "$@"
-fi
+[ "$(id -u)" -eq 0 ] || exec sudo bash "$0" "$@"
 
 REAL_USER="${SUDO_USER:-$USER}"
 REAL_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
@@ -32,11 +26,40 @@ fi
 
 log "2. Creating wrapper scripts for Profile 2..."
 
+# Profile 2 directories and token symlink
+ACCOUNT2_GEMINI="$REAL_HOME/.antigravity-cli-account2/.gemini"
+mkdir -p "$ACCOUNT2_GEMINI/antigravity" "$ACCOUNT2_GEMINI/antigravity-cli" "$ACCOUNT2_GEMINI/config"
+ln -sf "../antigravity-cli/antigravity-oauth-token" "$ACCOUNT2_GEMINI/antigravity/antigravity-oauth-token"
+
+if [ ! -f "$ACCOUNT2_GEMINI/google_accounts.json" ]; then
+  cat > "$ACCOUNT2_GEMINI/google_accounts.json" <<'JSON'
+{
+  "active": "nataliegemini91@gmail.com",
+  "old": []
+}
+JSON
+fi
+
 # Desktop app wrapper
-cat > /usr/local/bin/antigravity-profile2 <<'EOF'
+cat > /usr/local/bin/antigravity-profile2 <<EOF
 #!/usr/bin/env bash
-# Run original Antigravity Desktop with Profile 2 configuration folder
-exec "/usr/local/bin/antigravity" --user-data-dir="$HOME/.config/antigravity-profile2" "$@"
+# Run original Antigravity Desktop with Profile 2 configuration and isolated .gemini
+ACCOUNT2_GEMINI="\$HOME/.antigravity-cli-account2/.gemini"
+mkdir -p "\$ACCOUNT2_GEMINI" "\$HOME/.config/antigravity-profile2"
+
+exec bwrap \\
+  --dev-bind / / \\
+  --bind "\$ACCOUNT2_GEMINI" "\$HOME/.gemini" \\
+  --setenv DBUS_SESSION_BUS_ADDRESS "unix:path=/dev/null" \\
+  --setenv GH_CONFIG_DIR "\$HOME/.config/gh" \\
+  --setenv GIT_CONFIG_GLOBAL "\$HOME/.gitconfig" \\
+  --setenv GOOGLE_API_KEY "" \\
+  "/usr/local/bin/antigravity" \\
+    --user-data-dir="\$HOME/.config/antigravity-profile2" \\
+    --no-sandbox \\
+    --password-store=basic \\
+    --class="antigravity-profile2" \\
+    "\$@"
 EOF
 chmod +x /usr/local/bin/antigravity-profile2
 
@@ -50,10 +73,6 @@ chmod +x /usr/local/bin/antigravity-ide-profile2
 
 # CLI app wrapper
 AGY_BIN="$REAL_HOME/.local/bin/agy"
-ACCOUNT2_GEMINI="$REAL_HOME/.antigravity-cli-account2/.gemini"
-
-mkdir -p "$ACCOUNT2_GEMINI"
-chown -R "$REAL_USER:$REAL_USER" "$REAL_HOME/.antigravity-cli-account2" 2>/dev/null || true
 
 if [ -f "$AGY_BIN" ]; then
   cat > /usr/local/bin/agy2 <<EOF
@@ -66,7 +85,6 @@ exec bwrap \\
   --dev-bind / / \\
   --bind "\$ACCOUNT2_GEMINI" "\$HOME/.gemini" \\
   --setenv DBUS_SESSION_BUS_ADDRESS "unix:path=/dev/null" \\
-  --setenv REAL_DBUS_SESSION_BUS_ADDRESS "\$DBUS_SESSION_BUS_ADDRESS" \\
   --setenv GH_CONFIG_DIR "\$HOME/.config/gh" \\
   --setenv GIT_CONFIG_GLOBAL "\$HOME/.gitconfig" \\
   --setenv GOOGLE_API_KEY "" \\
@@ -74,8 +92,6 @@ exec bwrap \\
 EOF
   chmod +x /usr/local/bin/agy2
 fi
-
-
 
 log "3. Creating desktop entries for Profile 2..."
 
@@ -90,7 +106,7 @@ Terminal=false
 Type=Application
 Categories=Development;IDE;
 StartupNotify=true
-StartupWMClass=Antigravity
+StartupWMClass=antigravity-profile2
 DESKTOP
 
 # IDE app shortcut
@@ -107,6 +123,9 @@ MimeType=inode/directory;text/plain;application/x-code-workspace;application/x-a
 StartupNotify=true
 StartupWMClass=antigravity-ide
 DESKTOP
+
+# Fix ownership
+chown -R "$REAL_USER:$REAL_USER" "$REAL_HOME/.antigravity-cli-account2" 2>/dev/null || true
 
 log "4. Refreshing desktop and icon database..."
 if command -v update-desktop-database >/dev/null 2>&1; then
