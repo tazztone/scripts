@@ -68,32 +68,9 @@ cat > /usr/local/bin/antigravity-profile2 <<EOF
 ACCOUNT2_GEMINI="\$HOME/.antigravity-cli-account2/.gemini"
 mkdir -p "\$ACCOUNT2_GEMINI" "\$HOME/.config/antigravity-profile2"
 
-# Ensure oauth_creds.json is in sync with CLI token
-CLI_TOKEN="\$ACCOUNT2_GEMINI/antigravity-cli/antigravity-oauth-token"
-CREDS_FILE="\$ACCOUNT2_GEMINI/oauth_creds.json"
-if [ -f "\$CLI_TOKEN" ] && [ ! -f "\$CREDS_FILE" ]; then
-  python3 -c "
-import json
-try:
-    with open('\$CLI_TOKEN') as f:
-        tok = json.load(f).get('token', {})
-    creds = {
-        'access_token': tok.get('access_token', ''),
-        'scope': 'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email openid https://www.googleapis.com/auth/cloud-platform',
-        'token_type': tok.get('token_type', 'Bearer'),
-        'refresh_token': tok.get('refresh_token', '')
-    }
-    with open('\$CREDS_FILE', 'w') as f:
-        json.dump(creds, f, indent=2)
-except Exception:
-    pass
-" 2>/dev/null || true
-fi
-
 exec bwrap \\
   --dev-bind / / \\
   --bind "\$ACCOUNT2_GEMINI" "\$HOME/.gemini" \\
-  --setenv DBUS_SESSION_BUS_ADDRESS "unix:path=/dev/null" \\
   --setenv GH_CONFIG_DIR "\$HOME/.config/gh" \\
   --setenv GIT_CONFIG_GLOBAL "\$HOME/.gitconfig" \\
   --setenv GOOGLE_API_KEY "" \\

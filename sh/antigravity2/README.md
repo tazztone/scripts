@@ -49,10 +49,10 @@ The `setup-profile2.sh` script configures wrapper launchers and desktop menu ent
 Both profiles share the core application binaries from the original installation. When launching Profile 2, the wrapper scripts pass parameters to isolate user data:
 
 * **Desktop App (Profile 2):** Launched via `bwrap` with `--no-sandbox` and `~/.antigravity-cli-account2/.gemini` mounted over `~/.gemini`.
-  * `DBUS_SESSION_BUS_ADDRESS="unix:path=/dev/null"` isolates Secret Service queries, forcing `language_server` to fall back to file-based OAuth token storage without leaking host GNOME Keyring credentials.
-  * `--password-store=basic` enables plaintext local encryption for Chromium cookies, eliminating GNOME Keyring crypto warnings and startup timeouts.
+  * `--password-store=basic` enables plaintext local encryption for Chromium session cookies in `~/.config/antigravity-profile2`, keeping sessions and web auth isolated from Profile 1.
   * `--class="antigravity-profile2"` pairs with `StartupWMClass=antigravity-profile2` in the desktop entry to keep dock and taskbar icons grouped separately from Profile 1.
   * `oauth_creds.json` and a relative symlink (`antigravity/antigravity-oauth-token` → `../antigravity-cli/antigravity-oauth-token`) seed and share refreshed credentials automatically between Desktop and CLI.
+  * D-Bus remains connected so Electron can open external browsers via FreeDesktop Desktop Portal (`org.freedesktop.portal.OpenURI`) for Google OAuth logins and external documentation links.
 * **IDE App (Profile 2):** Launched with `--user-data-dir="$HOME/.config/Antigravity-IDE-profile2"`. It shares installed extensions with Profile 1 (`~/.antigravity-ide/extensions`) while keeping settings, workspaces, and auth completely separate.
 * **CLI App (Profile 2):** Launched via `bwrap` with `DBUS_SESSION_BUS_ADDRESS="unix:path=/dev/null"`, mounting `~/.antigravity-cli-account2/.gemini` over `~/.gemini` while preserving `$HOME`, dotfiles, `.ssh`, `.gitconfig`, and developer tools (`gh`, `git`).
 

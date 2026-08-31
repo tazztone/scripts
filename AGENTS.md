@@ -2,15 +2,18 @@
 
 ## Testing & Verification
 
-- Run all test suites (Python + Userscripts) using the workspace virtualenv:
+- **Default (Fast Python Unit Tests — ~90ms):**
   ```bash
   userscripts/venv/bin/pytest
   ```
-- Run only Python tests:
-  ```bash
-  userscripts/venv/bin/pytest python/
-  ```
-- Run only Userscript tests:
+  *(or explicitly: `userscripts/venv/bin/pytest python/`)*
+
+- **Userscripts Playwright E2E Browser Tests (~25s):**
   ```bash
   userscripts/venv/bin/pytest userscripts/
+  ```
+
+- **Run Both Suites:**
+  ```bash
+  userscripts/venv/bin/pytest python/ userscripts/
   ```
