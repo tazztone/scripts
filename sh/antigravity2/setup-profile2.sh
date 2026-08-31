@@ -40,12 +40,55 @@ if [ ! -f "$ACCOUNT2_GEMINI/google_accounts.json" ]; then
 JSON
 fi
 
+# Seed oauth_creds.json from Account 2 CLI token if present
+CLI_TOKEN_FILE="$ACCOUNT2_GEMINI/antigravity-cli/antigravity-oauth-token"
+if [ -f "$CLI_TOKEN_FILE" ]; then
+  python3 -c "
+import json
+try:
+    with open('$CLI_TOKEN_FILE') as f:
+        tok = json.load(f).get('token', {})
+    creds = {
+        'access_token': tok.get('access_token', ''),
+        'scope': 'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email openid https://www.googleapis.com/auth/cloud-platform',
+        'token_type': tok.get('token_type', 'Bearer'),
+        'refresh_token': tok.get('refresh_token', '')
+    }
+    with open('$ACCOUNT2_GEMINI/oauth_creds.json', 'w') as f:
+        json.dump(creds, f, indent=2)
+except Exception:
+    pass
+" 2>/dev/null || true
+fi
+
 # Desktop app wrapper
 cat > /usr/local/bin/antigravity-profile2 <<EOF
 #!/usr/bin/env bash
 # Run original Antigravity Desktop with Profile 2 configuration and isolated .gemini
 ACCOUNT2_GEMINI="\$HOME/.antigravity-cli-account2/.gemini"
 mkdir -p "\$ACCOUNT2_GEMINI" "\$HOME/.config/antigravity-profile2"
+
+# Ensure oauth_creds.json is in sync with CLI token
+CLI_TOKEN="\$ACCOUNT2_GEMINI/antigravity-cli/antigravity-oauth-token"
+CREDS_FILE="\$ACCOUNT2_GEMINI/oauth_creds.json"
+if [ -f "\$CLI_TOKEN" ] && [ ! -f "\$CREDS_FILE" ]; then
+  python3 -c "
+import json
+try:
+    with open('\$CLI_TOKEN') as f:
+        tok = json.load(f).get('token', {})
+    creds = {
+        'access_token': tok.get('access_token', ''),
+        'scope': 'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email openid https://www.googleapis.com/auth/cloud-platform',
+        'token_type': tok.get('token_type', 'Bearer'),
+        'refresh_token': tok.get('refresh_token', '')
+    }
+    with open('\$CREDS_FILE', 'w') as f:
+        json.dump(creds, f, indent=2)
+except Exception:
+    pass
+" 2>/dev/null || true
+fi
 
 exec bwrap \\
   --dev-bind / / \\
