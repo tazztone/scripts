@@ -651,6 +651,90 @@ def test_real_deal_batch_check_button_counter_and_run(page: Page):
     assert 'Check Deals (0)' in btn_text or 'geprüft' in btn_text
 
 
+def test_empty_state_notice_and_actions(page: Page):
+    # Initially all 5 cards in mock_toppreise are visible, no empty notice
+    assert not page.locator('#tp-empty-state-notice').is_visible()
+
+    # Filter all 5 cards by setting negative terms
+    page.fill('#tp-inline-negative-input', 'GeForce, Silikon, iPhone, Dell')
+    page.wait_for_selector('#tp-empty-state-notice')
+
+    notice = page.locator('#tp-empty-state-notice')
+    assert notice.is_visible()
+    assert 'Alle 5 Angebote' in (notice.text_content() or '')
+
+    # Clicking "👁️ Ausgeblendete anzeigen" reveals previews
+    page.click('#tp-empty-reveal-btn')
+    assert 'tp-reveal-filtered' in (page.locator('body').get_attribute('class') or '')
+    assert not page.locator('#tp-empty-state-notice').is_visible()
+
+    # Toggle reveal off again -> notice comes back
+    page.click('#tp-bar-reveal-btn')
+    page.wait_for_selector('#tp-empty-state-notice')
+
+    # Clicking "🔄 Filter zurücksetzen" clears filters and restores cards
+    page.click('#tp-empty-reset-btn')
+    assert not page.locator('#tp-empty-state-notice').is_visible()
+    assert page.locator('#card-cheapest').is_visible()
+
+
+def test_real_deal_threshold_quick_selector(page: Page):
+    thresh_btn = page.locator('#tp-bar-threshold-btn')
+    popover = page.locator('#tp-threshold-popover')
+    batch_btn = page.locator('#tp-bar-batch-check-btn')
+
+    assert thresh_btn.is_visible()
+    assert '≥30%' in (thresh_btn.text_content() or '')
+    # Initially at 30%, 3 cards qualify (-67%, -35%, -50%)
+    assert 'Check Deals (3)' in (batch_btn.text_content() or '')
+
+    # Open popover
+    thresh_btn.click()
+    assert 'tp-show' in (popover.get_attribute('class') or '')
+
+    # Select >= 50%
+    page.click('#tp-threshold-popover button[data-val="50"]')
+    assert 'tp-show' not in (popover.get_attribute('class') or '')
+    assert '≥50%' in (thresh_btn.text_content() or '')
+
+    # At 50%, only 2 cards qualify (-67%, -50%) -> count updates live to (2)
+    assert 'Check Deals (2)' in (batch_btn.text_content() or '')
+
+
+def test_product_detail_page_deal_badge(page: Page):
+    # Mock route for product detail chart
+    page.route('**/plugins/product/pricechart*840582*', lambda route: route.fulfill(
+        status=200,
+        headers={'access-control-allow-origin': '*'},
+        content_type='text/html',
+        body='''
+        <div class="PriceChartLegend">
+          <div class="col-4"><div class="title">Tiefstpreis</div><div class="Plugin_Price">350.90</div></div>
+          <div class="col-4"><div class="title">Höchstpreis</div><div class="Plugin_Price">700.00</div></div>
+        </div>
+        '''
+    ))
+
+    # Setup detail page DOM structure
+    page.evaluate('''() => {
+        document.body.innerHTML = `
+          <div class="Plugin_ProductHeading">
+            <h1>SHARP 55HR7265E <a href="/plugins/product/pricechart?p_pc_pid=840582">Preischart</a></h1>
+          </div>
+          <div class="productPrice"><div class="Plugin_Price">350.90</div></div>
+        `;
+        window.ToppreiseSuite?.processProductDetailPage?.();
+    }''')
+
+    page.wait_for_selector('#tp-detail-deal-badge.tp-is-alltime-low')
+    badge = page.locator('#tp-detail-deal-badge')
+    assert 'Allzeit-Tiefstpreis' in (badge.text_content() or '')
+    title = badge.get_attribute('title') or ''
+    assert 'Allzeit-Tiefstpreis' in title
+    assert 'CHF 700.00' in title
+
+
+
 
 
 

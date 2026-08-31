@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.12.6
+// @version      2.12.7
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, checks real all-time Tiefstpreise, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -265,6 +265,133 @@ const STYLES = `
     background: rgba(245, 158, 11, 0.25) !important;
     border-color: rgba(245, 158, 11, 0.5) !important;
     color: #fbbf24 !important;
+  }
+  .tp-threshold-wrapper {
+    position: relative !important;
+    display: inline-flex !important;
+    align-items: center !important;
+  }
+  .tp-threshold-btn {
+    background: rgba(15, 23, 42, 0.6) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    border-left: none !important;
+    color: #94a3b8 !important;
+    padding: 5px 8px !important;
+    border-radius: 0 8px 8px 0 !important;
+    font: 600 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+  }
+  .tp-threshold-btn:hover, .tp-threshold-btn.tp-open {
+    color: #f8fafc !important;
+    background: rgba(30, 41, 59, 0.9) !important;
+  }
+  .tp-threshold-popover {
+    position: absolute !important;
+    top: calc(100% + 4px) !important;
+    left: 0 !important;
+    background: rgba(15, 23, 42, 0.96) !important;
+    backdrop-filter: blur(12px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: 8px !important;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5) !important;
+    padding: 4px !important;
+    display: none;
+    flex-direction: column !important;
+    gap: 2px !important;
+    z-index: 100000 !important;
+    min-width: 84px !important;
+  }
+  .tp-threshold-popover.tp-show { display: flex !important; }
+  .tp-threshold-option {
+    background: transparent !important;
+    border: none !important;
+    color: #cbd5e1 !important;
+    padding: 5px 10px !important;
+    font: 600 11.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    border-radius: 5px !important;
+    cursor: pointer !important;
+    text-align: left !important;
+    transition: all 0.15s ease !important;
+  }
+  .tp-threshold-option:hover {
+    background: rgba(59, 130, 246, 0.25) !important;
+    color: #60a5fa !important;
+  }
+  .tp-threshold-option.tp-selected {
+    background: #3b82f6 !important;
+    color: #ffffff !important;
+  }
+  .tp-empty-state-notice {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 12px !important;
+    background: rgba(30, 41, 59, 0.85) !important;
+    backdrop-filter: blur(12px) !important;
+    border: 1px dashed rgba(255, 255, 255, 0.2) !important;
+    border-radius: 12px !important;
+    padding: 24px 20px !important;
+    margin: 16px auto !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    color: #e2e8f0 !important;
+    text-align: center !important;
+    font: 500 13.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3) !important;
+  }
+  .tp-empty-state-actions {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    justify-content: center !important;
+  }
+  .tp-empty-state-btn {
+    background: rgba(15, 23, 42, 0.8) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    color: #f1f5f9 !important;
+    padding: 6px 12px !important;
+    border-radius: 6px !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+  }
+  .tp-empty-state-btn:hover {
+    background: #3b82f6 !important;
+    border-color: #60a5fa !important;
+    color: #ffffff !important;
+  }
+  .tp-detail-deal-badge {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    padding: 4px 10px !important;
+    border-radius: 8px !important;
+    font: 700 12.5px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+    vertical-align: middle !important;
+    margin-left: 10px !important;
+    user-select: none !important;
+  }
+  .tp-detail-deal-badge.tp-is-alltime-low {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.95) 0%, rgba(5, 150, 105, 0.95) 100%) !important;
+    border: 1px solid #34d399 !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 10px rgba(16, 185, 129, 0.45) !important;
+  }
+  .tp-detail-deal-badge.tp-is-not-low {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.95) 0%, rgba(217, 119, 6, 0.95) 100%) !important;
+    border: 1px solid #fbbf24 !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 10px rgba(245, 158, 11, 0.4) !important;
+  }
+  .tp-detail-deal-badge.tp-is-severe-markup {
+    background: linear-gradient(135deg, rgba(225, 29, 72, 0.95) 0%, rgba(190, 18, 60, 0.95)) !important;
+    border: 1px solid #f43f5e !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 10px rgba(225, 29, 72, 0.45) !important;
   }
   .tp-card-quick-block {
     position: absolute !important;
@@ -1037,7 +1164,11 @@ const SHADOW_MODAL_STYLES = `
       const titleEls = Array.from(doc.querySelectorAll('.title, .col-12.title, div'));
       const found = titleEls.find(el => el.textContent.trim().toLowerCase() === titleText.toLowerCase());
       if (found) {
-        const parent = found.closest('.col-4, .col-md-3, .row, .PriceChartLegend') || found.parentElement;
+        if (found.nextElementSibling?.classList.contains('Plugin_Price')) {
+          const val = parsePrice(found.nextElementSibling.textContent);
+          if (val > 0) return val;
+        }
+        const parent = found.closest('.col-4, .col-md-3, .col-12, .col, .cell') || found.parentElement;
         const priceEl = parent?.querySelector('.Plugin_Price');
         if (priceEl) {
           const val = parsePrice(priceEl.textContent);
@@ -1223,9 +1354,19 @@ const SHADOW_MODAL_STYLES = `
           <button class="tp-bar-btn ${CONFIG.REAL_DEAL_FILTER_ACTIVE ? 'tp-active' : ''}" id="tp-bar-real-deal-btn" title="Nur echte Allzeit-Tiefstpreise anzeigen (Nicht-Bestpreise ausblenden)">
             🌟 Nur Tiefstpreise <span id="tp-bar-real-deal-count" style="display: ${counts.nonBest > 0 ? 'inline' : 'none'}; font-size: 10px; opacity: 0.85;">(${counts.nonBest || 0})</span>
           </button>
-          <button class="tp-bar-btn ${isBatchChecking ? 'tp-batch-active' : ''}" id="tp-bar-batch-check-btn" title="Tiefstpreise für ${uncheckedDeals} Deals ab ${CONFIG.REAL_DEAL_MIN_DISCOUNT || 30}% Rabatt prüfen">
-            ${isBatchChecking ? '⏳ Prüfen...' : `🔍 Check Deals (${uncheckedDeals})`}
-          </button>
+          <div class="tp-threshold-wrapper" id="tp-bar-threshold-wrapper">
+            <button class="tp-bar-btn ${isBatchChecking ? 'tp-batch-active' : ''}" id="tp-bar-batch-check-btn" title="Tiefstpreise für ${uncheckedDeals} Deals ab ${CONFIG.REAL_DEAL_MIN_DISCOUNT || 30}% Rabatt prüfen" style="border-top-right-radius: 0 !important; border-bottom-right-radius: 0 !important; border-right: none !important;">
+              ${isBatchChecking ? '⏳ Prüfen...' : `🔍 Check Deals (${uncheckedDeals})`}
+            </button>
+            <button class="tp-threshold-btn" id="tp-bar-threshold-btn" title="Mindest-Rabatt für Deal-Check wählen (aktuell ≥${CONFIG.REAL_DEAL_MIN_DISCOUNT || 30}%)">≥${CONFIG.REAL_DEAL_MIN_DISCOUNT || 30}% ▾</button>
+            <div class="tp-threshold-popover" id="tp-threshold-popover">
+              <button class="tp-threshold-option ${(CONFIG.REAL_DEAL_MIN_DISCOUNT || 30) === 20 ? 'tp-selected' : ''}" data-val="20">≥ 20%</button>
+              <button class="tp-threshold-option ${(CONFIG.REAL_DEAL_MIN_DISCOUNT || 30) === 30 ? 'tp-selected' : ''}" data-val="30">≥ 30%</button>
+              <button class="tp-threshold-option ${(CONFIG.REAL_DEAL_MIN_DISCOUNT || 30) === 40 ? 'tp-selected' : ''}" data-val="40">≥ 40%</button>
+              <button class="tp-threshold-option ${(CONFIG.REAL_DEAL_MIN_DISCOUNT || 30) === 50 ? 'tp-selected' : ''}" data-val="50">≥ 50%</button>
+              <button class="tp-threshold-option ${(CONFIG.REAL_DEAL_MIN_DISCOUNT || 30) === 60 ? 'tp-selected' : ''}" data-val="60">≥ 60%</button>
+            </div>
+          </div>
           <button class="tp-bar-btn ${isBlockedCatsOpen ? 'tp-active' : ''}" id="tp-bar-cats-toggle" style="display: ${excluded.length > 0 ? 'flex' : 'none'};" title="Ausgeblendete Kategorien anzeigen/verbergen">
             🚫 <span id="tp-bar-cats-count">${excluded.length}</span> ${isBlockedCatsOpen ? '▴' : '▾'}
           </button>
@@ -1337,6 +1478,43 @@ const SHADOW_MODAL_STYLES = `
         };
       }
 
+      const threshBtn = bar.querySelector('#tp-bar-threshold-btn');
+      const threshPopover = bar.querySelector('#tp-threshold-popover');
+      if (threshBtn && threshPopover) {
+        threshBtn.onclick = e => {
+          e.preventDefault();
+          e.stopPropagation();
+          const isOpen = threshPopover.classList.toggle('tp-show');
+          threshBtn.classList.toggle('tp-open', isOpen);
+        };
+
+        threshPopover.querySelectorAll('.tp-threshold-option').forEach(opt => {
+          opt.onclick = e => {
+            e.preventDefault();
+            e.stopPropagation();
+            const val = parseInt(opt.dataset.val, 10);
+            if (!isNaN(val)) {
+              saveConfigKey('REAL_DEAL_MIN_DISCOUNT', val);
+              if (uiShadowRoot) {
+                const modalRange = uiShadowRoot.getElementById('tp-real-deal-min-range');
+                const modalVal = uiShadowRoot.getElementById('tp-real-deal-min-val');
+                if (modalRange) modalRange.value = val;
+                if (modalVal) modalVal.value = val;
+              }
+              threshPopover.classList.remove('tp-show');
+              threshBtn.classList.remove('tp-open');
+              processListings();
+              showToast(`Mindest-Rabatt für Deals auf ${val}% gesetzt`);
+            }
+          };
+        });
+
+        document.addEventListener('click', () => {
+          threshPopover.classList.remove('tp-show');
+          threshBtn.classList.remove('tp-open');
+        });
+      }
+
       bar.querySelector('#tp-bar-cats-toggle').onclick = () => {
         isBlockedCatsOpen = !isBlockedCatsOpen;
         processListings();
@@ -1401,6 +1579,20 @@ const SHADOW_MODAL_STYLES = `
       batchBtn.innerHTML = `🔍 Check Deals (${uncheckedDeals})`;
       batchBtn.title = `Tiefstpreise für ${uncheckedDeals} Deals ab ${CONFIG.REAL_DEAL_MIN_DISCOUNT || 30}% Rabatt prüfen`;
       batchBtn.classList.remove('tp-batch-active');
+    }
+
+    const threshBtn = bar.querySelector('#tp-bar-threshold-btn');
+    if (threshBtn) {
+      const minDisc = CONFIG.REAL_DEAL_MIN_DISCOUNT || 30;
+      threshBtn.textContent = `≥${minDisc}% ▾`;
+      threshBtn.title = `Mindest-Rabatt für Deal-Check wählen (aktuell ≥${minDisc}%)`;
+    }
+    const threshPopover = bar.querySelector('#tp-threshold-popover');
+    if (threshPopover) {
+      const minDisc = CONFIG.REAL_DEAL_MIN_DISCOUNT || 30;
+      threshPopover.querySelectorAll('.tp-threshold-option').forEach(opt => {
+        opt.classList.toggle('tp-selected', parseInt(opt.dataset.val, 10) === minDisc);
+      });
     }
 
     const catsToggleBtn = bar.querySelector('#tp-bar-cats-toggle');
@@ -1784,9 +1976,130 @@ const SHADOW_MODAL_STYLES = `
         }
       }
 
+      // 5. Empty State Notice when all items are filtered out
+      const totalHidden = (counts.neg || 0) + (counts.cat || 0) + (counts.min || 0) + (counts.nonBest || 0);
+      const isRevealed = document.body.classList.contains('tp-reveal-filtered');
+      let emptyNotice = document.getElementById('tp-empty-state-notice');
+
+      if (cards.length > 0 && totalHidden >= cards.length && !isRevealed) {
+        if (!emptyNotice) {
+          emptyNotice = document.createElement('div');
+          emptyNotice.id = 'tp-empty-state-notice';
+          emptyNotice.className = 'tp-empty-state-notice';
+          const listParent = cards[0]?.parentElement;
+          if (listParent) {
+            listParent.insertBefore(emptyNotice, listParent.firstChild);
+          }
+        }
+        emptyNotice.innerHTML = `
+          <div>🚫 <strong>Alle ${cards.length} Angebote auf dieser Seite sind durch aktive Filter ausgeblendet.</strong></div>
+          <div class="tp-empty-state-actions">
+            <button class="tp-empty-state-btn" id="tp-empty-reveal-btn">👁️ Ausgeblendete anzeigen</button>
+            ${counts.nonBest > 0 ? '<button class="tp-empty-state-btn" id="tp-empty-disable-dealfilter-btn">🌟 Tiefstpreis-Filter ausschalten</button>' : ''}
+            <button class="tp-empty-state-btn" id="tp-empty-reset-btn">🔄 Filter zurücksetzen</button>
+          </div>
+        `;
+        emptyNotice.querySelector('#tp-empty-reveal-btn')?.addEventListener('click', () => {
+          document.body.classList.toggle('tp-reveal-filtered');
+          processListings();
+        });
+        emptyNotice.querySelector('#tp-empty-disable-dealfilter-btn')?.addEventListener('click', () => {
+          saveConfigKey('REAL_DEAL_FILTER_ACTIVE', false);
+          if (uiShadowRoot) {
+            const modalToggle = uiShadowRoot.getElementById('tp-real-deal-filter-toggle');
+            if (modalToggle) modalToggle.checked = false;
+          }
+          processListings();
+          showToast('Tiefstpreis-Filter deaktiviert');
+        });
+        emptyNotice.querySelector('#tp-empty-reset-btn')?.addEventListener('click', resetAllFilters);
+      } else if (emptyNotice) {
+        emptyNotice.remove();
+      }
+
       renderSuiteFilterBar(counts, pageHasOffers);
     } finally {
       isModifyingDOM = false;
+    }
+  }
+
+  // ─── PRODUCT DETAIL PAGE REAL DEAL ──────────────────────────────────────────
+  function isProductDetailPage() {
+    return /\/preisvergleich\/[^/]+\/[^/]+-p(\d+)/i.test(location.href) ||
+           !!document.querySelector('.Page_DetailProduct, #Page_DetailProduct, .product_detail_page') ||
+           (!!document.querySelector('.Plugin_ProductHeading h1, .productHeading h1, .product_title h1, h1.productTitle') && !!getDetailProductId());
+  }
+
+  function getDetailProductId() {
+    const match = location.href.match(/-p(\d+)/i);
+    if (match) return match[1];
+    const chartLink = document.querySelector('a[href*="pricechart"], a[href*="p_pc_pid="]');
+    if (chartLink) {
+      const m = chartLink.href.match(/p_pc_pid=(\d+)/i);
+      if (m) return m[1];
+    }
+    const chartForm = document.querySelector('form[action*="pricechart"] input[name*="pid"], input[name="p_pc_pid"]');
+    if (chartForm && chartForm.value) return chartForm.value;
+    return null;
+  }
+
+  function getDetailLowestPrice() {
+    const priceEl = document.querySelector('.productPrice .Plugin_Price, .product_price .Plugin_Price, .lowestPrice .Plugin_Price, .priceComparison .Plugin_Price, .tableDealerPriceList .Plugin_Price, .Plugin_Price');
+    return priceEl ? parsePrice(priceEl.textContent) : 0;
+  }
+
+  let isProcessingDetail = false;
+  async function processProductDetailPage() {
+    if (isProcessingDetail) return;
+    const pid = getDetailProductId();
+    if (!pid) return;
+
+    const headingEl = document.querySelector('.Plugin_ProductHeading h1, .productHeading h1, .product_title h1, h1.productTitle, h1');
+    if (!headingEl) return;
+
+    const currentPrice = getDetailLowestPrice();
+    if (currentPrice <= 0) return;
+
+    let badge = document.getElementById('tp-detail-deal-badge');
+    const stats = getCachedPriceStats(pid);
+
+    if (stats && stats.tiefstpreis > 0) {
+      if (!badge) {
+        badge = document.createElement('div');
+        badge.id = 'tp-detail-deal-badge';
+        headingEl.appendChild(badge);
+      }
+
+      const isAllTimeLow = currentPrice <= stats.tiefstpreis * 1.01;
+      const hasSignificantPeak = stats.hoechstpreis && stats.hoechstpreis > stats.tiefstpreis * 1.02;
+
+      if (isAllTimeLow) {
+        badge.className = 'tp-detail-deal-badge tp-is-alltime-low';
+        let peakContext = '';
+        if (hasSignificantPeak) {
+          const peakDropPct = Math.round(((stats.hoechstpreis - currentPrice) / stats.hoechstpreis) * 100);
+          peakContext = ` (-${peakDropPct}% vom Höchstpreis CHF ${stats.hoechstpreis.toFixed(2)})`;
+        }
+        badge.title = `Aktueller Bestpreis (CHF ${currentPrice.toFixed(2)}) ist der historische Allzeit-Tiefstpreis!${peakContext}`;
+        badge.innerHTML = `🌟 Allzeit-Tiefstpreis`;
+      } else {
+        const markupPct = Math.round(((currentPrice - stats.tiefstpreis) / stats.tiefstpreis) * 100);
+        const isSevere = markupPct >= 50;
+        badge.className = `tp-detail-deal-badge tp-is-not-low ${isSevere ? 'tp-is-severe-markup' : ''}`;
+        const peakContext = hasSignificantPeak ? ` | Höchstpreis: CHF ${stats.hoechstpreis.toFixed(2)}` : '';
+        badge.title = `Historischer Tiefstpreis lag bei CHF ${stats.tiefstpreis.toFixed(2)} (+${markupPct}% Aufschlag)${peakContext}`;
+        badge.innerHTML = `⚠️ Tiefstpreis: CHF ${stats.tiefstpreis.toFixed(2)} (+${markupPct}%)`;
+      }
+    } else if (!activeFetches.has(pid)) {
+      isProcessingDetail = true;
+      try {
+        const fetchedStats = await fetchSingleProductPriceStats(pid);
+        if (fetchedStats) {
+          processProductDetailPage();
+        }
+      } finally {
+        isProcessingDetail = false;
+      }
     }
   }
 
@@ -2255,6 +2568,9 @@ const SHADOW_MODAL_STYLES = `
     debounceTimer = setTimeout(() => {
       processListings();
       processPriceAlarmModal();
+      if (isProductDetailPage()) {
+        processProductDetailPage();
+      }
     }, CONFIG.OBSERVER_DEBOUNCE_MS);
   });
 
@@ -2264,10 +2580,25 @@ const SHADOW_MODAL_STYLES = `
     self.navigation.addEventListener('navigatesuccess', () => {
       processListings();
       processPriceAlarmModal();
+      if (isProductDetailPage()) {
+        processProductDetailPage();
+      }
     });
   }
 
   setupUI();
   processListings();
   processPriceAlarmModal();
+  if (isProductDetailPage()) {
+    processProductDetailPage();
+  }
+
+  if (typeof window !== 'undefined') {
+    window.ToppreiseSuite = {
+      processListings,
+      processProductDetailPage,
+      processPriceAlarmModal,
+      CONFIG
+    };
+  }
 })();
