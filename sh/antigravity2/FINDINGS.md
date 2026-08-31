@@ -106,6 +106,7 @@ Pass `--class="antigravity-profile2"` to Electron and set `StartupWMClass=antigr
 ### 5. Dev Tool Credentials Passthrough
 Pass `GH_CONFIG_DIR="$HOME/.config/gh"` and `GIT_CONFIG_GLOBAL="$HOME/.gitconfig"`.
 * Embedded terminals and background coding agents in Desktop Profile 2 can authenticate against host Git and GitHub accounts without re-login.
+* Because `DBUS_SESSION_BUS_ADDRESS="unix:path=/dev/null"` isolates the Secret Service to protect Google Account 2 from host keyring leaks, `gh` uses file-based token storage in `~/.config/gh/hosts.yml` (`gh auth login --insecure-storage`) instead of GNOME Keyring.
 
 ### 6. Legacy Standalone Token Symlink (`jetski-standalone-oauth-token`)
 The `language_server` in `--standalone` mode reads the legacy token path `~/.gemini/jetski-standalone-oauth-token`, **not** `antigravity/antigravity-oauth-token` as previously assumed.
@@ -161,3 +162,8 @@ During development and testing of the multi-profile architecture, several non-ob
 * **Layer 1 (Go Backend RPC):** Isolated by Bubblewrap namespace mount of `~/.antigravity-cli-account2/.gemini` over `~/.gemini`.
 * **Layer 2 (Electron / Chromium Web Session):** Isolated by `--user-data-dir="$HOME/.config/antigravity-profile2"` with `--password-store=basic`.
 * **Dock Grouping:** Separated via `--class="antigravity-profile2"` and `StartupWMClass=antigravity-profile2`.
+
+### F. GitHub CLI (`gh`) and Git Credential Auth under D-Bus Isolation
+* **Symptom:** In AG IDE, `gh auth status` reported `Logged in to github.com account (keyring)`. Inside `agy2` and `antigravity-profile2`, `gh auth status` failed with `Failed to log in to github.com account (default) - The token in default is invalid`.
+* **Root Cause:** By default on Linux, `gh` stores credentials in GNOME Keyring via D-Bus Secret Service. Because Profile 2 sets `DBUS_SESSION_BUS_ADDRESS="unix:path=/dev/null"` to isolate Google OAuth tokens, `gh` could not reach the host keyring and fell back to `~/.config/gh/hosts.yml`, which lacked an `oauth_token` field.
+* **Resolution:** Save the GitHub authentication token directly into `~/.config/gh/hosts.yml` (using `gh auth login --insecure-storage` or automatic synchronization during `setup-profile2.sh`). This enables both `gh` and Git credential helpers (`gh auth git-credential`) to work cleanly in all environments (AG IDE, host shells, `agy2`, and `antigravity-profile2`).

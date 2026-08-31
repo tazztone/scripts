@@ -45,6 +45,13 @@ ln -sf "../antigravity-cli/antigravity-oauth-token" "$ACCOUNT2_GEMINI/antigravit
 # finds no token and reports "You are not logged into Antigravity."
 ln -sf "antigravity-cli/antigravity-oauth-token" "$ACCOUNT2_GEMINI/jetski-standalone-oauth-token"
 
+# Shared skills symlink (makes global/shared agent skills accessible in Profile 2)
+if [ -d "$REAL_HOME/.agents/skills" ]; then
+  ln -sfn "$REAL_HOME/.agents/skills" "$ACCOUNT2_GEMINI/skills"
+elif [ -d "$REAL_HOME/.gemini/skills" ]; then
+  ln -sfn "$REAL_HOME/.gemini/skills" "$ACCOUNT2_GEMINI/skills"
+fi
+
 if [ -n "$PROFILE2_EMAIL" ] && [ ! -f "$ACCOUNT2_GEMINI/google_accounts.json" ]; then
   cat > "$ACCOUNT2_GEMINI/google_accounts.json" <<JSON
 {
@@ -117,6 +124,20 @@ except Exception:
 " 2>/dev/null || true
 fi
 
+# Ensure GitHub CLI config in ~/.config/gh/hosts.yml has file-based token storage for isolated D-Bus environments
+GH_HOSTS="$REAL_HOME/.config/gh/hosts.yml"
+if [ -f "$GH_HOSTS" ] && ! grep -q "oauth_token:" "$GH_HOSTS"; then
+  log "Syncing GitHub CLI token to $GH_HOSTS for D-Bus-isolated profile..."
+  sudo -u "$REAL_USER" bash -c '
+    if command -v gh >/dev/null 2>&1; then
+      tok=$(gh auth token 2>/dev/null || true)
+      if [ -n "$tok" ]; then
+        gh auth login --insecure-storage --with-token <<< "$tok" 2>/dev/null || true
+      fi
+    fi
+  ' 2>/dev/null || true
+fi
+
 # Desktop app wrapper
 cat > /usr/local/bin/antigravity-profile2 <<EOF
 #!/usr/bin/env bash
@@ -127,6 +148,8 @@ mkdir -p "\$ACCOUNT2_GEMINI" "\$HOME/.config/antigravity-profile2"
 exec bwrap \\
   --dev-bind / / \\
   --bind "\$ACCOUNT2_GEMINI" "\$HOME/.gemini" \\
+  --ro-bind-try "\$HOME/.gemini/config/plugins" "\$HOME/.gemini/config/plugins" \\
+  --ro-bind-try "\$HOME/.gemini/GEMINI.md" "\$HOME/.gemini/GEMINI.md" \\
   --setenv DBUS_SESSION_BUS_ADDRESS "unix:path=/dev/null" \\
   --setenv GH_CONFIG_DIR "\$HOME/.config/gh" \\
   --setenv GIT_CONFIG_GLOBAL "\$HOME/.gitconfig" \\
@@ -161,6 +184,8 @@ mkdir -p "\$ACCOUNT2_GEMINI" "\$HOME/.gemini"
 exec bwrap \\
   --dev-bind / / \\
   --bind "\$ACCOUNT2_GEMINI" "\$HOME/.gemini" \\
+  --ro-bind-try "\$HOME/.gemini/config/plugins" "\$HOME/.gemini/config/plugins" \\
+  --ro-bind-try "\$HOME/.gemini/GEMINI.md" "\$HOME/.gemini/GEMINI.md" \\
   --setenv DBUS_SESSION_BUS_ADDRESS "unix:path=/dev/null" \\
   --setenv GH_CONFIG_DIR "\$HOME/.config/gh" \\
   --setenv GIT_CONFIG_GLOBAL "\$HOME/.gitconfig" \\
