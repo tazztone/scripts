@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.12.4
+// @version      2.12.5
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, checks real all-time Tiefstpreise, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -1475,9 +1475,17 @@ const SHADOW_MODAL_STYLES = `
       const isNeueFeed = isNeueToppreisePage();
 
       for (const card of cards) {
+        const pid = getCardProductId(card);
+        const cardPriceEl = CONFIG.USE_SHIPPING_PRICE
+          ? (card.querySelector('.price_information_product .shippingPrice .Plugin_Price') || card.querySelector('.price_information_product .productPrice .Plugin_Price') || card.querySelector('.priceContainer.shippingPrice .Plugin_Price') || card.querySelector('.priceContainer.productPrice .Plugin_Price') || card.querySelector('.Plugin_Price'))
+          : (card.querySelector('.price_information_product .productPrice .Plugin_Price') || card.querySelector('.price_information_product .shippingPrice .Plugin_Price') || card.querySelector('.priceContainer.productPrice .Plugin_Price') || card.querySelector('.priceContainer.shippingPrice .Plugin_Price') || card.querySelector('.Plugin_Price'));
+        const cardPrice = cardPriceEl ? parsePrice(cardPriceEl.textContent) : 0;
+        const stats = pid ? getCachedPriceStats(pid) : null;
+        const isVerifiedNonBest = !!(stats && cardPrice > 0 && stats.tiefstpreis > 0 && cardPrice > stats.tiefstpreis * 1.01);
+
         // 0. Heatmap
         const discountVal = extractCardDiscount(card);
-        if (CONFIG.HEATMAP_ENABLED && discountVal !== null) {
+        if (CONFIG.HEATMAP_ENABLED && discountVal !== null && !isVerifiedNonBest) {
           const heatStyles = getHeatmapStyles(discountVal, CONFIG.HEATMAP_INTENSITY, CONFIG.HEATMAP_CURVE);
           card.style.setProperty('--tp-heat-bg', heatStyles.bg);
           card.style.setProperty('--tp-heat-border', heatStyles.border);
@@ -1628,12 +1636,6 @@ const SHADOW_MODAL_STYLES = `
         }
 
         // 3.5 Real Deal & Allzeit-Tiefstpreis Check
-        const pid = getCardProductId(card);
-        const cardPriceEl = CONFIG.USE_SHIPPING_PRICE
-          ? (card.querySelector('.price_information_product .shippingPrice .Plugin_Price') || card.querySelector('.price_information_product .productPrice .Plugin_Price') || card.querySelector('.priceContainer.shippingPrice .Plugin_Price') || card.querySelector('.priceContainer.productPrice .Plugin_Price') || card.querySelector('.Plugin_Price'))
-          : (card.querySelector('.price_information_product .productPrice .Plugin_Price') || card.querySelector('.price_information_product .shippingPrice .Plugin_Price') || card.querySelector('.priceContainer.productPrice .Plugin_Price') || card.querySelector('.priceContainer.shippingPrice .Plugin_Price') || card.querySelector('.Plugin_Price'));
-        const cardPrice = cardPriceEl ? parsePrice(cardPriceEl.textContent) : 0;
-        const stats = pid ? getCachedPriceStats(pid) : null;
         const badgeDifEl = card.querySelector('.badge-dif, .badge, [class*="badge-dif"]');
 
         let realDealWrapper = card.querySelector('.tp-real-deal-wrapper');

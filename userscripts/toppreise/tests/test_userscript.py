@@ -585,5 +585,36 @@ def test_real_deal_dom_memoization_and_cache_pruning(page: Page):
     assert fresh_exists
 
 
+def test_real_deal_removes_heatmap_on_non_bestpreis(page: Page):
+    # Both card 1 (all-time low) and card 3 (non-bestpreis) initially have heatmap
+    card1 = page.locator('#card-cheapest')
+    card3 = page.locator('#card-negative')
+    assert 'tp-heatmap-active' in (card1.get_attribute('class') or '')
+    assert 'tp-heatmap-active' in (card3.get_attribute('class') or '')
+
+    # Mock routes
+    def handle_pricechart(route):
+        url = route.request.url
+        if 'p_pc_pid=797571' in url:
+            route.fulfill(status=200, headers={'access-control-allow-origin': '*'}, content_type='text/html', body='<div class="PriceChartLegend"><div class="title">Tiefstpreis</div><div class="Plugin_Price">1800.00</div></div>')
+        elif 'p_pc_pid=797573' in url:
+            route.fulfill(status=200, headers={'access-control-allow-origin': '*'}, content_type='text/html', body='<div class="PriceChartLegend"><div class="title">Tiefstpreis</div><div class="Plugin_Price">10.00</div></div>')
+        else:
+            route.fulfill(status=404, headers={'access-control-allow-origin': '*'}, body='Not Found')
+
+    page.route('**/plugins/product/pricechart*', handle_pricechart)
+
+    # Check card 1 (all-time low) -> heatmap stays active
+    page.click('#card-cheapest .tp-card-check-deal-btn')
+    page.wait_for_selector('#card-cheapest .tp-real-deal-sub-badge.tp-is-alltime-low')
+    assert 'tp-heatmap-active' in (card1.get_attribute('class') or '')
+
+    # Check card 3 (non-bestpreis, 15 CHF vs 10 CHF low) -> heatmap is removed
+    page.click('#card-negative .tp-card-check-deal-btn')
+    page.wait_for_selector('#card-negative .tp-real-deal-sub-badge.tp-is-not-low')
+    assert 'tp-heatmap-active' not in (card3.get_attribute('class') or '')
+
+
+
 
 
