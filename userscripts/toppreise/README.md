@@ -19,10 +19,14 @@ Requires Violentmonkey (or a compatible userscript manager):
 1. **🌟 Real Deals & Allzeit-Tiefstpreis Prüfung (On-Demand)**: Verifiziert echte Rekord-Preise gegenüber scheinbaren Feed-Rabatten (`.badge-dif`).
    - **1-Klick-Check pro Produktkarte (`🔍 Tiefstpreis?`)**: Fragt in ~150ms direkt die historische Preishistorie ab und rendert das Ergebnis direkt unter dem Differenz-Badge.
    - **`🌟 Allzeit-Tiefstpreis`**: Kennzeichnet echte historische Rekordpreise (z. B. Sharp TV).
-   - **`⚠️ TP: CHF XX.XX (+YY%)`**: Entlarvt Schein-Rabatte und zeigt den bisherigen Tiefstpreis samt prozentualem Aufschlag an.
+   - **`⚠️ +XX%` Vergrösserter Warnbadge & Separater Tiefstpreis**: Entlarvt Schein-Rabatte mit auffälligem Warnbadge unter dem Rabattkreis und zeigt `Tiefstpreis: CHF XX.XX` rechtsbündig unter dem Preis.
    - **Filterleisten-Toggle (`🌟 Nur Tiefstpreise`)**: Blendet verifizierte Nicht-Bestpreise auf Knopfdruck aus.
-   - **Batch-Checker (`🔍 Check Deals`)**: Prüft auf Knopfdruck nacheinander alle Deals ab 30% Rabatt mit Live-Fortschrittszähler und Abbruch-Option.
-   - **12h Lokaler Cache**: Einmal geprüfte Produkte bleiben im Browser gespeichert und laden bei Folgebesuchen blitzschnell ohne Netzwerkabfrage.
+   - **Batch-Checker mit Live-Zähler (`🔍 Check Deals (N)`)**: Prüft auf Knopfdruck nacheinander alle Deals ab dem Schwellenwert mit Live-Fortschrittszähler und Abbruch-Option.
+   - **Schwellenwert-Schnellwahl (`≥30% ▾`)**: Direkte Auswahl des Mindestrabatts (20%, 30%, 40%, 50%, 60%) in der Filterleiste mit sofortiger Live-Aktualisierung des Zählers.
+   - **Selektive Heatmap**: Der thermische Heatmap-Effekt bleibt nur bei echten Tiefstpreisen aktiv und wird bei Schein-Rabatten automatisch entfernt.
+   - **Detailseiten-Badge (`/preisvergleich/...-p...`)**: Zeigt direkt auf Produktseiten neben dem Haupttitel/Hauptpreis, ob das Angebot ein Allzeit-Tiefstpreis ist.
+   - **Leere-Feed-Hinweis (Empty State)**: Blendet bei komplett gefilterter Seite einen eleganten Hinweis mit Schnellaktionen ein (`[ 👁️ Vorschau ]`, `[ 🌟 Filter aus ]`, `[ 🔄 Reset ]`).
+   - **12h Lokaler Cache & Auto-Eviction**: Einmal geprüfte Produkte bleiben im Browser gespeichert und laden bei Folgebesuchen blitzschnell ohne Netzwerkabfrage.
 2. **🔥 Rabatt-Heatmap (100% Heiß bis 0% Kalt)**: Dynamische thermische Hintergrund-Verläufe auf allen Produktkarten anhand der Rabatthöhe (z. B. auf `neue-toppreise`). Realistische Deal-Kalibrierung: 0–15% Kaltes Mitternachtsblau ❄️ $\rightarrow$ 35% Warmes Bernstein ⚡ $\rightarrow$ 70%+ Vulkanisches Rubinrot 🔥 mit leuchtenden Akzenten. 1-Klick-Toggle direkt in der oberen Filterleiste.
 3. **🚫 1-Click Product Card Category Quick-Block & Toast Undo**: Direct "🚫 [Kategorie]" action button overlay on every product card on `neue-toppreise`. Clicking instantly hides the product's category from the feed and displays a glassmorphic toast notification with a **"Rückgängig"** (Undo) action button.
 4. **📋 Blocked Categories Overview Chips**: Top filter bar shows a compact overview row `🚫 Ausgeblendet (N)` with dismissable chips (`[ 💻 Externe SSD ✕ ]`, `[ 🧸 Lego ✕ ]`) and an *Alle freigeben* button whenever categories are blocked.
@@ -32,7 +36,7 @@ Requires Violentmonkey (or a compatible userscript manager):
 8. **Negativer Textfilter (Ausschluss)**: Exclude products containing specific unwanted keywords (e.g. `SAMSUNG, Hülle, Case, Refurbished, Gebraucht`) with word-boundary precision via the inline search bar or modal.
 9. **Angebote & Rabatt-Sortierung**: Filter out marketplace items with fewer than $N$ offers, plus optional client-side re-sorting by total offer count or highest discount (`% Rabatt ⬇`).
 10. **Preisalarm Auto-Filler**: Automatically configures target price (e.g. 60% of current price) and 2-year duration upon clicking the price alarm bell icon, supporting Swiss currency formatting (`CHF 1'299.–`).
-11. **⚡ Unified Top Filter Bar**: Consolidated single-surface toolbar containing hidden count indicator `🚫 N`, reveal preview toggle `👁️`, `🔥 Heatmap` toggle, `🌟 Nur Tiefstpreise` toggle, `🔍 Check Deals` batch button, Min-Offers stepper `[-] 0 [+]`, and `🔄 Reset` button.
+11. **⚡ Unified Top Filter Bar**: Consolidated single-surface toolbar containing hidden count indicator `🚫 N`, reveal preview toggle `👁️`, `🔥 Heatmap` toggle, `🌟 Nur Tiefstpreise` toggle, `🔍 Check Deals (N)` batch button with threshold quick-selector `≥30% ▾`, Min-Offers stepper `[-] 0 [+]`, and `🔄 Reset` button.
 
 ---
 
