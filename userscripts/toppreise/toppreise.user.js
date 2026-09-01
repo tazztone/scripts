@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.17.4
+// @version      2.17.5
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, checks real all-time Tiefstpreise, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -2718,11 +2718,15 @@ const SHADOW_MODAL_STYLES = `
     }
   }
 
-  function getSortItem(card) {
+  function getSortItem(card, allCards) {
     if (!card) return null;
-    const colWrapper = card.closest('.col-12, .col-6, .col-4, .col-3, .col-md-6, .col-md-4, .col-md-3, .col-sm-6, .cell, [class*="col-"]');
-    if (colWrapper && colWrapper.parentElement && !colWrapper.parentElement.closest('#tp-root, dialog, .header, .filters')) {
-      return colWrapper;
+    // 1. Direct siblings: cards share the same parent container
+    if (allCards && allCards.length > 1 && allCards[0].parentElement === allCards[1].parentElement) {
+      return card;
+    }
+    // 2. Individual column wrapper: each card has a separate parent whose parents match
+    if (allCards && allCards.length > 1 && card.parentElement && allCards[0].parentElement?.parentElement === allCards[1].parentElement?.parentElement) {
+      return card.parentElement;
     }
     return card;
   }
@@ -2737,7 +2741,7 @@ const SHADOW_MODAL_STYLES = `
       }
     });
 
-    const firstItem = getSortItem(cards[0]);
+    const firstItem = getSortItem(cards[0], cards);
     const parent = firstItem?.parentElement;
     if (!parent) return;
 
@@ -2747,7 +2751,7 @@ const SHADOW_MODAL_STYLES = `
         const dealData = computeDealScore(cd.stats, cd.cardPrice);
         return {
           card: c,
-          item: getSortItem(c),
+          item: getSortItem(c, cards),
           score: dealData?.score ?? -1,
           initialOrder: parseInt(c.dataset.tpInitialOrder || '0', 10)
         };
@@ -2763,7 +2767,7 @@ const SHADOW_MODAL_STYLES = `
 
     if (CONFIG.SORT_BY_OFFERS === 'discount-desc') {
       const sorted = Array.from(cards).map(c => ({
-        item: getSortItem(c),
+        item: getSortItem(c, cards),
         disc: extractCardDiscount(c) ?? -1,
         initialOrder: parseInt(c.dataset.tpInitialOrder || '0', 10)
       }));
@@ -2778,7 +2782,7 @@ const SHADOW_MODAL_STYLES = `
 
     if (pageHasOffers && CONFIG.SORT_BY_OFFERS !== 'none') {
       const sorted = Array.from(cards).map(c => ({
-        item: getSortItem(c),
+        item: getSortItem(c, cards),
         count: extractOfferCount(c),
         initialOrder: parseInt(c.dataset.tpInitialOrder || '0', 10)
       }));
@@ -2793,7 +2797,7 @@ const SHADOW_MODAL_STYLES = `
 
     // Natural order restoration: restore initial DOM order when no custom sort is active
     const natural = Array.from(cards).map(c => ({
-      item: getSortItem(c),
+      item: getSortItem(c, cards),
       initialOrder: parseInt(c.dataset.tpInitialOrder || '0', 10)
     }));
     natural.sort((a, b) => a.initialOrder - b.initialOrder);
