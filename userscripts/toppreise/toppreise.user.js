@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.14.4
+// @version      2.14.5
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, checks real all-time Tiefstpreise, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -2115,7 +2115,7 @@ const SHADOW_MODAL_STYLES = `
             peakContext = ` (-${peakDropPct}% vom Höchstpreis CHF ${stats.hoechstpreis.toFixed(2)})`;
           }
           badgeDifEl.title = `🌟 Aktueller Preis (CHF ${cardPrice.toFixed(2)}) ist der historische Allzeit-Tiefstpreis!${peakContext} (Klicken zum Aktualisieren)`;
-          badgeDifEl.innerHTML = `<div class="text">Differenz</div><p>🌟 -${rawDiscount}%</p>`;
+          badgeDifEl.innerHTML = `<div class="text">Differenz</div><p>-${rawDiscount}%</p>`;
         } else {
           // 2A: Verified Non-Tiefstpreis (Amber Alert Morph with Shrunken Strikethrough)
           const markupPct = Math.round(((cardPrice - stats.tiefstpreis) / stats.tiefstpreis) * 100);

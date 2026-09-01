@@ -407,10 +407,10 @@ def test_real_deal_on_demand_check_and_badges(page: Page):
     page.wait_for_selector('#card-cheapest .badge-dif.tp-deal-badge-interactive')
     page.click('#card-cheapest .badge-dif')
 
-    # Verify badge transforms into Allzeit-Tiefstpreis with halo and star
+    # Verify badge transforms into Allzeit-Tiefstpreis with halo and clean percentage
     page.wait_for_selector('#card-cheapest .badge-dif.tp-deal-alltime-low')
     badge1 = page.locator('#card-cheapest .badge-dif.tp-deal-alltime-low')
-    assert '🌟' in (badge1.text_content() or '')
+    assert '-67%' in (badge1.text_content() or '')
     assert 'Allzeit-Tiefstpreis' in (badge1.get_attribute('title') or '')
     assert not page.locator('#card-cheapest .tp-card-historical-price').is_visible()
 
@@ -822,7 +822,7 @@ def test_real_world_toppreise_pricechart_html_parsing(page: Page):
     page.click('#card-negative .badge-dif')
     page.wait_for_selector('#card-negative .badge-dif.tp-deal-alltime-low', timeout=3000)
     neg_badge = page.locator('#card-negative .badge-dif.tp-deal-alltime-low')
-    assert '🌟' in (neg_badge.text_content() or '')
+    assert '-35%' in (neg_badge.text_content() or '')
 
 
 def test_filter_bar_hidden_on_product_detail_page(page: Page):
@@ -1229,7 +1229,7 @@ def test_negative_caching_and_manual_click_override(page: Page):
     page.click('#card-cheapest .badge-dif')
     page.wait_for_selector('#card-cheapest .badge-dif.tp-deal-alltime-low')
     badge = page.locator('#card-cheapest .badge-dif.tp-deal-alltime-low')
-    assert '🌟' in (badge.text_content() or '')
+    assert '-67%' in (badge.text_content() or '')
     assert 'Allzeit-Tiefstpreis' in (badge.get_attribute('title') or '')
 
 
