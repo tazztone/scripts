@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.14.2
+// @version      2.14.3
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, checks real all-time Tiefstpreise, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -179,80 +179,81 @@ const STYLES = `
     z-index: 25 !important;
     pointer-events: auto !important;
   }
-  .badge.badge-dif .tp-real-deal-wrapper,
-  .badge .tp-real-deal-wrapper {
-    position: absolute !important;
-    top: 100% !important;
-    right: 0 !important;
-    margin-top: 3px !important;
-  }
-  .tp-card-check-deal-btn {
-    background: rgba(15, 23, 42, 0.92) !important;
-    backdrop-filter: blur(8px) !important;
-    border: 1px dashed rgba(56, 189, 248, 0.7) !important;
-    color: #38bdf8 !important;
-    font: 700 10.5px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-    padding: 3px 8px !important;
-    border-radius: 6px !important;
+  /* ─── NATIVE DIFFERENZ BADGE REAL DEAL INTEGRATION ─── */
+  .badge.badge-dif.tp-deal-badge-interactive,
+  .badge-dif.tp-deal-badge-interactive {
     cursor: pointer !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    gap: 4px !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.4) !important;
-    transition: all 0.2s ease !important;
-    white-space: nowrap !important;
+    position: relative !important;
     user-select: none !important;
-    z-index: 25 !important;
-    pointer-events: auto !important;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, border-color 0.2s ease !important;
   }
-  .tp-card-check-deal-btn:hover {
-    background: #0284c7 !important;
-    color: #ffffff !important;
-    border-color: #38bdf8 !important;
-    transform: scale(1.04) !important;
-    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.5) !important;
+  .badge.badge-dif.tp-deal-badge-interactive:hover,
+  .badge-dif.tp-deal-badge-interactive:hover {
+    transform: scale(1.10) !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45) !important;
   }
-  .tp-card-check-deal-btn.tp-loading {
-    border-style: solid !important;
-    border-color: #f59e0b !important;
-    color: #fcd34d !important;
-    cursor: wait !important;
+  .tp-badge-loupe-icon {
+    position: absolute !important;
+    bottom: -2px !important;
+    right: -2px !important;
+    font-size: 11px !important;
+    line-height: 1 !important;
+    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.8)) !important;
     pointer-events: none !important;
+    transition: transform 0.2s ease !important;
   }
-  .tp-real-deal-sub-badge {
-    display: inline-flex !important;
-    align-items: center !important;
-    gap: 4px !important;
-    padding: 3px 8px !important;
-    border-radius: 6px !important;
-    font: 700 10.5px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.35) !important;
-    white-space: nowrap !important;
-    user-select: none !important;
-    z-index: 25 !important;
-    pointer-events: auto !important;
-    transition: all 0.2s ease !important;
+  .badge.badge-dif.tp-deal-badge-interactive:hover .tp-badge-loupe-icon {
+    transform: scale(1.2) rotate(-10deg) !important;
   }
-  .tp-real-deal-sub-badge.tp-is-alltime-low {
-    background: linear-gradient(135deg, rgba(16, 185, 129, 0.95) 0%, rgba(5, 150, 105, 0.95) 100%) !important;
-    border: 1px solid #34d399 !important;
+  .badge.badge-dif.tp-deal-loading,
+  .badge-dif.tp-deal-loading {
+    cursor: wait !important;
+    opacity: 0.85 !important;
+    animation: tpPulse 1.2s infinite ease-in-out !important;
+  }
+  @keyframes tpPulse {
+    0%, 100% { transform: scale(1); opacity: 0.85; }
+    50% { transform: scale(1.06); opacity: 1; }
+  }
+  /* 3B: Verified All-Time Low: Glowing Pulsing Emerald Halo */
+  .badge.badge-dif.tp-deal-alltime-low,
+  .badge-dif.tp-deal-alltime-low {
+    box-shadow: 0 0 0 2.5px #10b981, 0 0 16px rgba(16, 185, 129, 0.75) !important;
+    border-color: #10b981 !important;
+    animation: tpHaloPulse 2.4s infinite ease-in-out !important;
+  }
+  @keyframes tpHaloPulse {
+    0%, 100% { box-shadow: 0 0 0 2.5px #10b981, 0 0 14px rgba(16, 185, 129, 0.6); }
+    50% { box-shadow: 0 0 0 3.5px #34d399, 0 0 22px rgba(52, 211, 153, 0.85); }
+  }
+  /* 2A: Verified Non-Tiefstpreis: Amber Alert Morph with Shrunken Strikethrough */
+  .badge.badge-dif.tp-deal-not-low,
+  .badge-dif.tp-deal-not-low {
+    background: linear-gradient(135deg, #78350f 0%, #b45309 100%) !important;
+    border: 1.5px solid #f59e0b !important;
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.45) !important;
     color: #ffffff !important;
-    box-shadow: 0 2px 10px rgba(16, 185, 129, 0.45) !important;
   }
-  .tp-real-deal-sub-badge.tp-is-not-low {
-    background: linear-gradient(135deg, rgba(245, 158, 11, 0.95) 0%, rgba(217, 119, 6, 0.95) 100%) !important;
-    border: 1px solid #fbbf24 !important;
-    color: #ffffff !important;
-    font-size: 12.5px !important;
+  .badge.badge-dif.tp-deal-not-low.tp-is-severe-markup,
+  .badge-dif.tp-deal-not-low.tp-is-severe-markup {
+    background: linear-gradient(135deg, #881337 0%, #be123c 100%) !important;
+    border-color: #f43f5e !important;
+    box-shadow: 0 0 14px rgba(244, 63, 94, 0.55) !important;
+  }
+  .badge.badge-dif.tp-deal-not-low p.tp-markup-val {
+    font-size: 13px !important;
     font-weight: 800 !important;
-    padding: 3px 8px !important;
-    box-shadow: 0 2px 10px rgba(245, 158, 11, 0.4) !important;
-  }
-  .tp-real-deal-sub-badge.tp-is-severe-markup {
-    background: linear-gradient(135deg, rgba(225, 29, 72, 0.95) 0%, rgba(190, 18, 60, 0.95)) !important;
-    border: 1px solid #f43f5e !important;
+    margin: 0 !important;
+    line-height: 1.1 !important;
     color: #ffffff !important;
-    box-shadow: 0 2px 10px rgba(225, 29, 72, 0.45) !important;
+  }
+  .badge.badge-dif.tp-deal-not-low .tp-fake-discount {
+    font-size: 9.5px !important;
+    opacity: 0.75 !important;
+    display: block !important;
+    line-height: 1 !important;
+    margin-top: 1px !important;
+    color: #fde68a !important;
   }
   .tp-card-historical-price {
     font: 500 11px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
@@ -2049,126 +2050,120 @@ const SHADOW_MODAL_STYLES = `
       }
     }
 
-    // 3.5 Real Deal & Allzeit-Tiefstpreis Check
+    // 3.5 Real Deal & Allzeit-Tiefstpreis Check (Consolidated into Differenz Circle Badge)
     const badgeDifEl = card.querySelector('.badge-dif, [class*="badge-dif"]');
-    let realDealWrapper = card.querySelector('.tp-real-deal-wrapper');
+    // Remove any legacy floating wrappers if present
+    card.querySelector('.tp-real-deal-wrapper')?.remove();
 
-    if (stats && cardPrice > 0 && stats.tiefstpreis > 0) {
-      const isAllTimeLow = cardPrice <= stats.tiefstpreis * 1.01;
-      const isNonBest = !isAllTimeLow;
+    if (badgeDifEl) {
+      if (!badgeDifEl.dataset.tpOriginalDiscount) {
+        const initialDiscount = extractCardDiscount(card) ?? 0;
+        badgeDifEl.dataset.tpOriginalDiscount = String(initialDiscount);
+      }
+      const rawDiscount = parseFloat(badgeDifEl.dataset.tpOriginalDiscount) || (extractCardDiscount(card) ?? 0);
 
-      if (isNonBest && CONFIG.REAL_DEAL_FILTER_ACTIVE) {
-        card.classList.add('tp-non-bestpreis-filtered');
-      } else {
-        card.classList.remove('tp-non-bestpreis-filtered');
+      // Bind single click handler on badge
+      if (!badgeDifEl.dataset.tpDealBound) {
+        badgeDifEl.dataset.tpDealBound = 'true';
+        badgeDifEl.addEventListener('click', async e => {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          if (badgeDifEl.classList.contains('tp-deal-loading')) return;
+          const currentPid = getCardProductId(card);
+          if (!currentPid) return;
+
+          badgeDifEl.classList.add('tp-deal-loading');
+          badgeDifEl.innerHTML = `<div class="text">Prüfe...</div><p>⏳</p>`;
+          const fetchedStats = await fetchSingleProductPriceStats(currentPid, 1, true);
+          badgeDifEl.classList.remove('tp-deal-loading');
+          if (fetchedStats) {
+            processListings();
+          } else {
+            badgeDifEl.classList.remove('tp-deal-alltime-low', 'tp-deal-not-low', 'tp-is-severe-markup');
+            badgeDifEl.innerHTML = `<div class="text">Fehler</div><p style="font-size: 13px;">⚠️ n/v</p>`;
+            badgeDifEl.title = '⚠️ Preishistorie zurzeit nicht verfügbar (Klicken für erneuten Versuch)';
+            setTimeout(() => {
+              if (badgeDifEl && !getCachedPriceStats(currentPid)) {
+                processListings();
+              }
+            }, 2500);
+          }
+        });
       }
 
-      if (!realDealWrapper) {
-        realDealWrapper = document.createElement('div');
-        realDealWrapper.className = 'tp-real-deal-wrapper';
-        if (badgeDifEl) {
-          badgeDifEl.appendChild(realDealWrapper);
+      if (stats && cardPrice > 0 && stats.tiefstpreis > 0) {
+        const isAllTimeLow = cardPrice <= stats.tiefstpreis * 1.01;
+        const isNonBest = !isAllTimeLow;
+
+        if (isNonBest && CONFIG.REAL_DEAL_FILTER_ACTIVE) {
+          card.classList.add('tp-non-bestpreis-filtered');
         } else {
-          card.appendChild(realDealWrapper);
+          card.classList.remove('tp-non-bestpreis-filtered');
         }
-      }
 
-      const targetStatus = isAllTimeLow ? 'low' : 'not-low';
-      const priceStr = cardPrice.toFixed(2);
-
-      // DOM Memoization: only re-render if status, pid, or price changed
-      if (realDealWrapper.dataset.tpPid !== pid || realDealWrapper.dataset.tpStatus !== targetStatus || realDealWrapper.dataset.tpPrice !== priceStr) {
-        realDealWrapper.dataset.tpPid = pid;
-        realDealWrapper.dataset.tpStatus = targetStatus;
-        realDealWrapper.dataset.tpPrice = priceStr;
-        realDealWrapper.innerHTML = '';
-
-        const badge = document.createElement('div');
         const hasSignificantPeak = stats.hoechstpreis && stats.hoechstpreis > stats.tiefstpreis * 1.02;
 
         if (isAllTimeLow) {
-          badge.className = 'tp-real-deal-sub-badge tp-is-alltime-low';
+          // 3B: Verified All-Time Low (Glowing Emerald Halo + Star)
+          badgeDifEl.classList.add('tp-deal-alltime-low', 'tp-deal-badge-interactive');
+          badgeDifEl.classList.remove('tp-deal-not-low', 'tp-is-severe-markup', 'tp-deal-loading');
+          
           let peakContext = '';
           if (hasSignificantPeak) {
             const peakDropPct = Math.round(((stats.hoechstpreis - cardPrice) / stats.hoechstpreis) * 100);
             peakContext = ` (-${peakDropPct}% vom Höchstpreis CHF ${stats.hoechstpreis.toFixed(2)})`;
           }
-          badge.title = `Aktueller Preis (CHF ${priceStr}) ist der historische Allzeit-Tiefstpreis!${peakContext}`;
-          badge.innerHTML = `🌟 Allzeit-Tiefstpreis`;
+          badgeDifEl.title = `🌟 Aktueller Preis (CHF ${cardPrice.toFixed(2)}) ist der historische Allzeit-Tiefstpreis!${peakContext} (Klicken zum Aktualisieren)`;
+          badgeDifEl.innerHTML = `<div class="text">Differenz</div><p>🌟 -${rawDiscount}%</p>`;
         } else {
+          // 2A: Verified Non-Tiefstpreis (Amber Alert Morph with Shrunken Strikethrough)
           const markupPct = Math.round(((cardPrice - stats.tiefstpreis) / stats.tiefstpreis) * 100);
           const isSevere = markupPct >= 50;
-          badge.className = `tp-real-deal-sub-badge tp-is-not-low ${isSevere ? 'tp-is-severe-markup' : ''}`;
-          const peakContext = hasSignificantPeak ? ` | Höchstpreis: CHF ${stats.hoechstpreis.toFixed(2)}` : '';
-          badge.title = `Historischer Tiefstpreis lag bei CHF ${stats.tiefstpreis.toFixed(2)} (+${markupPct}% Aufschlag)${peakContext}`;
-          badge.innerHTML = `⚠️ +${markupPct}%`;
-        }
-        realDealWrapper.appendChild(badge);
-      }
 
-      // Historical Tiefstpreis display right below current price
-      let histPriceEl = card.querySelector('.tp-card-historical-price');
-      if (isNonBest) {
-        if (!histPriceEl) {
-          histPriceEl = document.createElement('div');
-          histPriceEl.className = 'tp-card-historical-price';
-          const priceContainer = card.querySelector('.Plugin_PriceInformation, .price_information_product') ||
-                                 cardPriceEl?.closest('.priceContainer, .Plugin_PriceInformation, .price_information_product') ||
-                                 cardPriceEl?.parentElement ||
-                                 card;
-          priceContainer.appendChild(histPriceEl);
+          badgeDifEl.classList.add('tp-deal-not-low', 'tp-deal-badge-interactive');
+          badgeDifEl.classList.remove('tp-deal-alltime-low', 'tp-deal-loading');
+          if (isSevere) {
+            badgeDifEl.classList.add('tp-is-severe-markup');
+          } else {
+            badgeDifEl.classList.remove('tp-is-severe-markup');
+          }
+
+          const peakContext = hasSignificantPeak ? ` | Höchstpreis: CHF ${stats.hoechstpreis.toFixed(2)}` : '';
+          badgeDifEl.title = `⚠️ Historischer Tiefstpreis lag bei CHF ${stats.tiefstpreis.toFixed(2)} (+${markupPct}% Aufschlag) | Schein-Rabatt: -${rawDiscount}%${peakContext} (Klicken zum Aktualisieren)`;
+          badgeDifEl.innerHTML = `<div class="text">Aufschlag</div><p class="tp-markup-val">+${markupPct}%</p><span class="tp-fake-discount"><s>-${rawDiscount}%</s></span>`;
         }
-        histPriceEl.textContent = `Tiefstpreis: CHF ${stats.tiefstpreis.toFixed(2)}`;
-        histPriceEl.title = `Historischer Tiefstpreis lag bei CHF ${stats.tiefstpreis.toFixed(2)}`;
-      } else if (histPriceEl) {
-        histPriceEl.remove();
+
+        // 4A: Historical Tiefstpreis line right below current price
+        let histPriceEl = card.querySelector('.tp-card-historical-price');
+        if (isNonBest) {
+          if (!histPriceEl) {
+            histPriceEl = document.createElement('div');
+            histPriceEl.className = 'tp-card-historical-price';
+            const priceContainer = card.querySelector('.Plugin_PriceInformation, .price_information_product') ||
+                                   cardPriceEl?.closest('.priceContainer, .Plugin_PriceInformation, .price_information_product') ||
+                                   cardPriceEl?.parentElement ||
+                                   card;
+            priceContainer.appendChild(histPriceEl);
+          }
+          histPriceEl.textContent = `Tiefstpreis: CHF ${stats.tiefstpreis.toFixed(2)}`;
+          histPriceEl.title = `Historischer Tiefstpreis lag bei CHF ${stats.tiefstpreis.toFixed(2)}`;
+        } else if (histPriceEl) {
+          histPriceEl.remove();
+        }
+      } else {
+        // 1A: Unchecked State (Subtle Mini Loupe + Hover Scale + Tooltip)
+        card.classList.remove('tp-non-bestpreis-filtered');
+        card.querySelector('.tp-card-historical-price')?.remove();
+
+        badgeDifEl.classList.add('tp-deal-badge-interactive');
+        badgeDifEl.classList.remove('tp-deal-alltime-low', 'tp-deal-not-low', 'tp-is-severe-markup', 'tp-deal-loading');
+        badgeDifEl.title = `🔍 Klicken: Echten Allzeit-Tiefstpreis prüfen (-${rawDiscount}% Schein-Rabatt vs Realität)`;
+        badgeDifEl.innerHTML = `<div class="text">Differenz</div><p>-${rawDiscount}%</p><span class="tp-badge-loupe-icon">🔍</span>`;
       }
     } else {
       card.classList.remove('tp-non-bestpreis-filtered');
       card.querySelector('.tp-card-historical-price')?.remove();
-      if (pid && (isNeueFeed || badgeDifEl)) {
-        if (!realDealWrapper) {
-          realDealWrapper = document.createElement('div');
-          realDealWrapper.className = 'tp-real-deal-wrapper';
-          if (badgeDifEl) {
-            badgeDifEl.appendChild(realDealWrapper);
-          } else {
-            card.appendChild(realDealWrapper);
-          }
-        }
-
-        if (realDealWrapper.dataset.tpStatus !== 'unchecked' || (!realDealWrapper.querySelector('.tp-card-check-deal-btn') && !realDealWrapper.querySelector('.tp-real-deal-sub-badge'))) {
-          realDealWrapper.dataset.tpPid = pid;
-          realDealWrapper.dataset.tpStatus = 'unchecked';
-          realDealWrapper.removeAttribute('data-tp-price');
-          realDealWrapper.innerHTML = '';
-          const checkBtn = document.createElement('button');
-          checkBtn.type = 'button';
-          checkBtn.className = 'tp-card-check-deal-btn';
-          checkBtn.title = 'Tiefstpreis und echten Allzeit-Rabatt prüfen';
-          checkBtn.innerHTML = `🔍 Tiefstpreis?`;
-          checkBtn.onclick = async e => {
-            e.preventDefault();
-            e.stopPropagation();
-            e.stopImmediatePropagation();
-            checkBtn.classList.add('tp-loading');
-            checkBtn.innerHTML = `⏳ Prüfe...`;
-            const fetchedStats = await fetchSingleProductPriceStats(pid, 1, true);
-            if (fetchedStats) {
-              processListings();
-            } else {
-              checkBtn.classList.remove('tp-loading');
-              checkBtn.innerHTML = `⚠️ Nicht verfügbar`;
-              setTimeout(() => {
-                if (checkBtn && checkBtn.parentElement) checkBtn.innerHTML = `🔍 Tiefstpreis?`;
-              }, 2500);
-            }
-          };
-          realDealWrapper.appendChild(checkBtn);
-        }
-      } else if (realDealWrapper) {
-        realDealWrapper.remove();
-      }
     }
 
     // 3.6 Mini Price-Trend Sparkline (Beta Feature)

@@ -10,16 +10,16 @@ Requires Violentmonkey (or a compatible userscript manager):
 - [Firefox](https://addons.mozilla.org/en-US/firefox/addon/violentmonkey/)
 - [Chrome / Brave](https://chromewebstore.google.com/detail/violentmonkey/jinjaccalgkegednnccohejagnlnfdag)
 
-### 👉 [**CLICK HERE TO INSTALL USERSCRIPT (v2.14.2)**](https://raw.githubusercontent.com/tazztone/scripts/main/userscripts/toppreise/toppreise.user.js)
+### 👉 [**CLICK HERE TO INSTALL USERSCRIPT (v2.14.3)**](https://raw.githubusercontent.com/tazztone/scripts/main/userscripts/toppreise/toppreise.user.js)
 
 ---
 
 ## ⚡ Features
 
-1. **🌟 Real Deals & Allzeit-Tiefstpreis Prüfung (On-Demand)**: Verifiziert echte Rekord-Preise gegenüber scheinbaren Feed-Rabatten (`.badge-dif`).
-   - **1-Klick-Check pro Produktkarte (`🔍 Tiefstpreis?`)**: Fragt in ~150ms direkt die historische Preishistorie ab und rendert das Ergebnis direkt unter dem Differenz-Badge.
-   - **`🌟 Allzeit-Tiefstpreis`**: Kennzeichnet echte historische Rekordpreise (z. B. Sharp TV).
-   - **`⚠️ +XX%` Vergrösserter Warnbadge & Separater Tiefstpreis**: Entlarvt Schein-Rabatte mit auffälligem Warnbadge unter dem Rabattkreis und zeigt `Tiefstpreis: CHF XX.XX` rechtsbündig unter dem Preis.
+1. **🌟 Integrierte Real Deals & Allzeit-Tiefstpreis Prüfung**: Verifiziert echte Rekord-Preise direkt im bestehenden Toppreise Differenz-Kreisbadge (`.badge-dif`) ohne störende Extra-Badges.
+   - **1-Klick-Check im Differenz-Badge (`🔍`)**: Das Rabatt-Kreisbadge besitzt eine dezente Eck-Lupe und löst per Klick direkt die historische Tiefstpreis-Prüfung aus.
+   - **`🌟 Allzeit-Tiefstpreis` (Pulsierende Grüne Halo-Aura)**: Echte Rekordpreise erhalten einen leuchtend grünen Halo-Ring um das Differenz-Badge mit `🌟 -XX%` Stern-Präfix.
+   - **`⚠️ +XX%` Aufschlag-Morph & Gestrichener Schein-Rabatt (`~~-YY%~~`)**: Entlarvt Schein-Rabatte direkt im Kreisbadge mit auffälligem `+XX%` Aufschlag und durchgestrichenem Feed-Rabatt `<s>-YY%</s>`, plus `Tiefstpreis: CHF XX.XX` unter dem Preis.
    - **Filterleisten-Toggle (`🌟 Nur Tiefstpreise`)**: Blendet verifizierte Nicht-Bestpreise auf Knopfdruck aus.
    - **Batch-Checker mit Live-Zähler (`🔍 Check Deals (N)`)**: Prüft auf Knopfdruck nacheinander alle Deals ab dem Schwellenwert mit Live-Fortschrittszähler und Abbruch-Option.
    - **Schwellenwert-Schnellwahl (`≥30% ▾`)**: Direkte Auswahl des Mindestrabatts (20%, 30%, 40%, 50%, 60%) in der Filterleiste mit sofortiger Live-Aktualisierung des Zählers.

@@ -193,10 +193,17 @@ Subcategories appear in two distinct patterns across the site:
   - **Real Deal Discount % (vs Historical High)**: $\frac{\text{Höchstpreis} - \text{CurrentPrice}}{\text{Höchstpreis}} \times 100$
   - **Inflation Gap % (vs Historical Low)**: $\frac{\text{CurrentPrice} - \text{Tiefstpreis}}{\text{Tiefstpreis}} \times 100$
 - **Caching & Rate-Limiting Strategy**:
-  - Cache responses in `localStorage` under `tp_hist_v1_{productId}` with a 12-hour TTL to prevent redundant network queries.
+  - Valid price stats cached in `localStorage` under `tp_hist_v1_{productId}` with a 48-hour TTL.
+  - Negative cache (`{ unavailable: true }`) stored for 2 hours (bypassed on manual single-click).
   - LRU/cap pruning maintaining max 300 cached entries.
-  - Query on-demand via single card `🔍 Tiefstpreis?` button or user-initiated batch check.
-  - Paced batch checks with 220–280ms jittered delay between items and automatic exponential backoff retry on transient 429/503 responses.
+  - Query on-demand via native `.badge-dif` circle badge click (`🔍`) or user-initiated batch check.
+  - Paced batch checks with 250–350ms jittered delay between items and automatic exponential backoff retry on transient 429/503 responses.
   - Multi-language label resolution (DE, FR, IT, EN).
+- **Consolidated Differenz Badge UI Architecture**:
+  - **Unchecked**: Retains original `-XX%` with subtle `.tp-badge-loupe-icon` (`🔍`) and hover scale.
+  - **Loading**: In-place pulse animation with `⏳` spinner.
+  - **All-Time Low**: Retains discount value prefixed with `🌟 -XX%` and pulsing emerald halo ring (`#10b981`).
+  - **Non-Bestpreis / Fake Deal**: Morphs to amber alert gradient with bold `+XX%` markup and shrunken struck-through `<s>-YY%</s>` fake discount, plus discreet `Tiefstpreis: CHF XX.XX` line under the price.
+
 
 

@@ -403,24 +403,26 @@ def test_real_deal_on_demand_check_and_badges(page: Page):
 
     page.route('**/plugins/product/pricechart*', handle_pricechart)
 
-    # 1. On Card 1 (RTX 4090, 1800.00 CHF): click on-demand Tiefstpreis button
-    page.wait_for_selector('#card-cheapest .tp-card-check-deal-btn')
-    page.click('#card-cheapest .tp-card-check-deal-btn')
+    # 1. On Card 1 (RTX 4090, 1800.00 CHF): click on-demand Differenz badge
+    page.wait_for_selector('#card-cheapest .badge-dif.tp-deal-badge-interactive')
+    page.click('#card-cheapest .badge-dif')
 
-    # Verify badge transforms into Allzeit-Tiefstpreis and has no extra subtitle
-    page.wait_for_selector('#card-cheapest .tp-real-deal-sub-badge.tp-is-alltime-low')
-    badge1 = page.locator('#card-cheapest .tp-real-deal-sub-badge.tp-is-alltime-low')
-    assert 'Allzeit-Tiefstpreis' in (badge1.text_content() or '')
+    # Verify badge transforms into Allzeit-Tiefstpreis with halo and star
+    page.wait_for_selector('#card-cheapest .badge-dif.tp-deal-alltime-low')
+    badge1 = page.locator('#card-cheapest .badge-dif.tp-deal-alltime-low')
+    assert '🌟' in (badge1.text_content() or '')
+    assert 'Allzeit-Tiefstpreis' in (badge1.get_attribute('title') or '')
     assert not page.locator('#card-cheapest .tp-card-historical-price').is_visible()
 
-    # 2. On Card 3 (Silikon Case, 15.00 CHF): click on-demand Tiefstpreis button
-    page.wait_for_selector('#card-negative .tp-card-check-deal-btn')
-    page.click('#card-negative .tp-card-check-deal-btn')
+    # 2. On Card 3 (Silikon Case, 15.00 CHF): click on-demand Differenz badge
+    page.wait_for_selector('#card-negative .badge-dif.tp-deal-badge-interactive')
+    page.click('#card-negative .badge-dif')
 
-    # Verify badge transforms into enlarged Non-Bestpreis warning with markup %
-    page.wait_for_selector('#card-negative .tp-real-deal-sub-badge.tp-is-not-low')
-    badge3 = page.locator('#card-negative .tp-real-deal-sub-badge.tp-is-not-low')
+    # Verify badge transforms into amber Non-Bestpreis warning with markup % and struck-through fake discount
+    page.wait_for_selector('#card-negative .badge-dif.tp-deal-not-low')
+    badge3 = page.locator('#card-negative .badge-dif.tp-deal-not-low')
     assert '+50%' in (badge3.text_content() or '')
+    assert '-35%' in (badge3.text_content() or '')
 
     # Verify separated Tiefstpreis subtitle below current price
     page.wait_for_selector('#card-negative .tp-card-historical-price')
@@ -442,13 +444,13 @@ def test_real_deal_filter_non_bestpreis_toggle(page: Page):
     page.route('**/plugins/product/pricechart*', handle_pricechart)
 
     # Check both cards
-    page.wait_for_selector('#card-cheapest .tp-card-check-deal-btn')
-    page.click('#card-cheapest .tp-card-check-deal-btn')
-    page.wait_for_selector('#card-cheapest .tp-real-deal-sub-badge')
+    page.wait_for_selector('#card-cheapest .badge-dif')
+    page.click('#card-cheapest .badge-dif')
+    page.wait_for_selector('#card-cheapest .badge-dif.tp-deal-alltime-low')
 
-    page.wait_for_selector('#card-negative .tp-card-check-deal-btn')
-    page.click('#card-negative .tp-card-check-deal-btn')
-    page.wait_for_selector('#card-negative .tp-real-deal-sub-badge')
+    page.wait_for_selector('#card-negative .badge-dif')
+    page.click('#card-negative .badge-dif')
+    page.wait_for_selector('#card-negative .badge-dif.tp-deal-not-low')
 
     # Now click filter bar toggle "🌟 Nur Tiefstpreise"
     real_deal_toggle = page.locator('#tp-bar-real-deal-btn')
@@ -530,21 +532,21 @@ def test_real_deal_rich_tooltips_with_peak_context(page: Page):
     page.route('**/plugins/product/pricechart*', handle_pricechart)
 
     # Check Card 1
-    page.wait_for_selector('#card-cheapest .tp-card-check-deal-btn')
-    page.click('#card-cheapest .tp-card-check-deal-btn')
-    page.wait_for_selector('#card-cheapest .tp-real-deal-sub-badge.tp-is-alltime-low')
+    page.wait_for_selector('#card-cheapest .badge-dif')
+    page.click('#card-cheapest .badge-dif')
+    page.wait_for_selector('#card-cheapest .badge-dif.tp-deal-alltime-low')
 
-    badge1 = page.locator('#card-cheapest .tp-real-deal-sub-badge.tp-is-alltime-low')
+    badge1 = page.locator('#card-cheapest .badge-dif.tp-deal-alltime-low')
     title1 = badge1.get_attribute('title') or ''
     assert 'Allzeit-Tiefstpreis' in title1
     assert '-25% vom Höchstpreis CHF 2400.00' in title1
 
     # Check Card 3
-    page.wait_for_selector('#card-negative .tp-card-check-deal-btn')
-    page.click('#card-negative .tp-card-check-deal-btn')
-    page.wait_for_selector('#card-negative .tp-real-deal-sub-badge.tp-is-not-low')
+    page.wait_for_selector('#card-negative .badge-dif')
+    page.click('#card-negative .badge-dif')
+    page.wait_for_selector('#card-negative .badge-dif.tp-deal-not-low')
 
-    badge3 = page.locator('#card-negative .tp-real-deal-sub-badge.tp-is-not-low')
+    badge3 = page.locator('#card-negative .badge-dif.tp-deal-not-low')
     title3 = badge3.get_attribute('title') or ''
     assert 'Historischer Tiefstpreis lag bei CHF 10.00 (+50% Aufschlag)' in title3
     assert 'Höchstpreis: CHF 25.00' in title3
@@ -560,7 +562,7 @@ def test_real_deal_dom_memoization_and_cache_pruning(page: Page):
         localStorage.setItem('tp_hist_v1_fresh999', JSON.stringify({ tiefstpreis: 80, hoechstpreis: 120, time: freshTime }));
     }''')
 
-    # Trigger setCachedPriceStats by mocking a route and clicking check button
+    # Trigger setCachedPriceStats by mocking a route and clicking check badge
     page.route('**/plugins/product/pricechart*', lambda route: route.fulfill(
         status=200,
         headers={'access-control-allow-origin': '*'},
@@ -568,15 +570,9 @@ def test_real_deal_dom_memoization_and_cache_pruning(page: Page):
         body='<div class="PriceChartLegend"><div class="title">Tiefstpreis</div><div class="Plugin_Price">1800.00</div></div>'
     ))
 
-    page.wait_for_selector('#card-cheapest .tp-card-check-deal-btn')
-    page.click('#card-cheapest .tp-card-check-deal-btn')
-    page.wait_for_selector('#card-cheapest .tp-real-deal-sub-badge')
-
-    # Verify wrapper dataset memoization attributes
-    wrapper = page.locator('#card-cheapest .tp-real-deal-wrapper')
-    assert wrapper.get_attribute('data-tp-status') == 'low'
-    assert wrapper.get_attribute('data-tp-pid') == '797571'
-    assert wrapper.get_attribute('data-tp-price') == '1800.00'
+    page.wait_for_selector('#card-cheapest .badge-dif')
+    page.click('#card-cheapest .badge-dif')
+    page.wait_for_selector('#card-cheapest .badge-dif.tp-deal-alltime-low')
 
     # Stale item should be pruned, fresh item preserved
     stale_exists = page.evaluate("() => localStorage.getItem('tp_hist_v1_stale999') !== null")
@@ -605,13 +601,13 @@ def test_real_deal_removes_heatmap_on_non_bestpreis(page: Page):
     page.route('**/plugins/product/pricechart*', handle_pricechart)
 
     # Check card 1 (all-time low) -> heatmap stays active
-    page.click('#card-cheapest .tp-card-check-deal-btn')
-    page.wait_for_selector('#card-cheapest .tp-real-deal-sub-badge.tp-is-alltime-low')
+    page.click('#card-cheapest .badge-dif')
+    page.wait_for_selector('#card-cheapest .badge-dif.tp-deal-alltime-low')
     assert 'tp-heatmap-active' in (card1.get_attribute('class') or '')
 
     # Check card 3 (non-bestpreis, 15 CHF vs 10 CHF low) -> heatmap is removed
-    page.click('#card-negative .tp-card-check-deal-btn')
-    page.wait_for_selector('#card-negative .tp-real-deal-sub-badge.tp-is-not-low')
+    page.click('#card-negative .badge-dif')
+    page.wait_for_selector('#card-negative .badge-dif.tp-deal-not-low')
     assert 'tp-heatmap-active' not in (card3.get_attribute('class') or '')
 
 
@@ -634,14 +630,14 @@ def test_real_deal_batch_check_button_counter_and_run(page: Page):
     page.route('**/plugins/product/pricechart*', handle_pricechart)
 
     # 1. Checking one card individually reduces the batch count from (3) to (2)
-    page.click('#card-cheapest .tp-card-check-deal-btn')
-    page.wait_for_selector('#card-cheapest .tp-real-deal-sub-badge')
+    page.click('#card-cheapest .badge-dif')
+    page.wait_for_selector('#card-cheapest .badge-dif.tp-deal-not-low')
     assert 'Check Deals (2)' in (batch_btn.text_content() or '')
 
     # 2. Clicking batch button runs the batch check for remaining cards
     batch_btn.click()
-    page.wait_for_selector('#card-negative .tp-real-deal-sub-badge')
-    page.wait_for_selector('#card-cat-excluded .tp-real-deal-sub-badge')
+    page.wait_for_selector('#card-negative .badge-dif.tp-deal-alltime-low')
+    page.wait_for_selector('#card-cat-excluded .badge-dif.tp-deal-not-low')
 
     # Wait for batch run to complete (tp-batch-active removed)
     page.wait_for_function("() => !document.querySelector('#tp-bar-batch-check-btn').classList.contains('tp-batch-active')")
@@ -799,12 +795,12 @@ def test_real_world_toppreise_pricechart_html_parsing(page: Page):
         body=real_toppreise_html
     ))
 
-    # Click Tiefstpreis? on card-cheapest (price 1800 CHF vs Tiefstpreis 79.45 CHF -> +2166% markup)
-    page.click('#card-cheapest .tp-card-check-deal-btn')
+    # Click Differenz badge on card-cheapest (price 1800 CHF vs Tiefstpreis 79.45 CHF -> +2166% markup)
+    page.click('#card-cheapest .badge-dif')
 
     # Expect badge to be created with markup badge, NOT 'Nicht verfügbar'
-    page.wait_for_selector('#card-cheapest .tp-real-deal-sub-badge', timeout=3000)
-    badge = page.locator('#card-cheapest .tp-real-deal-sub-badge')
+    page.wait_for_selector('#card-cheapest .badge-dif.tp-deal-not-low', timeout=3000)
+    badge = page.locator('#card-cheapest .badge-dif.tp-deal-not-low')
     assert '+2166%' in (badge.text_content() or '')
 
     # Now verify all-time low case when Tiefstpreis matches card price (1800 CHF)
@@ -823,10 +819,10 @@ def test_real_world_toppreise_pricechart_html_parsing(page: Page):
         content_type='text/html',
         body=real_negative_html
     ))
-    page.click('#card-negative .tp-card-check-deal-btn')
-    page.wait_for_selector('#card-negative .tp-real-deal-sub-badge', timeout=3000)
-    neg_badge = page.locator('#card-negative .tp-real-deal-sub-badge')
-    assert 'Allzeit-Tiefstpreis' in (neg_badge.text_content() or '')
+    page.click('#card-negative .badge-dif')
+    page.wait_for_selector('#card-negative .badge-dif.tp-deal-alltime-low', timeout=3000)
+    neg_badge = page.locator('#card-negative .badge-dif.tp-deal-alltime-low')
+    assert '🌟' in (neg_badge.text_content() or '')
 
 
 def test_filter_bar_hidden_on_product_detail_page(page: Page):
@@ -878,15 +874,12 @@ def test_check_deal_button_not_injected_on_category_page(page: Page):
         document.body.setAttribute('data-current_url', '/produktsuche/TV-Video/TV-Geraete-Zubehoer/TV-Geraete-c986');
         // Remove badge-dif elements from cards to simulate real category catalog
         document.querySelectorAll('.badge-dif').forEach(b => b.remove());
-        // Clean any existing wrappers
-        document.querySelectorAll('.tp-real-deal-wrapper').forEach(w => w.remove());
         window.ToppreiseSuite?.processListings?.();
     }''')
     page.wait_for_timeout(200)
 
-    # Verify no on-card check deal buttons exist on standard catalog listings
-    check_deal_btns = page.locator('.tp-card-check-deal-btn')
-    assert check_deal_btns.count() == 0
+    # Verify no interactive deal badges exist on standard catalog listings
+    assert page.locator('.badge-dif.tp-deal-badge-interactive').count() == 0
 
 
 def test_slash_key_focuses_negative_filter(page: Page):
@@ -1233,10 +1226,11 @@ def test_negative_caching_and_manual_click_override(page: Page):
         body='<div class="PriceChartLegend"><div class="title">Tiefstpreis</div><div class="Plugin_Price">1800.00</div></div>'
     ))
 
-    page.click('#card-cheapest .tp-card-check-deal-btn')
-    page.wait_for_selector('#card-cheapest .tp-real-deal-sub-badge')
-    badge = page.locator('#card-cheapest .tp-real-deal-sub-badge')
-    assert 'Allzeit-Tiefstpreis' in (badge.text_content() or '')
+    page.click('#card-cheapest .badge-dif')
+    page.wait_for_selector('#card-cheapest .badge-dif.tp-deal-alltime-low')
+    badge = page.locator('#card-cheapest .badge-dif.tp-deal-alltime-low')
+    assert '🌟' in (badge.text_content() or '')
+    assert 'Allzeit-Tiefstpreis' in (badge.get_attribute('title') or '')
 
 
 def test_sparklines_beta_settings_toggle(page: Page):
