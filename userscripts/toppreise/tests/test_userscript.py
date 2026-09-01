@@ -1653,6 +1653,49 @@ def test_bestpreise_settings_horizon_selection_persistence(page: Page):
     assert page.evaluate("() => window.ToppreiseSuite.CONFIG.BESTPREISE_MEDIAN_HORIZON_DAYS") == 180
 
 
+def test_cache_settings_and_clear_button(page: Page):
+    # Seed local storage with 2 fake cache items
+    page.evaluate("""() => {
+        localStorage.setItem('tp_hist_v1_item1', JSON.stringify({ tiefstpreis: 100, time: Date.now() }));
+        localStorage.setItem('tp_hist_v1_item2', JSON.stringify({ tiefstpreis: 200, time: Date.now() }));
+    }""")
+
+    # Open settings modal
+    page.click('#tp-root >> #tp-settings-fab')
+    page.wait_for_selector('#tp-root >> #tp-settings-dialog', state='visible')
+
+    # Verify cache count label displays 2 items
+    stats_label = page.locator('#tp-root >> #tp-cache-stats-label')
+    assert '2 Einträge' in (stats_label.text_content() or '')
+
+    # Change Cache TTL to 72 hours and Neg TTL to 6 hours
+    page.select_option('#tp-root >> #tp-cache-ttl-select', '72')
+    page.select_option('#tp-root >> #tp-cache-neg-ttl-select', '6')
+
+    # Click Clear Cache button
+    page.click('#tp-root >> #tp-cache-clear-btn')
+    assert '0 Einträge' in (stats_label.text_content() or '')
+
+    # Verify localStorage items were removed
+    remaining_keys = page.evaluate("""() => {
+        const keys = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith('tp_hist_v1_')) keys.push(k);
+        }
+        return keys;
+    }""")
+    assert len(remaining_keys) == 0
+
+    # Save
+    page.click('#tp-root >> #tp-btn-save')
+    page.wait_for_selector('#tp-root >> #tp-settings-dialog', state='hidden')
+
+    assert page.evaluate("() => window.ToppreiseSuite.CONFIG.REAL_DEAL_CACHE_HOURS") == 72
+    assert page.evaluate("() => window.ToppreiseSuite.CONFIG.NEGATIVE_CACHE_HOURS") == 6
+
+
+
 
 
 

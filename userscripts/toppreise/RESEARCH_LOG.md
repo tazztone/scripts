@@ -282,6 +282,14 @@ $$\text{Score} = \max\left(0, \text{round}\left((1 - W) \times D_{\text{median}}
 - **Adaptive Fallback**: If recent window contains $<3$ data points, seamlessly falls back to lifetime median.
 - **Subline Formatting**: Displays contextual window label: `Ø-Preis (1J): CHF 460.00 (-12%)`.
 
+### 4. Configurable Cache & Performance Management (v2.17.0)
+- **Settings Modal Section 7 (`7. Cache & Performance`)**:
+  - **Valid Data Cache TTL (`REAL_DEAL_CACHE_HOURS`)**: Configurable dropdown (24h, 48h [default], 72h, 7d, 14d).
+  - **Negative Cache TTL (`NEGATIVE_CACHE_HOURS`)**: Configurable dropdown (1h, 2h [default], 6h, 12h, 24h).
+  - **Live Storage Counter (`tp-cache-stats-label`)**: Displays real-time count of cached product entries (`Lokaler Cache: N Einträge`).
+  - **1-Click Cache Wipe (`🗑️ Cache leeren`)**: Removes all `tp_hist_v1_*` entries from `localStorage`, refreshes listing badges, and confirms with a glassmorphic toast.
+
+
 
 
 

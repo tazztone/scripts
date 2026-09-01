@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.17.1
+// @version      2.17.3
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, checks real all-time Tiefstpreise, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -1247,6 +1247,35 @@ const SHADOW_MODAL_STYLES = `
         window.localStorage?.setItem(STATS_CACHE_PREFIX + productId, JSON.stringify(payload));
       } catch (err) {}
     }
+  }
+
+  function getCachedProductCount() {
+    let count = 0;
+    try {
+      if (window.localStorage) {
+        for (let i = 0; i < window.localStorage.length; i++) {
+          const key = window.localStorage.key(i);
+          if (key && key.startsWith(STATS_CACHE_PREFIX)) count++;
+        }
+      }
+    } catch (e) {}
+    return count;
+  }
+
+  function clearPriceStatsCache() {
+    let count = 0;
+    try {
+      if (window.localStorage) {
+        const keysToRemove = [];
+        for (let i = 0; i < window.localStorage.length; i++) {
+          const key = window.localStorage.key(i);
+          if (key && key.startsWith(STATS_CACHE_PREFIX)) keysToRemove.push(key);
+        }
+        keysToRemove.forEach(k => window.localStorage.removeItem(k));
+        count = keysToRemove.length;
+      }
+    } catch (e) {}
+    return count;
   }
 
   function parsePriceStatsFromHtml(html) {
@@ -3273,7 +3302,34 @@ const SHADOW_MODAL_STYLES = `
               <input type="number" id="tp-real-deal-min-val" min="5" max="95" step="5" value="30">
             </div>
           </div>
-          <div class="tp-section-header" style="color: #8b5cf6;">7. Experimentell / Beta</div>
+          <div class="tp-section-header" style="color: #06b6d4;">7. Cache & Performance</div>
+          <div class="tp-settings-group">
+            <label>Cache-Dauer für Preishistorie (Gültige Daten)</label>
+            <select id="tp-cache-ttl-select" class="tp-select" style="width: 100%; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; padding: 6px 10px; font-size: 13px; margin-top: 4px; box-sizing: border-box;">
+              <option value="24">24 Stunden (1 Tag)</option>
+              <option value="48">48 Stunden (2 Tage) [Standard]</option>
+              <option value="72">72 Stunden (3 Tage)</option>
+              <option value="168">7 Tage (1 Woche)</option>
+              <option value="336">14 Tage (2 Wochen)</option>
+            </select>
+            <span class="tp-switch-desc" style="display: block; margin-top: 4px; font-size: 11px; opacity: 0.85;">Bestimmt, wie lange abgefragte Preisstatistiken lokal gespeichert bleiben</span>
+          </div>
+          <div class="tp-settings-group">
+            <label>Negativ-Cache Dauer (Nicht verfügbare Daten)</label>
+            <select id="tp-cache-neg-ttl-select" class="tp-select" style="width: 100%; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; padding: 6px 10px; font-size: 13px; margin-top: 4px; box-sizing: border-box;">
+              <option value="1">1 Stunde</option>
+              <option value="2">2 Stunden [Standard]</option>
+              <option value="6">6 Stunden</option>
+              <option value="12">12 Stunden</option>
+              <option value="24">24 Stunden</option>
+            </select>
+            <span class="tp-switch-desc" style="display: block; margin-top: 4px; font-size: 11px; opacity: 0.85;">Verhindert wiederholte Server-Anfragen bei Produkten ohne Preiskurve</span>
+          </div>
+          <div class="tp-settings-group" style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px;">
+            <div style="font-size: 12px; opacity: 0.85;" id="tp-cache-stats-label">Lokaler Cache: 0 Einträge</div>
+            <button type="button" id="tp-cache-clear-btn" class="tp-btn tp-btn-secondary" style="padding: 4px 10px; font-size: 12px;">🗑️ Cache leeren</button>
+          </div>
+          <div class="tp-section-header" style="color: #8b5cf6;">8. Experimentell / Beta</div>
           <div class="tp-settings-group tp-switch-container">
             <div class="tp-switch-label">
               <label>Mini-Preiskurven (Sparklines) anzeigen</label>
@@ -3284,7 +3340,7 @@ const SHADOW_MODAL_STYLES = `
               <span class="tp-slider"></span>
             </label>
           </div>
-          <div class="tp-section-header" style="color: #6366f1;">8. Import / Export</div>
+          <div class="tp-section-header" style="color: #6366f1;">9. Import / Export</div>
           <div class="tp-settings-group" style="display: flex; flex-direction: row; gap: 8px;">
             <button type="button" id="tp-export-config-btn" class="tp-btn tp-btn-secondary" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;">📥 Export (JSON)</button>
             <button type="button" id="tp-import-config-btn" class="tp-btn tp-btn-secondary" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;">📤 Import (JSON)</button>
@@ -3336,6 +3392,10 @@ const SHADOW_MODAL_STYLES = `
     const bestpreiseWeightDesc = shadow.getElementById('tp-bestpreise-weight-desc');
     const bestpreiseHorizonGroup = shadow.getElementById('tp-bestpreise-horizon-group');
     const bestpreiseHorizonSelect = shadow.getElementById('tp-bestpreise-horizon-select');
+    const cacheTtlSelect = shadow.getElementById('tp-cache-ttl-select');
+    const cacheNegTtlSelect = shadow.getElementById('tp-cache-neg-ttl-select');
+    const cacheStatsLabel = shadow.getElementById('tp-cache-stats-label');
+    const cacheClearBtn = shadow.getElementById('tp-cache-clear-btn');
     const realDealMinRange = shadow.getElementById('tp-real-deal-min-range');
     const realDealMinVal = shadow.getElementById('tp-real-deal-min-val');
     const sparklinesToggle = shadow.getElementById('tp-sparklines-toggle');
@@ -3413,6 +3473,13 @@ const SHADOW_MODAL_STYLES = `
         bestpreiseWeightDesc.textContent = `${100 - weightPct}% Median / ${weightPct}% Neuer Rekord`;
       }
 
+      if (cacheTtlSelect) cacheTtlSelect.value = String(CONFIG.REAL_DEAL_CACHE_HOURS || 48);
+      if (cacheNegTtlSelect) cacheNegTtlSelect.value = String(CONFIG.NEGATIVE_CACHE_HOURS || 2);
+      if (cacheStatsLabel) {
+        const count = getCachedProductCount();
+        cacheStatsLabel.textContent = `Lokaler Cache: ${count} ${count === 1 ? 'Eintrag' : 'Einträge'}`;
+      }
+
       if (realDealFilterToggle) realDealFilterToggle.checked = CONFIG.REAL_DEAL_FILTER_ACTIVE === true;
       if (realDealMinRange) realDealMinRange.value = CONFIG.REAL_DEAL_MIN_DISCOUNT || 30;
       if (realDealMinVal) realDealMinVal.value = CONFIG.REAL_DEAL_MIN_DISCOUNT || 30;
@@ -3462,6 +3529,13 @@ const SHADOW_MODAL_STYLES = `
       if (alarmDelaysGroup) {
         alarmDelaysGroup.style.display = alarmAutoSubmitToggle.checked ? 'block' : 'none';
       }
+    });
+
+    cacheClearBtn?.addEventListener('click', () => {
+      const removed = clearPriceStatsCache();
+      if (cacheStatsLabel) cacheStatsLabel.textContent = 'Lokaler Cache: 0 Einträge';
+      processListings();
+      showToast(`Cache geleert (${removed} Produkte entfernt)`);
     });
 
     exportBtn?.addEventListener('click', () => {
@@ -3576,6 +3650,9 @@ const SHADOW_MODAL_STYLES = `
           cancelBestpreiseScan();
         }
       }
+      if (cacheTtlSelect) saveConfigKey('REAL_DEAL_CACHE_HOURS', parseInt(cacheTtlSelect.value, 10) || 48);
+      if (cacheNegTtlSelect) saveConfigKey('NEGATIVE_CACHE_HOURS', parseInt(cacheNegTtlSelect.value, 10) || 2);
+
       if (realDealFilterToggle) saveConfigKey('REAL_DEAL_FILTER_ACTIVE', realDealFilterToggle.checked);
       if (realDealMinVal) saveConfigKey('REAL_DEAL_MIN_DISCOUNT', Math.max(5, Math.min(95, parseInt(realDealMinVal.value) || 30)));
       if (sparklinesToggle) saveConfigKey('ENABLE_SPARKLINES', sparklinesToggle.checked);
