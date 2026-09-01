@@ -1383,6 +1383,19 @@ def test_deal_score_computation_and_weights(page: Page):
     }""")
     assert tier3_flat is None
 
+    # Test 6: Exclusion: 0% Real Deal Score (price matches low and median, zero savings)
+    zero_score = page.evaluate("""() => {
+        const stats = {
+            tiefstpreis: 1000,
+            hoechstpreis: 1500,
+            medianPrice: 1000,
+            isNewAllTimeLow: false,
+            dataPointCount: 10
+        };
+        return window.ToppreiseSuite.computeDealScore(stats, 1000);
+    }""")
+    assert zero_score is None
+
 
 def test_bestpreise_filter_bar_toggle_and_state(page: Page):
     # Verify button exists in filter bar

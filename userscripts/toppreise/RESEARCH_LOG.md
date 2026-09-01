@@ -226,7 +226,7 @@ $$\text{Score} = \max\left(0, \text{round}\left((1 - W) \times D_{\text{median}}
 - **$D_{\text{median}}$ (Everyday Savings)**: Discount vs historical median price $\frac{P_{\text{median}} - P_{\text{curr}}}{P_{\text{median}}} \times 100$.
 - **$D_{\text{record}}$ (Record-Breaking Margin)**: Discount vs previous all-time low $\frac{P_{\text{prev\_low}} - P_{\text{curr}}}{P_{\text{prev\_low}}} \times 100$ (or $0\%$ if matching existing record).
 - **Weight $W$**: User-configurable via settings slider (default $0.50$ = 50% Median / 50% Neuer Rekord).
-- **Qualification Gate**: Products must be at/below all-time low ($P_{\text{curr}} \le P_{\text{low}} \times 1.01$), have $\ge 2\%$ historical variance, and have $\ge 5$ data points. Non-qualifiers are hidden (`.tp-bestpreise-hidden`).
+- **Qualification Gate**: Products must be at/below all-time low ($P_{\text{curr}} \le P_{\text{low}} \times 1.01$), have $\ge 2\%$ historical variance, $\ge 5$ data points, and deliver genuine real savings ($\text{Score} > 0\%$). Products with $\text{Score} \le 0\%$ (i.e. prices equal to median with 0% record drop) are excluded and hidden (`.tp-bestpreise-hidden`).
 
 ### 3. Integrated Thermal Heatmap & Visual Hierarchy
 - **Card Thermal Background**: The computed Deal-Score directly drives `getHeatmapStyles(Score, ...)` on the card (5–15% cool cyan $\rightarrow$ 20–30% warm amber $\rightarrow$ 35%+ fiery red).
