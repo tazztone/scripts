@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.14.6
+// @version      2.15.2
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, checks real all-time Tiefstpreise, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -273,6 +273,16 @@ const STYLES = `
     white-space: nowrap !important;
     user-select: none !important;
     pointer-events: auto !important;
+  }
+  .tp-card-historical-price.tp-is-record-low {
+    color: #34d399 !important;
+    font-weight: 600 !important;
+  }
+  .tp-card-historical-price.tp-is-at-low {
+    color: #10b981 !important;
+  }
+  .tp-card-historical-price.tp-is-markup {
+    color: #fbbf24 !important;
   }
   .tp-sparkline-container {
     display: inline-flex !important;
@@ -1258,27 +1268,110 @@ const SHADOW_MODAL_STYLES = `
     return null;
   }
 
+  function analyzePriceTimeSeries(series, currentPrice = null) {
+    if (!series || !Array.isArray(series) || series.length === 0) return null;
+
+    // Flatten or handle 2D array [series0, series1]
+    let rawPoints = series;
+    if (Array.isArray(series[0]) && series[0].length > 0 && Array.isArray(series[0][0])) {
+      rawPoints = series[0];
+    }
+
+    const points = rawPoints.map(p => {
+      if (Array.isArray(p) && p.length >= 2) {
+        const ts = typeof p[0] === 'number' ? p[0] : parseInt(p[0]);
+        const pr = typeof p[1] === 'number' ? p[1] : parsePrice(String(p[1]));
+        return pr > 0 ? [ts, pr] : null;
+      }
+      if (p && typeof p.price === 'number' && p.price > 0) {
+        return [p.timestamp || p.time || 0, p.price];
+      }
+      return null;
+    }).filter(Boolean);
+
+    if (points.length === 0) return null;
+
+    const prices = points.map(p => p[1]);
+    const curr = (typeof currentPrice === 'number' && currentPrice > 0) ? currentPrice : prices[prices.length - 1];
+    const allTimeLow = Math.min(...prices);
+    const allTimeHigh = Math.max(...prices);
+
+    // Calculate previous low before current price drop:
+    // Look backwards from recent points while price is within 1% of current low
+    let idx = prices.length - 1;
+    while (idx > 0 && prices[idx] <= curr * 1.01) {
+      idx--;
+    }
+    const historicalPrices = prices.slice(0, idx + 1);
+    const previousLow = historicalPrices.length > 0 ? Math.min(...historicalPrices) : allTimeLow;
+
+    const sorted = [...prices].sort((a, b) => a - b);
+    const medianPrice = sorted[Math.floor(sorted.length / 2)];
+    const avgPrice = prices.reduce((a, b) => a + b, 0) / prices.length;
+
+    const isNewAllTimeLow = previousLow > 0 && curr < previousLow * 0.99;
+    const isAtAllTimeLow = curr <= allTimeLow * 1.01;
+    const isNonBest = !isAtAllTimeLow;
+
+    const realDiscountVsPrevLow = (previousLow > 0 && isNewAllTimeLow)
+      ? Math.round(((previousLow - curr) / previousLow) * 100)
+      : 0;
+
+    const realDiscountVsAvg = (avgPrice > curr)
+      ? Math.round(((avgPrice - curr) / avgPrice) * 100)
+      : 0;
+
+    const markupVsLow = (allTimeLow > 0 && isNonBest)
+      ? Math.round(((curr - allTimeLow) / allTimeLow) * 100)
+      : 0;
+
+    return {
+      tiefstpreis: allTimeLow,
+      hoechstpreis: allTimeHigh,
+      aktuellerToppreis: curr,
+      previousLow: previousLow > 0 ? previousLow : null,
+      avgPrice: Math.round(avgPrice * 100) / 100,
+      medianPrice: Math.round(medianPrice * 100) / 100,
+      isNewAllTimeLow,
+      isAtAllTimeLow,
+      isNonBest,
+      realDiscountVsPrevLow,
+      realDiscountVsAvg,
+      markupVsLow,
+      timeSeries: points
+    };
+  }
+
   async function fetchPriceTimeSeries(productId) {
     if (!productId) return null;
     try {
       const baseUrl = (location.origin && location.origin.startsWith('http')) ? location.origin : 'https://www.toppreise.ch';
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const postBody = `pcspagdpi=${encodeURIComponent(productId)}&pcspagdfdt=0000-00-00&pcspagdtd=&p_pc_ch=&lang=de`;
       const res = await fetch(`${baseUrl}/plugins/product/pricechart`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
           'X-Requested-With': 'XMLHttpRequest',
           'Accept': 'application/json, text/javascript, */*; q=0.01'
         },
         credentials: 'same-origin',
-        body: `p_pc_pid=${encodeURIComponent(productId)}`,
+        body: postBody,
         signal: controller.signal
       });
       clearTimeout(timeoutId);
       if (!res.ok) return null;
       const data = await res.json();
-      if (Array.isArray(data)) return data;
+      if (Array.isArray(data)) {
+        // If 2D array of series [[series0], [series1]]
+        if (Array.isArray(data[0]) && data[0].length > 0 && Array.isArray(data[0][0])) {
+          return data[0]; // Series 0: Produktpreis
+        }
+        if (Array.isArray(data[0]) && typeof data[0][0] === 'number') {
+          return data; // Raw points [[t1, p1], [t2, p2]]
+        }
+      }
       if (Array.isArray(data?.series)) return data.series;
       if (Array.isArray(data?.data)) return data.data;
       return null;
@@ -1305,8 +1398,21 @@ const SHADOW_MODAL_STYLES = `
     const fetchPromise = (async () => {
       try {
         const baseUrl = (location.origin && location.origin.startsWith('http')) ? location.origin : 'https://www.toppreise.ch';
-        const url = `${baseUrl}/plugins/product/pricechart?p_pc_pid=${encodeURIComponent(productId)}`;
         
+        // 1. Primary fast route: POST JSON time-series (gives series + all aggregates in 1 request)
+        try {
+          const timeSeries = await fetchPriceTimeSeries(productId);
+          if (timeSeries && Array.isArray(timeSeries) && timeSeries.length >= 1) {
+            const analysis = analyzePriceTimeSeries(timeSeries);
+            if (analysis && analysis.tiefstpreis > 0) {
+              setCachedPriceStats(productId, analysis);
+              return analysis;
+            }
+          }
+        } catch (seriesErr) {}
+
+        // 2. Fallback route: GET HTML modal dialog
+        const url = `${baseUrl}/plugins/product/pricechart?p_pc_pid=${encodeURIComponent(productId)}`;
         let resHtml = null;
         for (let attempt = 0; attempt <= retries; attempt++) {
           try {
@@ -1342,16 +1448,6 @@ const SHADOW_MODAL_STYLES = `
         const html = await resHtml.text();
         const stats = parsePriceStatsFromHtml(html);
         if (stats) {
-          // Only fetch secondary time series if Beta Sparklines are explicitly enabled
-          if (CONFIG.ENABLE_SPARKLINES) {
-            fetchPriceTimeSeries(productId).then(timeSeries => {
-              if (timeSeries && Array.isArray(timeSeries) && timeSeries.length >= 2) {
-                stats.timeSeries = timeSeries;
-                setCachedPriceStats(productId, stats);
-              }
-            }).catch(() => {});
-          }
-
           setCachedPriceStats(productId, stats);
           return stats;
         } else {
@@ -2105,6 +2201,9 @@ const SHADOW_MODAL_STYLES = `
       if (stats && cardPrice > 0 && stats.tiefstpreis > 0) {
         const isAllTimeLow = cardPrice <= stats.tiefstpreis * 1.01;
         const isNonBest = !isAllTimeLow;
+        const isNewRecord = !!(stats.isNewAllTimeLow || (isAllTimeLow && stats.previousLow && stats.previousLow > cardPrice * 1.01));
+        const prevLow = stats.previousLow;
+        const realDropVsPrev = prevLow && prevLow > cardPrice ? Math.round(((prevLow - cardPrice) / prevLow) * 100) : (stats.realDiscountVsPrevLow || 0);
 
         if (isNonBest && CONFIG.REAL_DEAL_FILTER_ACTIVE) {
           card.classList.add('tp-non-bestpreis-filtered');
@@ -2115,7 +2214,7 @@ const SHADOW_MODAL_STYLES = `
         const hasSignificantPeak = stats.hoechstpreis && stats.hoechstpreis > stats.tiefstpreis * 1.02;
 
         if (isAllTimeLow) {
-          // 3B: Verified All-Time Low (Glowing Emerald Halo + Star)
+          // 3B: Verified All-Time Low (Glowing Emerald Halo)
           badgeDifEl.classList.add('tp-deal-alltime-low', 'tp-deal-badge-interactive');
           badgeDifEl.classList.remove('tp-deal-not-low', 'tp-is-severe-markup', 'tp-deal-loading');
           
@@ -2124,7 +2223,14 @@ const SHADOW_MODAL_STYLES = `
             const peakDropPct = Math.round(((stats.hoechstpreis - cardPrice) / stats.hoechstpreis) * 100);
             peakContext = ` (-${peakDropPct}% vom Höchstpreis CHF ${stats.hoechstpreis.toFixed(2)})`;
           }
-          badgeDifEl.title = `🌟 Aktueller Preis (CHF ${cardPrice.toFixed(2)}) ist der historische Allzeit-Tiefstpreis!${peakContext} (Klicken zum Aktualisieren)`;
+
+          let prevLowContext = '';
+          if (isNewRecord && prevLow) {
+            prevLowContext = ` | Bisheriger Rekord: CHF ${prevLow.toFixed(2)} (-${realDropVsPrev}%)`;
+          }
+          const avgContext = stats.avgPrice && stats.avgPrice > cardPrice ? ` | Ø-Preis: CHF ${stats.avgPrice.toFixed(2)}` : '';
+
+          badgeDifEl.title = `🌟 ${isNewRecord ? 'Neuer Allzeit-Tiefstpreis' : 'Allzeit-Tiefstpreis'} (CHF ${cardPrice.toFixed(2)})!${prevLowContext}${avgContext}${peakContext} (Klicken zum Aktualisieren)`;
           badgeDifEl.innerHTML = `<div class="text">Differenz</div><p>-${rawDiscount}%</p>`;
         } else {
           // 2A: Verified Non-Tiefstpreis (Amber Alert Morph with Shrunken Strikethrough)
@@ -2149,15 +2255,27 @@ const SHADOW_MODAL_STYLES = `
         if (isNonBest) {
           if (!histPriceEl) {
             histPriceEl = document.createElement('div');
-            histPriceEl.className = 'tp-card-historical-price';
             const priceContainer = card.querySelector('.Plugin_PriceInformation, .price_information_product') ||
                                    cardPriceEl?.closest('.priceContainer, .Plugin_PriceInformation, .price_information_product') ||
                                    cardPriceEl?.parentElement ||
                                    card;
             priceContainer.appendChild(histPriceEl);
           }
+          histPriceEl.className = 'tp-card-historical-price tp-is-markup';
           histPriceEl.textContent = `Tiefstpreis: CHF ${stats.tiefstpreis.toFixed(2)}`;
-          histPriceEl.title = `Historischer Tiefstpreis lag bei CHF ${stats.tiefstpreis.toFixed(2)}`;
+          histPriceEl.title = `Historischer Tiefstpreis lag bei CHF ${stats.tiefstpreis.toFixed(2)} (+${Math.round(((cardPrice - stats.tiefstpreis) / stats.tiefstpreis) * 100)}% Aufschlag)`;
+        } else if (isNewRecord && prevLow) {
+          if (!histPriceEl) {
+            histPriceEl = document.createElement('div');
+            const priceContainer = card.querySelector('.Plugin_PriceInformation, .price_information_product') ||
+                                   cardPriceEl?.closest('.priceContainer, .Plugin_PriceInformation, .price_information_product') ||
+                                   cardPriceEl?.parentElement ||
+                                   card;
+            priceContainer.appendChild(histPriceEl);
+          }
+          histPriceEl.className = 'tp-card-historical-price tp-is-record-low';
+          histPriceEl.textContent = `Bisher: CHF ${prevLow.toFixed(2)} (-${realDropVsPrev}%)`;
+          histPriceEl.title = `Neuer Rekord-Tiefstpreis! Vorheriges Tief lag bei CHF ${prevLow.toFixed(2)}`;
         } else if (histPriceEl) {
           histPriceEl.remove();
         }
@@ -2822,7 +2940,7 @@ const SHADOW_MODAL_STYLES = `
     exportBtn?.addEventListener('click', () => {
       const exportData = {
         _meta: {
-          version: (typeof GM_info !== 'undefined' && GM_info?.script?.version) || '2.14.0',
+          version: (typeof GM_info !== 'undefined' && GM_info?.script?.version) || '2.15.0',
           exported: new Date().toISOString()
         },
         config: { ...CONFIG }

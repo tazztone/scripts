@@ -10,7 +10,7 @@ Requires Violentmonkey (or a compatible userscript manager):
 - [Firefox](https://addons.mozilla.org/en-US/firefox/addon/violentmonkey/)
 - [Chrome / Brave](https://chromewebstore.google.com/detail/violentmonkey/jinjaccalgkegednnccohejagnlnfdag)
 
-### 👉 [**CLICK HERE TO INSTALL USERSCRIPT (v2.14.6)**](https://raw.githubusercontent.com/tazztone/scripts/main/userscripts/toppreise/toppreise.user.js)
+### 👉 [**CLICK HERE TO INSTALL USERSCRIPT (v2.15.2)**](https://raw.githubusercontent.com/tazztone/scripts/main/userscripts/toppreise/toppreise.user.js)
 
 ---
 
@@ -18,7 +18,7 @@ Requires Violentmonkey (or a compatible userscript manager):
 
 1. **🌟 Integrierte Real Deals & Allzeit-Tiefstpreis Prüfung**: Verifiziert echte Rekord-Preise direkt im bestehenden Toppreise Differenz-Kreisbadge (`.badge-dif`) ohne störende Extra-Badges.
    - **1-Klick-Check im Differenz-Badge (`🔍`)**: Das Rabatt-Kreisbadge besitzt eine dezente Eck-Lupe und löst per Klick direkt die historische Tiefstpreis-Prüfung aus.
-   - **`🌟 Allzeit-Tiefstpreis` (Pulsierende Grüne Halo-Aura)**: Echte Rekordpreise erhalten einen leuchtend grünen Halo-Ring um das Differenz-Badge mit `🌟 -XX%` Stern-Präfix.
+   - **`🌟 Allzeit-Tiefstpreis` & Neuer Rekord-Tiefstpreis**: Echte Rekordpreise erhalten einen leuchtend grünen Halo-Ring um das Differenz-Badge. Bei neuen Allzeit-Tiefstpreisen wird zusätzlich der bisherige Tiefstpreis und der echte Neuer-Rekord-Rabatt angezeigt (`Bisher: CHF 1'978.15 (-38%)`).
    - **`⚠️ +XX%` Aufschlag-Morph & Gestrichener Schein-Rabatt (`~~-YY%~~`)**: Entlarvt Schein-Rabatte direkt im Kreisbadge mit auffälligem `+XX%` Aufschlag und durchgestrichenem Feed-Rabatt `<s>-YY%</s>`, plus `Tiefstpreis: CHF XX.XX` unter dem Preis.
    - **Filterleisten-Toggle (`🌟 Nur Tiefstpreise`)**: Blendet verifizierte Nicht-Bestpreise auf Knopfdruck aus.
    - **Batch-Checker mit Live-Zähler (`🔍 Check Deals (N)`)**: Prüft auf Knopfdruck nacheinander alle Deals ab dem Schwellenwert mit Live-Fortschrittszähler und Abbruch-Option.
@@ -27,7 +27,7 @@ Requires Violentmonkey (or a compatible userscript manager):
    - **Detailseiten-Badge (`/preisvergleich/...-p...`)**: Zeigt direkt auf Produktseiten neben dem Haupttitel/Hauptpreis, ob das Angebot ein Allzeit-Tiefstpreis ist.
    - **Leere-Feed-Hinweis (Empty State)**: Blendet bei komplett gefilterter Seite einen eleganten Hinweis mit Schnellaktionen ein (`[ 👁️ Vorschau ]`, `[ 🌟 Filter aus ]`, `[ 🔄 Reset ]`).
    - **48h Lokaler Cache & 2h Negativ-Cache**: Einmal geprüfte Produkte bleiben 48 Stunden im Browser gespeichert und laden bei Folgebesuchen blitzschnell ohne Netzwerkabfrage. Nicht verfügbare Produkte werden für 2 Stunden zwischengespeichert (bei manuellem Klick sofort überschreibbar).
-2. **📈 Mini Preis-Trend Sparklines (Beta)**: Zeigt auf Karten mit geprüfter Preishistorie kompakte Inline-SVG-Sparklines des historischen Preisverlaufs (Grün für fallenden/stabilen Trend 🟢, Rot für steigenden Trend 🔴) mit Hover-Skalierung und Tooltip (optional in den Einstellungen aktivierbar).
+2. **📈 Mini Preis-Trend Sparklines (Beta)**: Zeigt auf Karten mit geprüfter Preishistorie kompakte Inline-SVG-Sparklines des historischen Preisverlaufs (Grün für fallenden Trend / Allzeit-Tief 🟢, Rot für steigenden Trend 🔴) mit Hover-Skalierung und Tooltip (optional in den Einstellungen aktivierbar). Lädt blitzschnell in einem einzigen Request ohne zusätzliche Server-Abfragen.
 3. **🔥 Rabatt-Heatmap (100% Heiß bis 0% Kalt)**: Dynamische thermische Hintergrund-Verläufe auf allen Produktkarten anhand der Rabatthöhe (z. B. auf `neue-toppreise`). Realistische Deal-Kalibrierung: 0–15% Kaltes Mitternachtsblau ❄️ $\rightarrow$ 35% Warmes Bernstein ⚡ $\rightarrow$ 70%+ Vulkanisches Rubinrot 🔥 mit leuchtenden Akzenten. 1-Klick-Toggle direkt in der oberen Filterleiste.
 4. **🚫 1-Click Product Card Category Quick-Block & Toast Undo**: Direct "🚫 [Kategorie]" action button overlay on every product card on `neue-toppreise`. Clicking instantly hides the product's category from the feed and displays a glassmorphic toast notification with a **"Rückgängig"** (Undo) action button.
 5. **📋 Blocked Categories Overview Chips**: Top filter bar shows a compact overview row `🚫 Ausgeblendet (N)` with dismissable chips (`[ 💻 Externe SSD ✕ ]`, `[ 🧸 Lego ✕ ]`) and an *Alle freigeben* button whenever categories are blocked.

@@ -1251,6 +1251,53 @@ def test_sparklines_beta_settings_toggle(page: Page):
     assert page.evaluate("() => window.ToppreiseSuite?.CONFIG?.ENABLE_SPARKLINES") is True
 
 
+def test_real_deal_record_low_with_previous_low_subline(page: Page):
+    # Enable sparklines
+    page.evaluate("""() => {
+        window.ToppreiseSuite.CONFIG.ENABLE_SPARKLINES = true;
+    }""")
+
+    # Product 797571 (current price 1800.00 CHF) had a previous low of 2200.00 CHF before dropping to 1800.00 CHF
+    def handle_pricechart_post(route):
+        if route.request.method == 'POST':
+            # Return 2-series JSON with historical points: 2500 -> 2200 -> 1800 (current)
+            series_data = [
+                [[1672531199000, 2500.0], [1675209599000, 2200.0], [1677628799000, 1800.0]],
+                [[1672531199000, 2500.0], [1675209599000, 2200.0], [1677628799000, 1800.0]]
+            ]
+            route.fulfill(
+                status=200,
+                headers={'access-control-allow-origin': '*'},
+                content_type='application/json',
+                body=json.dumps(series_data)
+            )
+        else:
+            route.fallback()
+
+    import json
+    page.route('**/plugins/product/pricechart*', handle_pricechart_post)
+
+    # Click Differenz badge on card-cheapest (1800.00 CHF)
+    page.click('#card-cheapest .badge-dif')
+
+    # Wait for all-time low badge
+    page.wait_for_selector('#card-cheapest .badge-dif.tp-deal-alltime-low')
+    badge = page.locator('#card-cheapest .badge-dif.tp-deal-alltime-low')
+    title = badge.get_attribute('title') or ''
+    assert 'Neuer Allzeit-Tiefstpreis' in title
+    assert 'Bisheriger Rekord: CHF 2200.00 (-18%)' in title
+
+    # Verify record-low subline is displayed
+    page.wait_for_selector('#card-cheapest .tp-card-historical-price.tp-is-record-low')
+    subline = page.locator('#card-cheapest .tp-card-historical-price.tp-is-record-low')
+    assert 'Bisher: CHF 2200.00 (-18%)' in (subline.text_content() or '')
+
+    # Verify sparkline is rendered immediately from POST response
+    sparkline = page.locator('#card-cheapest .tp-sparkline')
+    assert sparkline.is_visible()
+
+
+
 
 
 

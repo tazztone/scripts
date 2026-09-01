@@ -176,20 +176,26 @@ Subcategories appear in two distinct patterns across the site:
 
 #### Endpoint B: Raw Time-Series JSON (`POST /plugins/product/pricechart`)
 - **Method**: `POST`
-- **Content-Type**: `application/x-www-form-urlencoded`
-- **Required Header**: `X-Requested-With: XMLHttpRequest`
-- **Form Body**: `p_pc_pid={productId}` (or legacy `pcspagdpi={productId}&pcspagdfdt=0000-00-00&pcspagdtd=&p_pc_ch=&lang=de`)
-- **Response Payload**: JSON Object with `series` / `data` array containing `[timestamp_ms, price]` tuples:
-  - `[[timestamp_1, price_1], [timestamp_2, price_2], ...]` spanning the tracked price progression.
-- **Sparkline Integration (v2.13.0)**:
-  - Parallel fetch during price stats retrieval (`fetchPriceTimeSeries(productId)`) with `Promise.all`.
-  - Cached alongside price stats in `localStorage` under `tp_hist_v1_{productId}`.
-  - Inline SVG polyline rendering (60x18px) with color encoding: Emerald `#10b981` (trending down/stable) vs Rose `#ef4444` (trending up).
+- **Content-Type**: `application/x-www-form-urlencoded; charset=UTF-8`
+- **Required Header**: `X-Requested-With: XMLHttpRequest`, `Accept: application/json, text/javascript, */*; q=0.01`
+- **Form Body**: `pcspagdpi={productId}&pcspagdfdt=0000-00-00&pcspagdtd=&p_pc_ch=&lang=de`
+- **Response Payload**: 2D JSON array `[ [ [timestamp_ms, price_product], ... ], [ [timestamp_ms, price_shipping], ... ] ]`:
+  - `data[0]`: Chronological `[timestamp_ms, price]` array for Produktpreis (excl. shipping).
+  - `data[1]`: Chronological `[timestamp_ms, price]` array for Versandpreis (incl. shipping).
+- **Time-Series Analysis Engine (`analyzePriceTimeSeries`)**:
+  - **Previous Low (Bisheriger Tiefstpreis)**: Looks backwards from the current price drop window to find the prior historical minimum $P_{\text{prev\_low}}$.
+  - **Real Discount vs Previous Low**: $\frac{P_{\text{prev\_low}} - P_{\text{curr}}}{P_{\text{prev\_low}}} \times 100\%$ (savings compared to prior all-time record).
+  - **Real Discount vs Baseline/Average**: $\frac{P_{\text{avg}} - P_{\text{curr}}}{P_{\text{avg}}} \times 100\%$ (realistic savings vs typical street price).
+- **Sparkline Integration (v2.15.0)**:
+  - Single fast POST fetch (~50ms) extracts both time-series and all statistical aggregates in 1 request.
+  - Cached in `localStorage` under `tp_hist_v1_{productId}`.
+  - Inline SVG polyline rendering (60x18px) with color encoding: Emerald `#10b981` (new low / trending down) vs Rose `#ef4444` (trending up).
 
 ### 3. Real Deal vs Feed-Diff Discrepancy & Validation Logic
 - **Feed Badge Discrepancy**: The `-XX%` badge on `/neue-toppreise` (`.badge-dif`) represents only the immediate price drop compared to the previous or baseline listing. It frequently tags non-bestpreise as massive discounts even when earlier historical prices were far lower.
 - **Validation Formulas**:
   - **Is All-Time Bestpreis**: $\text{CurrentPrice} \le \text{Tiefstpreis} \times 1.01$
+  - **Is New Record Low**: $P_{\text{curr}} < P_{\text{prev\_low}} \times 0.99$ (renders subline: `Bisher: CHF XX.XX (-YY%)`)
   - **Real Deal Discount % (vs Historical High)**: $\frac{\text{Höchstpreis} - \text{CurrentPrice}}{\text{Höchstpreis}} \times 100$
   - **Inflation Gap % (vs Historical Low)**: $\frac{\text{CurrentPrice} - \text{Tiefstpreis}}{\text{Tiefstpreis}} \times 100$
 - **Caching & Rate-Limiting Strategy**:
@@ -202,7 +208,7 @@ Subcategories appear in two distinct patterns across the site:
 - **Consolidated Differenz Badge UI Architecture**:
   - **Unchecked**: Retains original `-XX%` with subtle `.tp-badge-loupe-icon` (`🔍`) and hover scale.
   - **Loading**: In-place pulse animation with `⏳` spinner.
-  - **All-Time Low**: Retains discount value prefixed with `🌟 -XX%` and pulsing emerald halo ring (`#10b981`).
+  - **All-Time Low**: Retains discount value with pulsing emerald halo ring (`#10b981`). For new record lows, subline displays `Bisher: CHF XX.XX (-YY%)`.
   - **Non-Bestpreis / Fake Deal**: Morphs to amber alert gradient with bold `+XX%` markup and shrunken struck-through `<s>-YY%</s>` fake discount, plus discreet `Tiefstpreis: CHF XX.XX` line under the price.
 
 
