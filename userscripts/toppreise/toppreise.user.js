@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.18.14
+// @version      2.18.15
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, checks real all-time Tiefstpreise, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -344,23 +344,73 @@ const STYLES = `
     padding: 8px 10px !important;
     min-height: 0 !important;
   }
+  .Plugin_Product .row.h-100,
+  .Plugin_Product .row {
+    flex-wrap: nowrap !important;
+    align-items: stretch !important;
+    height: 100% !important;
+    margin: 0 !important;
+  }
+  .Plugin_Product .row > .col-auto,
+  .Plugin_Product .row.h-100 > .col-auto,
+  .Plugin_Product .image_container {
+    flex: 0 0 auto !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    max-width: 75px !important;
+    padding: 0 6px 0 0 !important;
+  }
   .Plugin_Product.medium-box .image_container img,
   .Plugin_Product.medium-box .productImage img,
   .Plugin_Product.medium-box img {
-    max-height: 70px !important;
-    max-width: 70px !important;
+    max-height: 65px !important;
+    max-width: 65px !important;
     width: auto !important;
     height: auto !important;
     object-fit: contain !important;
+    display: block !important;
   }
-  .Plugin_Product .col.d-flex.flex-column,
-  .Plugin_Product .row.h-100 > .col {
+  .Plugin_Product .row > .col,
+  .Plugin_Product .row.h-100 > .col,
+  .Plugin_Product .col.d-flex.flex-column {
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
+    display: flex !important;
+    flex-direction: column !important;
     justify-content: flex-start !important;
     gap: 2px !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+  .Plugin_Product .product-name,
+  .Plugin_Product .productName,
+  .Plugin_Product .product_name,
+  .Plugin_Product .productDetails {
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2 !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    word-break: break-word !important;
+    line-height: 1.25 !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    margin: 0 0 2px 0 !important;
+    padding-right: 52px !important;
   }
   .Plugin_Product .Plugin_PriceInformation,
   .Plugin_Product .price_information_product {
-    margin-top: 2px !important;
+    margin-top: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-end !important;
+    justify-content: flex-end !important;
+    padding-top: 2px !important;
+  }
+  .Plugin_Product .Plugin_DealerRelProdPriceInfo,
+  .Plugin_Product .offersCount {
+    margin-top: 0 !important;
   }
   .tp-bar-btn.tp-batch-active {
     background: rgba(245, 158, 11, 0.25) !important;

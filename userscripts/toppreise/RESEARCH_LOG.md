@@ -401,4 +401,25 @@ $$\text{Score} = \max\left(0, \text{round}\left((1 - W) \times D_{\text{median}}
   3. Added a 5-second **"Rückgängig" (Undo)** toast action to *"Alle freigeben"*, protecting users even against accidental clicks inside the category drawer.
   4. Updated empty state notice action from destructive reset to `[ ⚡ Filter ausschalten ]`.
 
+---
+
+## 15. Card Interior Anti-Wrap & Empty Void Elimination (v2.18.15)
+
+### Root Cause Analysis
+- **The Problem**: On `/neue-toppreise`, cards with wide product images or long titles (e.g. `SAMSUNG The Frame PRO 55" (2026) GQ55LS03HWUXZG`) caused Bootstrap's flexbox (`.row.h-100` inside `.Plugin_Product`) to wrap the details column below the image container.
+- **Cascading Void Stretch**:
+  1. A wrapped card expanded vertically from ~90px to ~160px.
+  2. Because Bootstrap's outer grid row uses `align-items: stretch`, all other cards in that horizontal row (e.g. `NOTHING Ear (3a)`) were forced to expand to 160px.
+  3. Inside those stretched cards, `justify-content: flex-start` packed the short title and price at the top, leaving a massive empty void underneath (and between image/price).
+
+### Architectural Fix
+1. **Interior Non-Wrapping Grid**: Enforced `flex-wrap: nowrap !important` on `.Plugin_Product .row.h-100` and `.Plugin_Product .row`, preventing the details column from ever wrapping underneath the image.
+2. **Constrained Image & Column Bounds**:
+   - Set `.col-auto` / `.image_container` to `max-width: 75px` and image to `max-width: 65px; max-height: 65px; object-fit: contain`.
+   - Set `.col` to `min-width: 0 !important; flex: 1 1 auto; overflow: hidden`.
+3. **2-Line Title Clamping with Badge Clearance**: Clamped `.product-name` to 2 lines (`-webkit-line-clamp: 2`) with `padding-right: 52px` to prevent text collision with the top-right discount circle badge and breakdown pill.
+4. **Bottom-Aligned Price Anchor**: Applied `margin-top: auto !important` to `.Plugin_PriceInformation, .price_information_product`, ensuring prices across all cards in the row anchor cleanly at the bottom edge.
+
+
+
 

@@ -2506,25 +2506,32 @@ def test_badge_and_card_no_pulsing_animations_or_scale_transforms(page: Page):
     assert not has_hover_scale
 
 
+def test_card_row_no_wrap_and_title_clamping(page: Page):
+    """
+    Validates that product card interior rows enforce flex-wrap: nowrap to prevent column
+    dropping and void stretch, and product titles are cleanly clamped to 2 lines with badge clearance.
+    """
+    page.evaluate("""() => {
+        window.ToppreiseSuite.processListings();
+    }""")
 
+    card_row_wrap = page.evaluate("""() => {
+        const row = document.querySelector('#card-cheapest .row.h-100');
+        return row ? window.getComputedStyle(row).flexWrap : null;
+    }""")
+    assert card_row_wrap == 'nowrap'
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    title_clamp = page.evaluate("""() => {
+        const title = document.querySelector('#card-cheapest .product-name');
+        if (!title) return null;
+        const style = window.getComputedStyle(title);
+        return {
+            lineClamp: style.webkitLineClamp,
+            overflow: style.overflow,
+            paddingRight: style.paddingRight
+        };
+    }""")
+    assert title_clamp is not None
+    assert title_clamp['lineClamp'] == '2'
+    assert title_clamp['overflow'] == 'hidden'
+    assert int(title_clamp['paddingRight'].replace('px', '')) >= 50
