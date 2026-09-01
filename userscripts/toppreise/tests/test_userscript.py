@@ -2442,8 +2442,8 @@ def test_hover_stability_no_translate_jitter(page: Page):
 
 def test_card_layout_tight_flex_alignment_no_void_stretch(page: Page):
     """
-    Validates that product card details columns are not stretched by Bootstrap justify-content-between,
-    ensuring tight natural grouping from top to bottom.
+    Validates that product card details columns use flex column with space-between/auto price anchor,
+    ensuring price, historical subline, and sparklines are fully visible and not clipped.
     """
     page.evaluate("""() => {
         window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
@@ -2455,7 +2455,7 @@ def test_card_layout_tight_flex_alignment_no_void_stretch(page: Page):
         return col ? window.getComputedStyle(col).justifyContent : null;
     }""")
 
-    assert details_col_justify in ('flex-start', 'start')
+    assert details_col_justify in ('space-between', 'normal')
 
 
 def test_badge_and_card_no_pulsing_animations_or_scale_transforms(page: Page):
@@ -2506,32 +2506,31 @@ def test_badge_and_card_no_pulsing_animations_or_scale_transforms(page: Page):
     assert not has_hover_scale
 
 
-def test_card_row_no_wrap_and_title_clamping(page: Page):
+def test_card_elements_and_sparkline_visibility_unclipped(page: Page):
     """
-    Validates that product card interior rows enforce flex-wrap: nowrap to prevent column
-    dropping and void stretch, and product titles are cleanly clamped to 2 lines with badge clearance.
+    Validates that product card components (image, title, price, subline, and sparkline)
+    remain completely visible and unclipped without overlapping quick block buttons.
     """
     page.evaluate("""() => {
+        localStorage.clear();
+        localStorage.setItem('tp_hist_v1_797571', JSON.stringify({
+            tiefstpreis: 1800,
+            previousLow: 2200,
+            hoechstpreis: 2500,
+            medianPrice: 2300,
+            isNewAllTimeLow: true,
+            timeSeries: [[Date.now() - 86400000 * 30, 2400], [Date.now(), 1800]],
+            dataPointCount: 15,
+            time: Date.now()
+        }));
+        window.ToppreiseSuite.CONFIG.ENABLE_SPARKLINES = true;
+        window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
         window.ToppreiseSuite.processListings();
     }""")
 
-    card_row_wrap = page.evaluate("""() => {
-        const row = document.querySelector('#card-cheapest .row.h-100');
-        return row ? window.getComputedStyle(row).flexWrap : null;
-    }""")
-    assert card_row_wrap == 'nowrap'
+    assert page.locator('#card-cheapest .product-name').is_visible()
+    assert page.locator('#card-cheapest .price_information_product').is_visible()
+    assert page.locator('#card-cheapest .tp-card-historical-price').is_visible()
+    assert page.locator('#card-cheapest .tp-sparkline').is_visible()
 
-    title_clamp = page.evaluate("""() => {
-        const title = document.querySelector('#card-cheapest .product-name');
-        if (!title) return null;
-        const style = window.getComputedStyle(title);
-        return {
-            lineClamp: style.webkitLineClamp,
-            overflow: style.overflow,
-            paddingRight: style.paddingRight
-        };
-    }""")
-    assert title_clamp is not None
-    assert title_clamp['lineClamp'] == '2'
-    assert title_clamp['overflow'] == 'hidden'
-    assert int(title_clamp['paddingRight'].replace('px', '')) >= 50
+
