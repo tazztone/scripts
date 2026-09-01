@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.18.4
+// @version      2.18.5
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, checks real all-time Tiefstpreise, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -2719,128 +2719,149 @@ const SHADOW_MODAL_STYLES = `
     }
   }
 
-  function findGridContainer(cards) {
-    if (!cards || cards.length === 0) return null;
-    if (cards.length === 1) return cards[0].parentElement;
-
-    // Direct parent check: if all cards share the same parent
-    const firstParent = cards[0].parentElement;
-    if (firstParent && cards.every(c => c.parentElement === firstParent)) {
-      return firstParent;
-    }
-
-    // Column wrapper parent check: if cards are wrapped in .col-* and all cols share the same parent
-    const firstColParent = cards[0].closest('.col-12, .col-sm-6, .col-md-4, .col-md-3, [class*="col-"], .cell')?.parentElement;
-    if (firstColParent && cards.every(c => firstColParent.contains(c))) {
-      return firstColParent;
-    }
-
-    // Lowest Common Ancestor (scoped strictly below any layout/sidebar rows)
-    let parent = cards[0].parentElement;
-    while (parent && parent !== document.body && !parent.classList?.contains('layout-row')) {
-      if (parent.id === 'product-list' || parent.classList?.contains('product-grid') || parent.classList?.contains('mixedBrowsingList')) {
+  function getCardSortableUnit(card) {
+    if (!card) return null;
+    const parent = card.parentElement;
+    if (parent && parent !== document.body && parent.id !== 'product-list' && parent.id !== 'main-content' && !parent.classList?.contains('main-content-col') && !parent.classList?.contains('product-grid')) {
+      if (Array.from(parent.classList || []).some(c => c.startsWith('col-') || c === 'cell')) {
         return parent;
       }
-      if (cards.every(c => parent.contains(c))) {
-        return parent;
-      }
-      parent = parent.parentElement;
     }
-    return cards[0].parentElement;
+    return card;
   }
 
   function applySorting(cards, pageHasOffers) {
     if (!cards || cards.length <= 1) return;
 
-    // Ensure initial order is recorded on all cards
+    // Ensure initial order and original parent IDs are recorded on all cards/columns
     cards.forEach((c, idx) => {
       if (!c.dataset.tpInitialOrder) {
         c.dataset.tpInitialOrder = String(idx);
       }
+      const item = getCardSortableUnit(c);
+      if (item && !item.dataset.tpInitialOrder) {
+        item.dataset.tpInitialOrder = String(idx);
+        const parent = item.parentElement;
+        if (parent) {
+          if (!parent.id && !parent.dataset.tpParentId) {
+            parent.dataset.tpParentId = 'tp-p-' + Math.random().toString(36).slice(2, 9);
+          }
+          item.dataset.tpOrigParentId = parent.id || parent.dataset.tpParentId;
+        }
+      }
     });
 
-    const gridContainer = findGridContainer(cards);
-    if (!gridContainer) return;
+    // Find all rows that actually contain product cards (strictly scopes to product rows, never sidebar/tabs)
+    const productRows = Array.from(new Set(cards.map(c => getCardSortableUnit(c)?.parentElement).filter(Boolean)));
+    if (productRows.length === 0) return;
 
-    const gridCards = cards.filter(c => gridContainer.contains(c));
-    if (gridCards.length <= 1) return;
+    const primaryRow = productRows[0];
+    const isCustomSortActive = CONFIG.BESTPREISE_MODE_ACTIVE ||
+                               CONFIG.SORT_BY_OFFERS === 'discount-desc' ||
+                               (pageHasOffers && CONFIG.SORT_BY_OFFERS !== 'none');
 
-    function getSortableElement(card) {
-      if (!card || card.parentElement === gridContainer) return card;
-      let cur = card;
-      while (cur && cur.parentElement && cur.parentElement !== gridContainer && cur.parentElement !== document.body) {
-        cur = cur.parentElement;
+    if (isCustomSortActive) {
+      let sortedEntries = [];
+
+      if (CONFIG.BESTPREISE_MODE_ACTIVE) {
+        const scored = cards.map(c => {
+          const cd = extractCardData(c);
+          const dealData = computeDealScore(cd.stats, cd.cardPrice);
+          return {
+            card: c,
+            item: getCardSortableUnit(c),
+            score: dealData?.score ?? -1,
+            initialOrder: parseInt(c.dataset.tpInitialOrder || '0', 10)
+          };
+        });
+        scored.sort((a, b) => (b.score - a.score) || (a.initialOrder - b.initialOrder));
+        sortedEntries = scored;
+      } else if (CONFIG.SORT_BY_OFFERS === 'discount-desc') {
+        const scored = cards.map(c => ({
+          card: c,
+          item: getCardSortableUnit(c),
+          disc: extractCardDiscount(c) ?? -1,
+          initialOrder: parseInt(c.dataset.tpInitialOrder || '0', 10)
+        }));
+        scored.sort((a, b) => (b.disc - a.disc) || (a.initialOrder - b.initialOrder));
+        sortedEntries = scored;
+      } else if (pageHasOffers && CONFIG.SORT_BY_OFFERS !== 'none') {
+        const scored = cards.map(c => ({
+          card: c,
+          item: getCardSortableUnit(c),
+          count: extractOfferCount(c),
+          initialOrder: parseInt(c.dataset.tpInitialOrder || '0', 10)
+        }));
+        scored.sort((a, b) => CONFIG.SORT_BY_OFFERS === 'desc' ? (b.count - a.count) : (a.count - b.count));
+        sortedEntries = scored;
       }
-      return (cur && cur.parentElement === gridContainer) ? cur : card;
-    }
 
-    if (CONFIG.BESTPREISE_MODE_ACTIVE) {
-      const scored = gridCards.map(c => {
-        const cd = extractCardData(c);
-        const dealData = computeDealScore(cd.stats, cd.cardPrice);
+      // Move sortable items into primaryRow and apply CSS flex order
+      sortedEntries.forEach((entry, rank) => {
+        const item = entry.item;
+        if (item) {
+          if (item.parentElement !== primaryRow) {
+            primaryRow.appendChild(item);
+          } else {
+            primaryRow.appendChild(item);
+          }
+          item.style.setProperty('order', String(rank), 'important');
+        }
+      });
+
+      // Hide empty secondary product rows
+      if (productRows.length > 1) {
+        productRows.slice(1).forEach(r => {
+          if (!r.querySelector('.Plugin_Product, .mixedBrowsingListProduct')) {
+            r.style.setProperty('display', 'none', 'important');
+            r.classList.add('tp-empty-product-row-hidden');
+          }
+        });
+      }
+    } else {
+      // Natural order restoration: return items to original parents in initial order
+      const itemsToRestore = cards.map(c => {
+        const item = getCardSortableUnit(c);
         return {
           card: c,
-          item: getSortableElement(c),
-          score: dealData?.score ?? -1,
-          initialOrder: parseInt(c.dataset.tpInitialOrder || '0', 10)
+          item,
+          initialOrder: parseInt(c.dataset.tpInitialOrder || '0', 10),
+          origParentId: item?.dataset.tpOrigParentId
         };
       });
-      scored.sort((a, b) => (b.score - a.score) || (a.initialOrder - b.initialOrder));
-      scored.forEach((s, rank) => {
-        if (s.item && s.item.parentElement === gridContainer) {
-          gridContainer.appendChild(s.item);
-          s.item.style.setProperty('order', String(rank), 'important');
+
+      itemsToRestore.sort((a, b) => a.initialOrder - b.initialOrder);
+
+      const allOrigParents = Array.from(new Set(itemsToRestore.map(entry => {
+        if (!entry.origParentId) return entry.item?.parentElement;
+        return document.getElementById(entry.origParentId) ||
+               document.querySelector(`[data-tp-parent-id="${entry.origParentId}"]`) ||
+               entry.item?.parentElement;
+      }).filter(Boolean)));
+
+      itemsToRestore.forEach(entry => {
+        const item = entry.item;
+        if (!item) return;
+        item.style.removeProperty('order');
+
+        if (entry.origParentId) {
+          let origParent = document.getElementById(entry.origParentId) ||
+                           document.querySelector(`[data-tp-parent-id="${entry.origParentId}"]`);
+          if (origParent && item.parentElement !== origParent) {
+            origParent.appendChild(item);
+          }
         }
       });
-      return;
-    }
 
-    if (CONFIG.SORT_BY_OFFERS === 'discount-desc') {
-      const sorted = gridCards.map(c => ({
-        card: c,
-        item: getSortableElement(c),
-        disc: extractCardDiscount(c) ?? -1,
-        initialOrder: parseInt(c.dataset.tpInitialOrder || '0', 10)
-      }));
-      sorted.sort((a, b) => (b.disc - a.disc) || (a.initialOrder - b.initialOrder));
-      sorted.forEach((s, rank) => {
-        if (s.item && s.item.parentElement === gridContainer) {
-          gridContainer.appendChild(s.item);
-          s.item.style.setProperty('order', String(rank), 'important');
-        }
+      // Ensure each product row has its children in initial order and unhide
+      allOrigParents.forEach(row => {
+        const children = Array.from(row.children).filter(ch => ch.dataset.tpInitialOrder !== undefined);
+        children.sort((a, b) => parseInt(a.dataset.tpInitialOrder || '0', 10) - parseInt(b.dataset.tpInitialOrder || '0', 10));
+        children.forEach(ch => row.appendChild(ch));
+        row.style.removeProperty('display');
+        row.classList.remove('tp-empty-product-row-hidden');
       });
-      return;
     }
-
-    if (pageHasOffers && CONFIG.SORT_BY_OFFERS !== 'none') {
-      const sorted = gridCards.map(c => ({
-        card: c,
-        item: getSortableElement(c),
-        count: extractOfferCount(c),
-        initialOrder: parseInt(c.dataset.tpInitialOrder || '0', 10)
-      }));
-      sorted.sort((a, b) => CONFIG.SORT_BY_OFFERS === 'desc' ? (b.count - a.count) : (a.count - b.count));
-      sorted.forEach((s, rank) => {
-        if (s.item && s.item.parentElement === gridContainer) {
-          gridContainer.appendChild(s.item);
-          s.item.style.setProperty('order', String(rank), 'important');
-        }
-      });
-      return;
-    }
-
-    // Natural order restoration: restore initial DOM order when no custom sort is active
-    const natural = gridCards.map(c => ({
-      item: getSortableElement(c),
-      initialOrder: parseInt(c.dataset.tpInitialOrder || '0', 10)
-    }));
-    natural.sort((a, b) => a.initialOrder - b.initialOrder);
-    natural.forEach(s => {
-      if (s.item && s.item.parentElement === gridContainer) {
-        s.item.style.removeProperty('order');
-        gridContainer.appendChild(s.item);
-      }
-    });
   }
 
   function renderEmptyState(cards, counts) {

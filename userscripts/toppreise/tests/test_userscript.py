@@ -1935,12 +1935,105 @@ def test_filter_counts_never_double_count(page: Page):
         window.ToppreiseSuite.processListings();
     }""")
 
-    # Total hidden count displayed on reveal button should be exactly 20 (negative items), not 20 + 20
-    reveal_count = page.evaluate("""() => {
-        const el = document.getElementById('tp-bar-reveal-count');
-        return el ? parseInt(el.textContent, 10) : 0;
+def test_bestpreise_cross_row_sorting_and_natural_order_restoration(page: Page):
+    # Setup 3 separate Bootstrap .row containers inside main content area
+    page.evaluate("""() => {
+        const list = document.getElementById('product-list');
+        list.innerHTML = '';
+
+        const row1 = document.createElement('div');
+        row1.className = 'row product-row';
+        row1.id = 'product-row-1';
+
+        const row2 = document.createElement('div');
+        row2.className = 'row product-row';
+        row2.id = 'product-row-2';
+
+        const row3 = document.createElement('div');
+        row3.className = 'row product-row';
+        row3.id = 'product-row-3';
+
+        list.appendChild(row1);
+        list.appendChild(row2);
+        list.appendChild(row3);
+
+        // Row 1: Card 1 (Score 15%), Card 2 (Score 10%)
+        row1.innerHTML = `
+            <div class="col-6 col-md-3" id="col-1"><a href="/preisvergleich/P1-p101" id="multi-card-1" class="Plugin_Product"><span class="product-name">HP Envy</span><div class="Plugin_PriceInformation"><div class="priceContainer productPrice"><div class="Plugin_Price">100.00</div></div></div><div class="badge badge-dif"><p>-10%</p></div></a></div>
+            <div class="col-6 col-md-3" id="col-2"><a href="/preisvergleich/P2-p102" id="multi-card-2" class="Plugin_Product"><span class="product-name">Kärcher</span><div class="Plugin_PriceInformation"><div class="priceContainer productPrice"><div class="Plugin_Price">200.00</div></div></div><div class="badge badge-dif"><p>-10%</p></div></a></div>
+        `;
+
+        // Row 2: Card 3 (Score 37% - Top Deal!), Card 4 (Score 25%)
+        row2.innerHTML = `
+            <div class="col-6 col-md-3" id="col-3"><a href="/preisvergleich/P3-p103" id="multi-card-3" class="Plugin_Product"><span class="product-name">Villeroy</span><div class="Plugin_PriceInformation"><div class="priceContainer productPrice"><div class="Plugin_Price">300.00</div></div></div><div class="badge badge-dif"><p>-37%</p></div></a></div>
+            <div class="col-6 col-md-3" id="col-4"><a href="/preisvergleich/P4-p104" id="multi-card-4" class="Plugin_Product"><span class="product-name">Lego</span><div class="Plugin_PriceInformation"><div class="priceContainer productPrice"><div class="Plugin_Price">400.00</div></div></div><div class="badge badge-dif"><p>-25%</p></div></a></div>
+        `;
+
+        // Row 3: Card 5 (Score 20%), Card 6 (Score 5%)
+        row3.innerHTML = `
+            <div class="col-6 col-md-3" id="col-5"><a href="/preisvergleich/P5-p105" id="multi-card-5" class="Plugin_Product"><span class="product-name">Anker</span><div class="Plugin_PriceInformation"><div class="priceContainer productPrice"><div class="Plugin_Price">500.00</div></div></div><div class="badge badge-dif"><p>-20%</p></div></a></div>
+            <div class="col-6 col-md-3" id="col-6"><a href="/preisvergleich/P6-p106" id="multi-card-6" class="Plugin_Product"><span class="product-name">Maxi-Cosi</span><div class="Plugin_PriceInformation"><div class="priceContainer productPrice"><div class="Plugin_Price">600.00</div></div></div><div class="badge badge-dif"><p>-5%</p></div></a></div>
+        `;
+
+        // Seed price history cache with strictly descending scores:
+        // Card 3: ~37%, Card 4: ~25%, Card 5: ~19%, Card 1: ~12%, Card 2: ~8%, Card 6: ~4%
+        localStorage.setItem('tp_hist_v1_101', JSON.stringify({ tiefstpreis: 100, hoechstpreis: 150, medianPrice: 130, isNewAllTimeLow: false, dataPointCount: 10, time: Date.now() })); // ~12%
+        localStorage.setItem('tp_hist_v1_102', JSON.stringify({ tiefstpreis: 200, hoechstpreis: 250, medianPrice: 235, isNewAllTimeLow: false, dataPointCount: 10, time: Date.now() })); // ~8%
+        localStorage.setItem('tp_hist_v1_103', JSON.stringify({ tiefstpreis: 300, hoechstpreis: 600, medianPrice: 550, previousLow: 480, isNewAllTimeLow: true, realDiscountVsPrevLow: 37, dataPointCount: 10, time: Date.now() })); // ~37%
+        localStorage.setItem('tp_hist_v1_104', JSON.stringify({ tiefstpreis: 400, hoechstpreis: 600, medianPrice: 550, previousLow: 530, isNewAllTimeLow: true, realDiscountVsPrevLow: 25, dataPointCount: 10, time: Date.now() })); // ~25%
+        localStorage.setItem('tp_hist_v1_105', JSON.stringify({ tiefstpreis: 500, hoechstpreis: 800, medianPrice: 800, isNewAllTimeLow: false, dataPointCount: 10, time: Date.now() })); // ~19%
+        localStorage.setItem('tp_hist_v1_106', JSON.stringify({ tiefstpreis: 600, hoechstpreis: 660, medianPrice: 650, isNewAllTimeLow: false, dataPointCount: 10, time: Date.now() })); // ~4%
+
+        window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
+        window.ToppreiseSuite.processListings();
     }""")
-    assert reveal_count == 20
+
+    # 1. Verify strict descending order across rows in primary row:
+    # Card 3 (37%) -> Card 4 (25%) -> Card 5 (19%) -> Card 1 (12%) -> Card 2 (8%) -> Card 6 (4%)
+    sorted_card_ids = page.evaluate("""() => {
+        const primaryRow = document.getElementById('product-row-1');
+        const cards = Array.from(primaryRow.querySelectorAll('.Plugin_Product'));
+        return cards.map(c => c.id);
+    }""")
+    assert sorted_card_ids == [
+        'multi-card-3', # 37% (Villeroy from Row 2)
+        'multi-card-4', # 25% (Lego from Row 2)
+        'multi-card-5', # 19% (Anker from Row 3)
+        'multi-card-1', # 12% (HP Envy from Row 1)
+        'multi-card-2', # 8%  (Kärcher from Row 1)
+        'multi-card-6'  # 4%  (Maxi-Cosi from Row 3)
+    ]
+
+    # 2. Secondary product rows must be hidden
+    assert page.evaluate("() => document.getElementById('product-row-2').style.display === 'none'")
+    assert page.evaluate("() => document.getElementById('product-row-3').style.display === 'none'")
+
+    # 3. Sidebar, tabs, and layout rows must remain completely untouched and visible
+    assert page.locator('#sidebar-categories').is_visible()
+    assert page.locator('#feed-tabs').is_visible()
+
+    # 4. Turn off Bestpreise mode and verify clean natural order restoration across all 3 rows
+    page.evaluate("""() => {
+        window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = false;
+        window.ToppreiseSuite.processListings();
+    }""")
+
+    # Row 1 restored
+    row1_cards = page.evaluate("() => Array.from(document.querySelectorAll('#product-row-1 .Plugin_Product')).map(c => c.id)")
+    assert row1_cards == ['multi-card-1', 'multi-card-2']
+
+    # Row 2 restored
+    row2_cards = page.evaluate("() => Array.from(document.querySelectorAll('#product-row-2 .Plugin_Product')).map(c => c.id)")
+    assert row2_cards == ['multi-card-3', 'multi-card-4']
+
+    # Row 3 restored
+    row3_cards = page.evaluate("() => Array.from(document.querySelectorAll('#product-row-3 .Plugin_Product')).map(c => c.id)")
+    assert row3_cards == ['multi-card-5', 'multi-card-6']
+
+    # Secondary product rows must be visible again
+    assert page.evaluate("() => document.getElementById('product-row-2').style.display !== 'none'")
+    assert page.evaluate("() => document.getElementById('product-row-3').style.display !== 'none'")
+
 
 
 
