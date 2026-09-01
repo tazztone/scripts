@@ -289,6 +289,13 @@ $$\text{Score} = \max\left(0, \text{round}\left((1 - W) \times D_{\text{median}}
   - **Live Storage Counter (`tp-cache-stats-label`)**: Displays real-time count of cached product entries (`Lokaler Cache: N Einträge`).
   - **1-Click Cache Wipe (`🗑️ Cache leeren`)**: Removes all `tp_hist_v1_*` entries from `localStorage`, refreshes listing badges, and confirms with a glassmorphic toast.
 
+### 5. On-Demand & Subset-Scoped Network Architecture (v2.18.0)
+- **Instant Bestpreise View Filter (0 Network Calls)**: Toggling `💎 Neue Bestpreise` performs pure instant client-side filtering and continuous Deal-Score sorting without forcing full-page background network scans.
+- **On-Demand Threshold Batch Scanning in Bestpreise Mode**: `[ 🔍 Check Deals (N) ]` and `[ ≥30% ▾ ]` remain fully active and interactive inside Bestpreise mode, allowing users to scan only deals matching their desired discount threshold. Newly verified deals stream live into the Bestpreise feed as they finish.
+- **Active Fetch State Tracking (`currentlyScanningPid`)**: Resolved visual freeze bug where uncached cards displayed permanent `⏳ Prüfe...`. Badges now display loading spinners *strictly* while an HTTP request is in-flight for that specific product.
+- **Empty State Action Button**: Added 1-click `[ 🔍 Deals prüfen (≥30%) ]` button to the empty state banner when no deals are cached yet.
+
+
 
 
 

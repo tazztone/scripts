@@ -1411,13 +1411,14 @@ def test_bestpreise_filter_bar_toggle_and_state(page: Page):
     assert 'tp-bestpreise-active' in (btn.get_attribute('class') or '')
     assert page.evaluate("() => window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE") is True
 
-    # Redundant controls should be disabled
+    # Redundant controls: Real Deal filter toggle is disabled because Bestpreise mode already filters deals
     real_deal_btn = page.locator('#tp-bar-real-deal-btn')
     assert 'tp-disabled' in (real_deal_btn.get_attribute('class') or '')
     assert 'Inaktiv' in (real_deal_btn.get_attribute('title') or '')
 
+    # On-demand Check Deals button remains enabled and clickable
     batch_btn = page.locator('#tp-bar-batch-check-btn')
-    assert 'tp-disabled' in (batch_btn.get_attribute('class') or '')
+    assert 'tp-disabled' not in (batch_btn.get_attribute('class') or '')
 
     # Toggle Bestpreise mode OFF
     btn.click()
@@ -1483,11 +1484,10 @@ def test_bestpreise_card_heatmap_and_badge(page: Page):
     # Card 3: Scanned Non-Bestpreis -> Hidden in Bestpreise mode
     assert 'tp-bestpreise-hidden' in (page.locator('#card-negative').get_attribute('class') or '')
 
-    # Unscanned card: Remains visible with loading indicator during scan
+    # Unscanned card: Hidden by default in Bestpreise mode, not stuck in loading
+    assert 'tp-bestpreise-hidden' in (page.locator('#card-low-offers').get_attribute('class') or '')
     uncached_badge = page.locator('#card-low-offers .badge-dif')
-    assert 'tp-bestpreise-hidden' not in (page.locator('#card-low-offers').get_attribute('class') or '')
-    assert 'tp-deal-loading' in (uncached_badge.get_attribute('class') or '')
-    assert 'Prüfe' in (uncached_badge.text_content() or '')
+    assert 'tp-deal-loading' not in (uncached_badge.get_attribute('class') or '')
 
     # Toggle Bestpreise mode OFF -> Restores original badges and removes hidden classes
     page.evaluate("""() => {
@@ -1706,6 +1706,38 @@ def test_cache_settings_and_clear_button(page: Page):
 
     assert page.evaluate("() => window.ToppreiseSuite.CONFIG.REAL_DEAL_CACHE_HOURS") == 72
     assert page.evaluate("() => window.ToppreiseSuite.CONFIG.NEGATIVE_CACHE_HOURS") == 6
+
+
+def test_check_deals_active_in_bestpreise_mode(page: Page):
+    # Activate Bestpreise mode
+    page.evaluate("""() => {
+        window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
+        window.ToppreiseSuite.processListings();
+    }""")
+
+    # Check Deals button should NOT be disabled
+    batch_btn = page.locator('#tp-suite-filter-bar #tp-bar-batch-check-btn')
+    assert batch_btn.is_visible()
+    assert 'tp-disabled' not in (batch_btn.get_attribute('class') or '')
+
+    # Threshold button should be visible and interactive
+    thresh_btn = page.locator('#tp-suite-filter-bar #tp-bar-threshold-btn')
+    assert thresh_btn.is_visible()
+
+
+def test_unscanned_cards_no_stuck_loading_badge(page: Page):
+    # In Bestpreise mode, reveal filtered cards
+    page.evaluate("""() => {
+        window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
+        document.body.classList.add('tp-reveal-filtered');
+        window.ToppreiseSuite.processListings();
+    }""")
+
+    # Unscanned card badge must NOT have tp-deal-loading and should show original discount with loupe
+    uncached_badge = page.locator('#card-low-offers .badge-dif')
+    assert 'tp-deal-loading' not in (uncached_badge.get_attribute('class') or '')
+    assert '🔍' in (uncached_badge.text_content() or '')
+
 
 
 
