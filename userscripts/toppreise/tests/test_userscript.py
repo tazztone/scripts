@@ -794,6 +794,175 @@ def test_check_deal_button_not_injected_on_category_page(page: Page):
     assert check_deal_btns.count() == 0
 
 
+def test_slash_key_focuses_negative_filter(page: Page):
+    filter_bar = page.locator('#tp-suite-filter-bar')
+    assert filter_bar.is_visible()
+
+    # Make sure focus is on body
+    page.evaluate("() => document.body.focus()")
+    page.keyboard.press('/')
+
+    is_focused = page.evaluate("() => document.activeElement?.id === 'tp-inline-negative-input'")
+    assert is_focused
+
+
+def test_escape_blurs_negative_filter(page: Page):
+    input_el = page.locator('#tp-inline-negative-input')
+    input_el.focus()
+    assert page.evaluate("() => document.activeElement?.id === 'tp-inline-negative-input'")
+
+    page.keyboard.press('Escape')
+    assert not page.evaluate("() => document.activeElement?.id === 'tp-inline-negative-input'")
+
+
+def test_slash_key_noop_when_typing_in_input(page: Page):
+    page.evaluate("""() => {
+        const inp = document.createElement('input');
+        inp.id = 'native-test-input';
+        document.body.appendChild(inp);
+        inp.focus();
+    }""")
+    assert page.evaluate("() => document.activeElement?.id === 'native-test-input'")
+
+    page.keyboard.press('/')
+    assert page.evaluate("() => document.activeElement?.id === 'native-test-input'")
+
+
+def test_sparkline_renders_with_cached_timeseries(page: Page):
+    # Inject cached price stats with timeSeries into localStorage
+    page.evaluate("""() => {
+        const stats = {
+            tiefstpreis: 1800.0,
+            hoechstpreis: 2200.0,
+            aktuellerToppreis: 1800.0,
+            timeSeries: [[1672531199, 2200.0], [1675209599, 2000.0], [1677628799, 1800.0]],
+            time: Date.now()
+        };
+        localStorage.setItem('tp_hist_v1_797571', JSON.stringify(stats));
+        window.ToppreiseSuite?.processListings?.();
+    }""")
+
+    # Verify sparkline SVG is rendered on card-cheapest
+    sparkline = page.locator('#card-cheapest .tp-sparkline')
+    assert sparkline.is_visible()
+
+    polyline = page.locator('#card-cheapest .tp-sparkline polyline')
+    assert polyline.count() == 1
+    # Down-trending price => stroke is green (#10b981)
+    stroke = polyline.get_attribute('stroke')
+    assert stroke == '#10b981'
+
+
+def test_sparkline_not_rendered_without_timeseries(page: Page):
+    page.evaluate("""() => {
+        localStorage.removeItem('tp_hist_v1_797572');
+        window.ToppreiseSuite?.processListings?.();
+    }""")
+    assert page.locator('#card-expensive .tp-sparkline').count() == 0
+
+
+def test_sparkline_trending_up_renders_red(page: Page):
+    page.evaluate("""() => {
+        const stats = {
+            tiefstpreis: 900.0,
+            hoechstpreis: 1200.0,
+            aktuellerToppreis: 1100.0,
+            timeSeries: [[1672531199, 900.0], [1675209599, 1000.0], [1677628799, 1100.0]],
+            time: Date.now()
+        };
+        localStorage.setItem('tp_hist_v1_797572', JSON.stringify(stats));
+        window.ToppreiseSuite?.processListings?.();
+    }""")
+
+    sparkline = page.locator('#card-expensive .tp-sparkline')
+    assert sparkline.is_visible()
+
+    polyline = page.locator('#card-expensive .tp-sparkline polyline')
+    stroke = polyline.get_attribute('stroke')
+    # Up-trending price => stroke is red (#ef4444)
+    assert stroke == '#ef4444'
+
+
+def test_config_export_produces_valid_json(page: Page):
+    # Open settings dialog
+    page.click('#tp-root >> #tp-settings-fab')
+    page.wait_for_selector('#tp-root >> #tp-settings-dialog', state='visible')
+
+    # Setup export interception
+    exported_data = page.evaluate("""() => {
+        return new Promise(resolve => {
+            const originalCreateObjectURL = URL.createObjectURL;
+            URL.createObjectURL = blob => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const captured = JSON.parse(reader.result);
+                    URL.createObjectURL = originalCreateObjectURL;
+                    resolve(captured);
+                };
+                reader.readAsText(blob);
+                return 'blob:mock-url';
+            };
+            const shadow = document.getElementById('tp-root').shadowRoot;
+            shadow.getElementById('tp-export-config-btn').click();
+        });
+    }""")
+
+    assert exported_data is not None
+    assert '_meta' in exported_data
+    assert 'config' in exported_data
+    assert 'MODE' in exported_data['config']
+    assert 'MARGIN_PERCENT' in exported_data['config']
+    assert 'NEGATIVE_TERMS' in exported_data['config']
+
+
+def test_config_import_applies_settings(page: Page):
+    # Open settings dialog
+    page.click('#tp-root >> #tp-settings-fab')
+    page.wait_for_selector('#tp-root >> #tp-settings-dialog', state='visible')
+
+    # Trigger file import via DataTransfer / File
+    page.evaluate("""() => {
+        const shadow = document.getElementById('tp-root').shadowRoot;
+        const fileInput = shadow.getElementById('tp-import-config-file');
+        const testPayload = {
+            _meta: { version: '2.13.0' },
+            config: {
+                MARGIN_PERCENT: 7.5,
+                NEGATIVE_TERMS: 'ImportedNegativeTerm',
+                REAL_DEAL_MIN_DISCOUNT: 45,
+                MODE: 'hide'
+            }
+        };
+        const blob = new Blob([JSON.stringify(testPayload)], { type: 'application/json' });
+        const file = new File([blob], 'config.json', { type: 'application/json' });
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        fileInput.files = dt.files;
+        fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+    }""")
+
+    # Give FileReader a tick
+    page.wait_for_timeout(200)
+
+    # Check updated CONFIG and UI fields
+    config_state = page.evaluate("""() => ({
+        margin: window.ToppreiseSuite?.CONFIG?.MARGIN_PERCENT,
+        neg: window.ToppreiseSuite?.CONFIG?.NEGATIVE_TERMS,
+        minDiscount: window.ToppreiseSuite?.CONFIG?.REAL_DEAL_MIN_DISCOUNT,
+        mode: window.ToppreiseSuite?.CONFIG?.MODE,
+        inlineNegInput: document.getElementById('tp-inline-negative-input')?.value
+    })""")
+
+    assert config_state['margin'] == 7.5
+    assert config_state['neg'] == 'ImportedNegativeTerm'
+    assert config_state['minDiscount'] == 45
+    assert config_state['mode'] == 'hide'
+    assert config_state['inlineNegInput'] == 'ImportedNegativeTerm'
+
+
+
+
+
 
 
 

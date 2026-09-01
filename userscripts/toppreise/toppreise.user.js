@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.12.10
+// @version      2.13.2
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, checks real all-time Tiefstpreise, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -260,6 +260,21 @@ const STYLES = `
     white-space: nowrap !important;
     user-select: none !important;
     pointer-events: auto !important;
+  }
+  .tp-sparkline-container {
+    display: inline-flex !important;
+    align-items: center !important;
+    margin-top: 2px !important;
+    vertical-align: middle !important;
+  }
+  .tp-sparkline {
+    opacity: 0.85;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    overflow: visible;
+  }
+  .tp-sparkline:hover {
+    opacity: 1;
+    transform: scale(1.08);
   }
   .tp-bar-btn.tp-batch-active {
     background: rgba(245, 158, 11, 0.25) !important;
@@ -1188,6 +1203,30 @@ const SHADOW_MODAL_STYLES = `
     return null;
   }
 
+  async function fetchPriceTimeSeries(productId) {
+    if (!productId) return null;
+    try {
+      const baseUrl = (location.origin && location.origin.startsWith('http')) ? location.origin : 'https://www.toppreise.ch';
+      const res = await fetch(`${baseUrl}/plugins/product/pricechart`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: `p_pc_pid=${encodeURIComponent(productId)}`
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (Array.isArray(data)) return data;
+      if (Array.isArray(data?.series)) return data.series;
+      if (Array.isArray(data?.data)) return data.data;
+      return null;
+    } catch (err) {
+      if (CONFIG.DEBUG) console.warn('[Toppreise Suite] Failed fetching time series for product', productId, err);
+      return null;
+    }
+  }
+
   const activeFetches = new Map();
 
   async function fetchSingleProductPriceStats(productId) {
@@ -1203,13 +1242,17 @@ const SHADOW_MODAL_STYLES = `
       try {
         const baseUrl = (location.origin && location.origin.startsWith('http')) ? location.origin : 'https://www.toppreise.ch';
         const url = `${baseUrl}/plugins/product/pricechart?p_pc_pid=${productId}`;
-        const res = await fetch(url, {
-          headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        });
-        if (!res.ok) return null;
-        const html = await res.text();
+        const [resHtml, timeSeries] = await Promise.all([
+          fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } }),
+          fetchPriceTimeSeries(productId)
+        ]);
+        if (!resHtml.ok) return null;
+        const html = await resHtml.text();
         const stats = parsePriceStatsFromHtml(html);
         if (stats) {
+          if (timeSeries && Array.isArray(timeSeries)) {
+            stats.timeSeries = timeSeries;
+          }
           setCachedPriceStats(productId, stats);
           return stats;
         }
@@ -1393,6 +1436,13 @@ const SHADOW_MODAL_STYLES = `
 
       const input = bar.querySelector('#tp-inline-negative-input');
       const clearBtn = bar.querySelector('#tp-clear-neg-btn');
+
+      input.onkeydown = e => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          input.blur();
+        }
+      };
 
       input.oninput = e => {
         saveConfigKey('NEGATIVE_TERMS', e.target.value);
@@ -1666,6 +1716,447 @@ const SHADOW_MODAL_STYLES = `
 
   let isModifyingDOM = false;
 
+  function extractActiveStores() {
+    const filterElements = document.querySelectorAll('.filters .f_remove_filter[data-target-type="df"]');
+    return Array.from(filterElements).map(el => {
+      const clone = el.cloneNode(true);
+      clone.querySelectorAll('.icon-close, .f_remove_icon, .close, span').forEach(i => i.remove());
+      return normalizeName(clone.textContent);
+    }).filter(name => name.length > 0);
+  }
+
+  function parseNegativeTerms() {
+    const rawTerms = CONFIG.NEGATIVE_TERMS || '';
+    return rawTerms.split(/[,;\n]/).map(t => t.trim().toLowerCase()).filter(Boolean);
+  }
+
+  function extractCardData(card) {
+    const pid = getCardProductId(card);
+    const cardPriceEl = CONFIG.USE_SHIPPING_PRICE
+      ? (card.querySelector('.price_information_product .shippingPrice .Plugin_Price') || card.querySelector('.price_information_product .productPrice .Plugin_Price') || card.querySelector('.priceContainer.shippingPrice .Plugin_Price') || card.querySelector('.priceContainer.productPrice .Plugin_Price') || card.querySelector('.Plugin_Price'))
+      : (card.querySelector('.price_information_product .productPrice .Plugin_Price') || card.querySelector('.price_information_product .shippingPrice .Plugin_Price') || card.querySelector('.priceContainer.productPrice .Plugin_Price') || card.querySelector('.priceContainer.shippingPrice .Plugin_Price') || card.querySelector('.Plugin_Price'));
+    const cardPrice = cardPriceEl ? parsePrice(cardPriceEl.textContent) : 0;
+    const stats = pid ? getCachedPriceStats(pid) : null;
+    const isVerifiedNonBest = !!(stats && cardPrice > 0 && stats.tiefstpreis > 0 && cardPrice > stats.tiefstpreis * 1.01);
+    const discountVal = extractCardDiscount(card);
+    const catName = extractCardCategory(card);
+    const rootGroup = resolveCategoryGroup(catName, card);
+    const offerCount = extractOfferCount(card);
+
+    return {
+      card,
+      pid,
+      cardPriceEl,
+      cardPrice,
+      stats,
+      isVerifiedNonBest,
+      discountVal,
+      catName,
+      rootGroup,
+      offerCount
+    };
+  }
+
+  function applyCardFilters(cd, termsList, excludedCats, minOffers, pageHasOffers) {
+    const isNeg = matchesNegativeTerms(cd.card, termsList);
+    const isCatExcluded = !!(cd.catName && isPathExcluded(cd.catName, cd.rootGroup, excludedCats));
+    const isLowOffers = !!(pageHasOffers && minOffers > 0 && cd.offerCount < minOffers);
+    return { isNeg, isCatExcluded, isLowOffers };
+  }
+
+  function renderSparkline(timeSeries, width = 60, height = 18) {
+    if (!timeSeries || !Array.isArray(timeSeries) || timeSeries.length < 2) return null;
+    const prices = timeSeries.map(p => {
+      if (Array.isArray(p)) return typeof p[1] === 'number' ? p[1] : parsePrice(String(p[1]));
+      if (typeof p === 'number') return p;
+      if (p && typeof p.price === 'number') return p.price;
+      if (p && p.price) return parsePrice(String(p.price));
+      if (p && p.y) return typeof p.y === 'number' ? p.y : parsePrice(String(p.y));
+      return 0;
+    }).filter(p => p > 0);
+
+    if (prices.length < 2) return null;
+
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+    const range = max - min || 1;
+    const padding = 2;
+    const usableHeight = height - padding * 2;
+
+    const points = prices.map((p, i) => {
+      const x = ((i / (prices.length - 1)) * width).toFixed(1);
+      const y = (height - padding - ((p - min) / range) * usableHeight).toFixed(1);
+      return `${x},${y}`;
+    }).join(' ');
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', String(width));
+    svg.setAttribute('height', String(height));
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    svg.classList.add('tp-sparkline');
+
+    const firstPrice = prices[0];
+    const lastPrice = prices[prices.length - 1];
+    const isTrendingDown = lastPrice <= firstPrice;
+    const strokeColor = isTrendingDown ? '#10b981' : '#ef4444';
+
+    const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    polyline.setAttribute('points', points);
+    polyline.setAttribute('fill', 'none');
+    polyline.setAttribute('stroke', strokeColor);
+    polyline.setAttribute('stroke-width', '1.5');
+    polyline.setAttribute('stroke-linecap', 'round');
+    polyline.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(polyline);
+
+    svg.setAttribute('title', `Preisverlauf: CHF ${firstPrice.toFixed(2)} → CHF ${lastPrice.toFixed(2)} (Min: ${min.toFixed(2)}, Max: ${max.toFixed(2)})`);
+
+    return svg;
+  }
+
+  function renderCardEffects(cd, filters, isNeueFeed, activeStores) {
+    const { card, pid, cardPriceEl, cardPrice, stats, isVerifiedNonBest, discountVal, catName, rootGroup } = cd;
+
+    // 0. Heatmap (only applied for unchecked deals or verified Allzeit-Tiefstpreise)
+    if (CONFIG.HEATMAP_ENABLED && discountVal !== null && !isVerifiedNonBest) {
+      const heatStyles = getHeatmapStyles(discountVal, CONFIG.HEATMAP_INTENSITY, CONFIG.HEATMAP_CURVE);
+      card.style.setProperty('--tp-heat-bg', heatStyles.bg);
+      card.style.setProperty('--tp-heat-border', heatStyles.border);
+      card.style.setProperty('--tp-heat-glow', heatStyles.glow);
+
+      // DarkReader Dynamic Theme compatibility:
+      card.style.setProperty('--darkreader-inline-bgimage', heatStyles.bg);
+      card.style.setProperty('--darkreader-inline-bgcolor', 'transparent');
+      card.style.setProperty('--darkreader-inline-border', heatStyles.border);
+      card.style.setProperty('--darkreader-inline-border-top', heatStyles.border);
+      card.style.setProperty('--darkreader-inline-border-right', heatStyles.border);
+      card.style.setProperty('--darkreader-inline-border-bottom', heatStyles.border);
+      card.style.setProperty('--darkreader-inline-border-left', heatStyles.border);
+      card.style.setProperty('background', heatStyles.bg, 'important');
+      card.style.setProperty('background-image', heatStyles.bg, 'important');
+      card.style.setProperty('background-color', 'transparent', 'important');
+      card.style.setProperty('border-color', heatStyles.border, 'important');
+
+      card.removeAttribute('data-darkreader-inline-bgcolor');
+      card.removeAttribute('data-darkreader-inline-bgimage');
+
+      const subElements = card.querySelectorAll('.product-name, .productDetails, .price_information_product, .Plugin_PriceInformation, .f_product_info, .productDescription, .productDetailsDescription');
+      for (let s = 0; s < subElements.length; s++) {
+        const sub = subElements[s];
+        sub.removeAttribute('data-darkreader-inline-bgcolor');
+        sub.removeAttribute('data-darkreader-inline-bgimage');
+        sub.style.setProperty('background-color', 'transparent', 'important');
+        sub.style.setProperty('background', 'transparent', 'important');
+        sub.style.setProperty('--darkreader-inline-bgcolor', 'transparent');
+        sub.style.setProperty('--darkreader-inline-bgimage', 'none');
+      }
+
+      card.classList.add('tp-heatmap-active');
+    } else {
+      card.classList.remove('tp-heatmap-active');
+      card.style.removeProperty('--tp-heat-bg');
+      card.style.removeProperty('--tp-heat-border');
+      card.style.removeProperty('--tp-heat-glow');
+      card.style.removeProperty('--darkreader-inline-bgimage');
+      card.style.removeProperty('--darkreader-inline-bgcolor');
+      card.style.removeProperty('--darkreader-inline-border');
+      card.style.removeProperty('--darkreader-inline-border-top');
+      card.style.removeProperty('--darkreader-inline-border-right');
+      card.style.removeProperty('--darkreader-inline-border-bottom');
+      card.style.removeProperty('--darkreader-inline-border-left');
+      card.style.removeProperty('background');
+      card.style.removeProperty('background-image');
+      card.style.removeProperty('background-color');
+      card.style.removeProperty('border-color');
+    }
+
+    // 1. Category extraction & Quick-block
+    if (isNeueFeed) {
+      if (catName && !card.querySelector('.tp-card-quick-block')) {
+        const quickBlockBtn = document.createElement('button');
+        quickBlockBtn.type = 'button';
+        quickBlockBtn.className = 'tp-card-quick-block';
+        quickBlockBtn.title = `Kategorie "${catName}" (${rootGroup}) ausblenden`;
+        quickBlockBtn.innerHTML = `🚫 <span>${catName}</span>`;
+        quickBlockBtn.onclick = e => {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          const curr = CONFIG.EXCLUDED_CATEGORIES || [];
+          const key = `PATH:${rootGroup}/${catName}`;
+          if (!curr.includes(key) && !curr.includes(catName)) {
+            isBlockedCatsOpen = true;
+            saveConfigKey('EXCLUDED_CATEGORIES', [...curr, key]);
+            processListings();
+            showToast(`Kategorie "${catName}" ausgeblendet`, 4000, 'Rückgängig', () => {
+              saveConfigKey('EXCLUDED_CATEGORIES', (CONFIG.EXCLUDED_CATEGORIES || []).filter(c => c !== key && c !== catName));
+              processListings();
+              showToast(`Kategorie "${catName}" wieder eingeblendet`);
+            });
+          }
+        };
+        card.appendChild(quickBlockBtn);
+      }
+    } else {
+      card.querySelector('.tp-card-quick-block')?.remove();
+    }
+
+    // 2. Filters
+    card.classList.toggle('tp-negative-filtered', filters.isNeg);
+    card.classList.toggle('tp-category-filtered', filters.isCatExcluded);
+    card.classList.toggle('tp-min-offers-filtered', filters.isLowOffers);
+
+    // 3. Best Price Highlighting
+    if (activeStores.length === 0) {
+      card.classList.remove('tp-is-cheapest', 'tp-not-cheapest', 'tp-no-store-offer');
+      card.querySelector('.tp-best-price-badge')?.remove();
+    } else {
+      let matchedRow = null;
+      for (const row of card.querySelectorAll('.Plugin_DealerRelProdPriceInfo')) {
+        const titleEl = row.querySelector('.title');
+        if (titleEl) {
+          const rowStoreNormalized = normalizeName(titleEl.textContent);
+          if (activeStores.some(store => rowStoreNormalized.includes(store) || store.includes(rowStoreNormalized))) {
+            matchedRow = row;
+            break;
+          }
+        }
+      }
+
+      if (matchedRow) {
+        const storePriceEl = CONFIG.USE_SHIPPING_PRICE
+          ? (matchedRow.querySelector('.shippingPrice .Plugin_Price') || matchedRow.querySelector('.productPrice .Plugin_Price'))
+          : (matchedRow.querySelector('.productPrice .Plugin_Price') || matchedRow.querySelector('.shippingPrice .Plugin_Price'));
+        const storePrice = storePriceEl ? parsePrice(storePriceEl.textContent) : 0;
+
+        const bestPriceEl = CONFIG.USE_SHIPPING_PRICE
+          ? (card.querySelector('.price_information_product .shippingPrice .Plugin_Price') || card.querySelector('.price_information_product .productPrice .Plugin_Price') || card.querySelector('.priceContainer.shippingPrice .Plugin_Price') || card.querySelector('.priceContainer.productPrice .Plugin_Price'))
+          : (card.querySelector('.price_information_product .productPrice .Plugin_Price') || card.querySelector('.price_information_product .shippingPrice .Plugin_Price') || card.querySelector('.priceContainer.productPrice .Plugin_Price') || card.querySelector('.priceContainer.shippingPrice .Plugin_Price'));
+        const bestPrice = bestPriceEl ? parsePrice(bestPriceEl.textContent) : 0;
+
+        if (storePrice > 0 && bestPrice > 0 && storePrice <= bestPrice * (1 + CONFIG.MARGIN_PERCENT / 100)) {
+          card.classList.add('tp-is-cheapest');
+          card.classList.remove('tp-not-cheapest', 'tp-no-store-offer');
+          if (!card.querySelector('.tp-best-price-badge')) {
+            const badge = document.createElement('div');
+            badge.className = 'tp-best-price-badge';
+            badge.textContent = 'Best Price';
+            card.appendChild(badge);
+          }
+        } else {
+          card.classList.add(storePrice > 0 && bestPrice > 0 ? 'tp-not-cheapest' : 'tp-no-store-offer');
+          card.classList.remove('tp-is-cheapest', storePrice > 0 && bestPrice > 0 ? 'tp-no-store-offer' : 'tp-not-cheapest');
+          card.querySelector('.tp-best-price-badge')?.remove();
+        }
+      } else {
+        cd.card.classList.add('tp-no-store-offer');
+        cd.card.classList.remove('tp-is-cheapest', 'tp-not-cheapest');
+        cd.card.querySelector('.tp-best-price-badge')?.remove();
+      }
+    }
+
+    // 3.5 Real Deal & Allzeit-Tiefstpreis Check
+    const badgeDifEl = card.querySelector('.badge-dif, [class*="badge-dif"]');
+    let realDealWrapper = card.querySelector('.tp-real-deal-wrapper');
+
+    if (stats && cardPrice > 0 && stats.tiefstpreis > 0) {
+      const isAllTimeLow = cardPrice <= stats.tiefstpreis * 1.01;
+      const isNonBest = !isAllTimeLow;
+
+      if (isNonBest && CONFIG.REAL_DEAL_FILTER_ACTIVE) {
+        card.classList.add('tp-non-bestpreis-filtered');
+      } else {
+        card.classList.remove('tp-non-bestpreis-filtered');
+      }
+
+      if (!realDealWrapper) {
+        realDealWrapper = document.createElement('div');
+        realDealWrapper.className = 'tp-real-deal-wrapper';
+        if (badgeDifEl) {
+          badgeDifEl.appendChild(realDealWrapper);
+        } else {
+          card.appendChild(realDealWrapper);
+        }
+      }
+
+      const targetStatus = isAllTimeLow ? 'low' : 'not-low';
+      const priceStr = cardPrice.toFixed(2);
+
+      // DOM Memoization: only re-render if status, pid, or price changed
+      if (realDealWrapper.dataset.tpPid !== pid || realDealWrapper.dataset.tpStatus !== targetStatus || realDealWrapper.dataset.tpPrice !== priceStr) {
+        realDealWrapper.dataset.tpPid = pid;
+        realDealWrapper.dataset.tpStatus = targetStatus;
+        realDealWrapper.dataset.tpPrice = priceStr;
+        realDealWrapper.innerHTML = '';
+
+        const badge = document.createElement('div');
+        const hasSignificantPeak = stats.hoechstpreis && stats.hoechstpreis > stats.tiefstpreis * 1.02;
+
+        if (isAllTimeLow) {
+          badge.className = 'tp-real-deal-sub-badge tp-is-alltime-low';
+          let peakContext = '';
+          if (hasSignificantPeak) {
+            const peakDropPct = Math.round(((stats.hoechstpreis - cardPrice) / stats.hoechstpreis) * 100);
+            peakContext = ` (-${peakDropPct}% vom Höchstpreis CHF ${stats.hoechstpreis.toFixed(2)})`;
+          }
+          badge.title = `Aktueller Preis (CHF ${priceStr}) ist der historische Allzeit-Tiefstpreis!${peakContext}`;
+          badge.innerHTML = `🌟 Allzeit-Tiefstpreis`;
+        } else {
+          const markupPct = Math.round(((cardPrice - stats.tiefstpreis) / stats.tiefstpreis) * 100);
+          const isSevere = markupPct >= 50;
+          badge.className = `tp-real-deal-sub-badge tp-is-not-low ${isSevere ? 'tp-is-severe-markup' : ''}`;
+          const peakContext = hasSignificantPeak ? ` | Höchstpreis: CHF ${stats.hoechstpreis.toFixed(2)}` : '';
+          badge.title = `Historischer Tiefstpreis lag bei CHF ${stats.tiefstpreis.toFixed(2)} (+${markupPct}% Aufschlag)${peakContext}`;
+          badge.innerHTML = `⚠️ +${markupPct}%`;
+        }
+        realDealWrapper.appendChild(badge);
+      }
+
+      // Historical Tiefstpreis display right below current price
+      let histPriceEl = card.querySelector('.tp-card-historical-price');
+      if (isNonBest) {
+        if (!histPriceEl) {
+          histPriceEl = document.createElement('div');
+          histPriceEl.className = 'tp-card-historical-price';
+          const priceContainer = card.querySelector('.Plugin_PriceInformation, .price_information_product') ||
+                                 cardPriceEl?.closest('.priceContainer, .Plugin_PriceInformation, .price_information_product') ||
+                                 cardPriceEl?.parentElement ||
+                                 card;
+          priceContainer.appendChild(histPriceEl);
+        }
+        histPriceEl.textContent = `Tiefstpreis: CHF ${stats.tiefstpreis.toFixed(2)}`;
+        histPriceEl.title = `Historischer Tiefstpreis lag bei CHF ${stats.tiefstpreis.toFixed(2)}`;
+      } else if (histPriceEl) {
+        histPriceEl.remove();
+      }
+    } else {
+      card.classList.remove('tp-non-bestpreis-filtered');
+      card.querySelector('.tp-card-historical-price')?.remove();
+      if (pid && (isNeueFeed || badgeDifEl)) {
+        if (!realDealWrapper) {
+          realDealWrapper = document.createElement('div');
+          realDealWrapper.className = 'tp-real-deal-wrapper';
+          if (badgeDifEl) {
+            badgeDifEl.appendChild(realDealWrapper);
+          } else {
+            card.appendChild(realDealWrapper);
+          }
+        }
+
+        if (realDealWrapper.dataset.tpStatus !== 'unchecked' || (!realDealWrapper.querySelector('.tp-card-check-deal-btn') && !realDealWrapper.querySelector('.tp-real-deal-sub-badge'))) {
+          realDealWrapper.dataset.tpPid = pid;
+          realDealWrapper.dataset.tpStatus = 'unchecked';
+          realDealWrapper.removeAttribute('data-tp-price');
+          realDealWrapper.innerHTML = '';
+          const checkBtn = document.createElement('button');
+          checkBtn.type = 'button';
+          checkBtn.className = 'tp-card-check-deal-btn';
+          checkBtn.title = 'Tiefstpreis und echten Allzeit-Rabatt prüfen';
+          checkBtn.innerHTML = `🔍 Tiefstpreis?`;
+          checkBtn.onclick = async e => {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            checkBtn.classList.add('tp-loading');
+            checkBtn.innerHTML = `⏳ Prüfe...`;
+            const fetchedStats = await fetchSingleProductPriceStats(pid);
+            if (fetchedStats) {
+              processListings();
+            } else {
+              checkBtn.classList.remove('tp-loading');
+              checkBtn.innerHTML = `⚠️ Nicht verfügbar`;
+              setTimeout(() => {
+                if (checkBtn && checkBtn.parentElement) checkBtn.innerHTML = `🔍 Tiefstpreis?`;
+              }, 3000);
+            }
+          };
+          realDealWrapper.appendChild(checkBtn);
+        }
+      } else if (realDealWrapper) {
+        realDealWrapper.remove();
+      }
+    }
+
+    // 3.6 Mini Price-Trend Sparkline
+    if (stats && Array.isArray(stats.timeSeries) && stats.timeSeries.length >= 2) {
+      let sparkContainer = card.querySelector('.tp-sparkline-container');
+      if (!sparkContainer) {
+        sparkContainer = document.createElement('div');
+        sparkContainer.className = 'tp-sparkline-container';
+        const priceContainer = card.querySelector('.Plugin_PriceInformation, .price_information_product') ||
+                               cardPriceEl?.closest('.priceContainer, .Plugin_PriceInformation, .price_information_product') ||
+                               cardPriceEl?.parentElement ||
+                               card;
+        priceContainer.appendChild(sparkContainer);
+      }
+      if (!sparkContainer.querySelector('.tp-sparkline')) {
+        const svg = renderSparkline(stats.timeSeries);
+        if (svg) {
+          sparkContainer.innerHTML = '';
+          sparkContainer.appendChild(svg);
+        }
+      }
+    } else {
+      card.querySelector('.tp-sparkline-container')?.remove();
+    }
+  }
+
+  function applySorting(cards, pageHasOffers) {
+    if (CONFIG.SORT_BY_OFFERS === 'discount-desc' && cards.length > 1) {
+      const parent = cards[0].parentElement;
+      if (parent) {
+        Array.from(cards).sort((a, b) => (extractCardDiscount(b) ?? -1) - (extractCardDiscount(a) ?? -1)).forEach(c => parent.appendChild(c));
+      }
+    } else if (pageHasOffers && CONFIG.SORT_BY_OFFERS !== 'none' && cards.length > 1) {
+      const parent = cards[0].parentElement;
+      if (parent) {
+        Array.from(cards).sort((a, b) => CONFIG.SORT_BY_OFFERS === 'desc' ? extractOfferCount(b) - extractOfferCount(a) : extractOfferCount(a) - extractOfferCount(b)).forEach(c => parent.appendChild(c));
+      }
+    }
+  }
+
+  function renderEmptyState(cards, counts) {
+    const totalHidden = (counts.neg || 0) + (counts.cat || 0) + (counts.min || 0) + (counts.nonBest || 0);
+    const isRevealed = document.body.classList.contains('tp-reveal-filtered');
+    let emptyNotice = document.getElementById('tp-empty-state-notice');
+
+    if (cards.length > 0 && totalHidden >= cards.length && !isRevealed) {
+      if (!emptyNotice) {
+        emptyNotice = document.createElement('div');
+        emptyNotice.id = 'tp-empty-state-notice';
+        emptyNotice.className = 'tp-empty-state-notice';
+        const listParent = cards[0]?.parentElement;
+        if (listParent) {
+          listParent.insertBefore(emptyNotice, listParent.firstChild);
+        }
+      }
+      emptyNotice.innerHTML = `
+        <div>🚫 <strong>Alle ${cards.length} Angebote auf dieser Seite sind durch aktive Filter ausgeblendet.</strong></div>
+        <div class="tp-empty-state-actions">
+          <button class="tp-empty-state-btn" id="tp-empty-reveal-btn">👁️ Ausgeblendete anzeigen</button>
+          ${counts.nonBest > 0 ? '<button class="tp-empty-state-btn" id="tp-empty-disable-dealfilter-btn">🌟 Tiefstpreis-Filter ausschalten</button>' : ''}
+          <button class="tp-empty-state-btn" id="tp-empty-reset-btn">🔄 Filter zurücksetzen</button>
+        </div>
+      `;
+      emptyNotice.querySelector('#tp-empty-reveal-btn')?.addEventListener('click', () => {
+        document.body.classList.toggle('tp-reveal-filtered');
+        processListings();
+      });
+      emptyNotice.querySelector('#tp-empty-disable-dealfilter-btn')?.addEventListener('click', () => {
+        saveConfigKey('REAL_DEAL_FILTER_ACTIVE', false);
+        if (uiShadowRoot) {
+          const modalToggle = uiShadowRoot.getElementById('tp-real-deal-filter-toggle');
+          if (modalToggle) modalToggle.checked = false;
+        }
+        processListings();
+        showToast('Tiefstpreis-Filter deaktiviert');
+      });
+      emptyNotice.querySelector('#tp-empty-reset-btn')?.addEventListener('click', resetAllFilters);
+    } else if (emptyNotice) {
+      emptyNotice.remove();
+    }
+  }
+
   function processListings() {
     if (isModifyingDOM) return;
     if (isProductDetailPage()) {
@@ -1682,365 +2173,41 @@ const SHADOW_MODAL_STYLES = `
         return;
       }
 
-      const filterElements = document.querySelectorAll('.filters .f_remove_filter[data-target-type="df"]');
-      const activeStores = Array.from(filterElements).map(el => {
-        const clone = el.cloneNode(true);
-        clone.querySelectorAll('.icon-close, .f_remove_icon, .close, span').forEach(i => i.remove());
-        return normalizeName(clone.textContent);
-      }).filter(name => name.length > 0);
-
-      const rawTerms = CONFIG.NEGATIVE_TERMS || '';
-      const termsList = rawTerms.split(/[,;\n]/).map(t => t.trim().toLowerCase()).filter(Boolean);
+      // --- Extract ---
+      const activeStores = extractActiveStores();
+      const termsList = parseNegativeTerms();
       const excludedCats = CONFIG.EXCLUDED_CATEGORIES || [];
-      const counts = { neg: 0, cat: 0, min: 0, nonBest: 0, uncheckedDeals: 0 };
-      let pageHasOffers = false;
       const isNeueFeed = isNeueToppreisePage();
       const minDealDiscount = CONFIG.REAL_DEAL_MIN_DISCOUNT || 30;
+      const cardDataList = cards.map(extractCardData);
 
-      for (const card of cards) {
-        const pid = getCardProductId(card);
-        const cardPriceEl = CONFIG.USE_SHIPPING_PRICE
-          ? (card.querySelector('.price_information_product .shippingPrice .Plugin_Price') || card.querySelector('.price_information_product .productPrice .Plugin_Price') || card.querySelector('.priceContainer.shippingPrice .Plugin_Price') || card.querySelector('.priceContainer.productPrice .Plugin_Price') || card.querySelector('.Plugin_Price'))
-          : (card.querySelector('.price_information_product .productPrice .Plugin_Price') || card.querySelector('.price_information_product .shippingPrice .Plugin_Price') || card.querySelector('.priceContainer.productPrice .Plugin_Price') || card.querySelector('.priceContainer.shippingPrice .Plugin_Price') || card.querySelector('.Plugin_Price'));
-        const cardPrice = cardPriceEl ? parsePrice(cardPriceEl.textContent) : 0;
-        const stats = pid ? getCachedPriceStats(pid) : null;
-        const isVerifiedNonBest = !!(stats && cardPrice > 0 && stats.tiefstpreis > 0 && cardPrice > stats.tiefstpreis * 1.01);
+      // --- Filter ---
+      const counts = { neg: 0, cat: 0, min: 0, nonBest: 0, uncheckedDeals: 0 };
+      const pageHasOffers = cardDataList.some(cd => cd.offerCount > 0);
 
-        const discountVal = extractCardDiscount(card);
-        if (pid && !stats && discountVal !== null && discountVal >= minDealDiscount) {
+      for (const cd of cardDataList) {
+        cd.filters = applyCardFilters(cd, termsList, excludedCats, CONFIG.MIN_OFFERS, pageHasOffers);
+        if (cd.filters.isNeg) counts.neg++;
+        if (cd.filters.isCatExcluded) counts.cat++;
+        if (cd.filters.isLowOffers) counts.min++;
+        if (cd.pid && !cd.stats && cd.discountVal !== null && cd.discountVal >= minDealDiscount) {
           counts.uncheckedDeals++;
         }
-
-        // 0. Heatmap (only applied for unchecked deals or verified Allzeit-Tiefstpreise)
-        if (CONFIG.HEATMAP_ENABLED && discountVal !== null && !isVerifiedNonBest) {
-          const heatStyles = getHeatmapStyles(discountVal, CONFIG.HEATMAP_INTENSITY, CONFIG.HEATMAP_CURVE);
-          card.style.setProperty('--tp-heat-bg', heatStyles.bg);
-          card.style.setProperty('--tp-heat-border', heatStyles.border);
-          card.style.setProperty('--tp-heat-glow', heatStyles.glow);
-
-          // DarkReader Dynamic Theme compatibility:
-          card.style.setProperty('--darkreader-inline-bgimage', heatStyles.bg);
-          card.style.setProperty('--darkreader-inline-bgcolor', 'transparent');
-          card.style.setProperty('--darkreader-inline-border', heatStyles.border);
-          card.style.setProperty('--darkreader-inline-border-top', heatStyles.border);
-          card.style.setProperty('--darkreader-inline-border-right', heatStyles.border);
-          card.style.setProperty('--darkreader-inline-border-bottom', heatStyles.border);
-          card.style.setProperty('--darkreader-inline-border-left', heatStyles.border);
-          card.style.setProperty('background', heatStyles.bg, 'important');
-          card.style.setProperty('background-image', heatStyles.bg, 'important');
-          card.style.setProperty('background-color', 'transparent', 'important');
-          card.style.setProperty('border-color', heatStyles.border, 'important');
-
-          card.removeAttribute('data-darkreader-inline-bgcolor');
-          card.removeAttribute('data-darkreader-inline-bgimage');
-
-          const subElements = card.querySelectorAll('.product-name, .productDetails, .price_information_product, .Plugin_PriceInformation, .f_product_info, .productDescription, .productDetailsDescription');
-          for (let s = 0; s < subElements.length; s++) {
-            const sub = subElements[s];
-            sub.removeAttribute('data-darkreader-inline-bgcolor');
-            sub.removeAttribute('data-darkreader-inline-bgimage');
-            sub.style.setProperty('background-color', 'transparent', 'important');
-            sub.style.setProperty('background', 'transparent', 'important');
-            sub.style.setProperty('--darkreader-inline-bgcolor', 'transparent');
-            sub.style.setProperty('--darkreader-inline-bgimage', 'none');
-          }
-
-          card.classList.add('tp-heatmap-active');
-        } else {
-          card.classList.remove('tp-heatmap-active');
-          card.style.removeProperty('--tp-heat-bg');
-          card.style.removeProperty('--tp-heat-border');
-          card.style.removeProperty('--tp-heat-glow');
-          card.style.removeProperty('--darkreader-inline-bgimage');
-          card.style.removeProperty('--darkreader-inline-bgcolor');
-          card.style.removeProperty('--darkreader-inline-border');
-          card.style.removeProperty('--darkreader-inline-border-top');
-          card.style.removeProperty('--darkreader-inline-border-right');
-          card.style.removeProperty('--darkreader-inline-border-bottom');
-          card.style.removeProperty('--darkreader-inline-border-left');
-          card.style.removeProperty('background');
-          card.style.removeProperty('background-image');
-          card.style.removeProperty('background-color');
-          card.style.removeProperty('border-color');
-        }
-
-        // 1. Category extraction & Quick-block
-        const catName = extractCardCategory(card);
-        const rootGroup = resolveCategoryGroup(catName, card);
-
-        if (isNeueFeed) {
-          if (catName && !card.querySelector('.tp-card-quick-block')) {
-            const quickBlockBtn = document.createElement('button');
-            quickBlockBtn.type = 'button';
-            quickBlockBtn.className = 'tp-card-quick-block';
-            quickBlockBtn.title = `Kategorie "${catName}" (${rootGroup}) ausblenden`;
-            quickBlockBtn.innerHTML = `🚫 <span>${catName}</span>`;
-            quickBlockBtn.onclick = e => {
-              e.preventDefault();
-              e.stopPropagation();
-              e.stopImmediatePropagation();
-              const curr = CONFIG.EXCLUDED_CATEGORIES || [];
-              const key = `PATH:${rootGroup}/${catName}`;
-              if (!curr.includes(key) && !curr.includes(catName)) {
-                isBlockedCatsOpen = true;
-                saveConfigKey('EXCLUDED_CATEGORIES', [...curr, key]);
-                processListings();
-                showToast(`Kategorie "${catName}" ausgeblendet`, 4000, 'Rückgängig', () => {
-                  saveConfigKey('EXCLUDED_CATEGORIES', (CONFIG.EXCLUDED_CATEGORIES || []).filter(c => c !== key && c !== catName));
-                  processListings();
-                  showToast(`Kategorie "${catName}" wieder eingeblendet`);
-                });
-              }
-            };
-            card.appendChild(quickBlockBtn);
-          }
-        } else {
-          card.querySelector('.tp-card-quick-block')?.remove();
-        }
-
-        // 2. Filters
-        const isNeg = matchesNegativeTerms(card, termsList);
-        card.classList.toggle('tp-negative-filtered', isNeg);
-        if (isNeg) counts.neg++;
-
-        const isCatExcluded = catName && isPathExcluded(catName, rootGroup, excludedCats);
-        card.classList.toggle('tp-category-filtered', isCatExcluded);
-        if (isCatExcluded) counts.cat++;
-
-        const offerCount = extractOfferCount(card);
-        if (offerCount > 0) pageHasOffers = true;
-        const isLowOffers = pageHasOffers && CONFIG.MIN_OFFERS > 0 && offerCount < CONFIG.MIN_OFFERS;
-        card.classList.toggle('tp-min-offers-filtered', isLowOffers);
-        if (isLowOffers) counts.min++;
-
-        // 3. Best Price Highlighting
-        if (activeStores.length === 0) {
-          card.classList.remove('tp-is-cheapest', 'tp-not-cheapest', 'tp-no-store-offer');
-          card.querySelector('.tp-best-price-badge')?.remove();
-        } else {
-          let matchedRow = null;
-          for (const row of card.querySelectorAll('.Plugin_DealerRelProdPriceInfo')) {
-            const titleEl = row.querySelector('.title');
-            if (titleEl) {
-              const rowStoreNormalized = normalizeName(titleEl.textContent);
-              if (activeStores.some(store => rowStoreNormalized.includes(store) || store.includes(rowStoreNormalized))) {
-                matchedRow = row;
-                break;
-              }
-            }
-          }
-
-          if (matchedRow) {
-            const storePriceEl = CONFIG.USE_SHIPPING_PRICE
-              ? (matchedRow.querySelector('.shippingPrice .Plugin_Price') || matchedRow.querySelector('.productPrice .Plugin_Price'))
-              : (matchedRow.querySelector('.productPrice .Plugin_Price') || matchedRow.querySelector('.shippingPrice .Plugin_Price'));
-            const storePrice = storePriceEl ? parsePrice(storePriceEl.textContent) : 0;
-
-            const bestPriceEl = CONFIG.USE_SHIPPING_PRICE
-              ? (card.querySelector('.price_information_product .shippingPrice .Plugin_Price') || card.querySelector('.price_information_product .productPrice .Plugin_Price') || card.querySelector('.priceContainer.shippingPrice .Plugin_Price') || card.querySelector('.priceContainer.productPrice .Plugin_Price'))
-              : (card.querySelector('.price_information_product .productPrice .Plugin_Price') || card.querySelector('.price_information_product .shippingPrice .Plugin_Price') || card.querySelector('.priceContainer.productPrice .Plugin_Price') || card.querySelector('.priceContainer.shippingPrice .Plugin_Price'));
-            const bestPrice = bestPriceEl ? parsePrice(bestPriceEl.textContent) : 0;
-
-            if (storePrice > 0 && bestPrice > 0 && storePrice <= bestPrice * (1 + CONFIG.MARGIN_PERCENT / 100)) {
-              card.classList.add('tp-is-cheapest');
-              card.classList.remove('tp-not-cheapest', 'tp-no-store-offer');
-              if (!card.querySelector('.tp-best-price-badge')) {
-                const badge = document.createElement('div');
-                badge.className = 'tp-best-price-badge';
-                badge.textContent = 'Best Price';
-                card.appendChild(badge);
-              }
-            } else {
-              card.classList.add(storePrice > 0 && bestPrice > 0 ? 'tp-not-cheapest' : 'tp-no-store-offer');
-              card.classList.remove('tp-is-cheapest', storePrice > 0 && bestPrice > 0 ? 'tp-no-store-offer' : 'tp-not-cheapest');
-              card.querySelector('.tp-best-price-badge')?.remove();
-            }
-          } else {
-            card.classList.add('tp-no-store-offer');
-            card.classList.remove('tp-is-cheapest', 'tp-not-cheapest');
-            card.querySelector('.tp-best-price-badge')?.remove();
-          }
-        }
-
-        // 3.5 Real Deal & Allzeit-Tiefstpreis Check
-        const badgeDifEl = card.querySelector('.badge-dif, [class*="badge-dif"]');
-
-        let realDealWrapper = card.querySelector('.tp-real-deal-wrapper');
-
-        if (stats && cardPrice > 0 && stats.tiefstpreis > 0) {
-          const isAllTimeLow = cardPrice <= stats.tiefstpreis * 1.01;
-          const isNonBest = !isAllTimeLow;
-
-          if (isNonBest && CONFIG.REAL_DEAL_FILTER_ACTIVE) {
-            card.classList.add('tp-non-bestpreis-filtered');
-            counts.nonBest++;
-          } else {
-            card.classList.remove('tp-non-bestpreis-filtered');
-          }
-
-          if (!realDealWrapper) {
-            realDealWrapper = document.createElement('div');
-            realDealWrapper.className = 'tp-real-deal-wrapper';
-            if (badgeDifEl) {
-              badgeDifEl.appendChild(realDealWrapper);
-            } else {
-              card.appendChild(realDealWrapper);
-            }
-          }
-
-          const targetStatus = isAllTimeLow ? 'low' : 'not-low';
-          const priceStr = cardPrice.toFixed(2);
-
-          // DOM Memoization: only re-render if status, pid, or price changed
-          if (realDealWrapper.dataset.tpPid !== pid || realDealWrapper.dataset.tpStatus !== targetStatus || realDealWrapper.dataset.tpPrice !== priceStr) {
-            realDealWrapper.dataset.tpPid = pid;
-            realDealWrapper.dataset.tpStatus = targetStatus;
-            realDealWrapper.dataset.tpPrice = priceStr;
-            realDealWrapper.innerHTML = '';
-
-            const badge = document.createElement('div');
-            const hasSignificantPeak = stats.hoechstpreis && stats.hoechstpreis > stats.tiefstpreis * 1.02;
-
-            if (isAllTimeLow) {
-              badge.className = 'tp-real-deal-sub-badge tp-is-alltime-low';
-              let peakContext = '';
-              if (hasSignificantPeak) {
-                const peakDropPct = Math.round(((stats.hoechstpreis - cardPrice) / stats.hoechstpreis) * 100);
-                peakContext = ` (-${peakDropPct}% vom Höchstpreis CHF ${stats.hoechstpreis.toFixed(2)})`;
-              }
-              badge.title = `Aktueller Preis (CHF ${priceStr}) ist der historische Allzeit-Tiefstpreis!${peakContext}`;
-              badge.innerHTML = `🌟 Allzeit-Tiefstpreis`;
-            } else {
-              const markupPct = Math.round(((cardPrice - stats.tiefstpreis) / stats.tiefstpreis) * 100);
-              const isSevere = markupPct >= 50;
-              badge.className = `tp-real-deal-sub-badge tp-is-not-low ${isSevere ? 'tp-is-severe-markup' : ''}`;
-              const peakContext = hasSignificantPeak ? ` | Höchstpreis: CHF ${stats.hoechstpreis.toFixed(2)}` : '';
-              badge.title = `Historischer Tiefstpreis lag bei CHF ${stats.tiefstpreis.toFixed(2)} (+${markupPct}% Aufschlag)${peakContext}`;
-              badge.innerHTML = `⚠️ +${markupPct}%`;
-            }
-            realDealWrapper.appendChild(badge);
-          }
-
-          // Historical Tiefstpreis display right below current price
-          let histPriceEl = card.querySelector('.tp-card-historical-price');
-          if (isNonBest) {
-            if (!histPriceEl) {
-              histPriceEl = document.createElement('div');
-              histPriceEl.className = 'tp-card-historical-price';
-              const priceContainer = card.querySelector('.Plugin_PriceInformation, .price_information_product') ||
-                                     cardPriceEl?.closest('.priceContainer, .Plugin_PriceInformation, .price_information_product') ||
-                                     cardPriceEl?.parentElement ||
-                                     card;
-              priceContainer.appendChild(histPriceEl);
-            }
-            histPriceEl.textContent = `Tiefstpreis: CHF ${stats.tiefstpreis.toFixed(2)}`;
-            histPriceEl.title = `Historischer Tiefstpreis lag bei CHF ${stats.tiefstpreis.toFixed(2)}`;
-          } else if (histPriceEl) {
-            histPriceEl.remove();
-          }
-        } else {
-          card.classList.remove('tp-non-bestpreis-filtered');
-          card.querySelector('.tp-card-historical-price')?.remove();
-          if (pid && (isNeueFeed || badgeDifEl)) {
-            if (!realDealWrapper) {
-              realDealWrapper = document.createElement('div');
-              realDealWrapper.className = 'tp-real-deal-wrapper';
-              if (badgeDifEl) {
-                badgeDifEl.appendChild(realDealWrapper);
-              } else {
-                card.appendChild(realDealWrapper);
-              }
-            }
-
-            if (realDealWrapper.dataset.tpStatus !== 'unchecked' || (!realDealWrapper.querySelector('.tp-card-check-deal-btn') && !realDealWrapper.querySelector('.tp-real-deal-sub-badge'))) {
-              realDealWrapper.dataset.tpPid = pid;
-              realDealWrapper.dataset.tpStatus = 'unchecked';
-              realDealWrapper.removeAttribute('data-tp-price');
-              realDealWrapper.innerHTML = '';
-              const checkBtn = document.createElement('button');
-              checkBtn.type = 'button';
-              checkBtn.className = 'tp-card-check-deal-btn';
-              checkBtn.title = 'Tiefstpreis und echten Allzeit-Rabatt prüfen';
-              checkBtn.innerHTML = `🔍 Tiefstpreis?`;
-              checkBtn.onclick = async e => {
-                e.preventDefault();
-                e.stopPropagation();
-                e.stopImmediatePropagation();
-                checkBtn.classList.add('tp-loading');
-                checkBtn.innerHTML = `⏳ Prüfe...`;
-                const fetchedStats = await fetchSingleProductPriceStats(pid);
-                if (fetchedStats) {
-                  processListings();
-                } else {
-                  checkBtn.classList.remove('tp-loading');
-                  checkBtn.innerHTML = `⚠️ Nicht verfügbar`;
-                  setTimeout(() => {
-                    if (checkBtn && checkBtn.parentElement) checkBtn.innerHTML = `🔍 Tiefstpreis?`;
-                  }, 3000);
-                }
-              };
-              realDealWrapper.appendChild(checkBtn);
-            }
-          } else if (realDealWrapper) {
-            realDealWrapper.remove();
-          }
+        if (cd.isVerifiedNonBest && CONFIG.REAL_DEAL_FILTER_ACTIVE) {
+          counts.nonBest++;
         }
       }
 
-      // 4. Sorting
-      if (CONFIG.SORT_BY_OFFERS === 'discount-desc' && cards.length > 1) {
-        const parent = cards[0].parentElement;
-        if (parent) {
-          Array.from(cards).sort((a, b) => (extractCardDiscount(b) ?? -1) - (extractCardDiscount(a) ?? -1)).forEach(c => parent.appendChild(c));
-        }
-      } else if (pageHasOffers && CONFIG.SORT_BY_OFFERS !== 'none' && cards.length > 1) {
-        const parent = cards[0].parentElement;
-        if (parent) {
-          Array.from(cards).sort((a, b) => CONFIG.SORT_BY_OFFERS === 'desc' ? extractOfferCount(b) - extractOfferCount(a) : extractOfferCount(a) - extractOfferCount(b)).forEach(c => parent.appendChild(c));
-        }
+      // --- Render ---
+      for (const cd of cardDataList) {
+        renderCardEffects(cd, cd.filters, isNeueFeed, activeStores);
       }
 
-      // 5. Empty State Notice when all items are filtered out
-      const totalHidden = (counts.neg || 0) + (counts.cat || 0) + (counts.min || 0) + (counts.nonBest || 0);
-      const isRevealed = document.body.classList.contains('tp-reveal-filtered');
-      let emptyNotice = document.getElementById('tp-empty-state-notice');
+      // --- Sort ---
+      applySorting(cards, pageHasOffers);
 
-      if (cards.length > 0 && totalHidden >= cards.length && !isRevealed) {
-        if (!emptyNotice) {
-          emptyNotice = document.createElement('div');
-          emptyNotice.id = 'tp-empty-state-notice';
-          emptyNotice.className = 'tp-empty-state-notice';
-          const listParent = cards[0]?.parentElement;
-          if (listParent) {
-            listParent.insertBefore(emptyNotice, listParent.firstChild);
-          }
-        }
-        emptyNotice.innerHTML = `
-          <div>🚫 <strong>Alle ${cards.length} Angebote auf dieser Seite sind durch aktive Filter ausgeblendet.</strong></div>
-          <div class="tp-empty-state-actions">
-            <button class="tp-empty-state-btn" id="tp-empty-reveal-btn">👁️ Ausgeblendete anzeigen</button>
-            ${counts.nonBest > 0 ? '<button class="tp-empty-state-btn" id="tp-empty-disable-dealfilter-btn">🌟 Tiefstpreis-Filter ausschalten</button>' : ''}
-            <button class="tp-empty-state-btn" id="tp-empty-reset-btn">🔄 Filter zurücksetzen</button>
-          </div>
-        `;
-        emptyNotice.querySelector('#tp-empty-reveal-btn')?.addEventListener('click', () => {
-          document.body.classList.toggle('tp-reveal-filtered');
-          processListings();
-        });
-        emptyNotice.querySelector('#tp-empty-disable-dealfilter-btn')?.addEventListener('click', () => {
-          saveConfigKey('REAL_DEAL_FILTER_ACTIVE', false);
-          if (uiShadowRoot) {
-            const modalToggle = uiShadowRoot.getElementById('tp-real-deal-filter-toggle');
-            if (modalToggle) modalToggle.checked = false;
-          }
-          processListings();
-          showToast('Tiefstpreis-Filter deaktiviert');
-        });
-        emptyNotice.querySelector('#tp-empty-reset-btn')?.addEventListener('click', resetAllFilters);
-      } else if (emptyNotice) {
-        emptyNotice.remove();
-      }
-
+      // --- Empty state & filter bar ---
+      renderEmptyState(cards, counts);
       renderSuiteFilterBar(counts, pageHasOffers, isNeueFeed);
     } finally {
       isModifyingDOM = false;
@@ -2403,6 +2570,12 @@ const SHADOW_MODAL_STYLES = `
               <input type="number" id="tp-real-deal-min-val" min="5" max="95" step="5" value="30">
             </div>
           </div>
+          <div class="tp-section-header" style="color: #6366f1;">7. Import / Export</div>
+          <div class="tp-settings-group" style="display: flex; flex-direction: row; gap: 8px;">
+            <button type="button" id="tp-export-config-btn" class="tp-btn tp-btn-secondary" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;">📥 Export (JSON)</button>
+            <button type="button" id="tp-import-config-btn" class="tp-btn tp-btn-secondary" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;">📤 Import (JSON)</button>
+            <input type="file" id="tp-import-config-file" accept=".json" style="display: none;">
+          </div>
         </div>
       `;
       section = tempDiv.firstElementChild;
@@ -2448,6 +2621,10 @@ const SHADOW_MODAL_STYLES = `
     const dur180 = shadow.getElementById('tp-dur-180');
     const dur365 = shadow.getElementById('tp-dur-365');
     const dur730 = shadow.getElementById('tp-dur-730');
+
+    const exportBtn = shadow.getElementById('tp-export-config-btn');
+    const importBtn = shadow.getElementById('tp-import-config-btn');
+    const importFile = shadow.getElementById('tp-import-config-file');
 
     function syncFieldsFromConfig() {
       if (CONFIG.MODE === 'highlight-only') modeHighlight.checked = true;
@@ -2530,6 +2707,57 @@ const SHADOW_MODAL_STYLES = `
       }
     });
 
+    exportBtn?.addEventListener('click', () => {
+      const exportData = {
+        _meta: {
+          version: (typeof GM_info !== 'undefined' && GM_info?.script?.version) || '2.13.0',
+          exported: new Date().toISOString()
+        },
+        config: { ...CONFIG }
+      };
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `toppreise-suite-config-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showToast('Einstellungen exportiert');
+    });
+
+    importBtn?.addEventListener('click', () => {
+      importFile?.click();
+    });
+
+    importFile?.addEventListener('change', e => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          const importConfig = data.config || data;
+          let count = 0;
+          for (const [key, val] of Object.entries(importConfig)) {
+            if (key in DEFAULTS && key !== 'DEBUG') {
+              saveConfigKey(key, val);
+              count++;
+            }
+          }
+          updateBodyClasses();
+          processListings();
+          syncFieldsFromConfig();
+          showToast(`${count} Einstellungen importiert`);
+        } catch (err) {
+          showToast('Import fehlgeschlagen: Ungültige JSON-Datei');
+        }
+      };
+      reader.readAsText(file);
+      e.target.value = '';
+    });
+
     const openModal = () => {
       syncFieldsFromConfig();
       if (typeof dialog.showModal === 'function') dialog.showModal();
@@ -2602,6 +2830,30 @@ const SHADOW_MODAL_STYLES = `
   });
 
   observer.observe(document.documentElement, { childList: true, subtree: true });
+
+  document.addEventListener('keydown', e => {
+    // Skip if modifier keys other than none
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    // Skip if user is typing in an input/textarea/select or contenteditable
+    const tag = document.activeElement?.tagName;
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag) || document.activeElement?.isContentEditable) return;
+    // Skip if inside shadow root (settings modal)
+    if (document.activeElement?.shadowRoot || uiShadowRoot?.activeElement) return;
+
+    if (e.key === '/') {
+      const input = document.getElementById('tp-inline-negative-input');
+      if (input) {
+        e.preventDefault();
+        input.focus();
+        input.select();
+      }
+    } else if (e.key === 'Escape') {
+      const input = document.getElementById('tp-inline-negative-input');
+      if (input && document.activeElement === input) {
+        input.blur();
+      }
+    }
+  });
 
   if (self.navigation?.addEventListener) {
     self.navigation.addEventListener('navigatesuccess', () => {

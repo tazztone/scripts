@@ -176,19 +176,23 @@ Subcategories appear in two distinct patterns across the site:
 - **Method**: `POST`
 - **Content-Type**: `application/x-www-form-urlencoded`
 - **Required Header**: `X-Requested-With: XMLHttpRequest`
-- **Form Body**: `pcspagdpi={productId}&pcspagdfdt=0000-00-00&pcspagdtd=&p_pc_ch=&lang=de`
-- **Response Payload**: JSON Array of 2 time-series:
-  - `data[0]`: Array of `[timestamp_ms, price_without_shipping]` tuples spanning the entire tracked product lifetime.
-  - `data[1]`: Array of `[timestamp_ms, price_with_shipping]` tuples.
-- **Use Cases**: Custom window slicing (e.g. 30-day / 90-day lowest price), historical median/average pricing, or sparkline rendering.
+- **Form Body**: `p_pc_pid={productId}` (or legacy `pcspagdpi={productId}&pcspagdfdt=0000-00-00&pcspagdtd=&p_pc_ch=&lang=de`)
+- **Response Payload**: JSON Object with `series` / `data` array containing `[timestamp_ms, price]` tuples:
+  - `[[timestamp_1, price_1], [timestamp_2, price_2], ...]` spanning the tracked price progression.
+- **Sparkline Integration (v2.13.0)**:
+  - Parallel fetch during price stats retrieval (`fetchPriceTimeSeries(productId)`) with `Promise.all`.
+  - Cached alongside price stats in `localStorage` under `tp_hist_v1_{productId}`.
+  - Inline SVG polyline rendering (60x18px) with color encoding: Emerald `#10b981` (trending down/stable) vs Rose `#ef4444` (trending up).
 
 ### 3. Real Deal vs Feed-Diff Discrepancy & Validation Logic
 - **Feed Badge Discrepancy**: The `-XX%` badge on `/neue-toppreise` (`.badge-dif`) represents only the immediate price drop compared to the previous or baseline listing. It frequently tags non-bestpreise as massive discounts even when earlier historical prices were far lower.
 - **Validation Formulas**:
-  - **Is All-Time Bestpreis**: $\text{CurrentPrice} \le \text{Tiefstpreis} + 0.05$
+  - **Is All-Time Bestpreis**: $\text{CurrentPrice} \le \text{Tiefstpreis} \times 1.01$
   - **Real Deal Discount % (vs Historical High)**: $\frac{\text{Höchstpreis} - \text{CurrentPrice}}{\text{Höchstpreis}} \times 100$
   - **Inflation Gap % (vs Historical Low)**: $\frac{\text{CurrentPrice} - \text{Tiefstpreis}}{\text{Tiefstpreis}} \times 100$
 - **Caching & Rate-Limiting Strategy**:
-  - Cache responses in `sessionStorage` / `localStorage` under `tp_hist_{productId}` with a 6-hour TTL to prevent redundant network queries.
-  - Query in background batches prioritized for cards with high feed discount thresholds ($\ge 35\%$).
+  - Cache responses in `localStorage` under `tp_hist_v1_{productId}` with a 12-hour TTL to prevent redundant network queries.
+  - LRU/cap pruning maintaining max 300 cached entries.
+  - Query on-demand via single card `🔍 Tiefstpreis?` button or user-initiated batch check with rate-limiting delays (~120ms between items).
+
 
