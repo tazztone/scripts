@@ -297,16 +297,17 @@ $$\text{Score} = \max\left(0, \text{round}\left((1 - W) \times D_{\text{median}}
 
 ---
 
-## 11. Cross-Row Feed Sorting & Container Unification Engine (v2.18.0)
+## 11. Safe Grid-Scoped Feed Sorting & Deduplicated Filter Architecture (v2.18.2)
 
-### 1. Root-Cause Analysis: Multi-Row Bootstrap Isolation
-- **The Issue**: On `/neue-toppreise` and other feed pages, product cards are divided across multiple `<div class="row">` elements (e.g. 4 cards per row). The previous grid traversal stopped at `row 1` because `cards[0]` and `cards[1]` were both contained within the first row. As a result, only the first 4 cards were sorted among themselves, while cards in subsequent rows were completely ignored.
+### 1. Root-Cause Analysis: Multi-Row Bootstrap Traversal vs. Layout Destruction
+- **The Issue**: On `/neue-toppreise`, `#Page_ListTopPriceReductionProducts` is the top-level page wrapper containing the 2-column page layout (Left Sidebar + Main Content Column with Navigation Tabs, Timeframe Filter, and Product Grid). Querying `listContainer.querySelectorAll('.row')` and setting `display: none !important` on `allRows.slice(1)` obliterated the entire website layout (sidebar, tabs, header). Furthermore, double-counting filtered cards (`counts.neg + counts.bestpreiseHidden >= cards.length`) falsely triggered empty state notices.
 - **The Solution**:
-  1. *Authoritative Lowest Common Ancestor (`findListContainer`)*: Walks the DOM to find the common ancestor containing *all* cards on the page (or known top-level list containers like `#Page_ListTopPriceReductionProducts`, `#Page_ListTop100Products`, `.mixedBrowsingList`).
-  2. *Atomic Column Wrapper Resolver (`getSortableItem`)*: Distinguishes between direct `<a>` product cards and responsive grid column wrappers (`.col-12, .col-sm-6, .col-md-4, .col-md-3, [class*="col-"]`), ensuring that column sizing wrappers are moved rather than either breaking column layout or moving entire monolithic `.row` blocks.
-  3. *Primary Flex Container Unification*: All sortable items across all rows are appended into the primary `.row` flex container (`display: flex; flex-wrap: wrap;`), allowing column wrappers to flow seamlessly across rows in strict descending Deal-Score order.
-  4. *Secondary Row Gap Suppression*: Empty secondary rows receive `.tp-empty-row-hidden` (`display: none !important`) during active sorting to eliminate layout gaps.
-  5. *100% Reversible Multi-Parent Restoration*: Permanently records `dataset.tpInitialOrder` and `dataset.tpOrigParentId` on each item. When sorting is deactivated or reset to natural order, every card/column is returned to its exact original parent row in initial order, and secondary rows are unhidden.
+  1. *Safe Grid Container Resolver (`findGridContainer`)*: Walks the DOM to find the immediate parent container of the cards (`cards[0].parentElement` or lowest common ancestor strictly below any layout/sidebar rows like `#product-list`, `.product-grid`, `.mixedBrowsingList`).
+  2. *Direct In-Grid Reordering*: Sorts elements strictly within `gridContainer` using DOM `appendChild` and CSS `order`, eliminating whole-page `.row` querying and destructive `display: none` mutations.
+  3. *Deduplicated Filter Counting*: `counts.bestpreiseHidden` is only incremented for cards not already filtered by negative keywords or category exclusions.
+  4. *Empty State Guard*: `renderEmptyState` exits immediately if `counts.bestpreiseDeals > 0`, ensuring empty notices never appear when qualifying deals exist.
+  5. *Authentic DOM Test Fixture*: `mock_toppreise.html` mirrors live Toppreise with a 2-column layout (Left Sidebar + Tabs + Timeframe Filter + Product Grid) to prevent layout regressions.
+
 
 
 
