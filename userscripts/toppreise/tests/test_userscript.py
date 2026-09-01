@@ -960,6 +960,150 @@ def test_config_import_applies_settings(page: Page):
     assert config_state['inlineNegInput'] == 'ImportedNegativeTerm'
 
 
+def test_config_import_invalid_json_shows_error_toast(page: Page):
+    page.click('#tp-root >> #tp-settings-fab')
+    page.wait_for_selector('#tp-root >> #tp-settings-dialog', state='visible')
+
+    page.evaluate("""() => {
+        const shadow = document.getElementById('tp-root').shadowRoot;
+        const fileInput = shadow.getElementById('tp-import-config-file');
+        const blob = new Blob(['{ this is not valid json...'], { type: 'application/json' });
+        const file = new File([blob], 'corrupt.json', { type: 'application/json' });
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        fileInput.files = dt.files;
+        fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+    }""")
+
+    page.wait_for_timeout(200)
+    toast = page.locator('#tp-root >> .tp-toast')
+    assert toast.is_visible()
+    assert 'Import fehlgeschlagen' in (toast.text_content() or '')
+
+
+def test_config_import_ignores_unknown_and_debug_keys(page: Page):
+    page.click('#tp-root >> #tp-settings-fab')
+    page.wait_for_selector('#tp-root >> #tp-settings-dialog', state='visible')
+
+    page.evaluate("""() => {
+        const shadow = document.getElementById('tp-root').shadowRoot;
+        const fileInput = shadow.getElementById('tp-import-config-file');
+        const payload = {
+            config: {
+                UNRECOGNIZED_SECURITY_KEY: 'exploit',
+                DEBUG: false,
+                MARGIN_PERCENT: 4.2
+            }
+        };
+        const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+        const file = new File([blob], 'safe_config.json', { type: 'application/json' });
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        fileInput.files = dt.files;
+        fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+    }""")
+
+    page.wait_for_timeout(200)
+    res = page.evaluate("""() => ({
+        margin: window.ToppreiseSuite?.CONFIG?.MARGIN_PERCENT,
+        unknown: window.ToppreiseSuite?.CONFIG?.UNRECOGNIZED_SECURITY_KEY,
+        debug: window.ToppreiseSuite?.CONFIG?.DEBUG
+    })""")
+
+    assert res['margin'] == 4.2
+    assert res['unknown'] is None
+    # DEBUG is preserved and not overwritten
+    assert res['debug'] is True
+
+
+def test_filter_bar_stepper_buttons(page: Page):
+    # Reset min offers
+    page.evaluate("""() => {
+        window.ToppreiseSuite.CONFIG.MIN_OFFERS = 0;
+        window.ToppreiseSuite.processListings();
+    }""")
+
+    val_span = page.locator('#tp-bar-min-val')
+    plus_btn = page.locator('#tp-bar-min-plus')
+    minus_btn = page.locator('#tp-bar-min-minus')
+
+    assert val_span.text_content() == '0'
+
+    plus_btn.click()
+    assert val_span.text_content() == '1'
+    assert page.evaluate("() => window.ToppreiseSuite?.CONFIG?.MIN_OFFERS") == 1
+
+    plus_btn.click()
+    assert val_span.text_content() == '2'
+    assert page.evaluate("() => window.ToppreiseSuite?.CONFIG?.MIN_OFFERS") == 2
+
+    minus_btn.click()
+    assert val_span.text_content() == '1'
+    assert page.evaluate("() => window.ToppreiseSuite?.CONFIG?.MIN_OFFERS") == 1
+
+
+def test_inline_negative_input_clear_button(page: Page):
+    inp = page.locator('#tp-inline-negative-input')
+    clear_btn = page.locator('#tp-clear-neg-btn')
+
+    inp.fill('QuickClearTest')
+    inp.dispatch_event('input')
+    assert clear_btn.is_visible()
+    assert page.evaluate("() => window.ToppreiseSuite?.CONFIG?.NEGATIVE_TERMS") == 'QuickClearTest'
+
+    clear_btn.click()
+    assert inp.input_value() == ''
+    assert not clear_btn.is_visible()
+    assert page.evaluate("() => window.ToppreiseSuite?.CONFIG?.NEGATIVE_TERMS") == ''
+
+
+def test_negative_terms_multi_delimiter_support(page: Page):
+    # Test combination of newline, semicolon, and comma delimiters
+    page.evaluate("""() => {
+        window.ToppreiseSuite.CONFIG.NEGATIVE_TERMS = "GeForce;\\n4080, NonExistentTerm";
+        window.ToppreiseSuite.processListings();
+    }""")
+
+    # Both card 1 (contains GeForce) and card 2 (contains 4080) should be filtered
+    page.wait_for_selector('#card-cheapest.tp-negative-filtered', state='attached')
+    page.wait_for_selector('#card-expensive.tp-negative-filtered', state='attached')
+
+    assert 'tp-negative-filtered' in (page.locator('#card-cheapest').get_attribute('class') or '')
+    assert 'tp-negative-filtered' in (page.locator('#card-expensive').get_attribute('class') or '')
+
+
+def test_sparkline_handles_edge_cases(page: Page):
+    # 1 data point only -> not enough for a trend line, no sparkline rendered
+    page.evaluate("""() => {
+        const stats = {
+            tiefstpreis: 1800.0,
+            hoechstpreis: 2200.0,
+            timeSeries: [[1672531199, 1800.0]],
+            time: Date.now()
+        };
+        localStorage.setItem('tp_hist_v1_797571', JSON.stringify(stats));
+        window.ToppreiseSuite?.processListings?.();
+    }""")
+    assert page.locator('#card-cheapest .tp-sparkline').count() == 0
+
+    # Flat price trend (equal start and end) -> renders green (price did not go up)
+    page.evaluate("""() => {
+        const stats = {
+            tiefstpreis: 1800.0,
+            hoechstpreis: 1800.0,
+            timeSeries: [[1672531199, 1800.0], [1675209599, 1800.0]],
+            time: Date.now()
+        };
+        localStorage.setItem('tp_hist_v1_797571', JSON.stringify(stats));
+        window.ToppreiseSuite?.processListings?.();
+    }""")
+    sparkline = page.locator('#card-cheapest .tp-sparkline')
+    assert sparkline.is_visible()
+    polyline = page.locator('#card-cheapest .tp-sparkline polyline')
+    assert polyline.get_attribute('stroke') == '#10b981'
+
+
+
 
 
 
