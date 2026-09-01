@@ -361,12 +361,22 @@ $$\text{Score} = \max\left(0, \text{round}\left((1 - W) \times D_{\text{median}}
 - **Architecture**: Render a dedicated `.tp-badge-score-breakdown` sub-pill directly underneath the circle badge displaying both scores: `Rek: -X% · Ø: -Y%` (e.g. `Rek: -11% · Ø: -37%`).
 
 ### Hover Pulsing / Jitter Elimination
-- **Problem**: Card hover rules applied `transform: translateY(-2px) !important;`. Hovering near the card boundaries or child action buttons shifted the card by $-2\text{px}$, causing cursor loss $\rightarrow$ hover drop $\rightarrow$ downward shift $\rightarrow$ hover re-trigger $\rightarrow$ rapid visual jitter / pulsing.
-- **Fix**: Removed `translateY(-2px)` and transition transforms from card hover states, using non-layout-shifting `filter: brightness(...)` and `box-shadow`.
+- **Problem**: In addition to `translateY(-2px)`, several factors caused continuous pulsing and cursor boundary jitter:
+  1. Infinite `@keyframes` animations (`tpRecordPulse`, `tpHaloPulse`, `tpPulse`) continuously breathing box-shadow and scaling badges.
+  2. `transform: scale(...)` on badge hover (`1.08`), sparkline hover (`1.08`), and quick-block hover (`1.04`) shifting layout boundaries when the cursor crossed element edges.
+  3. `filter: brightness(1.15)` transitions on `.tp-heatmap-active:hover`.
+- **Fix**:
+  1. Removed all infinite pulsing keyframe animations in favor of static, clean glowing box-shadows.
+  2. Removed all `transform: scale(...)` from hover states across badges, sparklines, and quick blocks.
+  3. Replaced brightness transitions with stable box-shadows (`box-shadow: 0 4px 16px rgba(0,0,0,0.45)`).
 
-### Mixed Row Card Height Harmonization
-- **Problem**: Verified Bestpreise cards stacked the historical price subline and sparkline vertically, increasing height by $+35\text{px}$. In mixed rows (verified cards + unscanned cards), this caused height discrepancies.
-- **Fix**: Merged historical price subline and miniature sparkline ($44 \times 13\text{px}$) into a single compact horizontal `.tp-card-subline-row`. Set a standard `min-height: 114px` on `.Plugin_Product.medium-box`.
+### Card Height & Empty Void Space Harmonization
+- **Problem**: On the production site, product cards use Bootstrap's `.row.h-100 > .col.d-flex.flex-column.justify-content-between`. When cards were assigned `min-height: 114px` or when rows expanded to match the tallest item, `.justify-content-between` pushed the title to the very top and the price to the very bottom, creating a large empty void in the middle of the cards.
+- **Mock DOM Fidelity Gap**: `mock_toppreise.html` previously used flat child elements without `.row.h-100` and `.col.d-flex.flex-column.justify-content-between`, masking this vertical stretching in local unit tests.
+- **Fix**:
+  1. Updated `mock_toppreise.html` with the full production hierarchy (`.row.h-100`, `.col-auto` image container, and `.col.d-flex.flex-column.justify-content-between`).
+  2. Removed artificial `min-height: 114px` from `.Plugin_Product.medium-box`.
+  3. Overrode `.justify-content-between` on card detail columns with `justify-content: flex-start !important; gap: 2px !important;` and set `margin-top: auto` on `.Plugin_PriceInformation` so title, dealer, price, and price sublines stay grouped naturally and compactly.
 
 ### Weight Slider 0% Falsy Fallback Bug
 - **Problem**: `parseInt(bestpreiseWeightVal.value) || 50` in settings modal save handler evaluated `0 || 50` to `50` ($0.50$), resetting 0% Neuer Rekord to 50/50 every save.

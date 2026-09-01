@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.18.10
+// @version      2.18.11
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, checks real all-time Tiefstpreise, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -63,7 +63,7 @@ const STYLES = `
     border: 1.5px solid var(--tp-heat-border) !important;
     border-color: var(--tp-heat-border) !important;
     box-shadow: var(--tp-heat-glow, 0 2px 8px rgba(0,0,0,0.25)) !important;
-    transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, filter 0.2s ease !important;
+    transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease !important;
     --darkreader-inline-bgcolor: transparent !important;
     --darkreader-inline-bgimage: var(--tp-heat-bg) !important;
     --darkreader-inline-border: var(--tp-heat-border) !important;
@@ -75,8 +75,7 @@ const STYLES = `
   .tp-heatmap-active:hover,
   .Plugin_Product.tp-heatmap-active:hover,
   .mixedBrowsingListProduct.tp-heatmap-active:hover {
-    filter: brightness(1.15) !important;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.35), var(--tp-heat-glow, none) !important;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.45), var(--tp-heat-glow, none) !important;
   }
   .tp-heatmap-active .badge.badge-dif,
   .Plugin_Product.tp-heatmap-active .badge.badge-dif {
@@ -200,7 +199,7 @@ const STYLES = `
     user-select: none !important;
     touch-action: manipulation !important;
     transform-origin: center center !important;
-    transition: transform 0.12s ease-out, box-shadow 0.12s ease-out, border-color 0.12s ease-out !important;
+    transition: box-shadow 0.15s ease-out, border-color 0.15s ease-out !important;
   }
   .badge.badge-dif.tp-deal-badge-interactive *,
   .badge-dif.tp-deal-badge-interactive * {
@@ -208,13 +207,12 @@ const STYLES = `
   }
   .badge.badge-dif.tp-deal-badge-interactive:hover,
   .badge-dif.tp-deal-badge-interactive:hover {
-    transform: scale(1.08) !important;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45) !important;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5) !important;
     z-index: 30 !important;
   }
   .badge.badge-dif.tp-deal-badge-interactive:active,
   .badge-dif.tp-deal-badge-interactive:active {
-    transform: scale(0.95) !important;
+    opacity: 0.9 !important;
   }
   .tp-badge-loupe-icon {
     position: absolute !important;
@@ -224,51 +222,34 @@ const STYLES = `
     line-height: 1 !important;
     filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.8)) !important;
     pointer-events: none !important;
-    transition: transform 0.12s ease-out !important;
-  }
-  .badge.badge-dif.tp-deal-badge-interactive:hover .tp-badge-loupe-icon {
-    transform: scale(1.15) rotate(-10deg) !important;
   }
   .badge.badge-dif.tp-deal-loading,
   .badge-dif.tp-deal-loading {
     cursor: wait !important;
     opacity: 0.85 !important;
-    animation: tpPulse 1.2s infinite ease-in-out !important;
   }
-  @keyframes tpPulse {
-    0%, 100% { transform: scale(1); opacity: 0.85; }
-    50% { transform: scale(1.06); opacity: 1; }
-  }
-  /* 3A: Verified New Record Low: Glowing Pulsing Golden Diamond Halo */
+  /* 3A: Verified New Record Low: Radiant Solid Golden Diamond Halo */
   .badge.badge-dif.tp-deal-new-record,
   .badge-dif.tp-deal-new-record {
     background: linear-gradient(135deg, #78350f 0%, #b45309 50%, #f59e0b 100%) !important;
-    border-color: #fbbf24 !important;
-    box-shadow: 0 0 0 2.5px #f59e0b, 0 0 18px rgba(245, 158, 11, 0.7) !important;
-    animation: tpRecordPulse 2.4s infinite ease-in-out !important;
+    border: 1.5px solid #fbbf24 !important;
+    box-shadow: 0 0 0 2px #f59e0b, 0 0 14px rgba(245, 158, 11, 0.6) !important;
     color: #ffffff !important;
   }
-  @keyframes tpRecordPulse {
-    0%, 100% { box-shadow: 0 0 0 2.5px #f59e0b, 0 0 14px rgba(245, 158, 11, 0.55); }
-    50% { box-shadow: 0 0 0 3.5px #fbbf24, 0 0 24px rgba(251, 191, 36, 0.8); }
-  }
-  /* 3B: Verified All-Time Low: Glowing Pulsing Emerald Halo */
+  /* 3B: Verified All-Time Low: Emerald Halo */
   .badge.badge-dif.tp-deal-alltime-low,
   .badge-dif.tp-deal-alltime-low {
-    box-shadow: 0 0 0 2.5px #10b981, 0 0 16px rgba(16, 185, 129, 0.75) !important;
-    border-color: #10b981 !important;
-    animation: tpHaloPulse 2.4s infinite ease-in-out !important;
-  }
-  @keyframes tpHaloPulse {
-    0%, 100% { box-shadow: 0 0 0 2.5px #10b981, 0 0 14px rgba(16, 185, 129, 0.6); }
-    50% { box-shadow: 0 0 0 3.5px #34d399, 0 0 22px rgba(52, 211, 153, 0.85); }
+    background: linear-gradient(135deg, #064e3b 0%, #047857 100%) !important;
+    border: 1.5px solid #10b981 !important;
+    box-shadow: 0 0 0 2px #10b981, 0 0 12px rgba(16, 185, 129, 0.5) !important;
+    color: #ffffff !important;
   }
   /* 2A: Verified Non-Tiefstpreis: Amber Alert Morph with Shrunken Strikethrough */
   .badge.badge-dif.tp-deal-not-low,
   .badge-dif.tp-deal-not-low {
     background: linear-gradient(135deg, #78350f 0%, #b45309 100%) !important;
     border: 1.5px solid #f59e0b !important;
-    box-shadow: 0 0 12px rgba(245, 158, 11, 0.45) !important;
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.45) !important;
     color: #ffffff !important;
   }
   .badge.badge-dif.tp-deal-not-low.tp-is-severe-markup,
@@ -351,15 +332,21 @@ const STYLES = `
   }
   .tp-sparkline {
     opacity: 0.85;
-    transition: opacity 0.2s ease, transform 0.2s ease;
+    transition: opacity 0.2s ease;
     overflow: visible;
   }
   .tp-sparkline:hover {
-    opacity: 1;
-    transform: scale(1.08);
+    opacity: 1 !important;
   }
-  .Plugin_Product.medium-box {
-    min-height: 114px !important;
+  /* Prevent artificial void space and align product card column contents tightly */
+  .Plugin_Product .col.d-flex.flex-column,
+  .Plugin_Product .row.h-100 > .col {
+    justify-content: flex-start !important;
+    gap: 2px !important;
+  }
+  .Plugin_Product .Plugin_PriceInformation,
+  .Plugin_Product .price_information_product {
+    margin-top: auto !important;
   }
   .tp-bar-btn.tp-batch-active {
     background: rgba(245, 158, 11, 0.25) !important;
@@ -536,7 +523,6 @@ const STYLES = `
   .tp-card-quick-block:hover {
     background: #e11d48 !important;
     color: #fff !important;
-    transform: scale(1.04) !important;
   }
   #tp-suite-filter-bar {
     margin: 8px auto 12px !important;

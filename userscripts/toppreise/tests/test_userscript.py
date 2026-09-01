@@ -2383,6 +2383,72 @@ def test_hover_stability_no_translate_jitter(page: Page):
     assert not has_translate
 
 
+def test_card_layout_tight_flex_alignment_no_void_stretch(page: Page):
+    """
+    Validates that product card details columns are not stretched by Bootstrap justify-content-between,
+    ensuring tight natural grouping from top to bottom.
+    """
+    page.evaluate("""() => {
+        window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
+        window.ToppreiseSuite.processListings();
+    }""")
+
+    details_col_justify = page.evaluate("""() => {
+        const col = document.querySelector('#card-cheapest .col.d-flex.flex-column');
+        return col ? window.getComputedStyle(col).justifyContent : null;
+    }""")
+
+    assert details_col_justify in ('flex-start', 'start')
+
+
+def test_badge_and_card_no_pulsing_animations_or_scale_transforms(page: Page):
+    """
+    Validates that verified deal badges and cards do not run infinite pulse keyframes or scale transforms on hover.
+    """
+    page.evaluate("""() => {
+        localStorage.clear();
+        localStorage.setItem('tp_hist_v1_797571', JSON.stringify({
+            tiefstpreis: 1800,
+            previousLow: 2000,
+            hoechstpreis: 2800,
+            medianPrice: 2400,
+            isNewAllTimeLow: true,
+            dataPointCount: 20,
+            time: Date.now()
+        }));
+        window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
+        window.ToppreiseSuite.processListings();
+    }""")
+
+    badge_animation = page.evaluate("""() => {
+        const badge = document.querySelector('#card-cheapest .badge-dif');
+        return badge ? window.getComputedStyle(badge).animationName : 'none';
+    }""")
+
+    assert badge_animation in ('none', '', 'initial')
+
+    has_hover_scale = page.evaluate("""() => {
+        for (const sheet of document.styleSheets) {
+            try {
+                for (const rule of sheet.cssRules) {
+                    if (rule.selectorText && rule.selectorText.includes(':hover') && (
+                        rule.selectorText.includes('tp-deal-badge-interactive') ||
+                        rule.selectorText.includes('tp-card-quick-block') ||
+                        rule.selectorText.includes('tp-sparkline')
+                    )) {
+                        if (rule.style.transform && rule.style.transform.includes('scale')) {
+                            return true;
+                        }
+                    }
+                }
+            } catch (e) {}
+        }
+        return false;
+    }""")
+
+    assert not has_hover_scale
+
+
 
 
 
