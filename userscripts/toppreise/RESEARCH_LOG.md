@@ -385,3 +385,20 @@ $$\text{Score} = \max\left(0, \text{round}\left((1 - W) \times D_{\text{median}}
 ### Weight Preset Dropdown in Filter Bar
 - Added `#tp-bar-weight-wrapper` and `#tp-bar-weight-btn` in `#tp-suite-filter-bar` with 5 quick presets: `50/50`, `100% Rekord`, `70/30`, `30/70`, `100% Median`.
 
+---
+
+## 14. Toolbar Consolidation & Master Filter Toggle (v2.18.13)
+
+### Consolidation of "🌟 Nur Tiefstpreise" with Eye-Emoji "👁️"
+- **Rationale**: Having both `💎 Neue Bestpreise`, `🌟 Nur Tiefstpreise`, and `👁️` on the top filter bar created duplicate showing/hiding controls and congested the toolbar. `💎 Neue Bestpreise` curates deals via Deal-Score, while `👁️ <count>` tracks all filtered items.
+- **Implementation**: Removed `#tp-bar-real-deal-btn` from the toolbar. The `👁️ <count>` button now serves as the unified indicator and visual preview toggle for all filtered cards (negative terms, category blacklists, min offers, and non-best deals). The configuration option in Settings Section 6 remains intact for user preference.
+
+### Replacement of Destructive "🔄 Reset" with "⚡ Filter: AN / AUS"
+- **Problem**: The legacy `🔄 Reset` button in the toolbar unconditionally cleared `EXCLUDED_CATEGORIES`, causing users to accidentally delete their curated category blacklists.
+- **Solution**:
+  1. Replaced `🔄 Reset` with `⚡ Filter: AN / AUS` (`#tp-bar-filter-toggle`), which toggles `CONFIG.FILTERS_ENABLED`. When disabled (`⚡ Filter: AUS` in warm amber), all active filter rules are temporarily bypassed to show all cards, while **100% preserving** all negative terms, min offers, and excluded categories.
+  2. Category blacklist clearing remains exclusively in the category drawer's dedicated *"Alle freigeben"* button (`#tp-blocked-clear-all-btn`).
+  3. Added a 5-second **"Rückgängig" (Undo)** toast action to *"Alle freigeben"*, protecting users even against accidental clicks inside the category drawer.
+  4. Updated empty state notice action from destructive reset to `[ ⚡ Filter ausschalten ]`.
+
+

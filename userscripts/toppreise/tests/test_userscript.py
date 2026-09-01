@@ -169,24 +169,83 @@ def test_sort_by_offers(page: Page):
     assert first_card_id == 'card-cat-excluded'
 
 
-def test_reset_all_filters(page: Page):
-    # Add negative term and min offers filter
+def test_master_filter_toggle_and_category_preservation(page: Page):
+    # Add negative term, min offers filter, and blocked category
     page.click('#tp-root >> #tp-settings-fab')
     page.fill('#tp-root >> #tp-negative-terms-input', 'Case')
     page.fill('#tp-root >> #tp-min-offers-val', '10')
     page.click('#tp-root >> #tp-btn-save')
 
+    page.evaluate("""() => {
+        window.ToppreiseSuite.saveConfigKey('EXCLUDED_CATEGORIES', ['PATH:Hardware/Grafikkarten']);
+        window.ToppreiseSuite.processListings();
+    }""")
+
     page.wait_for_selector('#card-negative.tp-negative-filtered', state='attached')
     page.wait_for_selector('#card-low-offers.tp-min-offers-filtered', state='attached')
 
-    # Click Reset on top filter bar
-    page.click('#tp-bar-reset-btn')
+    filter_toggle = page.locator('#tp-bar-filter-toggle')
+    assert filter_toggle.is_visible()
+    assert 'Filter: AN' in (filter_toggle.text_content() or '')
+    assert 'tp-active' in (filter_toggle.get_attribute('class') or '')
 
-    # Verify all filters are cleared and cards restored to visible
+    # Click Master Filter Toggle to turn filters OFF (Filter: AUS)
+    filter_toggle.click()
+    page.wait_for_selector('#tp-bar-filter-toggle.tp-filter-off')
+    assert 'Filter: AUS' in (filter_toggle.text_content() or '')
+
+    # Verify cards are no longer filtered (all visible)
     page.wait_for_selector('#card-negative:not(.tp-negative-filtered)', state='visible')
     page.wait_for_selector('#card-low-offers:not(.tp-min-offers-filtered)', state='visible')
     assert 'tp-negative-filtered' not in (page.locator('#card-negative').get_attribute('class') or '')
     assert 'tp-min-offers-filtered' not in (page.locator('#card-low-offers').get_attribute('class') or '')
+
+    # Verify settings are 100% PRESERVED in storage
+    config = page.evaluate("() => window.ToppreiseSuite.CONFIG")
+    assert config['NEGATIVE_TERMS'] == 'Case'
+    assert config['MIN_OFFERS'] == 10
+    assert config['EXCLUDED_CATEGORIES'] == ['PATH:Hardware/Grafikkarten']
+
+    # Click Master Filter Toggle again to re-enable (Filter: AN)
+    filter_toggle.click()
+    page.wait_for_selector('#tp-bar-filter-toggle.tp-active')
+    assert 'Filter: AN' in (filter_toggle.text_content() or '')
+
+    # Verify cards are filtered again
+    page.wait_for_selector('#card-negative.tp-negative-filtered', state='attached')
+    page.wait_for_selector('#card-low-offers.tp-min-offers-filtered', state='attached')
+
+
+def test_category_drawer_clear_all_with_undo(page: Page):
+    # Block a category
+    page.evaluate("""() => {
+        window.ToppreiseSuite.saveConfigKey('EXCLUDED_CATEGORIES', ['PATH:Hardware/Grafikkarten']);
+        window.ToppreiseSuite.processListings();
+    }""")
+    page.wait_for_selector('#tp-bar-cats-toggle', state='visible')
+
+    # Open category drawer
+    page.click('#tp-bar-cats-toggle')
+    page.wait_for_selector('#tp-blocked-clear-all-btn', state='visible')
+
+    # Click "Alle freigeben"
+    page.click('#tp-blocked-clear-all-btn')
+    page.wait_for_timeout(200)
+
+    # Verify categories are cleared
+    assert page.evaluate("() => window.ToppreiseSuite.CONFIG.EXCLUDED_CATEGORIES") == []
+
+    # Toast with "Rückgängig" action should appear
+    undo_btn = page.locator('#tp-root >> .tp-toast-undo')
+    page.wait_for_selector('#tp-root >> .tp-toast-undo', state='visible')
+    assert 'Rückgängig' in (undo_btn.text_content() or '')
+
+    # Click "Rückgängig"
+    undo_btn.click()
+    page.wait_for_timeout(200)
+
+    # Verify categories are restored
+    assert page.evaluate("() => window.ToppreiseSuite.CONFIG.EXCLUDED_CATEGORIES") == ['PATH:Hardware/Grafikkarten']
 
 
 def test_quick_block_hidden_on_non_neue_toppreise_pages(page: Page):
@@ -452,10 +511,11 @@ def test_real_deal_filter_non_bestpreis_toggle(page: Page):
     page.click('#card-negative .badge-dif')
     page.wait_for_selector('#card-negative .badge-dif.tp-deal-not-low')
 
-    # Now click filter bar toggle "🌟 Nur Tiefstpreise"
-    real_deal_toggle = page.locator('#tp-bar-real-deal-btn')
-    assert real_deal_toggle.is_visible()
-    real_deal_toggle.click()
+    # Enable REAL_DEAL_FILTER_ACTIVE
+    page.evaluate("""() => {
+        window.ToppreiseSuite.saveConfigKey('REAL_DEAL_FILTER_ACTIVE', true);
+        window.ToppreiseSuite.processListings();
+    }""")
 
     # Card 3 (non-bestpreis) should be hidden with .tp-non-bestpreis-filtered
     page.wait_for_selector('#card-negative.tp-non-bestpreis-filtered', state='attached')
@@ -465,9 +525,10 @@ def test_real_deal_filter_non_bestpreis_toggle(page: Page):
     # Card 1 (all-time low) should still be visible
     assert page.locator('#card-cheapest').is_visible()
 
-    # Click reveal button (👁️) and verify card-negative is shown with outline
+    # Click reveal button (👁️) and verify card-negative is shown with outline preview
     page.click('#tp-bar-reveal-btn')
     assert page.locator('#card-negative').is_visible()
+    assert 'tp-reveal-filtered' in (page.locator('body').get_attribute('class') or '')
 
 
 def test_real_deal_settings_modal_controls(page: Page):
@@ -668,10 +729,11 @@ def test_empty_state_notice_and_actions(page: Page):
     page.click('#tp-bar-reveal-btn')
     page.wait_for_selector('#tp-empty-state-notice')
 
-    # Clicking "🔄 Filter zurücksetzen" clears filters and restores cards
-    page.click('#tp-empty-reset-btn')
+    # Clicking "⚡ Filter ausschalten" turns off master filter safely and restores cards
+    page.click('#tp-empty-toggle-filters-btn')
     assert not page.locator('#tp-empty-state-notice').is_visible()
     assert page.locator('#card-cheapest').is_visible()
+    assert page.evaluate("() => window.ToppreiseSuite.CONFIG.FILTERS_ENABLED") is False
 
 
 def test_real_deal_threshold_quick_selector(page: Page):
@@ -859,11 +921,10 @@ def test_deal_only_buttons_hidden_on_category_page(page: Page):
     # Listing features are visible
     assert page.locator('#tp-inline-negative-input').is_visible()
     assert page.locator('#tp-bar-reveal-btn').is_visible()
-    assert page.locator('#tp-bar-reset-btn').is_visible()
+    assert page.locator('#tp-bar-filter-toggle').is_visible()
 
     # Deal-feed-only features are hidden
     assert not page.locator('#tp-bar-heat-btn').is_visible()
-    assert not page.locator('#tp-bar-real-deal-btn').is_visible()
     assert not page.locator('#tp-bar-threshold-wrapper').is_visible()
 
 
@@ -1411,10 +1472,6 @@ def test_bestpreise_filter_bar_toggle_and_state(page: Page):
     assert 'tp-bestpreise-active' in (btn.get_attribute('class') or '')
     assert page.evaluate("() => window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE") is True
 
-    # Redundant controls: Real Deal filter toggle is disabled because Bestpreise mode already filters deals
-    real_deal_btn = page.locator('#tp-bar-real-deal-btn')
-    assert 'tp-disabled' in (real_deal_btn.get_attribute('class') or '')
-    assert 'Inaktiv' in (real_deal_btn.get_attribute('title') or '')
 
     # On-demand Check Deals button remains enabled and clickable
     batch_btn = page.locator('#tp-bar-batch-check-btn')
