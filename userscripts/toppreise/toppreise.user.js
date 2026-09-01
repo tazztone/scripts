@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.17.6
+// @version      2.17.7
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, checks real all-time Tiefstpreise, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -2719,17 +2719,26 @@ const SHADOW_MODAL_STYLES = `
     }
   }
 
-  function getSortItem(card, allCards) {
-    if (!card) return null;
-    // 1. Direct siblings: cards share the same parent container
-    if (allCards && allCards.length > 1 && allCards[0].parentElement === allCards[1].parentElement) {
-      return card;
+  function findCommonListContainer(cards) {
+    if (!cards || cards.length === 0) return null;
+    if (cards.length === 1) return cards[0].parentElement;
+    let parent = cards[0].parentElement;
+    while (parent && parent !== document.body) {
+      if (parent.contains(cards[1]) && (cards.length < 3 || parent.contains(cards[cards.length - 1]))) {
+        return parent;
+      }
+      parent = parent.parentElement;
     }
-    // 2. Individual column wrapper: each card has a separate parent whose parents match
-    if (allCards && allCards.length > 1 && card.parentElement && allCards[0].parentElement?.parentElement === allCards[1].parentElement?.parentElement) {
-      return card.parentElement;
+    return cards[0].parentElement;
+  }
+
+  function getDirectChildOfContainer(card, listContainer) {
+    if (!card || !listContainer) return card;
+    let cur = card;
+    while (cur && cur.parentElement && cur.parentElement !== listContainer && cur !== document.body) {
+      cur = cur.parentElement;
     }
-    return card;
+    return (cur && cur.parentElement === listContainer) ? cur : card;
   }
 
   function applySorting(cards, pageHasOffers) {
@@ -2742,9 +2751,8 @@ const SHADOW_MODAL_STYLES = `
       }
     });
 
-    const firstItem = getSortItem(cards[0], cards);
-    const parent = firstItem?.parentElement;
-    if (!parent) return;
+    const listContainer = findCommonListContainer(cards);
+    if (!listContainer) return;
 
     if (CONFIG.BESTPREISE_MODE_ACTIVE) {
       const scored = Array.from(cards).map(c => {
@@ -2752,15 +2760,15 @@ const SHADOW_MODAL_STYLES = `
         const dealData = computeDealScore(cd.stats, cd.cardPrice);
         return {
           card: c,
-          item: getSortItem(c, cards),
+          item: getDirectChildOfContainer(c, listContainer),
           score: dealData?.score ?? -1,
           initialOrder: parseInt(c.dataset.tpInitialOrder || '0', 10)
         };
       });
       scored.sort((a, b) => (b.score - a.score) || (a.initialOrder - b.initialOrder));
       scored.forEach(s => {
-        if (s.item && s.item.parentElement === parent) {
-          parent.appendChild(s.item);
+        if (s.item && s.item.parentElement === listContainer) {
+          listContainer.appendChild(s.item);
         }
       });
       return;
@@ -2768,14 +2776,14 @@ const SHADOW_MODAL_STYLES = `
 
     if (CONFIG.SORT_BY_OFFERS === 'discount-desc') {
       const sorted = Array.from(cards).map(c => ({
-        item: getSortItem(c, cards),
+        item: getDirectChildOfContainer(c, listContainer),
         disc: extractCardDiscount(c) ?? -1,
         initialOrder: parseInt(c.dataset.tpInitialOrder || '0', 10)
       }));
       sorted.sort((a, b) => (b.disc - a.disc) || (a.initialOrder - b.initialOrder));
       sorted.forEach(s => {
-        if (s.item && s.item.parentElement === parent) {
-          parent.appendChild(s.item);
+        if (s.item && s.item.parentElement === listContainer) {
+          listContainer.appendChild(s.item);
         }
       });
       return;
@@ -2783,14 +2791,14 @@ const SHADOW_MODAL_STYLES = `
 
     if (pageHasOffers && CONFIG.SORT_BY_OFFERS !== 'none') {
       const sorted = Array.from(cards).map(c => ({
-        item: getSortItem(c, cards),
+        item: getDirectChildOfContainer(c, listContainer),
         count: extractOfferCount(c),
         initialOrder: parseInt(c.dataset.tpInitialOrder || '0', 10)
       }));
       sorted.sort((a, b) => CONFIG.SORT_BY_OFFERS === 'desc' ? (b.count - a.count) : (a.count - b.count));
       sorted.forEach(s => {
-        if (s.item && s.item.parentElement === parent) {
-          parent.appendChild(s.item);
+        if (s.item && s.item.parentElement === listContainer) {
+          listContainer.appendChild(s.item);
         }
       });
       return;
@@ -2798,13 +2806,13 @@ const SHADOW_MODAL_STYLES = `
 
     // Natural order restoration: restore initial DOM order when no custom sort is active
     const natural = Array.from(cards).map(c => ({
-      item: getSortItem(c, cards),
+      item: getDirectChildOfContainer(c, listContainer),
       initialOrder: parseInt(c.dataset.tpInitialOrder || '0', 10)
     }));
     natural.sort((a, b) => a.initialOrder - b.initialOrder);
     natural.forEach(s => {
-      if (s.item && s.item.parentElement === parent) {
-        parent.appendChild(s.item);
+      if (s.item && s.item.parentElement === listContainer) {
+        listContainer.appendChild(s.item);
       }
     });
   }

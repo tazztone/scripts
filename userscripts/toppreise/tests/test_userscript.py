@@ -1739,6 +1739,64 @@ def test_unscanned_cards_no_stuck_loading_badge(page: Page):
     assert '🔍' in (uncached_badge.text_content() or '')
 
 
+def test_bestpreise_sorting_nested_wrappers(page: Page):
+    # Dynamically wrap each product card in a nested column/cell hierarchy to simulate real site layout:
+    # <div id="product-list"><div class="row"><div class="col-md-3 cell-1"><card1>...
+    page.evaluate("""() => {
+        const list = document.getElementById('product-list');
+        const cards = Array.from(list.querySelectorAll('.Plugin_Product'));
+        cards.forEach((c, idx) => {
+            const col = document.createElement('div');
+            col.className = 'col-md-3 custom-col-wrapper';
+            col.id = 'col-wrapper-' + idx;
+            list.appendChild(col);
+            col.appendChild(c);
+        });
+
+        // Set deal stats: Card 1 -> Score 15%, Card 2 -> Score 40%, Card 3 -> Score 25%
+        localStorage.setItem('tp_hist_v1_797571', JSON.stringify({
+            tiefstpreis: 1800,
+            hoechstpreis: 2400,
+            medianPrice: 2200,
+            isNewAllTimeLow: false,
+            dataPointCount: 10,
+            time: Date.now()
+        }));
+        localStorage.setItem('tp_hist_v1_797572', JSON.stringify({
+            tiefstpreis: 1100,
+            hoechstpreis: 3000,
+            medianPrice: 2750, // dMed 60% -> Score 30%
+            isNewAllTimeLow: false,
+            dataPointCount: 10,
+            time: Date.now()
+        }));
+        localStorage.setItem('tp_hist_v1_797573', JSON.stringify({
+            tiefstpreis: 15,
+            hoechstpreis: 50,
+            medianPrice: 40,
+            previousLow: 25,
+            isNewAllTimeLow: true,
+            realDiscountVsPrevLow: 40, // Score 50%
+            dataPointCount: 10,
+            time: Date.now()
+        }));
+
+        window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
+        window.ToppreiseSuite.processListings();
+    }""")
+
+    # Verify column wrappers were reordered descending by score:
+    # Card 3 (Score 50%) -> Card 2 (Score 30%) -> Card 1 (Score 15%)
+    wrapper_ids = page.evaluate("""() => {
+        const wrappers = Array.from(document.querySelectorAll('#product-list .custom-col-wrapper'));
+        return wrappers.map(w => w.querySelector('.Plugin_Product')?.id);
+    }""")
+    assert wrapper_ids[0] == 'card-negative'   # Card 3 (50%)
+    assert wrapper_ids[1] == 'card-expensive'  # Card 2 (30%)
+    assert wrapper_ids[2] == 'card-cheapest'   # Card 1 (15%)
+
+
+
 
 
 
