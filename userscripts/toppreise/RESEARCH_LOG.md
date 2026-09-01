@@ -250,6 +250,39 @@ $$\text{Score} = \max\left(0, \text{round}\left((1 - W) \times D_{\text{median}}
 - **Settings Modal Integration**: Managed under Section 6 with toggle and dynamic weight balance slider (`0%` 100% Median $\leftrightarrow$ `100%` 100% Neuer Rekord).
 - **Empty State**: Dedicated empty state with one-click disable button when 0 items on a page qualify.
 
+---
+
+## 10. Statistical Refinements & Feed Stability Engine (v2.17.0)
+
+### 1. Root-Cause Analysis: The "Disappearing / Stuck Hidden" Feed Bug
+- **Blind Exclusion of Unscanned Items**: Previously, entering Bestpreise mode added `.tp-bestpreise-hidden` (`display: none !important`) to all unscanned cards immediately before network requests commenced. Since ~90% of listings on `/neue-toppreise` are regular retailer price drops rather than all-time lows, the entire feed vanished into a blank screen.
+- **Grid Layout Detachment**: `applySorting()` directly appended `<a>` product elements to their common parent container, detaching them from responsive Bootstrap column wrappers (`.col-12, .col-md-4, .cell`). This broke CSS grid/flex structures and caused heights to collapse.
+- **Order Loss**: Toggling Bestpreise mode off did not restore initial DOM order.
+- **Solution**:
+  1. *Non-Destructive Streaming UI*: Unscanned cards remain visible with a subtle loading spinner badge (`⏳ Prüfe...`), morphing into verified Real Deals as stats stream in.
+  2. *Grid-Safe Sorting*: Sorting is applied to the outermost column wrapper (`card.closest('.col-*, .cell') || card`).
+  3. *Natural Order Restoration*: Initial DOM order is recorded in `data-tp-initial-order` and cleanly restored on mode deactivation.
+
+### 2. Multi-Pass Outlier Spike & Price Glitch Rejection (`sanitizeTimeSeries`)
+- **Problem**: Marketplace vendor errors (e.g. CHF 15 phone case indexed under CHF 1'200 phone for a few hours) create artificial record lows that corrupt lifetime all-time low checks and cause real discounts to be rejected.
+- **Algorithm**:
+  - Baseline Median: Computes raw median $M_{\text{raw}}$ from all price points.
+  - Candidate Outlier: Flags $(t_i, p_i)$ where $p_i < 0.35 \times M_{\text{raw}}$.
+  - Duration & Surrounding Validation: Excludes candidate if drop duration $<48\text{h}$ with normal adjacent points ($p_{i-1}, p_{i+1} \ge 0.60 \times M_{\text{raw}}$), or if extreme single boundary point ($p_i < 0.25 \times M_{\text{raw}}$ and neighbor $\ge 0.70 \times M_{\text{raw}}$).
+  - Clean History: Calculates $P_{\text{low}}$, $P_{\text{prev\_low}}$, and $P_{\text{median}}$ exclusively on $P_{\text{clean}}$.
+  - Metadata: Stores `filteredOutliers` in stats object for tooltip transparency (`ℹ️ 1 Ausreisser ignoriert`).
+
+### 3. Rolling Time-Horizon for Median ($D_{\text{median}}$)
+- **Problem**: Multi-year-old products (e.g. GPUs, TVs) carry high launch MSRPs that artificially inflate the lifetime median price.
+- **Configuration**: User can select Horizon in Section 6 settings:
+  - `365 Tage (1 Jahr)` [Default]
+  - `180 Tage (6 Monate)`
+  - `90 Tage (3 Monate)`
+  - `0 (Gesamte Historie / Lifetime)`
+- **Adaptive Fallback**: If recent window contains $<3$ data points, seamlessly falls back to lifetime median.
+- **Subline Formatting**: Displays contextual window label: `Ø-Preis (1J): CHF 460.00 (-12%)`.
+
+
 
 
 

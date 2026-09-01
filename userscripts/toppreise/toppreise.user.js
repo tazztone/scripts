@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.16.4
+// @version      2.17.1
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, checks real all-time Tiefstpreise, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -28,6 +28,8 @@ const DEFAULTS = {
   NEGATIVE_CACHE_HOURS: 2,
   BESTPREISE_MODE_ACTIVE: false,
   BESTPREISE_WEIGHT_RECORD: 0.50,
+  BESTPREISE_MEDIAN_HORIZON_DAYS: 365,
+  OUTLIER_REJECTION_ENABLED: true,
   ENABLE_SPARKLINES: false,
   NEGATIVE_TERMS: '',
   EXCLUDED_CATEGORIES: [],
@@ -1303,7 +1305,74 @@ const SHADOW_MODAL_STYLES = `
     return null;
   }
 
-  function analyzePriceTimeSeries(series, currentPrice = null) {
+  function sanitizeTimeSeries(points) {
+    if (!points || points.length < 3) {
+      return { cleanPoints: points || [], filteredOutliers: [] };
+    }
+
+    // Sort chronologically by timestamp
+    const sorted = [...points].sort((a, b) => a[0] - b[0]);
+    const prices = sorted.map(p => p[1]).sort((a, b) => a - b);
+    const rawMedian = prices[Math.floor(prices.length / 2)];
+
+    if (rawMedian <= 0) {
+      return { cleanPoints: sorted, filteredOutliers: [] };
+    }
+
+    const cleanPoints = [];
+    const filteredOutliers = [];
+    const n = sorted.length;
+
+    for (let i = 0; i < n; i++) {
+      const [ts, price] = sorted[i];
+      const isCandidateOutlier = price < 0.35 * rawMedian;
+
+      if (!isCandidateOutlier) {
+        cleanPoints.push(sorted[i]);
+        continue;
+      }
+
+      // Check if transient anomaly
+      let isGlitch = false;
+      if (i > 0 && i < n - 1) {
+        const prevPrice = sorted[i - 1][1];
+        const nextPrice = sorted[i + 1][1];
+        const prevTs = sorted[i - 1][0];
+        const nextTs = sorted[i + 1][0];
+        const durationHours = (nextTs && ts && nextTs > ts) ? (nextTs - ts) / (3600 * 1000) : 24;
+
+        // Anomaly lasting less than 48 hours with normal surroundings
+        if (durationHours < 48 && prevPrice >= 0.60 * rawMedian && nextPrice >= 0.60 * rawMedian) {
+          isGlitch = true;
+        } else if (price < 0.20 * rawMedian && (prevPrice >= 0.70 * rawMedian || nextPrice >= 0.70 * rawMedian)) {
+          isGlitch = true;
+        }
+      } else if (i === 0 && n > 1) {
+        const nextPrice = sorted[1][1];
+        if (price < 0.25 * rawMedian && nextPrice >= 0.70 * rawMedian) {
+          isGlitch = true;
+        }
+      } else if (i === n - 1 && n > 1) {
+        const prevPrice = sorted[n - 2][1];
+        if (price < 0.25 * rawMedian && prevPrice >= 0.70 * rawMedian) {
+          isGlitch = true;
+        }
+      }
+
+      if (isGlitch) {
+        filteredOutliers.push({ timestamp: ts, price, rawMedian });
+      } else {
+        cleanPoints.push(sorted[i]);
+      }
+    }
+
+    return {
+      cleanPoints: cleanPoints.length >= 2 ? cleanPoints : sorted,
+      filteredOutliers
+    };
+  }
+
+  function analyzePriceTimeSeries(series, currentPrice = null, customHorizon = null) {
     if (!series || !Array.isArray(series) || series.length === 0) return null;
 
     // Flatten or handle 2D array [series0, series1]
@@ -1312,7 +1381,7 @@ const SHADOW_MODAL_STYLES = `
       rawPoints = series[0];
     }
 
-    const points = rawPoints.map(p => {
+    const rawParsedPoints = rawPoints.map(p => {
       if (Array.isArray(p) && p.length >= 2) {
         const ts = typeof p[0] === 'number' ? p[0] : parseInt(p[0]);
         const pr = typeof p[1] === 'number' ? p[1] : parsePrice(String(p[1]));
@@ -1324,7 +1393,15 @@ const SHADOW_MODAL_STYLES = `
       return null;
     }).filter(Boolean);
 
-    if (points.length === 0) return null;
+    if (rawParsedPoints.length === 0) return null;
+
+    // 1. Multi-pass Outlier Rejection Filter
+    const sanitizeResult = (CONFIG.OUTLIER_REJECTION_ENABLED !== false)
+      ? sanitizeTimeSeries(rawParsedPoints)
+      : { cleanPoints: rawParsedPoints, filteredOutliers: [] };
+
+    const points = sanitizeResult.cleanPoints;
+    const filteredOutliers = sanitizeResult.filteredOutliers;
 
     const prices = points.map(p => p[1]);
     const curr = (typeof currentPrice === 'number' && currentPrice > 0) ? currentPrice : prices[prices.length - 1];
@@ -1340,9 +1417,25 @@ const SHADOW_MODAL_STYLES = `
     const historicalPrices = prices.slice(0, idx + 1);
     const previousLow = historicalPrices.length > 0 ? Math.min(...historicalPrices) : allTimeLow;
 
-    const sorted = [...prices].sort((a, b) => a - b);
-    const medianPrice = sorted[Math.floor(sorted.length / 2)];
-    const avgPrice = prices.reduce((a, b) => a + b, 0) / prices.length;
+    // Lifetime median & average
+    const sortedLifetime = [...prices].sort((a, b) => a - b);
+    const lifetimeMedian = sortedLifetime[Math.floor(sortedLifetime.length / 2)];
+
+    // 2. Rolling Time-Horizon for Median
+    const horizonDays = customHorizon ?? (typeof CONFIG.BESTPREISE_MEDIAN_HORIZON_DAYS === 'number' ? CONFIG.BESTPREISE_MEDIAN_HORIZON_DAYS : 365);
+    let windowPrices = prices;
+    if (horizonDays > 0) {
+      const now = Date.now();
+      const cutoffTime = now - horizonDays * 86400 * 1000;
+      const windowPoints = points.filter(p => p[0] >= cutoffTime);
+      if (windowPoints.length >= 3) {
+        windowPrices = windowPoints.map(p => p[1]);
+      }
+    }
+
+    const sortedWindow = [...windowPrices].sort((a, b) => a - b);
+    const medianPrice = sortedWindow[Math.floor(sortedWindow.length / 2)];
+    const avgPrice = windowPrices.reduce((a, b) => a + b, 0) / windowPrices.length;
 
     const isNewAllTimeLow = previousLow > 0 && curr < previousLow * 0.99;
     const isAtAllTimeLow = curr <= allTimeLow * 1.01;
@@ -1371,6 +1464,9 @@ const SHADOW_MODAL_STYLES = `
       previousLow: previousLow > 0 ? previousLow : null,
       avgPrice: Math.round(avgPrice * 100) / 100,
       medianPrice: Math.round(medianPrice * 100) / 100,
+      medianPriceLifetime: Math.round(lifetimeMedian * 100) / 100,
+      horizonDays,
+      filteredOutliers,
       isNewAllTimeLow,
       isAtAllTimeLow,
       isNonBest,
@@ -2409,14 +2505,12 @@ const SHADOW_MODAL_STYLES = `
       if (CONFIG.BESTPREISE_MODE_ACTIVE) {
         const dealData = cd.dealScore || computeDealScore(stats, cardPrice);
         if (!stats && pid) {
-          // Unscanned card: hide in Bestpreise mode until verified
-          card.classList.add('tp-bestpreise-hidden');
-          if (isBestpreiseScanning) {
-            badgeDifEl.classList.add('tp-deal-loading');
-            badgeDifEl.innerHTML = `<div class="text">Prüfe...</div><p>⏳</p>`;
-          }
+          // Unscanned card: keep visible while scanning with loading indicator
+          card.classList.remove('tp-bestpreise-hidden');
+          badgeDifEl.classList.add('tp-deal-loading');
+          badgeDifEl.innerHTML = `<div class="text">Prüfe...</div><p>⏳</p>`;
         } else if (!dealData) {
-          // Doesn't qualify as a genuine bestpreis deal
+          // Verified card that does not qualify as bestpreis
           card.classList.add('tp-bestpreise-hidden');
         } else {
           // Qualified Bestpreis Deal!
@@ -2436,10 +2530,13 @@ const SHADOW_MODAL_STYLES = `
 
           const prevLow = stats?.previousLow;
           const medianVal = stats?.medianPrice;
+          const horizonLabel = stats?.horizonDays && stats.horizonDays > 0 ? `${stats.horizonDays >= 365 ? '1J' : stats.horizonDays + 'T'}` : 'Lifetime';
+          const outlierText = stats?.filteredOutliers && stats.filteredOutliers.length > 0 ? ` | ℹ️ ${stats.filteredOutliers.length} Ausreisser ignoriert` : '';
+
           if (dealData.isNewRecord) {
-            badgeDifEl.title = `🔥 Neuer Rekord! Score: -${dealData.score}% (Ø -${dealData.dMedian}%, Rekord -${dealData.dRecord}% vs CHF ${prevLow ? prevLow.toFixed(2) : '?'}) [Klicken zum Aktualisieren]`;
+            badgeDifEl.title = `🔥 Neuer Rekord! Score: -${dealData.score}% (Ø ${horizonLabel}: -${dealData.dMedian}%, Rekord: -${dealData.dRecord}% vs CHF ${prevLow ? prevLow.toFixed(2) : '?'})${outlierText} [Klicken zum Aktualisieren]`;
           } else {
-            badgeDifEl.title = `🌟 Allzeit-Tiefstpreis! Score: -${dealData.score}% (Ø -${dealData.dMedian}%, kein neuer Rekord) [Klicken zum Aktualisieren]`;
+            badgeDifEl.title = `🌟 Allzeit-Tiefstpreis! Score: -${dealData.score}% (Ø ${horizonLabel}: -${dealData.dMedian}%, kein neuer Rekord)${outlierText} [Klicken zum Aktualisieren]`;
           }
 
           let histPriceEl = card.querySelector('.tp-card-historical-price');
@@ -2455,18 +2552,18 @@ const SHADOW_MODAL_STYLES = `
           if (dealData.isNewRecord && prevLow) {
             histPriceEl.className = 'tp-card-historical-price tp-is-record-low';
             histPriceEl.textContent = `Bisher: CHF ${prevLow.toFixed(2)} (-${dealData.dRecord}%)`;
-            histPriceEl.title = `Neuer Rekord-Tiefstpreis! Vorheriges Tief: CHF ${prevLow.toFixed(2)} (-${dealData.dRecord}%)`;
+            histPriceEl.title = `Neuer Rekord-Tiefstpreis! Vorheriges Tief: CHF ${prevLow.toFixed(2)} (-${dealData.dRecord}%)${outlierText}`;
           } else if (medianVal && medianVal > cardPrice) {
             histPriceEl.className = 'tp-card-historical-price tp-is-at-low';
-            histPriceEl.textContent = `Ø-Preis: CHF ${medianVal.toFixed(2)} (-${dealData.dMedian}%)`;
-            histPriceEl.title = `Allzeit-Tiefstpreis! Liegt ${dealData.dMedian}% unter dem Median-Preis von CHF ${medianVal.toFixed(2)}`;
+            histPriceEl.textContent = `Ø-Preis (${horizonLabel}): CHF ${medianVal.toFixed(2)} (-${dealData.dMedian}%)`;
+            histPriceEl.title = `Allzeit-Tiefstpreis! Liegt ${dealData.dMedian}% unter dem ${horizonLabel}-Median von CHF ${medianVal.toFixed(2)}${outlierText}`;
           } else {
             histPriceEl.remove();
           }
         }
       } else {
         card.classList.remove('tp-bestpreise-hidden');
-        badgeDifEl.classList.remove('tp-deal-new-record');
+        badgeDifEl.classList.remove('tp-deal-new-record', 'tp-deal-loading');
 
         if (stats && cardPrice > 0 && stats.tiefstpreis > 0) {
           const isAllTimeLow = cardPrice <= stats.tiefstpreis * 1.01;
@@ -2589,31 +2686,90 @@ const SHADOW_MODAL_STYLES = `
     }
   }
 
+  function getSortItem(card) {
+    if (!card) return null;
+    const colWrapper = card.closest('.col-12, .col-6, .col-4, .col-3, .col-md-6, .col-md-4, .col-md-3, .col-sm-6, .cell, [class*="col-"]');
+    if (colWrapper && colWrapper.parentElement && !colWrapper.parentElement.closest('#tp-root, dialog, .header, .filters')) {
+      return colWrapper;
+    }
+    return card;
+  }
+
   function applySorting(cards, pageHasOffers) {
-    if (CONFIG.BESTPREISE_MODE_ACTIVE && cards.length > 1) {
-      const parent = cards[0].parentElement;
-      if (parent) {
-        const scored = Array.from(cards).map(c => {
-          const cd = extractCardData(c);
-          const dealData = computeDealScore(cd.stats, cd.cardPrice);
-          return { card: c, score: dealData?.score ?? -1 };
-        });
-        scored.sort((a, b) => b.score - a.score);
-        scored.forEach(s => parent.appendChild(s.card));
+    if (cards.length <= 1) return;
+
+    // Ensure initial order is recorded on all cards
+    cards.forEach((c, idx) => {
+      if (!c.dataset.tpInitialOrder) {
+        c.dataset.tpInitialOrder = String(idx);
       }
+    });
+
+    const firstItem = getSortItem(cards[0]);
+    const parent = firstItem?.parentElement;
+    if (!parent) return;
+
+    if (CONFIG.BESTPREISE_MODE_ACTIVE) {
+      const scored = Array.from(cards).map(c => {
+        const cd = extractCardData(c);
+        const dealData = computeDealScore(cd.stats, cd.cardPrice);
+        return {
+          card: c,
+          item: getSortItem(c),
+          score: dealData?.score ?? -1,
+          initialOrder: parseInt(c.dataset.tpInitialOrder || '0', 10)
+        };
+      });
+      scored.sort((a, b) => (b.score - a.score) || (a.initialOrder - b.initialOrder));
+      scored.forEach(s => {
+        if (s.item && s.item.parentElement === parent) {
+          parent.appendChild(s.item);
+        }
+      });
       return;
     }
-    if (CONFIG.SORT_BY_OFFERS === 'discount-desc' && cards.length > 1) {
-      const parent = cards[0].parentElement;
-      if (parent) {
-        Array.from(cards).sort((a, b) => (extractCardDiscount(b) ?? -1) - (extractCardDiscount(a) ?? -1)).forEach(c => parent.appendChild(c));
-      }
-    } else if (pageHasOffers && CONFIG.SORT_BY_OFFERS !== 'none' && cards.length > 1) {
-      const parent = cards[0].parentElement;
-      if (parent) {
-        Array.from(cards).sort((a, b) => CONFIG.SORT_BY_OFFERS === 'desc' ? extractOfferCount(b) - extractOfferCount(a) : extractOfferCount(a) - extractOfferCount(b)).forEach(c => parent.appendChild(c));
-      }
+
+    if (CONFIG.SORT_BY_OFFERS === 'discount-desc') {
+      const sorted = Array.from(cards).map(c => ({
+        item: getSortItem(c),
+        disc: extractCardDiscount(c) ?? -1,
+        initialOrder: parseInt(c.dataset.tpInitialOrder || '0', 10)
+      }));
+      sorted.sort((a, b) => (b.disc - a.disc) || (a.initialOrder - b.initialOrder));
+      sorted.forEach(s => {
+        if (s.item && s.item.parentElement === parent) {
+          parent.appendChild(s.item);
+        }
+      });
+      return;
     }
+
+    if (pageHasOffers && CONFIG.SORT_BY_OFFERS !== 'none') {
+      const sorted = Array.from(cards).map(c => ({
+        item: getSortItem(c),
+        count: extractOfferCount(c),
+        initialOrder: parseInt(c.dataset.tpInitialOrder || '0', 10)
+      }));
+      sorted.sort((a, b) => CONFIG.SORT_BY_OFFERS === 'desc' ? (b.count - a.count) : (a.count - b.count));
+      sorted.forEach(s => {
+        if (s.item && s.item.parentElement === parent) {
+          parent.appendChild(s.item);
+        }
+      });
+      return;
+    }
+
+    // Natural order restoration: restore initial DOM order when no custom sort is active
+    const natural = Array.from(cards).map(c => ({
+      item: getSortItem(c),
+      initialOrder: parseInt(c.dataset.tpInitialOrder || '0', 10)
+    }));
+    natural.sort((a, b) => a.initialOrder - b.initialOrder);
+    natural.forEach(s => {
+      if (s.item && s.item.parentElement === parent) {
+        parent.appendChild(s.item);
+      }
+    });
   }
 
   function renderEmptyState(cards, counts) {
@@ -3090,6 +3246,16 @@ const SHADOW_MODAL_STYLES = `
             </div>
             <span class="tp-switch-desc" id="tp-bestpreise-weight-desc" style="display: block; margin-top: 4px; font-size: 11px; opacity: 0.85;">50% Median / 50% Neuer Rekord</span>
           </div>
+          <div class="tp-settings-group" id="tp-bestpreise-horizon-group" style="display: none;">
+            <label>Median-Berechnungszeitraum (Ø-Preis)</label>
+            <select id="tp-bestpreise-horizon-select" class="tp-select tp-purple" style="width: 100%; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; padding: 6px 10px; font-size: 13px; margin-top: 4px; box-sizing: border-box;">
+              <option value="365">1 Jahr (365 Tage) [Empfohlen]</option>
+              <option value="180">6 Monate (180 Tage)</option>
+              <option value="90">3 Monate (90 Tage)</option>
+              <option value="0">Gesamte Historie (Lifetime)</option>
+            </select>
+            <span class="tp-switch-desc" style="display: block; margin-top: 4px; font-size: 11px; opacity: 0.85;">Bestimmt den Vergleichszeitraum für den durchschnittlichen Marktpreis</span>
+          </div>
           <div class="tp-settings-group tp-switch-container">
             <div class="tp-switch-label">
               <label>Nur echte Tiefstpreise filtern</label>
@@ -3168,6 +3334,8 @@ const SHADOW_MODAL_STYLES = `
     const bestpreiseWeightRange = shadow.getElementById('tp-bestpreise-weight-range');
     const bestpreiseWeightVal = shadow.getElementById('tp-bestpreise-weight-val');
     const bestpreiseWeightDesc = shadow.getElementById('tp-bestpreise-weight-desc');
+    const bestpreiseHorizonGroup = shadow.getElementById('tp-bestpreise-horizon-group');
+    const bestpreiseHorizonSelect = shadow.getElementById('tp-bestpreise-horizon-select');
     const realDealMinRange = shadow.getElementById('tp-real-deal-min-range');
     const realDealMinVal = shadow.getElementById('tp-real-deal-min-val');
     const sparklinesToggle = shadow.getElementById('tp-sparklines-toggle');
@@ -3232,6 +3400,12 @@ const SHADOW_MODAL_STYLES = `
       if (bestpreiseWeightGroup) {
         bestpreiseWeightGroup.style.display = (CONFIG.BESTPREISE_MODE_ACTIVE === true) ? 'block' : 'none';
       }
+      if (bestpreiseHorizonGroup) {
+        bestpreiseHorizonGroup.style.display = (CONFIG.BESTPREISE_MODE_ACTIVE === true) ? 'block' : 'none';
+      }
+      if (bestpreiseHorizonSelect) {
+        bestpreiseHorizonSelect.value = String(CONFIG.BESTPREISE_MEDIAN_HORIZON_DAYS ?? 365);
+      }
       const weightPct = Math.round((CONFIG.BESTPREISE_WEIGHT_RECORD ?? 0.50) * 100);
       if (bestpreiseWeightRange) bestpreiseWeightRange.value = weightPct;
       if (bestpreiseWeightVal) bestpreiseWeightVal.value = weightPct;
@@ -3278,6 +3452,9 @@ const SHADOW_MODAL_STYLES = `
     bestpreiseModeToggle?.addEventListener('change', () => {
       if (bestpreiseWeightGroup) {
         bestpreiseWeightGroup.style.display = bestpreiseModeToggle.checked ? 'block' : 'none';
+      }
+      if (bestpreiseHorizonGroup) {
+        bestpreiseHorizonGroup.style.display = bestpreiseModeToggle.checked ? 'block' : 'none';
       }
     });
 
@@ -3390,6 +3567,9 @@ const SHADOW_MODAL_STYLES = `
         if (bestpreiseWeightVal) {
           saveConfigKey('BESTPREISE_WEIGHT_RECORD', Math.max(0, Math.min(1.0, (parseInt(bestpreiseWeightVal.value) || 50) / 100)));
         }
+        if (bestpreiseHorizonSelect) {
+          saveConfigKey('BESTPREISE_MEDIAN_HORIZON_DAYS', parseInt(bestpreiseHorizonSelect.value, 10) || 0);
+        }
         if (nowActive && !wasActive) {
           runBestpreiseScan();
         } else if (!nowActive && wasActive) {
@@ -3472,6 +3652,8 @@ const SHADOW_MODAL_STYLES = `
       processProductDetailPage,
       processPriceAlarmModal,
       computeDealScore,
+      analyzePriceTimeSeries,
+      sanitizeTimeSeries,
       runBestpreiseScan,
       cancelBestpreiseScan,
       CONFIG

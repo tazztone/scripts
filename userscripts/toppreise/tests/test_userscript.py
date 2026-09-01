@@ -1465,11 +1465,16 @@ def test_bestpreise_card_heatmap_and_badge(page: Page):
     assert '-14%' in (card2_badge.text_content() or '')
 
     card2_subline = page.locator('#card-expensive .tp-card-historical-price.tp-is-at-low')
-    assert 'Ø-Preis: CHF 1500.00 (-27%)' in (card2_subline.text_content() or '')
+    assert 'CHF 1500.00 (-27%)' in (card2_subline.text_content() or '')
 
-    # Card 3 & Uncached: Hidden in Bestpreise mode
+    # Card 3: Scanned Non-Bestpreis -> Hidden in Bestpreise mode
     assert 'tp-bestpreise-hidden' in (page.locator('#card-negative').get_attribute('class') or '')
-    assert 'tp-bestpreise-hidden' in (page.locator('#card-low-offers').get_attribute('class') or '')
+
+    # Unscanned card: Remains visible with loading indicator during scan
+    uncached_badge = page.locator('#card-low-offers .badge-dif')
+    assert 'tp-bestpreise-hidden' not in (page.locator('#card-low-offers').get_attribute('class') or '')
+    assert 'tp-deal-loading' in (uncached_badge.get_attribute('class') or '')
+    assert 'Prüfe' in (uncached_badge.text_content() or '')
 
     # Toggle Bestpreise mode OFF -> Restores original badges and removes hidden classes
     page.evaluate("""() => {
@@ -1559,6 +1564,94 @@ def test_bestpreise_settings_weight_slider(page: Page):
 
     assert page.evaluate("() => window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE") is True
     assert page.evaluate("() => window.ToppreiseSuite.CONFIG.BESTPREISE_WEIGHT_RECORD") == 0.70
+
+
+def test_outlier_spike_rejection(page: Page):
+    # Product: Smartphone normal price ~CHF 1200
+    # Vendor glitch: 1-day CHF 15 spike on Day 3
+    # Genuine new all-time low drop: CHF 999 on Day 10
+    analysis = page.evaluate("""() => {
+        const now = Date.now();
+        const dayMs = 86400 * 1000;
+        const series = [
+            [now - 10 * dayMs, 1300],
+            [now - 9 * dayMs, 1250],
+            [now - 7 * dayMs, 1200],
+            [now - 6 * dayMs, 15],   // 1-day glitch anomaly
+            [now - 5 * dayMs, 1200],
+            [now - 4 * dayMs, 1180],
+            [now - 3 * dayMs, 1150],
+            [now - 2 * dayMs, 1100],
+            [now - 1 * dayMs, 1050],
+            [now, 999]              // Current authentic record low
+        ];
+        return window.ToppreiseSuite.analyzePriceTimeSeries(series, 999);
+    }""")
+
+    # Outlier CHF 15 should have been sanitized
+    assert analysis is not None
+    assert len(analysis['filteredOutliers']) == 1
+    assert analysis['filteredOutliers'][0]['price'] == 15
+    assert analysis['tiefstpreis'] == 999
+    assert analysis['previousLow'] == 1050
+    assert analysis['isNewAllTimeLow'] is True
+
+
+def test_rolling_median_time_horizon(page: Page):
+    # Product: GPU launched 2 years ago at CHF 2000, sold for ~CHF 800 in last 6 months
+    res = page.evaluate("""() => {
+        const now = Date.now();
+        const dayMs = 86400 * 1000;
+        const series = [
+            [now - 700 * dayMs, 2200],
+            [now - 650 * dayMs, 2100],
+            [now - 600 * dayMs, 2000],
+            [now - 550 * dayMs, 1900],
+            [now - 500 * dayMs, 1800],
+            [now - 450 * dayMs, 1700],
+            [now - 400 * dayMs, 1600],
+            [now - 350 * dayMs, 1500],
+            [now - 120 * dayMs, 850],
+            [now - 90 * dayMs, 800],
+            [now - 60 * dayMs, 780],
+            [now - 30 * dayMs, 750],
+            [now, 699]
+        ];
+
+        const stats180d = window.ToppreiseSuite.analyzePriceTimeSeries(series, 699, 180);
+        const statsLifetime = window.ToppreiseSuite.analyzePriceTimeSeries(series, 699, 0);
+
+        return { stats180d, statsLifetime };
+    }""")
+
+    # 180d window should only consider points in the last 180 days (around ~780 median)
+    assert res['stats180d']['medianPrice'] <= 850
+    # Lifetime window includes early launch prices (median = 1700)
+    assert res['statsLifetime']['medianPrice'] >= 1500
+
+
+def test_bestpreise_settings_horizon_selection_persistence(page: Page):
+    # Open settings dialog in Shadow DOM
+    page.click('#tp-root >> #tp-settings-fab')
+    page.wait_for_selector('#tp-root >> #tp-settings-dialog', state='visible')
+
+    # Toggle Bestpreise on if not active
+    toggle = page.locator('#tp-root >> #tp-bestpreise-mode-toggle')
+    if not toggle.is_checked():
+        page.click('#tp-root >> #tp-bestpreise-mode-toggle + .tp-slider')
+
+    horizon_group = page.locator('#tp-root >> #tp-bestpreise-horizon-group')
+    assert horizon_group.is_visible()
+
+    # Change horizon select to 180 days (6 months)
+    page.select_option('#tp-root >> #tp-bestpreise-horizon-select', '180')
+
+    # Save
+    page.click('#tp-root >> #tp-btn-save')
+    page.wait_for_selector('#tp-root >> #tp-settings-dialog', state='hidden')
+
+    assert page.evaluate("() => window.ToppreiseSuite.CONFIG.BESTPREISE_MEDIAN_HORIZON_DAYS") == 180
+
 
 
 
