@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.18.11
+// @version      2.18.12
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, checks real all-time Tiefstpreise, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -339,6 +339,19 @@ const STYLES = `
     opacity: 1 !important;
   }
   /* Prevent artificial void space and align product card column contents tightly */
+  .Plugin_Product.medium-box {
+    padding: 8px 10px !important;
+    min-height: 0 !important;
+  }
+  .Plugin_Product.medium-box .image_container img,
+  .Plugin_Product.medium-box .productImage img,
+  .Plugin_Product.medium-box img {
+    max-height: 70px !important;
+    max-width: 70px !important;
+    width: auto !important;
+    height: auto !important;
+    object-fit: contain !important;
+  }
   .Plugin_Product .col.d-flex.flex-column,
   .Plugin_Product .row.h-100 > .col {
     justify-content: flex-start !important;
@@ -346,7 +359,7 @@ const STYLES = `
   }
   .Plugin_Product .Plugin_PriceInformation,
   .Plugin_Product .price_information_product {
-    margin-top: auto !important;
+    margin-top: 2px !important;
   }
   .tp-bar-btn.tp-batch-active {
     background: rgba(245, 158, 11, 0.25) !important;
@@ -2346,6 +2359,7 @@ const SHADOW_MODAL_STYLES = `
   }
 
   let isModifyingDOM = false;
+  let mainObserver = null;
 
   function extractActiveStores() {
     const filterElements = document.querySelectorAll('.filters .f_remove_filter[data-target-type="df"]');
@@ -3101,6 +3115,7 @@ const SHADOW_MODAL_STYLES = `
       return;
     }
     isModifyingDOM = true;
+    if (mainObserver) mainObserver.disconnect();
     try {
       const cards = getProductCards();
       if (cards.length === 0) {
@@ -3154,6 +3169,10 @@ const SHADOW_MODAL_STYLES = `
       renderSuiteFilterBar(counts, pageHasOffers, isNeueFeed);
     } finally {
       isModifyingDOM = false;
+      if (mainObserver) {
+        mainObserver.takeRecords();
+        mainObserver.observe(document.documentElement, { childList: true, subtree: true });
+      }
     }
   }
 
@@ -3902,9 +3921,22 @@ const SHADOW_MODAL_STYLES = `
 
   // ─── OBSERVER & INITIALIZATION ───────────────────────────────────────────────
   let debounceTimer = null;
-  const observer = new MutationObserver(mutations => {
+  mainObserver = new MutationObserver(mutations => {
     if (isModifyingDOM) return;
-    if (mutations.every(m => m.target?.id === 'tp-root' || m.target?.closest?.('#tp-root'))) return;
+    const isSelfMutation = mutations.every(m => {
+      const target = m.target;
+      if (!target) return true;
+      if (target.id === 'tp-root' || target.closest?.('#tp-root')) return true;
+      if (target.id === 'tp-suite-filter-bar' || target.closest?.('#tp-suite-filter-bar')) return true;
+      if (target.id === 'tp-blocked-cats-container' || target.closest?.('#tp-blocked-cats-container')) return true;
+      if (target.classList?.contains('tp-card-subline-row') || target.closest?.('.tp-card-subline-row')) return true;
+      if (target.classList?.contains('tp-badge-score-breakdown') || target.closest?.('.tp-badge-score-breakdown')) return true;
+      if (target.classList?.contains('tp-sparkline-container') || target.closest?.('.tp-sparkline-container')) return true;
+      if (target.classList?.contains('tp-best-price-badge') || target.closest?.('.tp-best-price-badge')) return true;
+      if (target.classList?.contains('tp-empty-state-notice') || target.closest?.('.tp-empty-state-notice')) return true;
+      return false;
+    });
+    if (isSelfMutation) return;
 
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
@@ -3916,7 +3948,7 @@ const SHADOW_MODAL_STYLES = `
     }, CONFIG.OBSERVER_DEBOUNCE_MS);
   });
 
-  observer.observe(document.documentElement, { childList: true, subtree: true });
+  mainObserver.observe(document.documentElement, { childList: true, subtree: true });
 
   document.addEventListener('keydown', e => {
     // Skip if modifier keys other than none

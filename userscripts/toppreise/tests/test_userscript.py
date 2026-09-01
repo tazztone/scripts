@@ -195,9 +195,9 @@ def test_quick_block_hidden_on_non_neue_toppreise_pages(page: Page):
         document.body.classList.remove('Page_ListTopPriceReductionProducts');
         document.body.removeAttribute('data-current_url');
         // Trigger re-process
-        window.dispatchEvent(new Event('scroll'));
+        window.ToppreiseSuite.processListings();
     }""")
-    page.wait_for_timeout(350)
+    page.wait_for_timeout(50)
 
     # Verify quick-block buttons are removed / absent on regular pages
     quick_blocks = page.locator('.tp-card-quick-block')
