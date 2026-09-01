@@ -351,3 +351,27 @@ $$\text{Score} = \max\left(0, \text{round}\left((1 - W) \times D_{\text{median}}
 2. **Column Wrapped Cards on Other Views**: On certain category or catalog listings, cards may be nested inside a dedicated `<div class="col-12 col-md-6 col-lg-3">`.
 3. **Sortable Unit Resolution**: `getCardSortableUnit()` must distinguish between when the `<a>` tag *itself* has `col-*` classes (in which case the `<a>` is the sortable unit) versus when a parent wrapper `<div>` has `col-*` (in which case the wrapper `<div>` is the sortable unit, NOT climbing past `.product-grid` or `row` or `contentBox`).
 4. **Visibility & Layout Hiding**: Any hide-filter class (`.tp-bestpreise-hidden`, `.tp-negative-filtered`, `.tp-category-filtered`, etc.) must cleanly hide both the card and any wrapping `.col-*` container (via CSS `:has(> .tp-*)`) so no vacant layout columns occupy space in the flex grid.
+
+---
+
+## 13. Deal-Score Dual Breakdown, Weight Presets & Layout Polish
+
+### Dual Score Breakdown Under Badge
+- **Problem**: The circle badge shows the blended Continuous Deal-Score ($D_{\text{blend}} = w_{\text{median}} \cdot D_{\text{median}} + w_{\text{record}} \cdot D_{\text{record}}$), while the price subline displays only the raw drop vs. previous record ($D_{\text{record}}$). When $D_{\text{record}} \neq D_{\text{median}}$, this discrepancy caused user confusion.
+- **Architecture**: Render a dedicated `.tp-badge-score-breakdown` sub-pill directly underneath the circle badge displaying both scores: `Rek: -X% · Ø: -Y%` (e.g. `Rek: -11% · Ø: -37%`).
+
+### Hover Pulsing / Jitter Elimination
+- **Problem**: Card hover rules applied `transform: translateY(-2px) !important;`. Hovering near the card boundaries or child action buttons shifted the card by $-2\text{px}$, causing cursor loss $\rightarrow$ hover drop $\rightarrow$ downward shift $\rightarrow$ hover re-trigger $\rightarrow$ rapid visual jitter / pulsing.
+- **Fix**: Removed `translateY(-2px)` and transition transforms from card hover states, using non-layout-shifting `filter: brightness(...)` and `box-shadow`.
+
+### Mixed Row Card Height Harmonization
+- **Problem**: Verified Bestpreise cards stacked the historical price subline and sparkline vertically, increasing height by $+35\text{px}$. In mixed rows (verified cards + unscanned cards), this caused height discrepancies.
+- **Fix**: Merged historical price subline and miniature sparkline ($44 \times 13\text{px}$) into a single compact horizontal `.tp-card-subline-row`. Set a standard `min-height: 114px` on `.Plugin_Product.medium-box`.
+
+### Weight Slider 0% Falsy Fallback Bug
+- **Problem**: `parseInt(bestpreiseWeightVal.value) || 50` in settings modal save handler evaluated `0 || 50` to `50` ($0.50$), resetting 0% Neuer Rekord to 50/50 every save.
+- **Fix**: Replaced with `isNaN(rawVal) ? 50 : rawVal` so `0.0` is preserved and persisted.
+
+### Weight Preset Dropdown in Filter Bar
+- Added `#tp-bar-weight-wrapper` and `#tp-bar-weight-btn` in `#tp-suite-filter-bar` with 5 quick presets: `50/50`, `100% Rekord`, `70/30`, `30/70`, `100% Median`.
+

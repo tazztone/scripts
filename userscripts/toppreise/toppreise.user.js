@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.18.9
+// @version      2.18.10
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, checks real all-time Tiefstpreise, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -63,7 +63,7 @@ const STYLES = `
     border: 1.5px solid var(--tp-heat-border) !important;
     border-color: var(--tp-heat-border) !important;
     box-shadow: var(--tp-heat-glow, 0 2px 8px rgba(0,0,0,0.25)) !important;
-    transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, transform 0.2s ease, filter 0.2s ease !important;
+    transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, filter 0.2s ease !important;
     --darkreader-inline-bgcolor: transparent !important;
     --darkreader-inline-bgimage: var(--tp-heat-bg) !important;
     --darkreader-inline-border: var(--tp-heat-border) !important;
@@ -76,8 +76,7 @@ const STYLES = `
   .Plugin_Product.tp-heatmap-active:hover,
   .mixedBrowsingListProduct.tp-heatmap-active:hover {
     filter: brightness(1.15) !important;
-    transform: translateY(-2px) !important;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.35), var(--tp-heat-glow, none) !important;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.35), var(--tp-heat-glow, none) !important;
   }
   .tp-heatmap-active .badge.badge-dif,
   .Plugin_Product.tp-heatmap-active .badge.badge-dif {
@@ -293,11 +292,34 @@ const STYLES = `
     margin-top: 1px !important;
     color: #fde68a !important;
   }
+  .tp-badge-score-breakdown {
+    position: absolute !important;
+    top: 64px !important;
+    right: 10px !important;
+    font: 600 9px/1.1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    background: rgba(15, 23, 42, 0.92) !important;
+    backdrop-filter: blur(6px) !important;
+    color: #cbd5e1 !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    border-radius: 4px !important;
+    padding: 2px 4px !important;
+    white-space: nowrap !important;
+    pointer-events: none !important;
+    z-index: 20 !important;
+    text-align: center !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.35) !important;
+  }
+  .tp-badge-score-breakdown .tp-score-record {
+    color: #fbbf24 !important;
+  }
+  .tp-badge-score-breakdown .tp-score-median {
+    color: #34d399 !important;
+  }
   .tp-card-historical-price {
-    font: 500 11px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    font: 500 10px/1.15 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
     color: #94a3b8 !important;
     text-align: right !important;
-    margin-top: 2px !important;
+    margin: 0 !important;
     white-space: nowrap !important;
     user-select: none !important;
     pointer-events: auto !important;
@@ -312,11 +334,20 @@ const STYLES = `
   .tp-card-historical-price.tp-is-markup {
     color: #fbbf24 !important;
   }
+  .tp-card-subline-row {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 4px !important;
+    margin-top: 1px !important;
+    width: 100% !important;
+  }
   .tp-sparkline-container {
     display: inline-flex !important;
     align-items: center !important;
-    margin-top: 2px !important;
     vertical-align: middle !important;
+    margin: 0 !important;
+    line-height: 1 !important;
   }
   .tp-sparkline {
     opacity: 0.85;
@@ -326,6 +357,9 @@ const STYLES = `
   .tp-sparkline:hover {
     opacity: 1;
     transform: scale(1.08);
+  }
+  .Plugin_Product.medium-box {
+    min-height: 114px !important;
   }
   .tp-bar-btn.tp-batch-active {
     background: rgba(245, 158, 11, 0.25) !important;
@@ -1889,6 +1923,18 @@ const SHADOW_MODAL_STYLES = `
           <button class="tp-bar-btn ${CONFIG.BESTPREISE_MODE_ACTIVE ? 'tp-bestpreise-active' : ''}" id="tp-bar-bestpreise-btn" title="Neue Bestpreise Modus: Verifizierte Bestpreise nach echtem Rabatt filtern und sortieren" style="display: ${isDealFeed ? 'flex' : 'none'};">
             💎 Neue Bestpreise <span id="tp-bar-bestpreise-count" style="display: ${bestpreiseDeals > 0 ? 'inline' : 'none'}; font-size: 10px; opacity: 0.85;">(${bestpreiseDeals})</span>
           </button>
+          <div class="tp-threshold-wrapper" id="tp-bar-weight-wrapper" style="display: ${isDealFeed && CONFIG.BESTPREISE_MODE_ACTIVE ? 'inline-flex' : 'none'};">
+            <button class="tp-threshold-btn" id="tp-bar-weight-btn" title="Deal-Score Gewichtung wählen" style="border-left: 1px solid rgba(255, 255, 255, 0.12) !important; border-radius: 8px !important;">
+              ⚖️ 50/50 ▾
+            </button>
+            <div class="tp-threshold-popover" id="tp-weight-popover" style="min-width: 170px;">
+              <button class="tp-threshold-option" data-weight="0.50">⚖️ 50/50 (Ausgewogen)</button>
+              <button class="tp-threshold-option" data-weight="1.00">🌟 100% Rekord (Nur Rekorde)</button>
+              <button class="tp-threshold-option" data-weight="0.70">🔥 70% Rekord / 30% Median</button>
+              <button class="tp-threshold-option" data-weight="0.30">💎 30% Rekord / 70% Median</button>
+              <button class="tp-threshold-option" data-weight="0.00">📊 100% Median (Marktpreis)</button>
+            </div>
+          </div>
           <button class="tp-bar-btn ${CONFIG.REAL_DEAL_FILTER_ACTIVE ? 'tp-active' : ''} ${CONFIG.BESTPREISE_MODE_ACTIVE ? 'tp-disabled' : ''}" id="tp-bar-real-deal-btn" title="${CONFIG.BESTPREISE_MODE_ACTIVE ? 'Inaktiv: Bestpreise-Modus filtert bereits echte Tiefstpreise' : 'Nur echte Allzeit-Tiefstpreise anzeigen (Nicht-Bestpreise ausblenden)'}" style="display: ${isDealFeed ? 'flex' : 'none'};">
             🌟 Nur Tiefstpreise <span id="tp-bar-real-deal-count" style="display: ${counts.nonBest > 0 ? 'inline' : 'none'}; font-size: 10px; opacity: 0.85;">(${counts.nonBest || 0})</span>
           </button>
@@ -2041,10 +2087,15 @@ const SHADOW_MODAL_STYLES = `
 
       const threshBtn = bar.querySelector('#tp-bar-threshold-btn');
       const threshPopover = bar.querySelector('#tp-threshold-popover');
+      const weightBtn = bar.querySelector('#tp-bar-weight-btn');
+      const weightPopover = bar.querySelector('#tp-weight-popover');
+
       if (threshBtn && threshPopover) {
         threshBtn.onclick = e => {
           e.preventDefault();
           e.stopPropagation();
+          weightPopover?.classList.remove('tp-show');
+          weightBtn?.classList.remove('tp-open');
           const isOpen = threshPopover.classList.toggle('tp-show');
           threshBtn.classList.toggle('tp-open', isOpen);
         };
@@ -2069,12 +2120,49 @@ const SHADOW_MODAL_STYLES = `
             }
           };
         });
+      }
 
-        document.addEventListener('click', () => {
-          threshPopover.classList.remove('tp-show');
-          threshBtn.classList.remove('tp-open');
+      if (weightBtn && weightPopover) {
+        weightBtn.onclick = e => {
+          e.preventDefault();
+          e.stopPropagation();
+          threshPopover?.classList.remove('tp-show');
+          threshBtn?.classList.remove('tp-open');
+          const isOpen = weightPopover.classList.toggle('tp-show');
+          weightBtn.classList.toggle('tp-open', isOpen);
+        };
+
+        weightPopover.querySelectorAll('.tp-threshold-option').forEach(opt => {
+          opt.onclick = e => {
+            e.preventDefault();
+            e.stopPropagation();
+            const w = parseFloat(opt.dataset.weight);
+            if (!isNaN(w)) {
+              saveConfigKey('BESTPREISE_WEIGHT_RECORD', w);
+              if (uiShadowRoot) {
+                const modalRange = uiShadowRoot.getElementById('tp-bestpreise-weight-range');
+                const modalVal = uiShadowRoot.getElementById('tp-bestpreise-weight-val');
+                const modalDesc = uiShadowRoot.getElementById('tp-bestpreise-weight-desc');
+                const pct = Math.round(w * 100);
+                if (modalRange) modalRange.value = pct;
+                if (modalVal) modalVal.value = pct;
+                if (modalDesc) modalDesc.textContent = `${100 - pct}% Median / ${pct}% Neuer Rekord`;
+              }
+              weightPopover.classList.remove('tp-show');
+              weightBtn.classList.remove('tp-open');
+              processListings();
+              showToast(`Deal-Score Gewichtung: ${Math.round((1 - w) * 100)}% Median / ${Math.round(w * 100)}% Rekord`);
+            }
+          };
         });
       }
+
+      document.addEventListener('click', () => {
+        threshPopover?.classList.remove('tp-show');
+        threshBtn?.classList.remove('tp-open');
+        weightPopover?.classList.remove('tp-show');
+        weightBtn?.classList.remove('tp-open');
+      });
 
       bar.querySelector('#tp-bar-cats-toggle').onclick = () => {
         isBlockedCatsOpen = !isBlockedCatsOpen;
@@ -2184,6 +2272,32 @@ const SHADOW_MODAL_STYLES = `
     const threshWrapper = bar.querySelector('#tp-bar-threshold-wrapper');
     if (threshWrapper) {
       threshWrapper.style.setProperty('display', isDealFeed ? 'inline-flex' : 'none', 'important');
+    }
+
+    const curWeight = typeof CONFIG.BESTPREISE_WEIGHT_RECORD === 'number' ? CONFIG.BESTPREISE_WEIGHT_RECORD : 0.50;
+    let curWeightShort = '50/50';
+    if (Math.abs(curWeight - 1.0) < 0.05) curWeightShort = '100% Rek';
+    else if (Math.abs(curWeight - 0.70) < 0.05) curWeightShort = '70/30';
+    else if (Math.abs(curWeight - 0.50) < 0.05) curWeightShort = '50/50';
+    else if (Math.abs(curWeight - 0.30) < 0.05) curWeightShort = '30/70';
+    else if (Math.abs(curWeight - 0.0) < 0.05) curWeightShort = '100% Med';
+    else curWeightShort = `${Math.round(curWeight * 100)}% Rek`;
+
+    const weightBtn = bar.querySelector('#tp-bar-weight-btn');
+    if (weightBtn) {
+      weightBtn.textContent = `⚖️ ${curWeightShort} ▾`;
+      weightBtn.title = `Deal-Score Gewichtung wählen (aktuell: ${Math.round((1 - curWeight) * 100)}% Median / ${Math.round(curWeight * 100)}% Neuer Rekord)`;
+    }
+    const weightPopover = bar.querySelector('#tp-weight-popover');
+    if (weightPopover) {
+      weightPopover.querySelectorAll('.tp-threshold-option').forEach(opt => {
+        const w = parseFloat(opt.dataset.weight);
+        opt.classList.toggle('tp-selected', Math.abs(w - curWeight) < 0.05);
+      });
+    }
+    const weightWrapper = bar.querySelector('#tp-bar-weight-wrapper');
+    if (weightWrapper) {
+      weightWrapper.style.setProperty('display', (isDealFeed && CONFIG.BESTPREISE_MODE_ACTIVE) ? 'inline-flex' : 'none', 'important');
     }
 
     const catsToggleBtn = bar.querySelector('#tp-bar-cats-toggle');
@@ -2561,6 +2675,19 @@ const SHADOW_MODAL_STYLES = `
             badgeDifEl.title = `🌟 Allzeit-Tiefstpreis! Score: -${dealData.score}% (Ø ${horizonLabel}: -${dealData.dMedian}%, kein neuer Rekord)${outlierText} [Klicken zum Aktualisieren]`;
           }
 
+          // Compact dual-score breakdown pill directly underneath the circle badge
+          let breakdownEl = card.querySelector('.tp-badge-score-breakdown');
+          if (!breakdownEl) {
+            breakdownEl = document.createElement('div');
+            breakdownEl.className = 'tp-badge-score-breakdown';
+            card.appendChild(breakdownEl);
+          }
+          if (dealData.isNewRecord && dealData.dRecord > 0) {
+            breakdownEl.innerHTML = `<span class="tp-score-record" title="Neuer Rekord-Rabatt (-${dealData.dRecord}%)">Rek: -${dealData.dRecord}%</span> · <span class="tp-score-median" title="${horizonLabel}-Median-Rabatt (-${dealData.dMedian}%)">Ø: -${dealData.dMedian}%</span>`;
+          } else {
+            breakdownEl.innerHTML = `<span class="tp-score-median" title="${horizonLabel}-Median-Rabatt (-${dealData.dMedian}%)">Ø: -${dealData.dMedian}%</span>`;
+          }
+
           let histPriceEl = card.querySelector('.tp-card-historical-price');
           if (!histPriceEl) {
             histPriceEl = document.createElement('div');
@@ -2587,10 +2714,12 @@ const SHADOW_MODAL_STYLES = `
           card.classList.add('tp-bestpreise-hidden');
           badgeDifEl.classList.remove('tp-deal-new-record', 'tp-deal-alltime-low');
           card.querySelector('.tp-card-historical-price')?.remove();
+          card.querySelector('.tp-badge-score-breakdown')?.remove();
         } else {
           // Unscanned card (!stats) -> KEEP VISIBLE with interactive loupe / loading spinner!
           card.classList.remove('tp-bestpreise-hidden');
           badgeDifEl.classList.remove('tp-deal-new-record', 'tp-deal-alltime-low');
+          card.querySelector('.tp-badge-score-breakdown')?.remove();
 
           if (currentlyScanningPid && currentlyScanningPid === pid) {
             badgeDifEl.classList.add('tp-deal-loading');
@@ -2606,6 +2735,7 @@ const SHADOW_MODAL_STYLES = `
       } else {
         card.classList.remove('tp-bestpreise-hidden');
         badgeDifEl.classList.remove('tp-deal-new-record');
+        card.querySelector('.tp-badge-score-breakdown')?.remove();
 
         if (currentlyScanningPid && currentlyScanningPid === pid) {
           badgeDifEl.classList.add('tp-deal-loading');
@@ -2717,21 +2847,45 @@ const SHADOW_MODAL_STYLES = `
       if (!sparkContainer) {
         sparkContainer = document.createElement('div');
         sparkContainer.className = 'tp-sparkline-container';
-        const priceContainer = card.querySelector('.Plugin_PriceInformation, .price_information_product') ||
-                               cardPriceEl?.closest('.priceContainer, .Plugin_PriceInformation, .price_information_product') ||
-                               cardPriceEl?.parentElement ||
-                               card;
-        priceContainer.appendChild(sparkContainer);
       }
       if (!sparkContainer.querySelector('.tp-sparkline')) {
-        const svg = renderSparkline(stats.timeSeries);
+        const svg = renderSparkline(stats.timeSeries, 44, 13);
         if (svg) {
           sparkContainer.innerHTML = '';
           sparkContainer.appendChild(svg);
         }
       }
+      const histPriceEl = card.querySelector('.tp-card-historical-price');
+      if (histPriceEl) {
+        let subRow = card.querySelector('.tp-card-subline-row');
+        if (!subRow) {
+          subRow = document.createElement('div');
+          subRow.className = 'tp-card-subline-row';
+          histPriceEl.parentElement?.insertBefore(subRow, histPriceEl);
+          subRow.appendChild(histPriceEl);
+        }
+        if (sparkContainer.parentElement !== subRow) {
+          subRow.appendChild(sparkContainer);
+        }
+      } else {
+        const priceContainer = card.querySelector('.Plugin_PriceInformation, .price_information_product') ||
+                               cardPriceEl?.closest('.priceContainer, .Plugin_PriceInformation, .price_information_product') ||
+                               cardPriceEl?.parentElement ||
+                               card;
+        if (sparkContainer.parentElement !== priceContainer) {
+          priceContainer.appendChild(sparkContainer);
+        }
+      }
     } else {
       card.querySelector('.tp-sparkline-container')?.remove();
+      const subRow = card.querySelector('.tp-card-subline-row');
+      if (subRow) {
+        const hist = subRow.querySelector('.tp-card-historical-price');
+        if (hist) {
+          subRow.parentElement?.insertBefore(hist, subRow);
+        }
+        subRow.remove();
+      }
     }
   }
 
@@ -3738,7 +3892,9 @@ const SHADOW_MODAL_STYLES = `
         const nowActive = bestpreiseModeToggle.checked;
         saveConfigKey('BESTPREISE_MODE_ACTIVE', nowActive);
         if (bestpreiseWeightVal) {
-          saveConfigKey('BESTPREISE_WEIGHT_RECORD', Math.max(0, Math.min(1.0, (parseInt(bestpreiseWeightVal.value) || 50) / 100)));
+          const rawW = parseInt(bestpreiseWeightVal.value, 10);
+          const weightNum = isNaN(rawW) ? 50 : rawW;
+          saveConfigKey('BESTPREISE_WEIGHT_RECORD', Math.max(0, Math.min(1.0, weightNum / 100)));
         }
         if (bestpreiseHorizonSelect) {
           saveConfigKey('BESTPREISE_MEDIAN_HORIZON_DAYS', parseInt(bestpreiseHorizonSelect.value, 10) || 0);

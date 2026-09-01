@@ -2274,6 +2274,115 @@ def test_column_wrapper_layout_fidelity_and_hiding(page: Page):
     assert page.locator('#wrap-card-2').is_visible()
 
 
+def test_deal_score_weight_slider_zero_persistence(page: Page):
+    """
+    Validates that setting the Deal-Score weight slider to 0% in settings dialog
+    persists as 0.0 (100% Median / 0% Neuer Rekord) without resetting to 0.50 (50%).
+    """
+    page.evaluate("""() => {
+        const root = document.getElementById('tp-root');
+        const fab = root.shadowRoot.getElementById('tp-settings-fab');
+        fab.click();
+        const weightVal = root.shadowRoot.getElementById('tp-bestpreise-weight-val');
+        weightVal.value = '0';
+        const saveBtn = root.shadowRoot.getElementById('tp-btn-save');
+        saveBtn.click();
+    }""")
+
+    stored_weight = page.evaluate("() => window.ToppreiseSuite.CONFIG.BESTPREISE_WEIGHT_RECORD")
+    assert stored_weight == 0.0
+
+
+def test_deal_score_weight_preset_dropdown_in_filter_bar(page: Page):
+    """
+    Validates that the Deal-Score weighting preset dropdown appears in the filter bar
+    when Bestpreise mode is active, and clicking options updates score weighting instantly.
+    """
+    page.evaluate("""() => {
+        localStorage.clear();
+        window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
+        window.ToppreiseSuite.processListings();
+    }""")
+
+    weight_wrapper = page.locator('#tp-bar-weight-wrapper')
+    assert weight_wrapper.is_visible()
+
+    weight_btn = page.locator('#tp-bar-weight-btn')
+    assert '50/50' in weight_btn.inner_text()
+
+    # Open weight popover
+    weight_btn.click()
+    popover = page.locator('#tp-weight-popover')
+    assert popover.is_visible()
+
+    # Select 100% Rekord
+    page.locator('#tp-weight-popover button[data-weight="1.00"]').click()
+    assert page.evaluate("() => window.ToppreiseSuite.CONFIG.BESTPREISE_WEIGHT_RECORD === 1.0")
+    assert '100% Rek' in page.locator('#tp-bar-weight-btn').inner_text()
+
+    # Select 100% Median
+    page.locator('#tp-bar-weight-btn').click()
+    page.locator('#tp-weight-popover button[data-weight="0.00"]').click()
+    assert page.evaluate("() => window.ToppreiseSuite.CONFIG.BESTPREISE_WEIGHT_RECORD === 0.0")
+    assert '100% Med' in page.locator('#tp-bar-weight-btn').inner_text()
+
+
+def test_dual_score_breakdown_pill_rendering(page: Page):
+    """
+    Validates that a verified deal renders both its combined weighted score in the circle badge
+    and its individual scores (Rek: -X% · Ø: -Y%) in .tp-badge-score-breakdown underneath.
+    """
+    page.evaluate("""() => {
+        localStorage.clear();
+        localStorage.setItem('tp_hist_v1_797571', JSON.stringify({
+            tiefstpreis: 1800,
+            previousLow: 2000,
+            hoechstpreis: 2800,
+            medianPrice: 2400,
+            isNewAllTimeLow: true,
+            dataPointCount: 20,
+            time: Date.now()
+        }));
+        window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
+        window.ToppreiseSuite.CONFIG.BESTPREISE_WEIGHT_RECORD = 0.50;
+        window.ToppreiseSuite.processListings();
+    }""")
+
+    card = page.locator('#card-cheapest')
+    assert card.is_visible()
+
+    # Badge circle has Real Deal text
+    badge = card.locator('.badge-dif')
+    assert badge.is_visible()
+
+    # Dual-score breakdown pill is rendered
+    breakdown = card.locator('.tp-badge-score-breakdown')
+    assert breakdown.is_visible()
+    text = breakdown.inner_text()
+    assert 'Rek:' in text and 'Ø:' in text
+
+
+def test_hover_stability_no_translate_jitter(page: Page):
+    """
+    Validates that hover styles do not apply transform: translateY, preventing boundary oscillation loops.
+    """
+    has_translate = page.evaluate("""() => {
+        for (const sheet of document.styleSheets) {
+            try {
+                for (const rule of sheet.cssRules) {
+                    if (rule.selectorText && rule.selectorText.includes(':hover') && rule.selectorText.includes('tp-heatmap-active')) {
+                        if (rule.style.transform && rule.style.transform.includes('translateY')) {
+                            return true;
+                        }
+                    }
+                }
+            } catch (e) {}
+        }
+        return false;
+    }""")
+    assert not has_translate
+
+
 
 
 
