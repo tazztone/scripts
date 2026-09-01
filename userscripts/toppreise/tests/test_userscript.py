@@ -1297,6 +1297,243 @@ def test_real_deal_record_low_with_previous_low_subline(page: Page):
     assert sparkline.is_visible()
 
 
+def test_bestpreise_tier_qualification_logic(page: Page):
+    # Test Tier 1: New Record Low
+    tier1_res = page.evaluate("""() => {
+        const stats = {
+            tiefstpreis: 1500,
+            hoechstpreis: 2500,
+            previousLow: 1800,
+            isNewAllTimeLow: true,
+            realDiscountVsPrevLow: 17,
+            dataPointCount: 10
+        };
+        return window.ToppreiseSuite.getBestpreiseTier(stats, 1500);
+    }""")
+    assert tier1_res['tier'] == 1
+    assert tier1_res['emoji'] == '🔥'
+    assert tier1_res['realPct'] == 17
+    assert tier1_res['score'] == 1017
+
+    # Test Tier 2: All-Time Low with Median Discount
+    tier2_res = page.evaluate("""() => {
+        const stats = {
+            tiefstpreis: 1000,
+            hoechstpreis: 1600,
+            medianPrice: 1400,
+            isNewAllTimeLow: false,
+            realDiscountVsMedian: 29,
+            dataPointCount: 8
+        };
+        return window.ToppreiseSuite.getBestpreiseTier(stats, 1000);
+    }""")
+    assert tier2_res['tier'] == 2
+    assert tier2_res['emoji'] == '🌟'
+    assert tier2_res['realPct'] == 29
+    assert tier2_res['score'] == 529
+
+    # Test Exclusion: Non-bestpreis
+    tier3_nonbest = page.evaluate("""() => {
+        const stats = {
+            tiefstpreis: 1000,
+            hoechstpreis: 1600,
+            medianPrice: 1400,
+            isNewAllTimeLow: false,
+            dataPointCount: 8
+        };
+        return window.ToppreiseSuite.getBestpreiseTier(stats, 1200); // 1200 > 1000 * 1.01
+    }""")
+    assert tier3_nonbest is None
+
+    # Test Exclusion: Fewer than 5 points
+    tier3_fewpoints = page.evaluate("""() => {
+        const stats = {
+            tiefstpreis: 1000,
+            hoechstpreis: 1500,
+            isNewAllTimeLow: true,
+            dataPointCount: 3,
+            timeSeries: [[1, 1500], [2, 1200], [3, 1000]]
+        };
+        return window.ToppreiseSuite.getBestpreiseTier(stats, 1000);
+    }""")
+    assert tier3_fewpoints is None
+
+    # Test Exclusion: Flat price (< 2% variance)
+    tier3_flatprice = page.evaluate("""() => {
+        const stats = {
+            tiefstpreis: 1000,
+            hoechstpreis: 1010,
+            isNewAllTimeLow: false,
+            dataPointCount: 12
+        };
+        return window.ToppreiseSuite.getBestpreiseTier(stats, 1000);
+    }""")
+    assert tier3_flatprice is None
+
+
+def test_bestpreise_filter_bar_toggle_and_state(page: Page):
+    # Verify button exists in filter bar
+    btn = page.locator('#tp-suite-filter-bar #tp-bar-bestpreise-btn')
+    assert btn.is_visible()
+    assert '💎 Neue Bestpreise' in (btn.text_content() or '')
+
+    # Toggle Bestpreise mode ON
+    btn.click()
+
+    # Verify bar accent class and active button state
+    assert 'tp-bestpreise-bar' in (page.locator('#tp-suite-filter-bar').get_attribute('class') or '')
+    assert 'tp-bestpreise-active' in (btn.get_attribute('class') or '')
+    assert page.evaluate("() => window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE") is True
+
+    # Redundant controls should be disabled
+    real_deal_btn = page.locator('#tp-bar-real-deal-btn')
+    assert 'tp-disabled' in (real_deal_btn.get_attribute('class') or '')
+    assert 'Inaktiv' in (real_deal_btn.get_attribute('title') or '')
+
+    batch_btn = page.locator('#tp-bar-batch-check-btn')
+    assert 'tp-disabled' in (batch_btn.get_attribute('class') or '')
+
+    # Toggle Bestpreise mode OFF
+    btn.click()
+    assert 'tp-bestpreise-bar' not in (page.locator('#tp-suite-filter-bar').get_attribute('class') or '')
+    assert 'tp-bestpreise-active' not in (btn.get_attribute('class') or '')
+    assert page.evaluate("() => window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE") is False
+
+
+def test_bestpreise_card_badge_morph_and_sublines(page: Page):
+    # Seed cache: Card 1 (797571, price 1800) is a Tier 1 New Record Low
+    # Seed cache: Card 2 (797572, price 1100) is a Tier 2 Bestpreis vs Median 1500
+    # Seed cache: Card 3 (797573, price 15) is a Non-Bestpreis (tiefstpreis 10)
+    page.evaluate("""() => {
+        localStorage.setItem('tp_hist_v1_797571', JSON.stringify({
+            tiefstpreis: 1800,
+            hoechstpreis: 2600,
+            previousLow: 2200,
+            isNewAllTimeLow: true,
+            realDiscountVsPrevLow: 18,
+            dataPointCount: 10,
+            time: Date.now()
+        }));
+        localStorage.setItem('tp_hist_v1_797572', JSON.stringify({
+            tiefstpreis: 1100,
+            hoechstpreis: 1800,
+            medianPrice: 1500,
+            isNewAllTimeLow: false,
+            realDiscountVsMedian: 27,
+            dataPointCount: 15,
+            time: Date.now()
+        }));
+        localStorage.setItem('tp_hist_v1_797573', JSON.stringify({
+            tiefstpreis: 10,
+            hoechstpreis: 25,
+            isNewAllTimeLow: false,
+            dataPointCount: 10,
+            time: Date.now()
+        }));
+        window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
+        window.ToppreiseSuite.processListings();
+    }""")
+
+    # Card 1: Tier 1 (New Record) -> Golden diamond badge with "Rekord -18%" and subline
+    card1_badge = page.locator('#card-cheapest .badge-dif')
+    assert 'tp-deal-new-record' in (card1_badge.get_attribute('class') or '')
+    assert 'Rekord' in (card1_badge.text_content() or '')
+    assert '-18%' in (card1_badge.text_content() or '')
+
+    card1_subline = page.locator('#card-cheapest .tp-card-historical-price.tp-is-record-low')
+    assert 'Bisher: CHF 2200.00 (-18%)' in (card1_subline.text_content() or '')
+
+    # Card 2: Tier 2 (Bestpreis) -> Emerald halo badge with "Bestpreis -27%" and median subline
+    card2_badge = page.locator('#card-expensive .badge-dif')
+    assert 'tp-deal-alltime-low' in (card2_badge.get_attribute('class') or '')
+    assert 'Bestpreis' in (card2_badge.text_content() or '')
+    assert '-27%' in (card2_badge.text_content() or '')
+
+    card2_subline = page.locator('#card-expensive .tp-card-historical-price.tp-is-at-low')
+    assert 'Ø-Preis: CHF 1500.00 (-27%)' in (card2_subline.text_content() or '')
+
+    # Card 3 & Uncached cards: Hidden in Bestpreise mode
+    assert 'tp-bestpreise-hidden' in (page.locator('#card-negative').get_attribute('class') or '')
+    assert 'tp-bestpreise-hidden' in (page.locator('#card-low-offers').get_attribute('class') or '')
+
+    # Toggle Bestpreise mode OFF -> Restores original badges and removes hidden classes
+    page.evaluate("""() => {
+        window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = false;
+        window.ToppreiseSuite.processListings();
+    }""")
+    assert 'tp-bestpreise-hidden' not in (page.locator('#card-negative').get_attribute('class') or '')
+    assert 'tp-deal-new-record' not in (page.locator('#card-cheapest .badge-dif').get_attribute('class') or '')
+    assert '-67%' in (page.locator('#card-cheapest .badge-dif').text_content() or '')
+
+
+def test_bestpreise_sorting_by_tier_and_real_discount(page: Page):
+    # Setup 3 products:
+    # Card 1 (797571): Tier 1 with 18% record discount (score: 1018)
+    # Card 2 (797572): Tier 2 with 35% median discount (score: 535)
+    # Card 3 (797573): Tier 1 with 25% record discount (score: 1025)
+    # In Bestpreise mode, sort order must be: Card 3 (1025) -> Card 1 (1018) -> Card 2 (535)
+    page.evaluate("""() => {
+        localStorage.setItem('tp_hist_v1_797571', JSON.stringify({
+            tiefstpreis: 1800,
+            hoechstpreis: 2600,
+            previousLow: 2200,
+            isNewAllTimeLow: true,
+            realDiscountVsPrevLow: 18,
+            dataPointCount: 10,
+            time: Date.now()
+        }));
+        localStorage.setItem('tp_hist_v1_797572', JSON.stringify({
+            tiefstpreis: 1100,
+            hoechstpreis: 1800,
+            medianPrice: 1700,
+            isNewAllTimeLow: false,
+            realDiscountVsMedian: 35,
+            dataPointCount: 15,
+            time: Date.now()
+        }));
+        localStorage.setItem('tp_hist_v1_797573', JSON.stringify({
+            tiefstpreis: 15,
+            hoechstpreis: 30,
+            previousLow: 20,
+            isNewAllTimeLow: true,
+            realDiscountVsPrevLow: 25,
+            dataPointCount: 12,
+            time: Date.now()
+        }));
+        window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
+        window.ToppreiseSuite.processListings();
+    }""")
+
+    card_ids = page.evaluate("""() => {
+        const cards = Array.from(document.querySelectorAll('#product-list .Plugin_Product'));
+        return cards.map(c => c.id);
+    }""")
+    assert card_ids[0] == 'card-negative'   # Score 1025
+    assert card_ids[1] == 'card-cheapest'   # Score 1018
+    assert card_ids[2] == 'card-expensive'  # Score 535
+
+
+def test_bestpreise_settings_modal_toggle_and_persistence(page: Page):
+    # Open settings modal in Shadow DOM
+    page.click('#tp-root >> #tp-settings-fab')
+    page.wait_for_selector('#tp-root >> #tp-settings-dialog', state='visible')
+
+    toggle = page.locator('#tp-root >> #tp-bestpreise-mode-toggle')
+    assert not toggle.is_checked()
+
+    # Toggle on
+    page.click('#tp-root >> #tp-bestpreise-mode-toggle + .tp-slider')
+    assert toggle.is_checked()
+
+    # Save
+    page.click('#tp-root >> #tp-btn-save')
+    page.wait_for_selector('#tp-root >> #tp-settings-dialog', state='hidden')
+
+    assert page.evaluate("() => window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE") is True
+    assert 'tp-bestpreise-bar' in (page.locator('#tp-suite-filter-bar').get_attribute('class') or '')
+
+
+
 
 
 
