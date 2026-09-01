@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.16.3
+// @version      2.16.4
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, checks real all-time Tiefstpreise, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -1547,6 +1547,58 @@ const SHADOW_MODAL_STYLES = `
     return fetchPromise;
   }
 
+  async function runProductScanner(options = {}) {
+    const {
+      filterFn = () => true,
+      sortFn = null,
+      delayMs = 200,
+      shouldCancelFn = () => false,
+      onProgress = null,
+      onComplete = null
+    } = options;
+
+    const cards = getProductCards();
+    const targets = [];
+
+    for (const card of cards) {
+      const pid = getCardProductId(card);
+      if (!pid) continue;
+      const cached = getCachedPriceStats(pid);
+      if (cached) continue;
+      const discount = extractCardDiscount(card) ?? 0;
+      if (filterFn({ pid, card, discount })) {
+        targets.push({ pid, card, discount });
+      }
+    }
+
+    if (sortFn) {
+      targets.sort(sortFn);
+    }
+
+    const total = targets.length;
+    let completed = 0;
+
+    if (total === 0) {
+      processListings();
+      if (onComplete) onComplete(0, 0);
+      return { completed: 0, total: 0 };
+    }
+
+    for (let i = 0; i < targets.length; i++) {
+      if (shouldCancelFn()) break;
+      const item = targets[i];
+      await fetchSingleProductPriceStats(item.pid);
+      completed++;
+      if (onProgress) onProgress(completed, total);
+      processListings();
+      const delay = typeof delayMs === 'function' ? delayMs() : delayMs;
+      await new Promise(r => setTimeout(r, delay));
+    }
+
+    if (onComplete) onComplete(completed, total);
+    return { completed, total };
+  }
+
   let isBatchChecking = false;
   let batchCancelRequested = false;
 
@@ -1559,41 +1611,13 @@ const SHADOW_MODAL_STYLES = `
     batchCancelRequested = false;
 
     try {
-      const cards = getProductCards();
-      const targets = [];
-
-      for (const card of cards) {
-        const pid = getCardProductId(card);
-        if (!pid) continue;
-        const discount = extractCardDiscount(card) ?? 0;
-        const cached = getCachedPriceStats(pid);
-        // Skip already cached items (both valid stats and negative unavailable cache)
-        if (!cached && discount >= minDiscount) {
-          targets.push({ pid, card, discount });
-        }
-      }
-
-      const total = targets.length;
-      let completed = 0;
-
-      if (total === 0) {
-        if (onComplete) onComplete(0, 0);
-        return;
-      }
-
-      for (let i = 0; i < targets.length; i++) {
-        if (batchCancelRequested) break;
-        const item = targets[i];
-        const res = await fetchSingleProductPriceStats(item.pid);
-        completed++;
-        if (onProgress) onProgress(completed, total);
-        processListings();
-        // Adaptive pacing between 250ms–350ms to respect server limits
-        const paceDelay = 250 + Math.floor(Math.random() * 100);
-        await new Promise(r => setTimeout(r, paceDelay));
-      }
-
-      if (onComplete) onComplete(completed, total);
+      await runProductScanner({
+        filterFn: item => item.discount >= minDiscount,
+        delayMs: () => 250 + Math.floor(Math.random() * 100),
+        shouldCancelFn: () => batchCancelRequested,
+        onProgress,
+        onComplete
+      });
     } finally {
       isBatchChecking = false;
       batchCancelRequested = false;
@@ -1617,41 +1641,14 @@ const SHADOW_MODAL_STYLES = `
     bestpreiseScanCancel = false;
 
     try {
-      const cards = getProductCards();
-      const targets = [];
-
-      for (const card of cards) {
-        const pid = getCardProductId(card);
-        if (!pid) continue;
-        const cached = getCachedPriceStats(pid);
-        if (cached) continue;
-        const discount = extractCardDiscount(card) ?? 0;
-        targets.push({ pid, card, discount });
-      }
-
-      // Priority: highest feed discount first (most likely genuine deals)
-      targets.sort((a, b) => b.discount - a.discount);
-
-      const total = targets.length;
-      let completed = 0;
-
-      if (total === 0) {
-        processListings();
-        if (onComplete) onComplete(0, 0);
-        return;
-      }
-
-      for (let i = 0; i < targets.length; i++) {
-        if (bestpreiseScanCancel || !CONFIG.BESTPREISE_MODE_ACTIVE) break;
-        const item = targets[i];
-        await fetchSingleProductPriceStats(item.pid);
-        completed++;
-        if (onProgress) onProgress(completed, total);
-        processListings();
-        await new Promise(r => setTimeout(r, 200));
-      }
-
-      if (onComplete) onComplete(completed, total);
+      await runProductScanner({
+        filterFn: () => true,
+        sortFn: (a, b) => b.discount - a.discount,
+        delayMs: 200,
+        shouldCancelFn: () => bestpreiseScanCancel || !CONFIG.BESTPREISE_MODE_ACTIVE,
+        onProgress,
+        onComplete
+      });
     } finally {
       isBestpreiseScanning = false;
       bestpreiseScanCancel = false;
