@@ -106,7 +106,9 @@ This document details the DOM selectors, event management, and filter logic for 
 
 14. **Deal-Feed-Only Features on Non-Feed Pages**:
     - *Gotcha*: Heatmap, batch deal-check, Tiefstpreis toggle, and threshold selector are rendered on category/search pages where no discount badges (`.badge-dif`) exist, creating dead UI clutter with permanently-zero counters. Furthermore, when `cards.length === 0` on product detail pages (`/preisvergleich/...-pNNNNN`), the filter bar was inadvertently injected above the dealer table.
-    - *Rule*: Gate deal-feed-only filter bar controls behind `isDealFeed` (derived from `isNeueToppreisePage()`). Suppress the entire filter bar on product detail pages (`isProductDetailPage()`) and pages with 0 product cards. The generic `.badge` selector must not be used for `badgeDifEl` — always require `.badge-dif`.
+15. **Pricechart HTML Grid Structure vs `Element.closest()` Traversal**:
+    - *Gotcha*: On real Toppreise pricechart endpoints, title headings carry grid classes directly (`<div class="title col-12">Tiefstpreis</div>`). Calling `found.closest('.col-12, .col-4, ...')` evaluates `closest()` on the element itself, matching `.col-12` and returning the title `<div>` (which contains only text, no price).
+    - *Rule*: Always inspect adjacent element containers (`found.nextElementSibling?.querySelector('.Plugin_Price')`) or scope parent traversal to `.col-4, .col-md-3, .col-md, [class*="col-"]:not(.title)` and include regex fallbacks.
 
 ---
 
@@ -193,6 +195,8 @@ Subcategories appear in two distinct patterns across the site:
 - **Caching & Rate-Limiting Strategy**:
   - Cache responses in `localStorage` under `tp_hist_v1_{productId}` with a 12-hour TTL to prevent redundant network queries.
   - LRU/cap pruning maintaining max 300 cached entries.
-  - Query on-demand via single card `🔍 Tiefstpreis?` button or user-initiated batch check with rate-limiting delays (~120ms between items).
+  - Query on-demand via single card `🔍 Tiefstpreis?` button or user-initiated batch check.
+  - Paced batch checks with 220–280ms jittered delay between items and automatic exponential backoff retry on transient 429/503 responses.
+  - Multi-language label resolution (DE, FR, IT, EN).
 
 

@@ -734,6 +734,101 @@ def test_product_detail_page_deal_badge(page: Page):
     assert 'CHF 700.00' in title
 
 
+def test_real_world_toppreise_pricechart_html_parsing(page: Page):
+    # Real HTML layout directly from Toppreise.ch pricechart endpoint
+    real_toppreise_html = '''
+    <div id="Plugin_PriceChart_121918" data-product-id="845299" class="Plugin_PriceChart Plugin_PriceChart_Fullview">
+      <div class="PriceChartLegend d-block col-12 text-center">
+        <div class="row align-items-center">
+          <div class="col-4 col-md-3">
+            <div class="row p-2">
+              <div class="title col-12">aktueller Toppreis</div>
+              <div class="col-12 pt-2">
+                <div class="row">
+                  <span class="chartProductPrice col-12 col-lg p-0">
+                    <div id="Plugin_PriceInformation_216829" class="Plugin_PriceInformation">
+                      <div class="priceContainer unrelatedprice">
+                        <div class="Plugin_Price "> 79.45 </div>
+                      </div>
+                    </div>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-4 col-md-3">
+            <div class="row p-2">
+              <div class="title col-12">Tiefstpreis</div>
+              <div class="col-12 pt-2">
+                <div class="row">
+                  <div class="chartProductPrice col-12 col-lg p-0">
+                    <div id="Plugin_PriceInformation_216829" class="Plugin_PriceInformation">
+                      <div class="priceContainer unrelatedprice">
+                        <div class="Plugin_Price "> 79.45 </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-4 col-md-3">
+            <div class="row p-2">
+              <div class="title col-12">Höchstpreis</div>
+              <div class="col-12 pt-2">
+                <div class="row">
+                  <div class="chartProductPrice col-12 col-lg p-0">
+                    <div id="Plugin_PriceInformation_216829" class="Plugin_PriceInformation">
+                      <div class="priceContainer unrelatedprice">
+                        <div class="Plugin_Price "> 172.00 </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    '''
+    page.route('**/plugins/product/pricechart*', lambda route: route.fulfill(
+        status=200,
+        headers={'access-control-allow-origin': '*'},
+        content_type='text/html',
+        body=real_toppreise_html
+    ))
+
+    # Click Tiefstpreis? on card-cheapest (price 1800 CHF vs Tiefstpreis 79.45 CHF -> +2166% markup)
+    page.click('#card-cheapest .tp-card-check-deal-btn')
+
+    # Expect badge to be created with markup badge, NOT 'Nicht verfügbar'
+    page.wait_for_selector('#card-cheapest .tp-real-deal-sub-badge', timeout=3000)
+    badge = page.locator('#card-cheapest .tp-real-deal-sub-badge')
+    assert '+2166%' in (badge.text_content() or '')
+
+    # Now verify all-time low case when Tiefstpreis matches card price (1800 CHF)
+    real_alltime_low_html = real_toppreise_html.replace('79.45', '1800.00')
+    page.route('**/plugins/product/pricechart*456*', lambda route: route.fulfill(
+        status=200,
+        headers={'access-control-allow-origin': '*'},
+        content_type='text/html',
+        body=real_alltime_low_html
+    ))
+    # card-negative has product id 456, price 15 CHF -> let's make mock match 15.00
+    real_negative_html = real_toppreise_html.replace('79.45', '15.00')
+    page.route('**/plugins/product/pricechart*456*', lambda route: route.fulfill(
+        status=200,
+        headers={'access-control-allow-origin': '*'},
+        content_type='text/html',
+        body=real_negative_html
+    ))
+    page.click('#card-negative .tp-card-check-deal-btn')
+    page.wait_for_selector('#card-negative .tp-real-deal-sub-badge', timeout=3000)
+    neg_badge = page.locator('#card-negative .tp-real-deal-sub-badge')
+    assert 'Allzeit-Tiefstpreis' in (neg_badge.text_content() or '')
+
+
 def test_filter_bar_hidden_on_product_detail_page(page: Page):
     # Simulate product detail page
     page.evaluate('''() => {
@@ -829,6 +924,10 @@ def test_slash_key_noop_when_typing_in_input(page: Page):
 
 
 def test_sparkline_renders_with_cached_timeseries(page: Page):
+    # Enable sparklines for testing
+    page.evaluate("""() => {
+        window.ToppreiseSuite.CONFIG.ENABLE_SPARKLINES = true;
+    }""")
     # Inject cached price stats with timeSeries into localStorage
     page.evaluate("""() => {
         const stats = {
@@ -863,6 +962,7 @@ def test_sparkline_not_rendered_without_timeseries(page: Page):
 
 def test_sparkline_trending_up_renders_red(page: Page):
     page.evaluate("""() => {
+        window.ToppreiseSuite.CONFIG.ENABLE_SPARKLINES = true;
         const stats = {
             tiefstpreis: 900.0,
             hoechstpreis: 1200.0,
@@ -1073,6 +1173,11 @@ def test_negative_terms_multi_delimiter_support(page: Page):
 
 
 def test_sparkline_handles_edge_cases(page: Page):
+    # Enable sparklines for testing
+    page.evaluate("""() => {
+        window.ToppreiseSuite.CONFIG.ENABLE_SPARKLINES = true;
+    }""")
+
     # 1 data point only -> not enough for a trend line, no sparkline rendered
     page.evaluate("""() => {
         const stats = {
@@ -1101,6 +1206,55 @@ def test_sparkline_handles_edge_cases(page: Page):
     assert sparkline.is_visible()
     polyline = page.locator('#card-cheapest .tp-sparkline polyline')
     assert polyline.get_attribute('stroke') == '#10b981'
+
+    # Disabled by default -> sparklines not rendered even if data exists
+    page.evaluate("""() => {
+        window.ToppreiseSuite.CONFIG.ENABLE_SPARKLINES = false;
+        window.ToppreiseSuite?.processListings?.();
+    }""")
+    assert page.locator('#card-cheapest .tp-sparkline').count() == 0
+
+
+def test_negative_caching_and_manual_click_override(page: Page):
+    # Set negative cache for card-cheapest (product 797571)
+    page.evaluate("""() => {
+        localStorage.setItem('tp_hist_v1_797571', JSON.stringify({ unavailable: true, time: Date.now() }));
+    }""")
+
+    # Batch check ignores negatively cached card
+    cached = page.evaluate("() => window.ToppreiseSuite?.CONFIG ? localStorage.getItem('tp_hist_v1_797571') : null")
+    assert 'unavailable' in (cached or '')
+
+    # Manual click bypasses negative cache and fetches fresh stats
+    page.route('**/plugins/product/pricechart*797571*', lambda route: route.fulfill(
+        status=200,
+        headers={'access-control-allow-origin': '*'},
+        content_type='text/html',
+        body='<div class="PriceChartLegend"><div class="title">Tiefstpreis</div><div class="Plugin_Price">1800.00</div></div>'
+    ))
+
+    page.click('#card-cheapest .tp-card-check-deal-btn')
+    page.wait_for_selector('#card-cheapest .tp-real-deal-sub-badge')
+    badge = page.locator('#card-cheapest .tp-real-deal-sub-badge')
+    assert 'Allzeit-Tiefstpreis' in (badge.text_content() or '')
+
+
+def test_sparklines_beta_settings_toggle(page: Page):
+    page.click('#tp-root >> #tp-settings-fab')
+    page.wait_for_selector('#tp-root >> #tp-settings-dialog', state='visible')
+
+    toggle = page.locator('#tp-root >> #tp-sparklines-toggle')
+    assert not toggle.is_checked()
+
+    # Toggle sparklines on via slider click
+    page.click('#tp-root >> #tp-sparklines-toggle + .tp-slider')
+    assert toggle.is_checked()
+
+    # Save
+    page.click('#tp-root >> #tp-btn-save')
+    page.wait_for_selector('#tp-root >> #tp-settings-dialog', state='hidden')
+
+    assert page.evaluate("() => window.ToppreiseSuite?.CONFIG?.ENABLE_SPARKLINES") is True
 
 
 

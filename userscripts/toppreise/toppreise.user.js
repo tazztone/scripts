@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.13.2
+// @version      2.14.2
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, checks real all-time Tiefstpreise, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -24,7 +24,9 @@ const DEFAULTS = {
   HEATMAP_CURVE: 'calibrated',
   REAL_DEAL_FILTER_ACTIVE: false,
   REAL_DEAL_MIN_DISCOUNT: 30,
-  REAL_DEAL_CACHE_HOURS: 12,
+  REAL_DEAL_CACHE_HOURS: 48,
+  NEGATIVE_CACHE_HOURS: 2,
+  ENABLE_SPARKLINES: false,
   NEGATIVE_TERMS: '',
   EXCLUDED_CATEGORIES: [],
   MIN_OFFERS: 0,
@@ -750,6 +752,7 @@ const SHADOW_MODAL_STYLES = `
   .tp-switch input:checked + .tp-slider { background-color: #10b981; }
   .tp-switch.tp-blue input:checked + .tp-slider { background-color: #3b82f6; }
   .tp-switch.tp-rose input:checked + .tp-slider { background-color: #f43f5e; }
+  .tp-switch.tp-purple input:checked + .tp-slider { background-color: #8b5cf6; }
   .tp-switch input:checked + .tp-slider:before { transform: translateX(20px); background-color: #fff; }
   .tp-modal-actions {
     display: flex;
@@ -1142,30 +1145,47 @@ const SHADOW_MODAL_STYLES = `
     } catch (e) {}
   }
 
-  function getCachedPriceStats(productId) {
+  function getCachedPriceStats(productId, ignoreNegative = false) {
     if (!productId) return null;
     try {
       const raw = window.localStorage?.getItem(STATS_CACHE_PREFIX + productId);
       if (!raw) return null;
       const parsed = JSON.parse(raw);
-      const ttlMs = (CONFIG.REAL_DEAL_CACHE_HOURS || 12) * 3600 * 1000;
-      if (Date.now() - (parsed.time || 0) < ttlMs) {
+      const now = Date.now();
+      const ageMs = now - (parsed.time || 0);
+
+      // Handle negative cache entry (unavailable)
+      if (parsed.unavailable) {
+        if (ignoreNegative) return null;
+        const negTtlMs = (CONFIG.NEGATIVE_CACHE_HOURS || 2) * 3600 * 1000;
+        if (ageMs < negTtlMs) {
+          return parsed;
+        }
+        return null;
+      }
+
+      const ttlMs = (CONFIG.REAL_DEAL_CACHE_HOURS || 48) * 3600 * 1000;
+      if (ageMs < ttlMs) {
         return parsed;
       }
     } catch (e) {}
     return null;
   }
 
-  function setCachedPriceStats(productId, stats) {
-    if (!productId || !stats) return;
+  function setCachedPriceStats(productId, stats, isUnavailable = false) {
+    if (!productId) return;
     try {
       prunePriceStatsCache();
-      const payload = { ...stats, time: Date.now() };
+      const payload = isUnavailable
+        ? { unavailable: true, time: Date.now() }
+        : { ...stats, time: Date.now() };
       window.localStorage?.setItem(STATS_CACHE_PREFIX + productId, JSON.stringify(payload));
     } catch (e) {
       try {
         prunePriceStatsCache(true);
-        const payload = { ...stats, time: Date.now() };
+        const payload = isUnavailable
+          ? { unavailable: true, time: Date.now() }
+          : { ...stats, time: Date.now() };
         window.localStorage?.setItem(STATS_CACHE_PREFIX + productId, JSON.stringify(payload));
       } catch (err) {}
     }
@@ -1183,19 +1203,43 @@ const SHADOW_MODAL_STYLES = `
           const val = parsePrice(found.nextElementSibling.textContent);
           if (val > 0) return val;
         }
-        const parent = found.closest('.col-4, .col-md-3, .col-12, .col, .cell') || found.parentElement;
-        const priceEl = parent?.querySelector('.Plugin_Price');
+        const nextPrice = found.nextElementSibling?.querySelector?.('.chartProductPrice .Plugin_Price, .Plugin_Price');
+        if (nextPrice) {
+          const val = parsePrice(nextPrice.textContent);
+          if (val > 0) return val;
+        }
+        const parentCol = found.closest('.col-4, .col-md-3, .col-md, .cell') ||
+                          (found.parentElement && !found.parentElement.classList.contains('title') ? found.parentElement : null) ||
+                          found.parentElement?.parentElement;
+        const priceEl = parentCol?.querySelector?.('.chartProductPrice .Plugin_Price, .Plugin_Price');
         if (priceEl) {
           const val = parsePrice(priceEl.textContent);
           if (val > 0) return val;
         }
       }
+      // Robust regex fallback if DOM layout differs
+      const escapedTitle = titleText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const reg = new RegExp(`${escapedTitle}[\\s\\S]{1,400}?class="[^"]*Plugin_Price[^"]*"[^>]*>\\s*([\\d.,'\\s]+)`, 'i');
+      const match = html.match(reg);
+      if (match && match[1]) {
+        const val = parsePrice(match[1]);
+        if (val > 0) return val;
+      }
       return null;
     };
 
-    const tiefstpreis = extractPrice('Tiefstpreis');
-    const hoechstpreis = extractPrice('Höchstpreis');
-    const aktuellerToppreis = extractPrice('aktueller Toppreis');
+    const tiefstpreis = extractPrice('Tiefstpreis') ??
+                        extractPrice('Prix le plus bas') ??
+                        extractPrice('Prezzo più basso') ??
+                        extractPrice('Lowest price');
+    const hoechstpreis = extractPrice('Höchstpreis') ??
+                         extractPrice('Prix le plus haut') ??
+                         extractPrice('Prezzo più alto') ??
+                         extractPrice('Highest price');
+    const aktuellerToppreis = extractPrice('aktueller Toppreis') ??
+                              extractPrice('Meilleur prix actuel') ??
+                              extractPrice('Miglior prezzo attuale') ??
+                              extractPrice('Current best price');
 
     if (tiefstpreis !== null) {
       return { tiefstpreis, hoechstpreis, aktuellerToppreis };
@@ -1207,14 +1251,20 @@ const SHADOW_MODAL_STYLES = `
     if (!productId) return null;
     try {
       const baseUrl = (location.origin && location.origin.startsWith('http')) ? location.origin : 'https://www.toppreise.ch';
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
       const res = await fetch(`${baseUrl}/plugins/product/pricechart`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
-          'X-Requested-With': 'XMLHttpRequest'
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json, text/javascript, */*; q=0.01'
         },
-        body: `p_pc_pid=${encodeURIComponent(productId)}`
+        credentials: 'same-origin',
+        body: `p_pc_pid=${encodeURIComponent(productId)}`,
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
       if (!res.ok) return null;
       const data = await res.json();
       if (Array.isArray(data)) return data;
@@ -1229,10 +1279,13 @@ const SHADOW_MODAL_STYLES = `
 
   const activeFetches = new Map();
 
-  async function fetchSingleProductPriceStats(productId) {
+  async function fetchSingleProductPriceStats(productId, retries = 1, forceFresh = false) {
     if (!productId) return null;
-    const cached = getCachedPriceStats(productId);
-    if (cached) return cached;
+    const cached = getCachedPriceStats(productId, forceFresh);
+    if (cached) {
+      if (cached.unavailable) return null;
+      return cached;
+    }
 
     if (activeFetches.has(productId)) {
       return activeFetches.get(productId);
@@ -1241,23 +1294,61 @@ const SHADOW_MODAL_STYLES = `
     const fetchPromise = (async () => {
       try {
         const baseUrl = (location.origin && location.origin.startsWith('http')) ? location.origin : 'https://www.toppreise.ch';
-        const url = `${baseUrl}/plugins/product/pricechart?p_pc_pid=${productId}`;
-        const [resHtml, timeSeries] = await Promise.all([
-          fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } }),
-          fetchPriceTimeSeries(productId)
-        ]);
-        if (!resHtml.ok) return null;
+        const url = `${baseUrl}/plugins/product/pricechart?p_pc_pid=${encodeURIComponent(productId)}`;
+        
+        let resHtml = null;
+        for (let attempt = 0; attempt <= retries; attempt++) {
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 7000);
+            resHtml = await fetch(url, {
+              headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'text/html, */*; q=0.01'
+              },
+              credentials: 'same-origin',
+              signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            if (resHtml.ok) break;
+            // If rate limited (429) or temporary server error, back off before retrying
+            if (attempt < retries) {
+              await new Promise(r => setTimeout(r, 400 + attempt * 400));
+            }
+          } catch (fetchErr) {
+            if (attempt < retries) {
+              await new Promise(r => setTimeout(r, 400 + attempt * 400));
+            } else {
+              throw fetchErr;
+            }
+          }
+        }
+
+        if (!resHtml || !resHtml.ok) {
+          setCachedPriceStats(productId, null, true);
+          return null;
+        }
         const html = await resHtml.text();
         const stats = parsePriceStatsFromHtml(html);
         if (stats) {
-          if (timeSeries && Array.isArray(timeSeries)) {
-            stats.timeSeries = timeSeries;
+          // Only fetch secondary time series if Beta Sparklines are explicitly enabled
+          if (CONFIG.ENABLE_SPARKLINES) {
+            fetchPriceTimeSeries(productId).then(timeSeries => {
+              if (timeSeries && Array.isArray(timeSeries) && timeSeries.length >= 2) {
+                stats.timeSeries = timeSeries;
+                setCachedPriceStats(productId, stats);
+              }
+            }).catch(() => {});
           }
+
           setCachedPriceStats(productId, stats);
           return stats;
+        } else {
+          setCachedPriceStats(productId, null, true);
         }
       } catch (err) {
         if (CONFIG.DEBUG) console.warn('[Toppreise Suite] Failed fetching price stats for product', productId, err);
+        setCachedPriceStats(productId, null, true);
       } finally {
         activeFetches.delete(productId);
       }
@@ -1288,6 +1379,7 @@ const SHADOW_MODAL_STYLES = `
         if (!pid) continue;
         const discount = extractCardDiscount(card) ?? 0;
         const cached = getCachedPriceStats(pid);
+        // Skip already cached items (both valid stats and negative unavailable cache)
         if (!cached && discount >= minDiscount) {
           targets.push({ pid, card, discount });
         }
@@ -1304,11 +1396,13 @@ const SHADOW_MODAL_STYLES = `
       for (let i = 0; i < targets.length; i++) {
         if (batchCancelRequested) break;
         const item = targets[i];
-        await fetchSingleProductPriceStats(item.pid);
+        const res = await fetchSingleProductPriceStats(item.pid);
         completed++;
         if (onProgress) onProgress(completed, total);
         processListings();
-        await new Promise(r => setTimeout(r, 120));
+        // Adaptive pacing between 250ms–350ms to respect server limits
+        const paceDelay = 250 + Math.floor(Math.random() * 100);
+        await new Promise(r => setTimeout(r, paceDelay));
       }
 
       if (onComplete) onComplete(completed, total);
@@ -2059,7 +2153,7 @@ const SHADOW_MODAL_STYLES = `
             e.stopImmediatePropagation();
             checkBtn.classList.add('tp-loading');
             checkBtn.innerHTML = `⏳ Prüfe...`;
-            const fetchedStats = await fetchSingleProductPriceStats(pid);
+            const fetchedStats = await fetchSingleProductPriceStats(pid, 1, true);
             if (fetchedStats) {
               processListings();
             } else {
@@ -2067,7 +2161,7 @@ const SHADOW_MODAL_STYLES = `
               checkBtn.innerHTML = `⚠️ Nicht verfügbar`;
               setTimeout(() => {
                 if (checkBtn && checkBtn.parentElement) checkBtn.innerHTML = `🔍 Tiefstpreis?`;
-              }, 3000);
+              }, 2500);
             }
           };
           realDealWrapper.appendChild(checkBtn);
@@ -2077,8 +2171,8 @@ const SHADOW_MODAL_STYLES = `
       }
     }
 
-    // 3.6 Mini Price-Trend Sparkline
-    if (stats && Array.isArray(stats.timeSeries) && stats.timeSeries.length >= 2) {
+    // 3.6 Mini Price-Trend Sparkline (Beta Feature)
+    if (CONFIG.ENABLE_SPARKLINES && stats && Array.isArray(stats.timeSeries) && stats.timeSeries.length >= 2) {
       let sparkContainer = card.querySelector('.tp-sparkline-container');
       if (!sparkContainer) {
         sparkContainer = document.createElement('div');
@@ -2570,7 +2664,18 @@ const SHADOW_MODAL_STYLES = `
               <input type="number" id="tp-real-deal-min-val" min="5" max="95" step="5" value="30">
             </div>
           </div>
-          <div class="tp-section-header" style="color: #6366f1;">7. Import / Export</div>
+          <div class="tp-section-header" style="color: #8b5cf6;">7. Experimentell / Beta</div>
+          <div class="tp-settings-group tp-switch-container">
+            <div class="tp-switch-label">
+              <label>Mini-Preiskurven (Sparklines) anzeigen</label>
+              <span class="tp-switch-desc">Erfordert zusätzliche Server-Abfragen pro Produkt</span>
+            </div>
+            <label class="tp-switch tp-purple">
+              <input type="checkbox" id="tp-sparklines-toggle">
+              <span class="tp-slider"></span>
+            </label>
+          </div>
+          <div class="tp-section-header" style="color: #6366f1;">8. Import / Export</div>
           <div class="tp-settings-group" style="display: flex; flex-direction: row; gap: 8px;">
             <button type="button" id="tp-export-config-btn" class="tp-btn tp-btn-secondary" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;">📥 Export (JSON)</button>
             <button type="button" id="tp-import-config-btn" class="tp-btn tp-btn-secondary" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;">📤 Import (JSON)</button>
@@ -2617,6 +2722,7 @@ const SHADOW_MODAL_STYLES = `
     const realDealFilterToggle = shadow.getElementById('tp-real-deal-filter-toggle');
     const realDealMinRange = shadow.getElementById('tp-real-deal-min-range');
     const realDealMinVal = shadow.getElementById('tp-real-deal-min-val');
+    const sparklinesToggle = shadow.getElementById('tp-sparklines-toggle');
     const dur90 = shadow.getElementById('tp-dur-90');
     const dur180 = shadow.getElementById('tp-dur-180');
     const dur365 = shadow.getElementById('tp-dur-365');
@@ -2677,6 +2783,7 @@ const SHADOW_MODAL_STYLES = `
       if (realDealFilterToggle) realDealFilterToggle.checked = CONFIG.REAL_DEAL_FILTER_ACTIVE === true;
       if (realDealMinRange) realDealMinRange.value = CONFIG.REAL_DEAL_MIN_DISCOUNT || 30;
       if (realDealMinVal) realDealMinVal.value = CONFIG.REAL_DEAL_MIN_DISCOUNT || 30;
+      if (sparklinesToggle) sparklinesToggle.checked = CONFIG.ENABLE_SPARKLINES === true;
     }
 
     const bindDual = (rangeEl, numEl, scale = 1, onInput = null) => {
@@ -2710,7 +2817,7 @@ const SHADOW_MODAL_STYLES = `
     exportBtn?.addEventListener('click', () => {
       const exportData = {
         _meta: {
-          version: (typeof GM_info !== 'undefined' && GM_info?.script?.version) || '2.13.0',
+          version: (typeof GM_info !== 'undefined' && GM_info?.script?.version) || '2.14.0',
           exported: new Date().toISOString()
         },
         config: { ...CONFIG }
@@ -2805,6 +2912,7 @@ const SHADOW_MODAL_STYLES = `
 
       if (realDealFilterToggle) saveConfigKey('REAL_DEAL_FILTER_ACTIVE', realDealFilterToggle.checked);
       if (realDealMinVal) saveConfigKey('REAL_DEAL_MIN_DISCOUNT', Math.max(5, Math.min(95, parseInt(realDealMinVal.value) || 30)));
+      if (sparklinesToggle) saveConfigKey('ENABLE_SPARKLINES', sparklinesToggle.checked);
 
       updateBodyClasses();
       processListings();
