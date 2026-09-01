@@ -308,11 +308,46 @@ $$\text{Score} = \max\left(0, \text{round}\left((1 - W) \times D_{\text{median}}
   4. *Empty State Guard*: `renderEmptyState` exits immediately if `counts.bestpreiseDeals > 0`, ensuring empty notices never appear when qualifying deals exist.
   5. *Authentic DOM Test Fixture*: `mock_toppreise.html` mirrors live Toppreise with a 2-column layout (Left Sidebar + Tabs + Timeframe Filter + Product Grid) to prevent layout regressions.
 
+---
 
+## 12. Ground Truth DOM Architecture & Hierarchy (Live Inspection on /neue-toppreise)
 
+### Canonical Production Hierarchy
+```html
+<body class="color_page Page_ListTopPriceReductionProducts" data-current-url="/neue-toppreise">
+  <!-- Layout Wrapper -->
+  <div id="Page_ListTopPriceReductionProducts" class="page bestListContainer col-12">
+    <div class="row no-gutters">
+      <!-- Sidebar Column (xl only) -->
+      <div class="filterBoxContainer d-none d-xl-block col-auto p-0 pr-md-3">
+        ...
+      </div>
+      <!-- Main Content Column -->
+      <div class="contentBox col-12 col-xl">
+        <!-- Tabs -->
+        <div class="tabbedContainer row">...</div>
+        <!-- Timeframe Filter -->
+        <div class="row timeframe-row">...</div>
+        <!-- Product List Plugin Container -->
+        <div id="Plugin_TopPriceReductionProductListFull_..." class="Plugin_TopPriceReductionProductListFull standardListWithoutBorder">
+          <div class="standardList container">
+            <!-- Product Grid Rows -->
+            <div class="row">
+              <!-- Product Card Anchor directly receiving column flex classes -->
+              <a href="/preisvergleich/..." id="Plugin_Product_..." class="Plugin_Product medium-box col-12 col-sm-6 col-lg-4 col-xxxl-3" data-entity-id="...">
+                ...
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+```
 
-
-
-
-
-
+### Key Architectural Takeaways
+1. **Direct Anchor Grid Elements**: On `/neue-toppreise`, cards are `<a>` tags with Bootstrap responsive grid classes (`col-12 col-sm-6 col-lg-4 col-xxxl-3`) attached directly to the anchor itself.
+2. **Column Wrapped Cards on Other Views**: On certain category or catalog listings, cards may be nested inside a dedicated `<div class="col-12 col-md-6 col-lg-3">`.
+3. **Sortable Unit Resolution**: `getCardSortableUnit()` must distinguish between when the `<a>` tag *itself* has `col-*` classes (in which case the `<a>` is the sortable unit) versus when a parent wrapper `<div>` has `col-*` (in which case the wrapper `<div>` is the sortable unit, NOT climbing past `.product-grid` or `row` or `contentBox`).
+4. **Visibility & Layout Hiding**: Any hide-filter class (`.tp-bestpreise-hidden`, `.tp-negative-filtered`, `.tp-category-filtered`, etc.) must cleanly hide both the card and any wrapping `.col-*` container (via CSS `:has(> .tp-*)`) so no vacant layout columns occupy space in the flex grid.

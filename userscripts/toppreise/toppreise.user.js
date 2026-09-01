@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.18.6
+// @version      2.18.9
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, checks real all-time Tiefstpreise, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -160,14 +160,24 @@ const STYLES = `
   }
   .tp-mode-hide .Plugin_Product.mixedBrowsingList.tp-not-cheapest,
   .tp-mode-hide .Plugin_Product.mixedBrowsingList.tp-no-store-offer,
-  .tp-negative-filtered, .tp-category-filtered, .tp-min-offers-filtered, .tp-non-bestpreis-filtered, .tp-bestpreise-hidden {
+  .tp-negative-filtered, .tp-category-filtered, .tp-min-offers-filtered, .tp-non-bestpreis-filtered, .tp-bestpreise-hidden,
+  [class*="col-"]:has(> .tp-negative-filtered),
+  [class*="col-"]:has(> .tp-category-filtered),
+  [class*="col-"]:has(> .tp-min-offers-filtered),
+  [class*="col-"]:has(> .tp-non-bestpreis-filtered),
+  [class*="col-"]:has(> .tp-bestpreise-hidden) {
     display: none !important;
   }
   body.tp-reveal-filtered .tp-negative-filtered,
   body.tp-reveal-filtered .tp-category-filtered,
   body.tp-reveal-filtered .tp-min-offers-filtered,
   body.tp-reveal-filtered .tp-non-bestpreis-filtered,
-  body.tp-reveal-filtered .tp-bestpreise-hidden {
+  body.tp-reveal-filtered .tp-bestpreise-hidden,
+  body.tp-reveal-filtered [class*="col-"]:has(> .tp-negative-filtered),
+  body.tp-reveal-filtered [class*="col-"]:has(> .tp-category-filtered),
+  body.tp-reveal-filtered [class*="col-"]:has(> .tp-min-offers-filtered),
+  body.tp-reveal-filtered [class*="col-"]:has(> .tp-non-bestpreis-filtered),
+  body.tp-reveal-filtered [class*="col-"]:has(> .tp-bestpreise-hidden) {
     display: block !important;
     opacity: var(--tp-dim-opacity, 0.25) !important;
     filter: grayscale(40%) !important;
@@ -1013,7 +1023,8 @@ const SHADOW_MODAL_STYLES = `
   };
 
   function getProductCards() {
-    const standardCards = Array.from(document.querySelectorAll('a.Plugin_Product, .Plugin_Product.medium-box, .Plugin_Product.mixedBrowsingList, .mixedBrowsingListProduct, .Plugin_Product'));
+    const rawCards = Array.from(document.querySelectorAll('a.Plugin_Product, .Plugin_Product.medium-box, .Plugin_Product.mixedBrowsingList, .mixedBrowsingListProduct, .Plugin_Product'));
+    const standardCards = rawCards.filter(c => !c.closest('header, nav, footer, .breadcrumb, #tp-suite-filter-bar, .Plugin_ProductHistoryDropdown, .AbstractDropDown, #Plugin_MainHead, .DropDownMenuList'));
     if (standardCards.length > 0) {
       const leafCards = standardCards.filter(c => !c.querySelector('.Plugin_Product, .mixedBrowsingListProduct'));
       if (leafCards.length > 0) return leafCards;
@@ -1021,7 +1032,7 @@ const SHADOW_MODAL_STYLES = `
 
     const gridCards = new Set();
     document.querySelectorAll('a[href*="/preisvergleich/"]').forEach(link => {
-      if (link.closest('header, nav, footer, .breadcrumb, #tp-suite-filter-bar')) return;
+      if (link.closest('header, nav, footer, .breadcrumb, #tp-suite-filter-bar, .Plugin_ProductHistoryDropdown, .AbstractDropDown, #Plugin_MainHead, .DropDownMenuList')) return;
       let container = link.parentElement;
       while (container && container !== document.body && container.parentElement !== document.body) {
         if (container.querySelector('.Plugin_Price, [class*="Price"], [class*="price"]') || container.querySelector('[class*="Differenz"], [class*="differenz"]')) {
@@ -2727,7 +2738,7 @@ const SHADOW_MODAL_STYLES = `
   function getCardSortableUnit(card) {
     if (!card) return null;
     const parent = card.parentElement;
-    if (parent && parent !== document.body && parent.id !== 'product-list' && parent.id !== 'main-content' && !parent.classList?.contains('main-content-col') && !parent.classList?.contains('product-grid')) {
+    if (parent && parent !== document.body && parent.id !== 'product-list' && parent.id !== 'main-content' && !parent.classList?.contains('main-content-col') && !parent.classList?.contains('product-grid') && !parent.classList?.contains('row')) {
       if (Array.from(parent.classList || []).some(c => c.startsWith('col-') || c === 'cell')) {
         return parent;
       }
@@ -2756,8 +2767,8 @@ const SHADOW_MODAL_STYLES = `
       }
     });
 
-    // Find all rows that actually contain product cards (strictly scopes to product rows, never sidebar/tabs)
-    const productRows = Array.from(new Set(cards.map(c => getCardSortableUnit(c)?.parentElement).filter(Boolean)));
+    // Find all rows that actually contain product cards (strictly scopes to product rows, never sidebar/tabs/header)
+    const productRows = Array.from(new Set(cards.map(c => getCardSortableUnit(c)?.parentElement).filter(r => r && !r.closest('header, nav, footer, .breadcrumb, #tp-suite-filter-bar, .Plugin_ProductHistoryDropdown, .AbstractDropDown, #Plugin_MainHead, .DropDownMenuList'))));
     if (productRows.length === 0) return;
 
     const primaryRow = productRows[0];

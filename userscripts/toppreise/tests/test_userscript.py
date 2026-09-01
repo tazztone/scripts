@@ -2073,6 +2073,208 @@ def test_bestpreise_mode_uncached_cards_streaming_ui_retention(page: Page):
     assert page.locator('#card-expensive').is_hidden()
 
 
+def test_bestpreise_mode_all_cards_remain_visible_when_uncached(page: Page):
+    """
+    Visibility Invariant Test 1:
+    When Bestpreise mode is enabled with zero cache, 100% of cards on the page
+    MUST remain computed-visible (offsetParent !== null, display !== 'none', and no ancestor hidden).
+    """
+    page.evaluate("""() => {
+        localStorage.clear();
+        window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
+        window.ToppreiseSuite.processListings();
+    }""")
+
+    # 1. Inspect visibility of all cards on page
+    card_visibilities = page.evaluate("""() => {
+        const cards = Array.from(document.querySelectorAll('.Plugin_Product'));
+        return cards.map(c => {
+            let el = c;
+            let hiddenAncestor = null;
+            while (el && el !== document.body) {
+                const style = window.getComputedStyle(el);
+                if (style.display === 'none' || style.visibility === 'hidden') {
+                    hiddenAncestor = { tag: el.tagName, id: el.id, class: el.className };
+                    break;
+                }
+                el = el.parentElement;
+            }
+            return {
+                id: c.id,
+                hasOffsetParent: c.offsetParent !== null,
+                computedDisplay: window.getComputedStyle(c).display,
+                hasBestpreiseHiddenClass: c.classList.contains('tp-bestpreise-hidden'),
+                hiddenAncestor
+            };
+        });
+    }""")
+
+    assert len(card_visibilities) == 5
+    for cv in card_visibilities:
+        assert cv['hasOffsetParent'] is True, f"Card {cv['id']} has null offsetParent (invisible)"
+        assert cv['computedDisplay'] != 'none', f"Card {cv['id']} has display: none"
+        assert cv['hasBestpreiseHiddenClass'] is False, f"Card {cv['id']} has tp-bestpreise-hidden"
+        assert cv['hiddenAncestor'] is None, f"Card {cv['id']} has hidden ancestor: {cv['hiddenAncestor']}"
+
+    # 2. Assert #product-list container itself is visible
+    assert page.locator('#product-list').is_visible()
+
+    # 3. Assert no empty state notice was generated
+    assert not page.locator('#tp-empty-state-notice').is_visible()
+
+
+def test_bestpreise_mode_progressive_reveal(page: Page):
+    """
+    Visibility Invariant Test 2: Progressive Reveal
+    1. Starts uncached: all 5 cards visible.
+    2. Seeds 1 verified deal (Card 1, score 67%): Card 1 is top-ranked, visible, and highlighted.
+    3. Seeds 1 verified non-deal (Card 2, markup): only Card 2 hides, remaining 4 cards stay visible.
+    4. Asserts visible count == total cards - verified_non_deals.
+    """
+    # 1. Uncached baseline
+    page.evaluate("""() => {
+        localStorage.clear();
+        window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
+        window.ToppreiseSuite.processListings();
+    }""")
+
+    visible_count_1 = page.evaluate("() => Array.from(document.querySelectorAll('.Plugin_Product')).filter(c => c.offsetParent !== null).length")
+    assert visible_count_1 == 5
+
+    # 2. Seed Card 1 as verified Deal (score 67%, 1800 CHF vs tiefstpreis 1800, previousLow 2400)
+    page.evaluate("""() => {
+        localStorage.setItem('tp_hist_v1_797571', JSON.stringify({
+            tiefstpreis: 1800,
+            hoechstpreis: 2500,
+            medianPrice: 2200,
+            previousLow: 2400,
+            isNewAllTimeLow: true,
+            realDiscountVsPrevLow: 25,
+            dataPointCount: 10,
+            time: Date.now()
+        }));
+        window.ToppreiseSuite.processListings();
+    }""")
+
+    # Card 1 is visible and first in primary row
+    assert page.locator('#card-cheapest').is_visible()
+    first_card_id = page.evaluate("() => Array.from(document.querySelectorAll('.Plugin_Product')).filter(c => c.offsetParent !== null)[0].id")
+    assert first_card_id == 'card-cheapest'
+
+    # All 5 cards still visible (1 deal + 4 unscanned)
+    visible_count_2 = page.evaluate("() => Array.from(document.querySelectorAll('.Plugin_Product')).filter(c => c.offsetParent !== null).length")
+    assert visible_count_2 == 5
+
+    # 3. Seed Card 2 as verified Non-Deal (1100 CHF vs tiefstpreis 600, not at low)
+    page.evaluate("""() => {
+        localStorage.setItem('tp_hist_v1_797572', JSON.stringify({
+            tiefstpreis: 600,
+            hoechstpreis: 1300,
+            medianPrice: 850,
+            isNewAllTimeLow: false,
+            dataPointCount: 10,
+            time: Date.now()
+        }));
+        window.ToppreiseSuite.processListings();
+    }""")
+
+    # Card 2 is hidden
+    assert page.locator('#card-expensive').is_hidden()
+
+    # Remaining 4 cards (Card 1 Deal + Cards 3, 4, 5 Unscanned) are visible
+    visible_cards = page.evaluate("() => Array.from(document.querySelectorAll('.Plugin_Product')).filter(c => c.offsetParent !== null).map(c => c.id)")
+    assert visible_cards == ['card-cheapest', 'card-negative', 'card-cat-excluded', 'card-low-offers']
+    assert len(visible_cards) == 4
+
+    # 4. Seed Card 3 as another verified Non-Deal
+    page.evaluate("""() => {
+        localStorage.setItem('tp_hist_v1_797573', JSON.stringify({
+            tiefstpreis: 8,
+            hoechstpreis: 20,
+            medianPrice: 12,
+            isNewAllTimeLow: false,
+            dataPointCount: 10,
+            time: Date.now()
+        }));
+        window.ToppreiseSuite.processListings();
+    }""")
+
+    visible_cards_after = page.evaluate("() => Array.from(document.querySelectorAll('.Plugin_Product')).filter(c => c.offsetParent !== null).map(c => c.id)")
+    assert visible_cards_after == ['card-cheapest', 'card-cat-excluded', 'card-low-offers']
+    assert len(visible_cards_after) == 3
+
+
+def test_column_wrapper_layout_fidelity_and_hiding(page: Page):
+    """
+    Visibility Invariant Test 3: Column Wrapper Fidelity
+    Verifies that when cards are nested inside <div class="col-*"> wrappers:
+    1. getCardSortableUnit() targets the column wrapper.
+    2. Hiding a card with .tp-bestpreise-hidden collapses the parent .col-* container via CSS.
+    3. Revealing with .tp-reveal-filtered displays both card and column wrapper.
+    """
+    page.evaluate("""() => {
+        const list = document.getElementById('product-list');
+        list.innerHTML = `
+            <div class="row product-row" id="wrapped-row-1">
+                <div class="col-6 col-md-3" id="wrapper-col-1">
+                    <a href="/preisvergleich/P1-p88801" id="wrap-card-1" class="Plugin_Product">
+                        <span class="product-name">Wrapped Product 1</span>
+                        <div class="Plugin_PriceInformation"><div class="priceContainer productPrice"><div class="Plugin_Price">100.00</div></div></div>
+                        <div class="badge badge-dif"><p>-50%</p></div>
+                    </a>
+                </div>
+                <div class="col-6 col-md-3" id="wrapper-col-2">
+                    <a href="/preisvergleich/P2-p88802" id="wrap-card-2" class="Plugin_Product">
+                        <span class="product-name">Wrapped Product 2</span>
+                        <div class="Plugin_PriceInformation"><div class="priceContainer productPrice"><div class="Plugin_Price">200.00</div></div></div>
+                        <div class="badge badge-dif"><p>-20%</p></div>
+                    </a>
+                </div>
+            </div>
+        `;
+        localStorage.clear();
+        window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
+        window.ToppreiseSuite.processListings();
+    }""")
+
+    # Both wrapped cards are visible initially
+    assert page.locator('#wrap-card-1').is_visible()
+    assert page.locator('#wrap-card-2').is_visible()
+    assert page.locator('#wrapper-col-1').is_visible()
+    assert page.locator('#wrapper-col-2').is_visible()
+
+    # Seed Card 2 as a verified non-deal -> hides Card 2
+    page.evaluate("""() => {
+        localStorage.setItem('tp_hist_v1_88802', JSON.stringify({
+            tiefstpreis: 100,
+            hoechstpreis: 250,
+            medianPrice: 150,
+            isNewAllTimeLow: false,
+            dataPointCount: 10,
+            time: Date.now()
+        }));
+        window.ToppreiseSuite.processListings();
+    }""")
+
+    # Card 1 remains visible
+    assert page.locator('#wrap-card-1').is_visible()
+    assert page.locator('#wrapper-col-1').is_visible()
+
+    # Card 2 is hidden AND wrapper-col-2 is collapsed (display: none)
+    assert page.locator('#wrap-card-2').is_hidden()
+    assert page.evaluate("() => window.getComputedStyle(document.getElementById('wrapper-col-2')).display === 'none'")
+
+    # Toggle reveal filtered -> wrapper-col-2 and wrap-card-2 are both displayed with dashed border
+    page.evaluate("""() => {
+        document.body.classList.add('tp-reveal-filtered');
+        window.ToppreiseSuite.processListings();
+    }""")
+
+    assert page.evaluate("() => window.getComputedStyle(document.getElementById('wrapper-col-2')).display !== 'none'")
+    assert page.locator('#wrap-card-2').is_visible()
+
+
+
 
 
 
