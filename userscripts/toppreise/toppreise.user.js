@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.18.5
+// @version      2.18.6
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, checks real all-time Tiefstpreise, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -2571,9 +2571,14 @@ const SHADOW_MODAL_STYLES = `
           } else {
             histPriceEl.remove();
           }
-        } else {
-          // Unscanned card or non-qualifying card
+        } else if (stats) {
+          // Verified NON-Deal (has stats but score <= 0 or not at low) -> HIDE IT!
           card.classList.add('tp-bestpreise-hidden');
+          badgeDifEl.classList.remove('tp-deal-new-record', 'tp-deal-alltime-low');
+          card.querySelector('.tp-card-historical-price')?.remove();
+        } else {
+          // Unscanned card (!stats) -> KEEP VISIBLE with interactive loupe / loading spinner!
+          card.classList.remove('tp-bestpreise-hidden');
           badgeDifEl.classList.remove('tp-deal-new-record', 'tp-deal-alltime-low');
 
           if (currentlyScanningPid && currentlyScanningPid === pid) {
@@ -2767,10 +2772,16 @@ const SHADOW_MODAL_STYLES = `
         const scored = cards.map(c => {
           const cd = extractCardData(c);
           const dealData = computeDealScore(cd.stats, cd.cardPrice);
+          let score = -100;
+          if (dealData) {
+            score = dealData.score;
+          } else if (!cd.stats) {
+            score = 0;
+          }
           return {
             card: c,
             item: getCardSortableUnit(c),
-            score: dealData?.score ?? -1,
+            score,
             initialOrder: parseInt(c.dataset.tpInitialOrder || '0', 10)
           };
         });
@@ -2974,7 +2985,7 @@ const SHADOW_MODAL_STYLES = `
         cd.dealScore = computeDealScore(cd.stats, cd.cardPrice);
         if (cd.dealScore) {
           counts.bestpreiseDeals++;
-        } else if (CONFIG.BESTPREISE_MODE_ACTIVE && !isStandardFiltered) {
+        } else if (CONFIG.BESTPREISE_MODE_ACTIVE && cd.stats && !isStandardFiltered) {
           counts.bestpreiseHidden++;
         }
       }

@@ -1484,8 +1484,8 @@ def test_bestpreise_card_heatmap_and_badge(page: Page):
     # Card 3: Scanned Non-Bestpreis -> Hidden in Bestpreise mode
     assert 'tp-bestpreise-hidden' in (page.locator('#card-negative').get_attribute('class') or '')
 
-    # Unscanned card: Hidden by default in Bestpreise mode, not stuck in loading
-    assert 'tp-bestpreise-hidden' in (page.locator('#card-low-offers').get_attribute('class') or '')
+    # Unscanned card: Stays visible with interactive loupe in Bestpreise mode (Streaming UI)
+    assert 'tp-bestpreise-hidden' not in (page.locator('#card-low-offers').get_attribute('class') or '')
     uncached_badge = page.locator('#card-low-offers .badge-dif')
     assert 'tp-deal-loading' not in (uncached_badge.get_attribute('class') or '')
 
@@ -2033,6 +2033,45 @@ def test_bestpreise_cross_row_sorting_and_natural_order_restoration(page: Page):
     # Secondary product rows must be visible again
     assert page.evaluate("() => document.getElementById('product-row-2').style.display !== 'none'")
     assert page.evaluate("() => document.getElementById('product-row-3').style.display !== 'none'")
+
+
+def test_bestpreise_mode_uncached_cards_streaming_ui_retention(page: Page):
+    # Ensure fresh state with no cached price stats
+    page.evaluate("""() => {
+        localStorage.clear();
+        window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
+        window.ToppreiseSuite.processListings();
+    }""")
+
+    # When Bestpreise mode is toggled on with uncached items, cards MUST NOT be hidden with tp-bestpreise-hidden
+    hidden_count = page.evaluate("""() => {
+        const cards = Array.from(document.querySelectorAll('#product-list .Plugin_Product'));
+        return cards.filter(c => c.classList.contains('tp-bestpreise-hidden')).length;
+    }""")
+    assert hidden_count == 0
+
+    # Cards must remain interactive and visible
+    assert page.locator('#card-cheapest').is_visible()
+    assert page.locator('#card-expensive').is_visible()
+
+    # Now verify that when 1 card is confirmed as a non-deal, only that specific card hides
+    page.evaluate("""() => {
+        // Seed Card 2 as a verified markup (non-deal)
+        localStorage.setItem('tp_hist_v1_797572', JSON.stringify({
+            tiefstpreis: 500,
+            hoechstpreis: 600,
+            medianPrice: 550,
+            isNewAllTimeLow: false,
+            time: Date.now()
+        }));
+        window.ToppreiseSuite.processListings();
+    }""")
+
+    # Card 1 (uncached) remains visible
+    assert page.locator('#card-cheapest').is_visible()
+    # Card 2 (verified non-deal) is hidden
+    assert page.locator('#card-expensive').is_hidden()
+
 
 
 
