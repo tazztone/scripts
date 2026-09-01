@@ -104,6 +104,10 @@ This document details the DOM selectors, event management, and filter logic for 
     - *Gotcha*: Synchronously clicking `.AbstractDialog_CloseButton` immediately after `input.f_submitbtn.click()` tears down the modal container (`AbstractDialog_hide()`) while Toppreise's AJAX POST request to `/plugins/infomails/NewInfoMailForm` is still in-flight, causing the request to abort and raising *"Es ist ein unerwarteter Fehler aufgetreten. Bitte versuchen Sie es noch einmal."* Furthermore, submitting in 0ms raced with Toppreise's internal duration dropdown and input validator event binding.
     - *Rule*: Always stage auto-submit asynchronously with a 300ms pre-submit settle delay and an 800ms post-submit grace period before closing the modal dialog container.
 
+14. **Deal-Feed-Only Features on Non-Feed Pages**:
+    - *Gotcha*: Heatmap, batch deal-check, Tiefstpreis toggle, and threshold selector are rendered on category/search pages where no discount badges (`.badge-dif`) exist, creating dead UI clutter with permanently-zero counters. Furthermore, when `cards.length === 0` on product detail pages (`/preisvergleich/...-pNNNNN`), the filter bar was inadvertently injected above the dealer table.
+    - *Rule*: Gate deal-feed-only filter bar controls behind `isDealFeed` (derived from `isNeueToppreisePage()`). Suppress the entire filter bar on product detail pages (`isProductDetailPage()`) and pages with 0 product cards. The generic `.badge` selector must not be used for `badgeDifEl` — always require `.badge-dif`.
+
 ---
 
 ## 6. Comprehensive Category Taxonomy & Resolution Engine (v2.8.12)

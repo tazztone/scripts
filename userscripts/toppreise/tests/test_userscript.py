@@ -734,6 +734,67 @@ def test_product_detail_page_deal_badge(page: Page):
     assert 'CHF 700.00' in title
 
 
+def test_filter_bar_hidden_on_product_detail_page(page: Page):
+    # Simulate product detail page
+    page.evaluate('''() => {
+        document.body.className = 'color_bg Page_Product';
+        document.body.setAttribute('data-current_url', '/preisvergleich/TV-Geraete/SHARP-55HR7265E-p840582');
+        window.ToppreiseSuite?.processListings?.();
+    }''')
+    page.wait_for_timeout(200)
+
+    # Filter bar must be completely absent on product detail page
+    filter_bar = page.locator('#tp-suite-filter-bar')
+    assert filter_bar.count() == 0
+
+    # Settings FAB is still available
+    fab = page.locator('#tp-root >> #tp-settings-fab')
+    assert fab.is_visible()
+
+
+def test_deal_only_buttons_hidden_on_category_page(page: Page):
+    # Simulate standard category/search listing page
+    page.evaluate('''() => {
+        document.body.className = 'color_bg Page_Browsing';
+        document.body.setAttribute('data-current_url', '/produktsuche/TV-Video/TV-Geraete-Zubehoer/TV-Geraete-c986');
+        window.ToppreiseSuite?.processListings?.();
+    }''')
+    page.wait_for_timeout(200)
+
+    # Filter bar itself is visible on category listings
+    filter_bar = page.locator('#tp-suite-filter-bar')
+    assert filter_bar.is_visible()
+
+    # Listing features are visible
+    assert page.locator('#tp-inline-negative-input').is_visible()
+    assert page.locator('#tp-bar-reveal-btn').is_visible()
+    assert page.locator('#tp-bar-reset-btn').is_visible()
+
+    # Deal-feed-only features are hidden
+    assert not page.locator('#tp-bar-heat-btn').is_visible()
+    assert not page.locator('#tp-bar-real-deal-btn').is_visible()
+    assert not page.locator('#tp-bar-threshold-wrapper').is_visible()
+
+
+def test_check_deal_button_not_injected_on_category_page(page: Page):
+    # Simulate category page where cards have no difference badge
+    page.evaluate('''() => {
+        document.body.className = 'color_bg Page_Browsing';
+        document.body.setAttribute('data-current_url', '/produktsuche/TV-Video/TV-Geraete-Zubehoer/TV-Geraete-c986');
+        // Remove badge-dif elements from cards to simulate real category catalog
+        document.querySelectorAll('.badge-dif').forEach(b => b.remove());
+        // Clean any existing wrappers
+        document.querySelectorAll('.tp-real-deal-wrapper').forEach(w => w.remove());
+        window.ToppreiseSuite?.processListings?.();
+    }''')
+    page.wait_for_timeout(200)
+
+    # Verify no on-card check deal buttons exist on standard catalog listings
+    check_deal_btns = page.locator('.tp-card-check-deal-btn')
+    assert check_deal_btns.count() == 0
+
+
+
 
 
 

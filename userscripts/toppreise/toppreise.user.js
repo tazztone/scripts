@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.12.7
+// @version      2.12.10
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, checks real all-time Tiefstpreise, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -1324,7 +1324,7 @@ const SHADOW_MODAL_STYLES = `
     return { container: document.body, reference: document.body.firstElementChild };
   }
 
-  function renderSuiteFilterBar(counts = { neg: 0, cat: 0, min: 0, nonBest: 0 }, pageHasOffers = false) {
+  function renderSuiteFilterBar(counts = { neg: 0, cat: 0, min: 0, nonBest: 0 }, pageHasOffers = false, isDealFeed = false) {
     const placement = getSuiteBarPlacement();
     if (!placement?.container) return;
 
@@ -1350,11 +1350,11 @@ const SHADOW_MODAL_STYLES = `
           <button class="tp-bar-btn ${isRevealed ? 'tp-active' : ''}" id="tp-bar-reveal-btn" title="Ausgeblendete Produkte anzeigen/verbergen">
             👁️ <span id="tp-bar-reveal-count">${totalHidden}</span>
           </button>
-          <button class="tp-bar-btn ${CONFIG.HEATMAP_ENABLED ? 'tp-active' : ''}" id="tp-bar-heat-btn" title="Rabatt-Heatmap ein-/ausschalten">🔥 Heatmap</button>
-          <button class="tp-bar-btn ${CONFIG.REAL_DEAL_FILTER_ACTIVE ? 'tp-active' : ''}" id="tp-bar-real-deal-btn" title="Nur echte Allzeit-Tiefstpreise anzeigen (Nicht-Bestpreise ausblenden)">
+          <button class="tp-bar-btn ${CONFIG.HEATMAP_ENABLED ? 'tp-active' : ''}" id="tp-bar-heat-btn" title="Rabatt-Heatmap ein-/ausschalten" style="display: ${isDealFeed ? 'flex' : 'none'};">🔥 Heatmap</button>
+          <button class="tp-bar-btn ${CONFIG.REAL_DEAL_FILTER_ACTIVE ? 'tp-active' : ''}" id="tp-bar-real-deal-btn" title="Nur echte Allzeit-Tiefstpreise anzeigen (Nicht-Bestpreise ausblenden)" style="display: ${isDealFeed ? 'flex' : 'none'};">
             🌟 Nur Tiefstpreise <span id="tp-bar-real-deal-count" style="display: ${counts.nonBest > 0 ? 'inline' : 'none'}; font-size: 10px; opacity: 0.85;">(${counts.nonBest || 0})</span>
           </button>
-          <div class="tp-threshold-wrapper" id="tp-bar-threshold-wrapper">
+          <div class="tp-threshold-wrapper" id="tp-bar-threshold-wrapper" style="display: ${isDealFeed ? 'inline-flex' : 'none'};">
             <button class="tp-bar-btn ${isBatchChecking ? 'tp-batch-active' : ''}" id="tp-bar-batch-check-btn" title="Tiefstpreise für ${uncheckedDeals} Deals ab ${CONFIG.REAL_DEAL_MIN_DISCOUNT || 30}% Rabatt prüfen" style="border-top-right-radius: 0 !important; border-bottom-right-radius: 0 !important; border-right: none !important;">
               ${isBatchChecking ? '⏳ Prüfen...' : `🔍 Check Deals (${uncheckedDeals})`}
             </button>
@@ -1562,11 +1562,16 @@ const SHADOW_MODAL_STYLES = `
     const revealCount = bar.querySelector('#tp-bar-reveal-count');
     if (revealCount) revealCount.textContent = totalHidden > 0 ? `${totalHidden}` : '0';
 
-    bar.querySelector('#tp-bar-heat-btn')?.classList.toggle('tp-active', CONFIG.HEATMAP_ENABLED !== false);
+    const heatBtn = bar.querySelector('#tp-bar-heat-btn');
+    if (heatBtn) {
+      heatBtn.classList.toggle('tp-active', CONFIG.HEATMAP_ENABLED !== false);
+      heatBtn.style.setProperty('display', isDealFeed ? 'flex' : 'none', 'important');
+    }
 
     const realDealBtn = bar.querySelector('#tp-bar-real-deal-btn');
     if (realDealBtn) {
       realDealBtn.classList.toggle('tp-active', CONFIG.REAL_DEAL_FILTER_ACTIVE !== false);
+      realDealBtn.style.setProperty('display', isDealFeed ? 'flex' : 'none', 'important');
       const countSpan = bar.querySelector('#tp-bar-real-deal-count');
       if (countSpan) {
         countSpan.textContent = counts.nonBest > 0 ? `(${counts.nonBest})` : '';
@@ -1593,6 +1598,11 @@ const SHADOW_MODAL_STYLES = `
       threshPopover.querySelectorAll('.tp-threshold-option').forEach(opt => {
         opt.classList.toggle('tp-selected', parseInt(opt.dataset.val, 10) === minDisc);
       });
+    }
+
+    const threshWrapper = bar.querySelector('#tp-bar-threshold-wrapper');
+    if (threshWrapper) {
+      threshWrapper.style.setProperty('display', isDealFeed ? 'inline-flex' : 'none', 'important');
     }
 
     const catsToggleBtn = bar.querySelector('#tp-bar-cats-toggle');
@@ -1643,18 +1653,32 @@ const SHADOW_MODAL_STYLES = `
     return /(?:neue-toppreise|new-best-prices|nouveaux-meilleurs-prix)/i.test(location.href) ||
            /(?:neue-toppreise|new-best-prices|nouveaux-meilleurs-prix)/i.test(document.body?.getAttribute('data-current_url') || '') ||
            document.body?.classList.contains('Page_ListTopPriceReductionProducts') ||
-           !!document.getElementById('Page_ListTopPriceReductionProducts');
+           document.body?.classList.contains('Page_ListTop100Products') ||
+           !!document.getElementById('Page_ListTopPriceReductionProducts') ||
+           !!document.getElementById('Page_ListTop100Products');
+  }
+
+  function getPageType() {
+    if (isProductDetailPage()) return 'detail';
+    if (isNeueToppreisePage()) return 'deal-feed';
+    return 'list';
   }
 
   let isModifyingDOM = false;
 
   function processListings() {
     if (isModifyingDOM) return;
+    if (isProductDetailPage()) {
+      const staleBar = document.getElementById('tp-suite-filter-bar');
+      if (staleBar) staleBar.remove();
+      return;
+    }
     isModifyingDOM = true;
     try {
       const cards = getProductCards();
       if (cards.length === 0) {
-        renderSuiteFilterBar({ neg: 0, cat: 0, min: 0, nonBest: 0, uncheckedDeals: 0 }, false);
+        const staleBar = document.getElementById('tp-suite-filter-bar');
+        if (staleBar) staleBar.remove();
         return;
       }
 
@@ -1839,7 +1863,7 @@ const SHADOW_MODAL_STYLES = `
         }
 
         // 3.5 Real Deal & Allzeit-Tiefstpreis Check
-        const badgeDifEl = card.querySelector('.badge-dif, .badge, [class*="badge-dif"]');
+        const badgeDifEl = card.querySelector('.badge-dif, [class*="badge-dif"]');
 
         let realDealWrapper = card.querySelector('.tp-real-deal-wrapper');
 
@@ -2017,7 +2041,7 @@ const SHADOW_MODAL_STYLES = `
         emptyNotice.remove();
       }
 
-      renderSuiteFilterBar(counts, pageHasOffers);
+      renderSuiteFilterBar(counts, pageHasOffers, isNeueFeed);
     } finally {
       isModifyingDOM = false;
     }
@@ -2026,12 +2050,15 @@ const SHADOW_MODAL_STYLES = `
   // ─── PRODUCT DETAIL PAGE REAL DEAL ──────────────────────────────────────────
   function isProductDetailPage() {
     return /\/preisvergleich\/[^/]+\/[^/]+-p(\d+)/i.test(location.href) ||
-           !!document.querySelector('.Page_DetailProduct, #Page_DetailProduct, .product_detail_page') ||
+           /\/preisvergleich\/[^/]+\/[^/]+-p(\d+)/i.test(document.body?.getAttribute('data-current_url') || '') ||
+           document.body?.classList.contains('Page_Product') ||
+           document.body?.classList.contains('Page_DetailProduct') ||
+           !!document.querySelector('.Page_DetailProduct, #Page_DetailProduct, .product_detail_page, .Page_Product') ||
            (!!document.querySelector('.Plugin_ProductHeading h1, .productHeading h1, .product_title h1, h1.productTitle') && !!getDetailProductId());
   }
 
   function getDetailProductId() {
-    const match = location.href.match(/-p(\d+)/i);
+    const match = location.href.match(/-p(\d+)/i) || (document.body?.getAttribute('data-current_url') || '').match(/-p(\d+)/i);
     if (match) return match[1];
     const chartLink = document.querySelector('a[href*="pricechart"], a[href*="p_pc_pid="]');
     if (chartLink) {
