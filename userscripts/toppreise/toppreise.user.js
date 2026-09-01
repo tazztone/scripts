@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.16.2
+// @version      2.16.3
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, checks real all-time Tiefstpreise, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -27,6 +27,7 @@ const DEFAULTS = {
   REAL_DEAL_CACHE_HOURS: 48,
   NEGATIVE_CACHE_HOURS: 2,
   BESTPREISE_MODE_ACTIVE: false,
+  BESTPREISE_WEIGHT_RECORD: 0.50,
   ENABLE_SPARKLINES: false,
   NEGATIVE_TERMS: '',
   EXCLUDED_CATEGORIES: [],
@@ -883,6 +884,7 @@ const SHADOW_MODAL_STYLES = `
     REAL_DEAL_FILTER_ACTIVE: _getValue('REAL_DEAL_FILTER_ACTIVE', DEFAULTS.REAL_DEAL_FILTER_ACTIVE),
     REAL_DEAL_MIN_DISCOUNT: parseInt(_getValue('REAL_DEAL_MIN_DISCOUNT', DEFAULTS.REAL_DEAL_MIN_DISCOUNT)),
     BESTPREISE_MODE_ACTIVE: _getValue('BESTPREISE_MODE_ACTIVE', DEFAULTS.BESTPREISE_MODE_ACTIVE),
+    BESTPREISE_WEIGHT_RECORD: parseFloat(_getValue('BESTPREISE_WEIGHT_RECORD', DEFAULTS.BESTPREISE_WEIGHT_RECORD)),
     ENABLE_SPARKLINES: _getValue('ENABLE_SPARKLINES', DEFAULTS.ENABLE_SPARKLINES),
     NEGATIVE_TERMS: _getValue('NEGATIVE_TERMS', DEFAULTS.NEGATIVE_TERMS),
     EXCLUDED_CATEGORIES: _getValue('EXCLUDED_CATEGORIES', DEFAULTS.EXCLUDED_CATEGORIES),
@@ -1381,7 +1383,7 @@ const SHADOW_MODAL_STYLES = `
     };
   }
 
-  function getBestpreiseTier(stats, cardPrice) {
+  function computeDealScore(stats, cardPrice) {
     if (!stats || stats.unavailable || !stats.tiefstpreis || stats.tiefstpreis <= 0) return null;
     if (!cardPrice || cardPrice <= 0) return null;
 
@@ -1394,30 +1396,31 @@ const SHADOW_MODAL_STYLES = `
       return null;
     }
 
-    const isNewLow = !!stats.isNewAllTimeLow;
     const isAtLow = cardPrice <= stats.tiefstpreis * 1.01;
+    if (!isAtLow) return null; // Auto-hide non-bestpreise
 
-    if (isNewLow) {
-      const realPct = stats.realDiscountVsPrevLow || 0;
-      return {
-        tier: 1,
-        label: 'Neuer Rekord',
-        emoji: '🔥',
-        realPct,
-        score: 1000 + realPct
-      };
-    }
-    if (isAtLow) {
-      const realPct = stats.realDiscountVsMedian || stats.realDiscountVsAvg || 0;
-      return {
-        tier: 2,
-        label: 'Bestpreis',
-        emoji: '🌟',
-        realPct,
-        score: 500 + realPct
-      };
-    }
-    return null;
+    const isNewRecord = !!stats.isNewAllTimeLow;
+    const dMedian = (stats.medianPrice && stats.medianPrice > cardPrice)
+      ? Math.round(((stats.medianPrice - cardPrice) / stats.medianPrice) * 100)
+      : (stats.realDiscountVsMedian || stats.realDiscountVsAvg || 0);
+
+    const prevLow = stats.previousLow;
+    const dRecord = (isNewRecord && prevLow && prevLow > cardPrice)
+      ? Math.round(((prevLow - cardPrice) / prevLow) * 100)
+      : (isNewRecord ? (stats.realDiscountVsPrevLow || 0) : 0);
+
+    const wRecord = typeof CONFIG.BESTPREISE_WEIGHT_RECORD === 'number' ? CONFIG.BESTPREISE_WEIGHT_RECORD : 0.50;
+    const wMedian = 1 - wRecord;
+    const score = Math.max(0, Math.round(wMedian * dMedian + wRecord * dRecord));
+
+    return {
+      score,
+      dMedian,
+      dRecord,
+      isNewRecord,
+      prevLow,
+      medianPrice: stats.medianPrice
+    };
   }
 
   async function fetchPriceTimeSeries(productId) {
@@ -2222,9 +2225,13 @@ const SHADOW_MODAL_STYLES = `
   function renderCardEffects(cd, filters, isNeueFeed, activeStores) {
     const { card, pid, cardPriceEl, cardPrice, stats, isVerifiedNonBest, discountVal, catName, rootGroup } = cd;
 
-    // 0. Heatmap (only applied for unchecked deals or verified Allzeit-Tiefstpreise)
-    if (CONFIG.HEATMAP_ENABLED && discountVal !== null && !isVerifiedNonBest) {
-      const heatStyles = getHeatmapStyles(discountVal, CONFIG.HEATMAP_INTENSITY, CONFIG.HEATMAP_CURVE);
+    // 0. Heatmap (in Bestpreise mode, driven by Deal-Score; in regular mode, driven by feed discount)
+    const effectiveHeatPercent = CONFIG.BESTPREISE_MODE_ACTIVE
+      ? (cd.dealScore ? cd.dealScore.score : null)
+      : (discountVal !== null && !isVerifiedNonBest ? discountVal : null);
+
+    if (CONFIG.HEATMAP_ENABLED && effectiveHeatPercent !== null && effectiveHeatPercent > 0) {
+      const heatStyles = getHeatmapStyles(effectiveHeatPercent, CONFIG.HEATMAP_INTENSITY, CONFIG.HEATMAP_CURVE);
       card.style.setProperty('--tp-heat-bg', heatStyles.bg);
       card.style.setProperty('--tp-heat-border', heatStyles.border);
       card.style.setProperty('--tp-heat-glow', heatStyles.glow);
@@ -2403,7 +2410,7 @@ const SHADOW_MODAL_STYLES = `
       }
 
       if (CONFIG.BESTPREISE_MODE_ACTIVE) {
-        const tier = getBestpreiseTier(stats, cardPrice);
+        const dealData = cd.dealScore || computeDealScore(stats, cardPrice);
         if (!stats && pid) {
           // Unscanned card: hide in Bestpreise mode until verified
           card.classList.add('tp-bestpreise-hidden');
@@ -2411,18 +2418,32 @@ const SHADOW_MODAL_STYLES = `
             badgeDifEl.classList.add('tp-deal-loading');
             badgeDifEl.innerHTML = `<div class="text">Prüfe...</div><p>⏳</p>`;
           }
-        } else if (!tier) {
+        } else if (!dealData) {
           // Doesn't qualify as a genuine bestpreis deal
           card.classList.add('tp-bestpreise-hidden');
-        } else if (tier.tier === 1) {
-          // Tier 1: New Record Low (Golden Diamond Pulse)
+        } else {
+          // Qualified Bestpreis Deal!
           card.classList.remove('tp-bestpreise-hidden', 'tp-non-bestpreis-filtered');
-          badgeDifEl.classList.add('tp-deal-new-record', 'tp-deal-badge-interactive');
-          badgeDifEl.classList.remove('tp-deal-alltime-low', 'tp-deal-not-low', 'tp-is-severe-markup', 'tp-deal-loading');
-          badgeDifEl.innerHTML = `<div class="text">Rekord</div><p>-${tier.realPct}%</p>`;
-          const prevLow = stats.previousLow;
-          const prevText = prevLow ? ` | Bisher: CHF ${prevLow.toFixed(2)}` : '';
-          badgeDifEl.title = `🔥 Neuer Rekord-Tiefstpreis (CHF ${cardPrice.toFixed(2)})!${prevText} (Klicken zum Aktualisieren)`;
+          badgeDifEl.classList.add('tp-deal-badge-interactive');
+          badgeDifEl.classList.remove('tp-deal-not-low', 'tp-is-severe-markup', 'tp-deal-loading');
+
+          if (dealData.isNewRecord) {
+            badgeDifEl.classList.add('tp-deal-new-record');
+            badgeDifEl.classList.remove('tp-deal-alltime-low');
+          } else {
+            badgeDifEl.classList.add('tp-deal-alltime-low');
+            badgeDifEl.classList.remove('tp-deal-new-record');
+          }
+
+          badgeDifEl.innerHTML = `<div class="text">Real Deal</div><p>-${dealData.score}%</p>`;
+
+          const prevLow = stats?.previousLow;
+          const medianVal = stats?.medianPrice;
+          if (dealData.isNewRecord) {
+            badgeDifEl.title = `🔥 Neuer Rekord! Score: -${dealData.score}% (Ø -${dealData.dMedian}%, Rekord -${dealData.dRecord}% vs CHF ${prevLow ? prevLow.toFixed(2) : '?'}) [Klicken zum Aktualisieren]`;
+          } else {
+            badgeDifEl.title = `🌟 Allzeit-Tiefstpreis! Score: -${dealData.score}% (Ø -${dealData.dMedian}%, kein neuer Rekord) [Klicken zum Aktualisieren]`;
+          }
 
           let histPriceEl = card.querySelector('.tp-card-historical-price');
           if (!histPriceEl) {
@@ -2433,32 +2454,16 @@ const SHADOW_MODAL_STYLES = `
                                    card;
             priceContainer.appendChild(histPriceEl);
           }
-          histPriceEl.className = 'tp-card-historical-price tp-is-record-low';
-          histPriceEl.textContent = prevLow ? `Bisher: CHF ${prevLow.toFixed(2)} (-${tier.realPct}%)` : `Rekord-Tiefstpreis`;
-          histPriceEl.title = `Neuer Rekord-Tiefstpreis! Vorheriges Tief lag bei CHF ${prevLow ? prevLow.toFixed(2) : '?'}`;
-        } else if (tier.tier === 2) {
-          // Tier 2: Bestpreis / All-Time Low (Glowing Emerald Halo)
-          card.classList.remove('tp-bestpreise-hidden', 'tp-non-bestpreis-filtered');
-          badgeDifEl.classList.add('tp-deal-alltime-low', 'tp-deal-badge-interactive');
-          badgeDifEl.classList.remove('tp-deal-new-record', 'tp-deal-not-low', 'tp-is-severe-markup', 'tp-deal-loading');
-          badgeDifEl.innerHTML = `<div class="text">Bestpreis</div><p>-${tier.realPct}%</p>`;
-          const avgText = stats.medianPrice ? ` | Median: CHF ${stats.medianPrice.toFixed(2)}` : (stats.avgPrice ? ` | Ø: CHF ${stats.avgPrice.toFixed(2)}` : '');
-          badgeDifEl.title = `🌟 Allzeit-Tiefstpreis (CHF ${cardPrice.toFixed(2)})!${avgText} (Klicken zum Aktualisieren)`;
 
-          let histPriceEl = card.querySelector('.tp-card-historical-price');
-          if (stats.medianPrice && stats.medianPrice > cardPrice) {
-            if (!histPriceEl) {
-              histPriceEl = document.createElement('div');
-              const priceContainer = card.querySelector('.Plugin_PriceInformation, .price_information_product') ||
-                                     cardPriceEl?.closest('.priceContainer, .Plugin_PriceInformation, .price_information_product') ||
-                                     cardPriceEl?.parentElement ||
-                                     card;
-              priceContainer.appendChild(histPriceEl);
-            }
+          if (dealData.isNewRecord && prevLow) {
+            histPriceEl.className = 'tp-card-historical-price tp-is-record-low';
+            histPriceEl.textContent = `Bisher: CHF ${prevLow.toFixed(2)} (-${dealData.dRecord}%)`;
+            histPriceEl.title = `Neuer Rekord-Tiefstpreis! Vorheriges Tief: CHF ${prevLow.toFixed(2)} (-${dealData.dRecord}%)`;
+          } else if (medianVal && medianVal > cardPrice) {
             histPriceEl.className = 'tp-card-historical-price tp-is-at-low';
-            histPriceEl.textContent = `Ø-Preis: CHF ${stats.medianPrice.toFixed(2)} (-${tier.realPct}%)`;
-            histPriceEl.title = `Aktueller Bestpreis liegt ${tier.realPct}% unter dem Median-Preis von CHF ${stats.medianPrice.toFixed(2)}`;
-          } else if (histPriceEl) {
+            histPriceEl.textContent = `Ø-Preis: CHF ${medianVal.toFixed(2)} (-${dealData.dMedian}%)`;
+            histPriceEl.title = `Allzeit-Tiefstpreis! Liegt ${dealData.dMedian}% unter dem Median-Preis von CHF ${medianVal.toFixed(2)}`;
+          } else {
             histPriceEl.remove();
           }
         }
@@ -2593,8 +2598,8 @@ const SHADOW_MODAL_STYLES = `
       if (parent) {
         const scored = Array.from(cards).map(c => {
           const cd = extractCardData(c);
-          const tier = getBestpreiseTier(cd.stats, cd.cardPrice);
-          return { card: c, score: tier?.score ?? -1 };
+          const dealData = computeDealScore(cd.stats, cd.cardPrice);
+          return { card: c, score: dealData?.score ?? -1 };
         });
         scored.sort((a, b) => b.score - a.score);
         scored.forEach(s => parent.appendChild(s.card));
@@ -2707,8 +2712,8 @@ const SHADOW_MODAL_STYLES = `
         if (cd.isVerifiedNonBest && CONFIG.REAL_DEAL_FILTER_ACTIVE) {
           counts.nonBest++;
         }
-        const tier = getBestpreiseTier(cd.stats, cd.cardPrice);
-        if (tier) {
+        cd.dealScore = computeDealScore(cd.stats, cd.cardPrice);
+        if (cd.dealScore) {
           counts.bestpreiseDeals++;
         } else if (CONFIG.BESTPREISE_MODE_ACTIVE) {
           counts.bestpreiseHidden++;
@@ -3073,12 +3078,20 @@ const SHADOW_MODAL_STYLES = `
           <div class="tp-settings-group tp-switch-container">
             <div class="tp-switch-label">
               <label>💎 Neue Bestpreise Modus</label>
-              <span class="tp-switch-desc">Auto-Scan + Tier-Ranking auf der Deal-Feed-Seite</span>
+              <span class="tp-switch-desc">Auto-Scan + Deal-Score Ranking auf der Deal-Feed-Seite</span>
             </div>
             <label class="tp-switch tp-purple">
               <input type="checkbox" id="tp-bestpreise-mode-toggle">
               <span class="tp-slider"></span>
             </label>
+          </div>
+          <div class="tp-settings-group" id="tp-bestpreise-weight-group" style="display: none;">
+            <label>Deal-Score Gewichtung (Median ↔ Neuer Rekord)</label>
+            <div class="tp-range-container tp-purple">
+              <input type="range" id="tp-bestpreise-weight-range" min="0" max="100" step="5" value="50">
+              <input type="number" id="tp-bestpreise-weight-val" min="0" max="100" step="5" value="50">
+            </div>
+            <span class="tp-switch-desc" id="tp-bestpreise-weight-desc" style="display: block; margin-top: 4px; font-size: 11px; opacity: 0.85;">50% Median / 50% Neuer Rekord</span>
           </div>
           <div class="tp-settings-group tp-switch-container">
             <div class="tp-switch-label">
@@ -3154,6 +3167,10 @@ const SHADOW_MODAL_STYLES = `
     const heatmapIntensityVal = shadow.getElementById('tp-heatmap-intensity-val');
     const realDealFilterToggle = shadow.getElementById('tp-real-deal-filter-toggle');
     const bestpreiseModeToggle = shadow.getElementById('tp-bestpreise-mode-toggle');
+    const bestpreiseWeightGroup = shadow.getElementById('tp-bestpreise-weight-group');
+    const bestpreiseWeightRange = shadow.getElementById('tp-bestpreise-weight-range');
+    const bestpreiseWeightVal = shadow.getElementById('tp-bestpreise-weight-val');
+    const bestpreiseWeightDesc = shadow.getElementById('tp-bestpreise-weight-desc');
     const realDealMinRange = shadow.getElementById('tp-real-deal-min-range');
     const realDealMinVal = shadow.getElementById('tp-real-deal-min-val');
     const sparklinesToggle = shadow.getElementById('tp-sparklines-toggle');
@@ -3215,6 +3232,16 @@ const SHADOW_MODAL_STYLES = `
       heatmapIntensityVal.value = heatIntensityPct;
 
       if (bestpreiseModeToggle) bestpreiseModeToggle.checked = CONFIG.BESTPREISE_MODE_ACTIVE === true;
+      if (bestpreiseWeightGroup) {
+        bestpreiseWeightGroup.style.display = (CONFIG.BESTPREISE_MODE_ACTIVE === true) ? 'block' : 'none';
+      }
+      const weightPct = Math.round((CONFIG.BESTPREISE_WEIGHT_RECORD ?? 0.50) * 100);
+      if (bestpreiseWeightRange) bestpreiseWeightRange.value = weightPct;
+      if (bestpreiseWeightVal) bestpreiseWeightVal.value = weightPct;
+      if (bestpreiseWeightDesc) {
+        bestpreiseWeightDesc.textContent = `${100 - weightPct}% Median / ${weightPct}% Neuer Rekord`;
+      }
+
       if (realDealFilterToggle) realDealFilterToggle.checked = CONFIG.REAL_DEAL_FILTER_ACTIVE === true;
       if (realDealMinRange) realDealMinRange.value = CONFIG.REAL_DEAL_MIN_DISCOUNT || 30;
       if (realDealMinVal) realDealMinVal.value = CONFIG.REAL_DEAL_MIN_DISCOUNT || 30;
@@ -3242,6 +3269,20 @@ const SHADOW_MODAL_STYLES = `
     bindDual(alarmCloseDelayRange, alarmCloseDelayVal, 1);
     bindDual(heatmapIntensityRange, heatmapIntensityVal, 1);
     bindDual(realDealMinRange, realDealMinVal, 1);
+
+    const updateWeightDesc = (val) => {
+      const pct = Math.round(val);
+      if (bestpreiseWeightDesc) {
+        bestpreiseWeightDesc.textContent = `${100 - pct}% Median / ${pct}% Neuer Rekord`;
+      }
+    };
+    bindDual(bestpreiseWeightRange, bestpreiseWeightVal, 1, updateWeightDesc);
+
+    bestpreiseModeToggle?.addEventListener('change', () => {
+      if (bestpreiseWeightGroup) {
+        bestpreiseWeightGroup.style.display = bestpreiseModeToggle.checked ? 'block' : 'none';
+      }
+    });
 
     alarmAutoSubmitToggle?.addEventListener('change', () => {
       if (alarmDelaysGroup) {
@@ -3349,6 +3390,9 @@ const SHADOW_MODAL_STYLES = `
         const wasActive = CONFIG.BESTPREISE_MODE_ACTIVE;
         const nowActive = bestpreiseModeToggle.checked;
         saveConfigKey('BESTPREISE_MODE_ACTIVE', nowActive);
+        if (bestpreiseWeightVal) {
+          saveConfigKey('BESTPREISE_WEIGHT_RECORD', Math.max(0, Math.min(1.0, (parseInt(bestpreiseWeightVal.value) || 50) / 100)));
+        }
         if (nowActive && !wasActive) {
           runBestpreiseScan();
         } else if (!nowActive && wasActive) {
@@ -3430,7 +3474,7 @@ const SHADOW_MODAL_STYLES = `
       processListings,
       processProductDetailPage,
       processPriceAlarmModal,
-      getBestpreiseTier,
+      computeDealScore,
       runBestpreiseScan,
       cancelBestpreiseScan,
       CONFIG

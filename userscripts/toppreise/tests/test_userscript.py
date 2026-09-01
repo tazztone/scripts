@@ -1297,42 +1297,68 @@ def test_real_deal_record_low_with_previous_low_subline(page: Page):
     assert sparkline.is_visible()
 
 
-def test_bestpreise_tier_qualification_logic(page: Page):
-    # Test Tier 1: New Record Low
-    tier1_res = page.evaluate("""() => {
+def test_deal_score_computation_and_weights(page: Page):
+    # Test 1: New Record Low (50/50 default weight)
+    # dMedian = 40%, dRecord = 20% -> Score = 0.5*40 + 0.5*20 = 30%
+    score_res = page.evaluate("""() => {
         const stats = {
             tiefstpreis: 1500,
             hoechstpreis: 2500,
-            previousLow: 1800,
+            medianPrice: 2500,
+            previousLow: 1875,
             isNewAllTimeLow: true,
-            realDiscountVsPrevLow: 17,
+            realDiscountVsPrevLow: 20,
             dataPointCount: 10
         };
-        return window.ToppreiseSuite.getBestpreiseTier(stats, 1500);
+        window.ToppreiseSuite.CONFIG.BESTPREISE_WEIGHT_RECORD = 0.50;
+        return window.ToppreiseSuite.computeDealScore(stats, 1500);
     }""")
-    assert tier1_res['tier'] == 1
-    assert tier1_res['emoji'] == '🔥'
-    assert tier1_res['realPct'] == 17
-    assert tier1_res['score'] == 1017
+    assert score_res['score'] == 30
+    assert score_res['dMedian'] == 40
+    assert score_res['dRecord'] == 20
+    assert score_res['isNewRecord'] is True
 
-    # Test Tier 2: All-Time Low with Median Discount
-    tier2_res = page.evaluate("""() => {
+    # Test 2: Matching All-Time Low (dRecord = 0%)
+    # dMedian = 30%, dRecord = 0% -> Score = 0.5*30 + 0 = 15%
+    match_res = page.evaluate("""() => {
         const stats = {
             tiefstpreis: 1000,
             hoechstpreis: 1600,
-            medianPrice: 1400,
+            medianPrice: 1428,
             isNewAllTimeLow: false,
-            realDiscountVsMedian: 29,
             dataPointCount: 8
         };
-        return window.ToppreiseSuite.getBestpreiseTier(stats, 1000);
+        window.ToppreiseSuite.CONFIG.BESTPREISE_WEIGHT_RECORD = 0.50;
+        return window.ToppreiseSuite.computeDealScore(stats, 1000);
     }""")
-    assert tier2_res['tier'] == 2
-    assert tier2_res['emoji'] == '🌟'
-    assert tier2_res['realPct'] == 29
-    assert tier2_res['score'] == 529
+    assert match_res['score'] == 15
+    assert match_res['dMedian'] == 30
+    assert match_res['dRecord'] == 0
+    assert match_res['isNewRecord'] is False
 
-    # Test Exclusion: Non-bestpreis
+    # Test 3: Weight Slider Effect (100% Record Weight vs 100% Median Weight)
+    weight_res = page.evaluate("""() => {
+        const stats = {
+            tiefstpreis: 1000,
+            hoechstpreis: 2000,
+            medianPrice: 2000,
+            previousLow: 1250,
+            isNewAllTimeLow: true,
+            dataPointCount: 10
+        };
+        // dMedian = 50%, dRecord = 20%
+        window.ToppreiseSuite.CONFIG.BESTPREISE_WEIGHT_RECORD = 1.0;
+        const pureRecord = window.ToppreiseSuite.computeDealScore(stats, 1000).score;
+
+        window.ToppreiseSuite.CONFIG.BESTPREISE_WEIGHT_RECORD = 0.0;
+        const pureMedian = window.ToppreiseSuite.computeDealScore(stats, 1000).score;
+
+        return { pureRecord, pureMedian };
+    }""")
+    assert weight_res['pureRecord'] == 20
+    assert weight_res['pureMedian'] == 50
+
+    # Test 4: Exclusion: Non-bestpreis
     tier3_nonbest = page.evaluate("""() => {
         const stats = {
             tiefstpreis: 1000,
@@ -1341,34 +1367,21 @@ def test_bestpreise_tier_qualification_logic(page: Page):
             isNewAllTimeLow: false,
             dataPointCount: 8
         };
-        return window.ToppreiseSuite.getBestpreiseTier(stats, 1200); // 1200 > 1000 * 1.01
+        return window.ToppreiseSuite.computeDealScore(stats, 1200); // 1200 > 1000 * 1.01
     }""")
     assert tier3_nonbest is None
 
-    # Test Exclusion: Fewer than 5 points
-    tier3_fewpoints = page.evaluate("""() => {
-        const stats = {
-            tiefstpreis: 1000,
-            hoechstpreis: 1500,
-            isNewAllTimeLow: true,
-            dataPointCount: 3,
-            timeSeries: [[1, 1500], [2, 1200], [3, 1000]]
-        };
-        return window.ToppreiseSuite.getBestpreiseTier(stats, 1000);
-    }""")
-    assert tier3_fewpoints is None
-
-    # Test Exclusion: Flat price (< 2% variance)
-    tier3_flatprice = page.evaluate("""() => {
+    # Test 5: Exclusion: Flat price (< 2% variance)
+    tier3_flat = page.evaluate("""() => {
         const stats = {
             tiefstpreis: 1000,
             hoechstpreis: 1010,
             isNewAllTimeLow: false,
             dataPointCount: 12
         };
-        return window.ToppreiseSuite.getBestpreiseTier(stats, 1000);
+        return window.ToppreiseSuite.computeDealScore(stats, 1000);
     }""")
-    assert tier3_flatprice is None
+    assert tier3_flat is None
 
 
 def test_bestpreise_filter_bar_toggle_and_state(page: Page):
@@ -1400,14 +1413,15 @@ def test_bestpreise_filter_bar_toggle_and_state(page: Page):
     assert page.evaluate("() => window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE") is False
 
 
-def test_bestpreise_card_badge_morph_and_sublines(page: Page):
-    # Seed cache: Card 1 (797571, price 1800) is a Tier 1 New Record Low
-    # Seed cache: Card 2 (797572, price 1100) is a Tier 2 Bestpreis vs Median 1500
-    # Seed cache: Card 3 (797573, price 15) is a Non-Bestpreis (tiefstpreis 10)
+def test_bestpreise_card_heatmap_and_badge(page: Page):
+    # Card 1 (797571, price 1800): New record (median 2400 -> dMed 25%, prevLow 2200 -> dRec 18%) -> Score = 22%
+    # Card 2 (797572, price 1100): Matching low (median 1500 -> dMed 27%, dRec 0%) -> Score = 14%
+    # Card 3 (797573, price 15): Non-Bestpreis (tiefstpreis 10) -> Excluded
     page.evaluate("""() => {
         localStorage.setItem('tp_hist_v1_797571', JSON.stringify({
             tiefstpreis: 1800,
             hoechstpreis: 2600,
+            medianPrice: 2400,
             previousLow: 2200,
             isNewAllTimeLow: true,
             realDiscountVsPrevLow: 18,
@@ -1430,29 +1444,30 @@ def test_bestpreise_card_badge_morph_and_sublines(page: Page):
             dataPointCount: 10,
             time: Date.now()
         }));
+        window.ToppreiseSuite.CONFIG.BESTPREISE_WEIGHT_RECORD = 0.50;
         window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
         window.ToppreiseSuite.processListings();
     }""")
 
-    # Card 1: Tier 1 (New Record) -> Golden diamond badge with "Rekord -18%" and subline
+    # Card 1: New Record -> Gold halo, "Real Deal -22%", and subline
     card1_badge = page.locator('#card-cheapest .badge-dif')
     assert 'tp-deal-new-record' in (card1_badge.get_attribute('class') or '')
-    assert 'Rekord' in (card1_badge.text_content() or '')
-    assert '-18%' in (card1_badge.text_content() or '')
+    assert 'Real Deal' in (card1_badge.text_content() or '')
+    assert '-22%' in (card1_badge.text_content() or '')
 
     card1_subline = page.locator('#card-cheapest .tp-card-historical-price.tp-is-record-low')
     assert 'Bisher: CHF 2200.00 (-18%)' in (card1_subline.text_content() or '')
 
-    # Card 2: Tier 2 (Bestpreis) -> Emerald halo badge with "Bestpreis -27%" and median subline
+    # Card 2: Matching Low -> Emerald halo, "Real Deal -14%", and median subline
     card2_badge = page.locator('#card-expensive .badge-dif')
     assert 'tp-deal-alltime-low' in (card2_badge.get_attribute('class') or '')
-    assert 'Bestpreis' in (card2_badge.text_content() or '')
-    assert '-27%' in (card2_badge.text_content() or '')
+    assert 'Real Deal' in (card2_badge.text_content() or '')
+    assert '-14%' in (card2_badge.text_content() or '')
 
     card2_subline = page.locator('#card-expensive .tp-card-historical-price.tp-is-at-low')
     assert 'Ø-Preis: CHF 1500.00 (-27%)' in (card2_subline.text_content() or '')
 
-    # Card 3 & Uncached cards: Hidden in Bestpreise mode
+    # Card 3 & Uncached: Hidden in Bestpreise mode
     assert 'tp-bestpreise-hidden' in (page.locator('#card-negative').get_attribute('class') or '')
     assert 'tp-bestpreise-hidden' in (page.locator('#card-low-offers').get_attribute('class') or '')
 
@@ -1466,16 +1481,17 @@ def test_bestpreise_card_badge_morph_and_sublines(page: Page):
     assert '-67%' in (page.locator('#card-cheapest .badge-dif').text_content() or '')
 
 
-def test_bestpreise_sorting_by_tier_and_real_discount(page: Page):
-    # Setup 3 products:
-    # Card 1 (797571): Tier 1 with 18% record discount (score: 1018)
-    # Card 2 (797572): Tier 2 with 35% median discount (score: 535)
-    # Card 3 (797573): Tier 1 with 25% record discount (score: 1025)
-    # In Bestpreise mode, sort order must be: Card 3 (1025) -> Card 1 (1018) -> Card 2 (535)
+def test_bestpreise_sorting_by_continuous_score(page: Page):
+    # Setup 3 products with continuous Deal Scores:
+    # Card 1 (797571): Score = 22%
+    # Card 2 (797572): Score = 35% (huge median discount)
+    # Card 3 (797573): Score = 28%
+    # In Bestpreise mode, sort order must be: Card 2 (35%) -> Card 3 (28%) -> Card 1 (22%)
     page.evaluate("""() => {
         localStorage.setItem('tp_hist_v1_797571', JSON.stringify({
             tiefstpreis: 1800,
             hoechstpreis: 2600,
+            medianPrice: 2400,
             previousLow: 2200,
             isNewAllTimeLow: true,
             realDiscountVsPrevLow: 18,
@@ -1484,22 +1500,23 @@ def test_bestpreise_sorting_by_tier_and_real_discount(page: Page):
         }));
         localStorage.setItem('tp_hist_v1_797572', JSON.stringify({
             tiefstpreis: 1100,
-            hoechstpreis: 1800,
-            medianPrice: 1700,
+            hoechstpreis: 3500,
+            medianPrice: 3437, // dMedian = 68% -> 0.5*68 + 0 = 34% or ~35%
             isNewAllTimeLow: false,
-            realDiscountVsMedian: 35,
             dataPointCount: 15,
             time: Date.now()
         }));
         localStorage.setItem('tp_hist_v1_797573', JSON.stringify({
             tiefstpreis: 15,
-            hoechstpreis: 30,
+            hoechstpreis: 40,
+            medianPrice: 30,
             previousLow: 20,
             isNewAllTimeLow: true,
-            realDiscountVsPrevLow: 25,
+            realDiscountVsPrevLow: 25, // dMed 50%, dRec 25% -> Score = 38%
             dataPointCount: 12,
             time: Date.now()
         }));
+        window.ToppreiseSuite.CONFIG.BESTPREISE_WEIGHT_RECORD = 0.50;
         window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
         window.ToppreiseSuite.processListings();
     }""")
@@ -1508,12 +1525,13 @@ def test_bestpreise_sorting_by_tier_and_real_discount(page: Page):
         const cards = Array.from(document.querySelectorAll('#product-list .Plugin_Product'));
         return cards.map(c => c.id);
     }""")
-    assert card_ids[0] == 'card-negative'   # Score 1025
-    assert card_ids[1] == 'card-cheapest'   # Score 1018
-    assert card_ids[2] == 'card-expensive'  # Score 535
+    # Scores: Card 3 (38%) -> Card 2 (34%) -> Card 1 (22%)
+    assert card_ids[0] == 'card-negative'   # Score 38%
+    assert card_ids[1] == 'card-expensive'  # Score 34%
+    assert card_ids[2] == 'card-cheapest'   # Score 22%
 
 
-def test_bestpreise_settings_modal_toggle_and_persistence(page: Page):
+def test_bestpreise_settings_weight_slider(page: Page):
     # Open settings modal in Shadow DOM
     page.click('#tp-root >> #tp-settings-fab')
     page.wait_for_selector('#tp-root >> #tp-settings-dialog', state='visible')
@@ -1521,16 +1539,26 @@ def test_bestpreise_settings_modal_toggle_and_persistence(page: Page):
     toggle = page.locator('#tp-root >> #tp-bestpreise-mode-toggle')
     assert not toggle.is_checked()
 
-    # Toggle on
+    # Toggle on -> Weight slider group should become visible
     page.click('#tp-root >> #tp-bestpreise-mode-toggle + .tp-slider')
     assert toggle.is_checked()
+
+    weight_group = page.locator('#tp-root >> #tp-bestpreise-weight-group')
+    assert weight_group.is_visible()
+
+    # Set slider to 70% Record / 30% Median
+    page.fill('#tp-root >> #tp-bestpreise-weight-val', '70')
+    page.dispatch_event('#tp-root >> #tp-bestpreise-weight-val', 'input')
+
+    desc = page.locator('#tp-root >> #tp-bestpreise-weight-desc')
+    assert '30% Median / 70% Neuer Rekord' in (desc.text_content() or '')
 
     # Save
     page.click('#tp-root >> #tp-btn-save')
     page.wait_for_selector('#tp-root >> #tp-settings-dialog', state='hidden')
 
     assert page.evaluate("() => window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE") is True
-    assert 'tp-bestpreise-bar' in (page.locator('#tp-suite-filter-bar').get_attribute('class') or '')
+    assert page.evaluate("() => window.ToppreiseSuite.CONFIG.BESTPREISE_WEIGHT_RECORD") == 0.70
 
 
 

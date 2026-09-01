@@ -213,34 +213,41 @@ Subcategories appear in two distinct patterns across the site:
 
 ---
 
-## 9. "Neue Bestpreise" Curated Feed Mode (v2.16.0)
+## 9. "Neue Bestpreise" Curated Feed Mode & Continuous Deal-Score (v2.16.2)
 
 ### 1. Architectural Concept
-"Neue Bestpreise" turns `/neue-toppreise` into a genuine deal feed by filtering out unverified and non-bestpreis listings, morphing feed badges with real historical discount metrics, and auto-scanning uncached products with priority ordering.
+"Neue Bestpreise" turns `/neue-toppreise` into a genuine deal feed by filtering out unverified and non-bestpreis listings, mapping continuous real historical discounts directly onto the thermal heatmap, and auto-scanning uncached products with priority ordering.
 
-### 2. 3-Tier Qualification & Composite Scoring Model
-- **Tier 1: Neuer Rekord (`isNewAllTimeLow === true`)**
-  - **Metric**: `realDiscountVsPrevLow` ($P_{\text{prev\_low}} \rightarrow P_{\text{curr}}$ drop %).
-  - **Badge**: Golden Diamond gradient (`#f59e0b` $\rightarrow$ `#fbbf24`), pulsing halo (`.tp-deal-new-record`), text `Rekord -XX%`.
-  - **Subline**: `Bisher: CHF XX.XX (-YY%)` in emerald.
-  - **Composite Score**: `1000 + realDiscountVsPrevLow` (guarantees all records rank above all Tier 2 deals).
-- **Tier 2: Bestpreis / All-Time Low (`isAtAllTimeLow === true && !isNewAllTimeLow`)**
-  - **Metric**: `realDiscountVsMedian` ($P_{\text{median}} \rightarrow P_{\text{curr}}$ drop % vs historical median).
-  - **Badge**: Pulsing Emerald halo (`.tp-deal-alltime-low`), text `Bestpreis -XX%`.
-  - **Subline**: `Ø-Preis: CHF XX.XX (-YY%)`.
-  - **Composite Score**: `500 + realDiscountVsMedian`.
-- **Tier 3: Hidden / Excluded**
-  - Items that are non-bestpreise, unverified without stats, flat-price products ($<2\%$ variance), or items with $<5$ historical data points are hidden (`.tp-bestpreise-hidden`).
+### 2. Continuous Weighted Real Deal-Score Model
+Instead of discrete artificial tier buckets, every qualifying all-time low product receives a continuous **Deal-Score %** ($S_{\text{deal}}$):
 
-### 3. Paced Auto-Scan Engine (`runBestpreiseScan`)
+$$\text{Score} = \max\left(0, \text{round}\left((1 - W) \times D_{\text{median}} + W \times D_{\text{record}}\right)\right)$$
+
+- **$D_{\text{median}}$ (Everyday Savings)**: Discount vs historical median price $\frac{P_{\text{median}} - P_{\text{curr}}}{P_{\text{median}}} \times 100$.
+- **$D_{\text{record}}$ (Record-Breaking Margin)**: Discount vs previous all-time low $\frac{P_{\text{prev\_low}} - P_{\text{curr}}}{P_{\text{prev\_low}}} \times 100$ (or $0\%$ if matching existing record).
+- **Weight $W$**: User-configurable via settings slider (default $0.50$ = 50% Median / 50% Neuer Rekord).
+- **Qualification Gate**: Products must be at/below all-time low ($P_{\text{curr}} \le P_{\text{low}} \times 1.01$), have $\ge 2\%$ historical variance, and have $\ge 5$ data points. Non-qualifiers are hidden (`.tp-bestpreise-hidden`).
+
+### 3. Integrated Thermal Heatmap & Visual Hierarchy
+- **Card Thermal Background**: The computed Deal-Score directly drives `getHeatmapStyles(Score, ...)` on the card (5–15% cool cyan $\rightarrow$ 20–30% warm amber $\rightarrow$ 35%+ fiery red).
+- **Circle Badge (`.badge-dif`)**:
+  - Displays `Real Deal` and `-${Score}%` in clean, crisp typography.
+  - Border/Halo: Pulsing gold halo (`.tp-deal-new-record`) if breaking a record, pulsing emerald halo (`.tp-deal-alltime-low`) if matching an all-time low.
+  - Hover Tooltip: Full breakdown with `Ø-Rabatt: ${D_median}%` and `Rekord-Marge: ${D_record}%`.
+- **Price Subline**:
+  - New Record: `Bisher: CHF XX.XX (-YY%)` in emerald below the price.
+  - Matching Low: `Ø-Preis: CHF XX.XX (-YY%)`.
+- **Feed Sorting**: Pure continuous descending sort by Deal-Score ($S_{\text{deal}} \downarrow$).
+
+### 4. Paced Auto-Scan Engine (`runBestpreiseScan`)
 - **Pacing**: 200ms fixed delay between sequential requests.
 - **Priority**: Sorts uncached queue by highest feed discount first ($D_{\text{feed}}$ descending) so the strongest deals surface immediately during streaming re-renders.
 - **Cancellation**: Disabling Bestpreise mode sets `bestpreiseScanCancel = true` to abort running requests.
 
-### 4. UI Controls & Synergy
+### 5. UI Controls & Synergy
 - **Filter Bar Toggle**: `💎 Neue Bestpreise` toggle in `#tp-suite-filter-bar` with live scan counter (`⏳ Bestpreise (12/47)` $\rightarrow$ `💎 Bestpreise (23 Deals)`).
 - **Redundant Control Mitigation**: Disables `🌟 Nur Tiefstpreise` and `🔍 Check Deals` with tooltips while Bestpreise mode is active to prevent user confusion.
-- **Settings Modal Integration**: Managed under Section 6 with full sync and persistence across reload.
+- **Settings Modal Integration**: Managed under Section 6 with toggle and dynamic weight balance slider (`0%` 100% Median $\leftrightarrow$ `100%` 100% Neuer Rekord).
 - **Empty State**: Dedicated empty state with one-click disable button when 0 items on a page qualify.
 
 
