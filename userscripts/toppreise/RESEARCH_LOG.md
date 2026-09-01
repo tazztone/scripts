@@ -295,6 +295,20 @@ $$\text{Score} = \max\left(0, \text{round}\left((1 - W) \times D_{\text{median}}
 - **Active Fetch State Tracking (`currentlyScanningPid`)**: Resolved visual freeze bug where uncached cards displayed permanent `⏳ Prüfe...`. Badges now display loading spinners *strictly* while an HTTP request is in-flight for that specific product.
 - **Empty State Action Button**: Added 1-click `[ 🔍 Deals prüfen (≥30%) ]` button to the empty state banner when no deals are cached yet.
 
+---
+
+## 11. Cross-Row Feed Sorting & Container Unification Engine (v2.18.0)
+
+### 1. Root-Cause Analysis: Multi-Row Bootstrap Isolation
+- **The Issue**: On `/neue-toppreise` and other feed pages, product cards are divided across multiple `<div class="row">` elements (e.g. 4 cards per row). The previous grid traversal stopped at `row 1` because `cards[0]` and `cards[1]` were both contained within the first row. As a result, only the first 4 cards were sorted among themselves, while cards in subsequent rows were completely ignored.
+- **The Solution**:
+  1. *Authoritative Lowest Common Ancestor (`findListContainer`)*: Walks the DOM to find the common ancestor containing *all* cards on the page (or known top-level list containers like `#Page_ListTopPriceReductionProducts`, `#Page_ListTop100Products`, `.mixedBrowsingList`).
+  2. *Atomic Column Wrapper Resolver (`getSortableItem`)*: Distinguishes between direct `<a>` product cards and responsive grid column wrappers (`.col-12, .col-sm-6, .col-md-4, .col-md-3, [class*="col-"]`), ensuring that column sizing wrappers are moved rather than either breaking column layout or moving entire monolithic `.row` blocks.
+  3. *Primary Flex Container Unification*: All sortable items across all rows are appended into the primary `.row` flex container (`display: flex; flex-wrap: wrap;`), allowing column wrappers to flow seamlessly across rows in strict descending Deal-Score order.
+  4. *Secondary Row Gap Suppression*: Empty secondary rows receive `.tp-empty-row-hidden` (`display: none !important`) during active sorting to eliminate layout gaps.
+  5. *100% Reversible Multi-Parent Restoration*: Permanently records `dataset.tpInitialOrder` and `dataset.tpOrigParentId` on each item. When sorting is deactivated or reset to natural order, every card/column is returned to its exact original parent row in initial order, and secondary rows are unhidden.
+
+
 
 
 

@@ -1796,6 +1796,149 @@ def test_bestpreise_sorting_nested_wrappers(page: Page):
     assert wrapper_ids[2] == 'card-cheapest'   # Card 1 (15%)
 
 
+def test_bestpreise_sorting_and_natural_order_restoration_multi_row(page: Page):
+    # Setup 2 separate Bootstrap .row containers inside list
+    page.evaluate("""() => {
+        const list = document.getElementById('product-list');
+        list.innerHTML = '';
+
+        const row1 = document.createElement('div');
+        row1.className = 'row';
+        row1.id = 'row-1';
+
+        const row2 = document.createElement('div');
+        row2.className = 'row';
+        row2.id = 'row-2';
+
+        list.appendChild(row1);
+        list.appendChild(row2);
+
+        // Card 1 in Row 1 (Score 15%)
+        const col1 = document.createElement('div');
+        col1.className = 'col-6 col-md-3';
+        col1.innerHTML = `<a href="/preisvergleich/Test/P1-p101" id="multi-card-1" class="Plugin_Product"><span class="product-name">Product 1</span><div class="Plugin_PriceInformation"><div class="priceContainer productPrice"><div class="Plugin_Price">100.00</div></div></div><div class="badge badge-dif"><p>-10%</p></div></a>`;
+        row1.appendChild(col1);
+
+        // Card 2 in Row 1 (Score 25%)
+        const col2 = document.createElement('div');
+        col2.className = 'col-6 col-md-3';
+        col2.innerHTML = `<a href="/preisvergleich/Test/P2-p102" id="multi-card-2" class="Plugin_Product"><span class="product-name">Product 2</span><div class="Plugin_PriceInformation"><div class="priceContainer productPrice"><div class="Plugin_Price">200.00</div></div></div><div class="badge badge-dif"><p>-20%</p></div></a>`;
+        row1.appendChild(col2);
+
+        // Card 3 in Row 2 (Score 60% - best deal!)
+        const col3 = document.createElement('div');
+        col3.className = 'col-6 col-md-3';
+        col3.innerHTML = `<a href="/preisvergleich/Test/P3-p103" id="multi-card-3" class="Plugin_Product"><span class="product-name">Product 3</span><div class="Plugin_PriceInformation"><div class="priceContainer productPrice"><div class="Plugin_Price">300.00</div></div></div><div class="badge badge-dif"><p>-50%</p></div></a>`;
+        row2.appendChild(col3);
+
+        // Card 4 in Row 2 (Score 5%)
+        const col4 = document.createElement('div');
+        col4.className = 'col-6 col-md-3';
+        col4.innerHTML = `<a href="/preisvergleich/Test/P4-p104" id="multi-card-4" class="Plugin_Product"><span class="product-name">Product 4</span><div class="Plugin_PriceInformation"><div class="priceContainer productPrice"><div class="Plugin_Price">400.00</div></div></div><div class="badge badge-dif"><p>-5%</p></div></a>`;
+        row2.appendChild(col4);
+
+        // Seed deal cache
+        localStorage.setItem('tp_hist_v1_101', JSON.stringify({ tiefstpreis: 100, hoechstpreis: 150, medianPrice: 130, isNewAllTimeLow: false, dataPointCount: 10, time: Date.now() })); // ~15%
+        localStorage.setItem('tp_hist_v1_102', JSON.stringify({ tiefstpreis: 200, hoechstpreis: 350, medianPrice: 300, isNewAllTimeLow: false, dataPointCount: 10, time: Date.now() })); // ~25%
+        localStorage.setItem('tp_hist_v1_103', JSON.stringify({ tiefstpreis: 300, hoechstpreis: 900, medianPrice: 800, previousLow: 500, isNewAllTimeLow: true, realDiscountVsPrevLow: 40, dataPointCount: 10, time: Date.now() })); // ~60%
+        localStorage.setItem('tp_hist_v1_104', JSON.stringify({ tiefstpreis: 400, hoechstpreis: 450, medianPrice: 430, isNewAllTimeLow: false, dataPointCount: 10, time: Date.now() })); // ~5%
+
+        window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
+        window.ToppreiseSuite.processListings();
+    }""")
+
+    # Verify visual order in primary row is Card 3 (60%) -> Card 2 (25%) -> Card 1 (15%) -> Card 4 (5%)
+    sorted_card_ids = page.evaluate("""() => {
+        const primaryRow = document.getElementById('row-1');
+        const cards = Array.from(primaryRow.querySelectorAll('.Plugin_Product'));
+        return cards.map(c => c.id);
+    }""")
+    assert sorted_card_ids == ['multi-card-3', 'multi-card-2', 'multi-card-1', 'multi-card-4']
+
+    # Verify secondary row is hidden
+    row2_display = page.evaluate("() => document.getElementById('row-2').style.display")
+    assert row2_display == 'none'
+
+    # Now disable Bestpreise mode to test natural restoration
+    page.evaluate("""() => {
+        window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = false;
+        window.ToppreiseSuite.processListings();
+    }""")
+
+    # Verify Row 1 contains Card 1 & Card 2
+    row1_card_ids = page.evaluate("""() => {
+        const row1 = document.getElementById('row-1');
+        return Array.from(row1.querySelectorAll('.Plugin_Product')).map(c => c.id);
+    }""")
+    assert row1_card_ids == ['multi-card-1', 'multi-card-2']
+
+    # Verify Row 2 contains Card 3 & Card 4
+    row2_card_ids = page.evaluate("""() => {
+        const row2 = document.getElementById('row-2');
+        return Array.from(row2.querySelectorAll('.Plugin_Product')).map(c => c.id);
+    }""")
+    assert row2_card_ids == ['multi-card-3', 'multi-card-4']
+
+    # Verify Row 2 is visible again
+    row2_display_restored = page.evaluate("() => document.getElementById('row-2').style.display")
+    assert row2_display_restored != 'none'
+
+
+def test_sort_by_discount_across_multiple_bootstrap_rows(page: Page):
+    # Setup multi-row layout
+    page.evaluate("""() => {
+        const list = document.getElementById('product-list');
+        list.innerHTML = '';
+
+        const row1 = document.createElement('div');
+        row1.className = 'row';
+        row1.id = 'row-1';
+
+        const row2 = document.createElement('div');
+        row2.className = 'row';
+        row2.id = 'row-2';
+
+        list.appendChild(row1);
+        list.appendChild(row2);
+
+        // Card 1 in Row 1 (-10%)
+        const col1 = document.createElement('div');
+        col1.className = 'col-6 col-md-3';
+        col1.innerHTML = `<a href="/preisvergleich/Test/P1-p101" id="multi-card-1" class="Plugin_Product"><span class="product-name">Product 1</span><div class="Plugin_PriceInformation"><div class="priceContainer productPrice"><div class="Plugin_Price">100.00</div></div></div><div class="badge badge-dif"><p>-10%</p></div></a>`;
+        row1.appendChild(col1);
+
+        // Card 2 in Row 1 (-20%)
+        const col2 = document.createElement('div');
+        col2.className = 'col-6 col-md-3';
+        col2.innerHTML = `<a href="/preisvergleich/Test/P2-p102" id="multi-card-2" class="Plugin_Product"><span class="product-name">Product 2</span><div class="Plugin_PriceInformation"><div class="priceContainer productPrice"><div class="Plugin_Price">200.00</div></div></div><div class="badge badge-dif"><p>-20%</p></div></a>`;
+        row1.appendChild(col2);
+
+        // Card 3 in Row 2 (-50%)
+        const col3 = document.createElement('div');
+        col3.className = 'col-6 col-md-3';
+        col3.innerHTML = `<a href="/preisvergleich/Test/P3-p103" id="multi-card-3" class="Plugin_Product"><span class="product-name">Product 3</span><div class="Plugin_PriceInformation"><div class="priceContainer productPrice"><div class="Plugin_Price">300.00</div></div></div><div class="badge badge-dif"><p>-50%</p></div></a>`;
+        row2.appendChild(col3);
+
+        // Card 4 in Row 2 (-5%)
+        const col4 = document.createElement('div');
+        col4.className = 'col-6 col-md-3';
+        col4.innerHTML = `<a href="/preisvergleich/Test/P4-p104" id="multi-card-4" class="Plugin_Product"><span class="product-name">Product 4</span><div class="Plugin_PriceInformation"><div class="priceContainer productPrice"><div class="Plugin_Price">400.00</div></div></div><div class="badge badge-dif"><p>-5%</p></div></a>`;
+        row2.appendChild(col4);
+
+        window.ToppreiseSuite.CONFIG.SORT_BY_OFFERS = 'discount-desc';
+        window.ToppreiseSuite.processListings();
+    }""")
+
+    # Discounts: Card 3 (-50%) -> Card 2 (-20%) -> Card 1 (-10%) -> Card 4 (-5%)
+    sorted_card_ids = page.evaluate("""() => {
+        const primaryRow = document.getElementById('row-1');
+        const cards = Array.from(primaryRow.querySelectorAll('.Plugin_Product'));
+        return cards.map(c => c.id);
+    }""")
+    assert sorted_card_ids == ['multi-card-3', 'multi-card-2', 'multi-card-1', 'multi-card-4']
+
+
+
 
 
 
