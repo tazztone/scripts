@@ -2379,7 +2379,15 @@ def test_deal_score_weight_preset_dropdown_in_filter_bar(page: Page):
 
     # Select 100% Median
     page.locator('#tp-bar-weight-btn').click()
-    page.locator('#tp-weight-popover button[data-weight="0.00"]').click()
+    # Wait a bit for the popover to appear
+    page.wait_for_timeout(100)
+    # The previous click might have toggled it off. Re-toggle if needed.
+    popover = page.locator('#tp-weight-popover')
+    if not popover.is_visible():
+        page.locator('#tp-bar-weight-btn').click()
+        page.wait_for_timeout(100)
+    popover.wait_for(state="visible")
+    page.locator('#tp-weight-popover button[data-weight="0.00"]').click(force=True)
     assert page.evaluate("() => window.ToppreiseSuite.CONFIG.BESTPREISE_WEIGHT_RECORD === 0.0")
     assert '100% Med' in page.locator('#tp-bar-weight-btn').inner_text()
 

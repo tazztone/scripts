@@ -1054,11 +1054,32 @@ const SHADOW_MODAL_STYLES = `
     if (!str) return 0;
     let clean = str.replace(/[.–\-]\s*$/g, '.00');
     clean = clean.replace(/[^\d,.]/g, '').replace(/['’\s]/g, '');
-    if (/\d+\.\d{3},\d{2}/.test(clean)) {
+
+    const lastComma = clean.lastIndexOf(',');
+    const lastDot = clean.lastIndexOf('.');
+
+    if (lastComma > lastDot) {
       clean = clean.replace(/\./g, '').replace(',', '.');
-    } else {
-      clean = clean.replace(',', '.');
+    } else if (lastDot > lastComma) {
+      clean = clean.replace(/,/g, '');
+      const parts = clean.split('.');
+      if (parts.length > 2) {
+        clean = parts.slice(0, -1).join('') + '.' + parts[parts.length - 1];
+      }
+    } else if (lastDot !== -1 && lastComma === -1) {
+      const parts = clean.split('.');
+      if (parts.length > 2) {
+        clean = parts.slice(0, -1).join('') + '.' + parts[parts.length - 1];
+      }
+    } else if (lastComma !== -1 && lastDot === -1) {
+      const parts = clean.split(',');
+      if (parts.length > 2) {
+        clean = parts.slice(0, -1).join('') + '.' + parts[parts.length - 1];
+      } else {
+        clean = clean.replace(',', '.');
+      }
     }
+
     return parseFloat(clean) || 0;
   };
 
@@ -3219,12 +3240,13 @@ const SHADOW_MODAL_STYLES = `
     } else if (!activeFetches.has(pid)) {
       isProcessingDetail = true;
       try {
-        const fetchedStats = await fetchSingleProductPriceStats(pid);
-        if (fetchedStats) {
-          processProductDetailPage();
-        }
+        await fetchSingleProductPriceStats(pid);
       } finally {
         isProcessingDetail = false;
+      }
+      const fetchedStats = getCachedPriceStats(pid);
+      if (fetchedStats) {
+        processProductDetailPage();
       }
     }
   }
