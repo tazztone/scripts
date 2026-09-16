@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.18.17
+// @version      2.18.18
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, checks real all-time Tiefstpreise, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -15,7 +15,10 @@
 
 // ─── CONFIG DEFAULT VALUES ───────────────────────────────────────────────────
 const DEFAULTS = {
-  FILTERS_ENABLED: true,
+  FILTER_NEG_ENABLED: true,
+  FILTER_CAT_ENABLED: true,
+  FILTER_MIN_ENABLED: true,
+  FILTER_BESTPREIS_ENABLED: true,
   MODE: 'dim',
   MARGIN_PERCENT: 0.0,
   DIM_OPACITY: 0.25,
@@ -925,7 +928,10 @@ const SHADOW_MODAL_STYLES = `
   const _setValue = (k, v) => (typeof GM_setValue !== 'undefined' ? GM_setValue(k, v) : localStorage.setItem('tp_suite_v2_' + k, JSON.stringify(v)));
 
   const CONFIG = {
-    FILTERS_ENABLED: _getValue('FILTERS_ENABLED', DEFAULTS.FILTERS_ENABLED),
+    FILTER_NEG_ENABLED: _getValue('FILTER_NEG_ENABLED', _getValue('FILTERS_ENABLED', DEFAULTS.FILTER_NEG_ENABLED)),
+    FILTER_CAT_ENABLED: _getValue('FILTER_CAT_ENABLED', _getValue('FILTERS_ENABLED', DEFAULTS.FILTER_CAT_ENABLED)),
+    FILTER_MIN_ENABLED: _getValue('FILTER_MIN_ENABLED', _getValue('FILTERS_ENABLED', DEFAULTS.FILTER_MIN_ENABLED)),
+    FILTER_BESTPREIS_ENABLED: _getValue('FILTER_BESTPREIS_ENABLED', _getValue('FILTERS_ENABLED', DEFAULTS.FILTER_BESTPREIS_ENABLED)),
     MODE: _getValue('MODE', DEFAULTS.MODE),
     MARGIN_PERCENT: parseFloat(_getValue('MARGIN_PERCENT', DEFAULTS.MARGIN_PERCENT)),
     DIM_OPACITY: parseFloat(_getValue('DIM_OPACITY', DEFAULTS.DIM_OPACITY)),
@@ -1947,9 +1953,20 @@ const SHADOW_MODAL_STYLES = `
             <span id="tp-bar-min-val" style="min-width: 14px; text-align: center;">${CONFIG.MIN_OFFERS}</span>
             <button class="tp-stepper-btn" id="tp-bar-min-plus">+</button>
           </div>
-          <button class="tp-bar-btn tp-filter-toggle-btn ${CONFIG.FILTERS_ENABLED !== false ? 'tp-active' : 'tp-filter-off'}" id="tp-bar-filter-toggle" title="${CONFIG.FILTERS_ENABLED !== false ? 'Alle Filter aktiv (Klicken zum Pausieren)' : 'Filter pausiert (Klicken zum Aktivieren)'}">
-            ${CONFIG.FILTERS_ENABLED !== false ? '⚡ Filter: AN' : '⚡ Filter: AUS'}
-          </button>
+          <div class="tp-filter-toggles-group" style="display: flex; gap: 4px; margin-left: auto;">
+            <button class="tp-bar-btn tp-filter-toggle-btn ${CONFIG.FILTER_NEG_ENABLED ? 'tp-active' : 'tp-filter-off'}" id="tp-toggle-neg" title="Negativ-Filter (Text) ${CONFIG.FILTER_NEG_ENABLED ? 'AN' : 'AUS'}">
+              📝
+            </button>
+            <button class="tp-bar-btn tp-filter-toggle-btn ${CONFIG.FILTER_CAT_ENABLED ? 'tp-active' : 'tp-filter-off'}" id="tp-toggle-cat" title="Kategorien-Filter ${CONFIG.FILTER_CAT_ENABLED ? 'AN' : 'AUS'}">
+              🚫
+            </button>
+            <button class="tp-bar-btn tp-filter-toggle-btn ${CONFIG.FILTER_MIN_ENABLED ? 'tp-active' : 'tp-filter-off'}" id="tp-toggle-min" title="Min-Angebote-Filter ${CONFIG.FILTER_MIN_ENABLED ? 'AN' : 'AUS'}">
+              🔢
+            </button>
+            <button class="tp-bar-btn tp-filter-toggle-btn ${CONFIG.FILTER_BESTPREIS_ENABLED ? 'tp-active' : 'tp-filter-off'}" id="tp-toggle-bestpreis" title="Deal-Filter ${CONFIG.FILTER_BESTPREIS_ENABLED ? 'AN' : 'AUS'}">
+              💎
+            </button>
+          </div>
         </div>
         <div id="tp-blocked-cats-container" class="tp-blocked-cats-row" style="display: ${excluded.length > 0 && isBlockedCatsOpen ? 'flex' : 'none'};">
           <span class="tp-blocked-cats-label">🚫 Ausgeblendet (${excluded.length}):</span>
@@ -2163,11 +2180,29 @@ const SHADOW_MODAL_STYLES = `
 
       bar.querySelector('#tp-bar-min-minus').onclick = () => updateMinOffers(-1);
       bar.querySelector('#tp-bar-min-plus').onclick = () => updateMinOffers(1);
-      bar.querySelector('#tp-bar-filter-toggle').onclick = () => {
-        const next = !(CONFIG.FILTERS_ENABLED !== false);
-        saveConfigKey('FILTERS_ENABLED', next);
+      bar.querySelector('#tp-toggle-neg').onclick = () => {
+        const next = !CONFIG.FILTER_NEG_ENABLED;
+        saveConfigKey('FILTER_NEG_ENABLED', next);
         processListings();
-        showToast(next ? '⚡ Filter aktiviert' : '⏸️ Filter pausiert (alle Angebote sichtbar)');
+        showToast(next ? '📝 Negativ-Filter AN' : '📝 Negativ-Filter AUS');
+      };
+      bar.querySelector('#tp-toggle-cat').onclick = () => {
+        const next = !CONFIG.FILTER_CAT_ENABLED;
+        saveConfigKey('FILTER_CAT_ENABLED', next);
+        processListings();
+        showToast(next ? '🚫 Kategorien-Filter AN' : '🚫 Kategorien-Filter AUS');
+      };
+      bar.querySelector('#tp-toggle-min').onclick = () => {
+        const next = !CONFIG.FILTER_MIN_ENABLED;
+        saveConfigKey('FILTER_MIN_ENABLED', next);
+        processListings();
+        showToast(next ? '🔢 Min-Angebote-Filter AN' : '🔢 Min-Angebote-Filter AUS');
+      };
+      bar.querySelector('#tp-toggle-bestpreis').onclick = () => {
+        const next = !CONFIG.FILTER_BESTPREIS_ENABLED;
+        saveConfigKey('FILTER_BESTPREIS_ENABLED', next);
+        processListings();
+        showToast(next ? '💎 Deal-Filter AN' : '💎 Deal-Filter AUS');
       };
       bar.querySelector('#tp-blocked-clear-all-btn').onclick = () => {
         const prevCats = [...(CONFIG.EXCLUDED_CATEGORIES || [])];
@@ -2220,13 +2255,29 @@ const SHADOW_MODAL_STYLES = `
       }
     }
 
-    const filterToggleBtn = bar.querySelector('#tp-bar-filter-toggle');
-    if (filterToggleBtn) {
-      const isEnabled = CONFIG.FILTERS_ENABLED !== false;
-      filterToggleBtn.classList.toggle('tp-active', isEnabled);
-      filterToggleBtn.classList.toggle('tp-filter-off', !isEnabled);
-      filterToggleBtn.title = isEnabled ? 'Alle Filter aktiv (Klicken zum Pausieren)' : 'Filter pausiert (Klicken zum Aktivieren)';
-      filterToggleBtn.innerHTML = isEnabled ? '⚡ Filter: AN' : '⚡ Filter: AUS';
+    const toggleNeg = bar.querySelector('#tp-toggle-neg');
+    if (toggleNeg) {
+      toggleNeg.classList.toggle('tp-active', CONFIG.FILTER_NEG_ENABLED);
+      toggleNeg.classList.toggle('tp-filter-off', !CONFIG.FILTER_NEG_ENABLED);
+      toggleNeg.title = `Negativ-Filter (Text) ${CONFIG.FILTER_NEG_ENABLED ? 'AN' : 'AUS'}`;
+    }
+    const toggleCat = bar.querySelector('#tp-toggle-cat');
+    if (toggleCat) {
+      toggleCat.classList.toggle('tp-active', CONFIG.FILTER_CAT_ENABLED);
+      toggleCat.classList.toggle('tp-filter-off', !CONFIG.FILTER_CAT_ENABLED);
+      toggleCat.title = `Kategorien-Filter ${CONFIG.FILTER_CAT_ENABLED ? 'AN' : 'AUS'}`;
+    }
+    const toggleMin = bar.querySelector('#tp-toggle-min');
+    if (toggleMin) {
+      toggleMin.classList.toggle('tp-active', CONFIG.FILTER_MIN_ENABLED);
+      toggleMin.classList.toggle('tp-filter-off', !CONFIG.FILTER_MIN_ENABLED);
+      toggleMin.title = `Min-Angebote-Filter ${CONFIG.FILTER_MIN_ENABLED ? 'AN' : 'AUS'}`;
+    }
+    const toggleBestpreis = bar.querySelector('#tp-toggle-bestpreis');
+    if (toggleBestpreis) {
+      toggleBestpreis.classList.toggle('tp-active', CONFIG.FILTER_BESTPREIS_ENABLED);
+      toggleBestpreis.classList.toggle('tp-filter-off', !CONFIG.FILTER_BESTPREIS_ENABLED);
+      toggleBestpreis.title = `Deal-Filter ${CONFIG.FILTER_BESTPREIS_ENABLED ? 'AN' : 'AUS'}`;
     }
 
     const batchBtn = bar.querySelector('#tp-bar-batch-check-btn');
@@ -2386,12 +2437,9 @@ const SHADOW_MODAL_STYLES = `
   }
 
   function applyCardFilters(cd, termsList, excludedCats, minOffers, pageHasOffers) {
-    if (CONFIG.FILTERS_ENABLED === false) {
-      return { isNeg: false, isCatExcluded: false, isLowOffers: false };
-    }
-    const isNeg = matchesNegativeTerms(cd.card, termsList);
-    const isCatExcluded = !!(cd.catName && isPathExcluded(cd.catName, cd.rootGroup, excludedCats));
-    const isLowOffers = !!(pageHasOffers && minOffers > 0 && cd.offerCount < minOffers);
+    const isNeg = CONFIG.FILTER_NEG_ENABLED ? matchesNegativeTerms(cd.card, termsList) : false;
+    const isCatExcluded = CONFIG.FILTER_CAT_ENABLED ? !!(cd.catName && isPathExcluded(cd.catName, cd.rootGroup, excludedCats)) : false;
+    const isLowOffers = CONFIG.FILTER_MIN_ENABLED ? !!(pageHasOffers && minOffers > 0 && cd.offerCount < minOffers) : false;
     return { isNeg, isCatExcluded, isLowOffers };
   }
 
@@ -2697,7 +2745,7 @@ const SHADOW_MODAL_STYLES = `
           }
         } else if (stats) {
           // Verified NON-Deal (has stats but score <= 0 or not at low) -> HIDE IT if filters enabled!
-          if (CONFIG.FILTERS_ENABLED !== false) {
+          if (CONFIG.FILTER_BESTPREIS_ENABLED !== false) {
             card.classList.add('tp-bestpreise-hidden');
           } else {
             card.classList.remove('tp-bestpreise-hidden');
@@ -2741,7 +2789,7 @@ const SHADOW_MODAL_STYLES = `
           const prevLow = stats.previousLow;
           const realDropVsPrev = prevLow && prevLow > cardPrice ? Math.round(((prevLow - cardPrice) / prevLow) * 100) : (stats.realDiscountVsPrevLow || 0);
 
-          if (CONFIG.FILTERS_ENABLED !== false && isNonBest && CONFIG.REAL_DEAL_FILTER_ACTIVE) {
+          if (CONFIG.FILTER_BESTPREIS_ENABLED !== false && isNonBest && CONFIG.REAL_DEAL_FILTER_ACTIVE) {
             card.classList.add('tp-non-bestpreis-filtered');
           } else {
             card.classList.remove('tp-non-bestpreis-filtered');
@@ -3082,9 +3130,12 @@ const SHADOW_MODAL_STYLES = `
         showToast('Bestpreise-Modus deaktiviert');
       });
       emptyNotice.querySelector('#tp-empty-toggle-filters-btn')?.addEventListener('click', () => {
-        saveConfigKey('FILTERS_ENABLED', false);
+        saveConfigKey('FILTER_NEG_ENABLED', false);
+        saveConfigKey('FILTER_CAT_ENABLED', false);
+        saveConfigKey('FILTER_MIN_ENABLED', false);
+        saveConfigKey('FILTER_BESTPREIS_ENABLED', false);
         processListings();
-        showToast('⏸️ Filter pausiert (alle Angebote sichtbar)');
+        showToast('⏸️ Alle Filter pausiert (alle Angebote sichtbar)');
       });
     } else if (emptyNotice) {
       emptyNotice.remove();
@@ -3129,13 +3180,13 @@ const SHADOW_MODAL_STYLES = `
         if (cd.pid && !cd.stats && cd.discountVal !== null && cd.discountVal >= minDealDiscount) {
           counts.uncheckedDeals++;
         }
-        if (CONFIG.FILTERS_ENABLED !== false && cd.isVerifiedNonBest && CONFIG.REAL_DEAL_FILTER_ACTIVE) {
+        if (CONFIG.FILTER_BESTPREIS_ENABLED !== false && cd.isVerifiedNonBest && CONFIG.REAL_DEAL_FILTER_ACTIVE) {
           counts.nonBest++;
         }
         cd.dealScore = computeDealScore(cd.stats, cd.cardPrice);
         if (cd.dealScore) {
           counts.bestpreiseDeals++;
-        } else if (CONFIG.FILTERS_ENABLED !== false && CONFIG.BESTPREISE_MODE_ACTIVE && cd.stats && !isStandardFiltered) {
+        } else if (CONFIG.FILTER_BESTPREIS_ENABLED !== false && CONFIG.BESTPREISE_MODE_ACTIVE && cd.stats && !isStandardFiltered) {
           counts.bestpreiseHidden++;
         }
       }
@@ -3784,7 +3835,7 @@ const SHADOW_MODAL_STYLES = `
     exportBtn?.addEventListener('click', () => {
       const exportData = {
         _meta: {
-          version: (typeof GM_info !== 'undefined' && GM_info?.script?.version) || '2.16.0',
+          version: (typeof GM_info !== 'undefined' && GM_info?.script?.version) || '2.18.18',
           exported: new Date().toISOString()
         },
         config: { ...CONFIG }

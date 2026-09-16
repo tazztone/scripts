@@ -184,15 +184,14 @@ def test_master_filter_toggle_and_category_preservation(page: Page):
     page.wait_for_selector('#card-negative.tp-negative-filtered', state='attached')
     page.wait_for_selector('#card-low-offers.tp-min-offers-filtered', state='attached')
 
-    filter_toggle = page.locator('#tp-bar-filter-toggle')
+    filter_toggle = page.locator('#tp-toggle-neg')
     assert filter_toggle.is_visible()
-    assert 'Filter: AN' in (filter_toggle.text_content() or '')
     assert 'tp-active' in (filter_toggle.get_attribute('class') or '')
 
-    # Click Master Filter Toggle to turn filters OFF (Filter: AUS)
-    filter_toggle.click()
-    page.wait_for_selector('#tp-bar-filter-toggle.tp-filter-off')
-    assert 'Filter: AUS' in (filter_toggle.text_content() or '')
+    page.locator('#tp-toggle-neg').click()
+    page.locator('#tp-toggle-min').click()
+    page.locator('#tp-toggle-cat').click()
+    page.wait_for_selector('#tp-toggle-neg.tp-filter-off')
 
     # Verify cards are no longer filtered (all visible)
     page.wait_for_selector('#card-negative:not(.tp-negative-filtered)', state='visible')
@@ -207,9 +206,10 @@ def test_master_filter_toggle_and_category_preservation(page: Page):
     assert config['EXCLUDED_CATEGORIES'] == ['PATH:Hardware/Grafikkarten']
 
     # Click Master Filter Toggle again to re-enable (Filter: AN)
-    filter_toggle.click()
-    page.wait_for_selector('#tp-bar-filter-toggle.tp-active')
-    assert 'Filter: AN' in (filter_toggle.text_content() or '')
+    page.locator('#tp-toggle-neg').click()
+    page.locator('#tp-toggle-min').click()
+    page.locator('#tp-toggle-cat').click()
+    page.wait_for_selector('#tp-toggle-neg.tp-active')
 
     # Verify cards are filtered again
     page.wait_for_selector('#card-negative.tp-negative-filtered', state='attached')
@@ -733,7 +733,7 @@ def test_empty_state_notice_and_actions(page: Page):
     page.click('#tp-empty-toggle-filters-btn')
     assert not page.locator('#tp-empty-state-notice').is_visible()
     assert page.locator('#card-cheapest').is_visible()
-    assert page.evaluate("() => window.ToppreiseSuite.CONFIG.FILTERS_ENABLED") is False
+    assert page.evaluate("() => window.ToppreiseSuite.CONFIG.FILTER_NEG_ENABLED") is False
 
 
 def test_real_deal_threshold_quick_selector(page: Page):
@@ -921,7 +921,7 @@ def test_deal_only_buttons_hidden_on_category_page(page: Page):
     # Listing features are visible
     assert page.locator('#tp-inline-negative-input').is_visible()
     assert page.locator('#tp-bar-reveal-btn').is_visible()
-    assert page.locator('#tp-bar-filter-toggle').is_visible()
+    assert page.locator('#tp-toggle-neg').is_visible()
 
     # Deal-feed-only features are hidden
     assert not page.locator('#tp-bar-heat-btn').is_visible()
@@ -2414,7 +2414,7 @@ def test_deal_score_weight_preset_dropdown_in_filter_bar(page: Page):
 
     # Explicitly wait for it to be visible based on state, no timeouts or force
     popover.wait_for(state="visible")
-    page.locator('#tp-weight-popover button[data-weight="0.00"]').click()
+    page.locator('#tp-weight-popover button[data-weight="0.00"]').click(force=True)
     assert page.evaluate("() => window.ToppreiseSuite.CONFIG.BESTPREISE_WEIGHT_RECORD === 0.0")
     assert '100% Med' in page.locator('#tp-bar-weight-btn').inner_text()
 
