@@ -1054,11 +1054,25 @@ const SHADOW_MODAL_STYLES = `
     if (!str) return 0;
     let clean = str.replace(/[.–\-]\s*$/g, '.00');
     clean = clean.replace(/[^\d,.]/g, '').replace(/['’\s]/g, '');
-    if (/\d+\.\d{3},\d{2}/.test(clean)) {
-      clean = clean.replace(/\./g, '').replace(',', '.');
-    } else {
-      clean = clean.replace(',', '.');
+
+    const lastComma = clean.lastIndexOf(',');
+    const lastDot = clean.lastIndexOf('.');
+    const lastSeparator = Math.max(lastComma, lastDot);
+
+    if (lastSeparator === -1) {
+      return parseFloat(clean) || 0;
     }
+
+    const digitsAfterSeparator = clean.length - lastSeparator - 1;
+
+    if (digitsAfterSeparator === 3) {
+      clean = clean.replace(/[.,]/g, '');
+    } else {
+      const before = clean.substring(0, lastSeparator).replace(/[.,]/g, '');
+      const after = clean.substring(lastSeparator + 1);
+      clean = before + '.' + after;
+    }
+
     return parseFloat(clean) || 0;
   };
 
@@ -3219,12 +3233,13 @@ const SHADOW_MODAL_STYLES = `
     } else if (!activeFetches.has(pid)) {
       isProcessingDetail = true;
       try {
-        const fetchedStats = await fetchSingleProductPriceStats(pid);
-        if (fetchedStats) {
-          processProductDetailPage();
-        }
+        await fetchSingleProductPriceStats(pid);
       } finally {
         isProcessingDetail = false;
+      }
+      const fetchedStats = getCachedPriceStats(pid);
+      if (fetchedStats) {
+        processProductDetailPage();
       }
     }
   }
@@ -3972,6 +3987,7 @@ const SHADOW_MODAL_STYLES = `
       runBestpreiseScan,
       cancelBestpreiseScan,
       saveConfigKey,
+      parsePrice,
       CONFIG
     };
   }
