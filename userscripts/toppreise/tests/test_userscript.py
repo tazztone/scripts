@@ -1636,6 +1636,34 @@ def test_bestpreise_settings_weight_slider(page: Page):
     assert page.evaluate("() => window.ToppreiseSuite.CONFIG.BESTPREISE_WEIGHT_RECORD") == 0.70
 
 
+def test_parse_price_normalization(page: Page):
+    """
+    Validates that the parsePrice function correctly handles varied European and
+    international grouping and decimal separator conventions based on the
+    digits after the final separator.
+    """
+    page.evaluate("""() => {
+        window.parsePrice = window.ToppreiseSuite.parsePrice;
+    }""")
+
+    test_cases = [
+        ("1.385.90", 1385.90),
+        ("1,385.90", 1385.90),
+        ("1.385,90", 1385.90),
+        ("1,385,900", 1385900),
+        ("1.385.900", 1385900),
+        ("1,385", 1385),
+        ("1'385.90", 1385.90),
+        ("CHF 1'433.00", 1433),
+        ("12.-", 12),
+        ("Gratis", 0)
+    ]
+
+    for input_str, expected in test_cases:
+        safe_input = input_str.replace("'", "\\'")
+        result = page.evaluate(f"() => window.parsePrice('{safe_input}')")
+        assert result == expected, f"Expected parsePrice('{input_str}') to be {expected}, but got {result}"
+
 def test_outlier_spike_rejection(page: Page):
     # Product: Smartphone normal price ~CHF 1200
     # Vendor glitch: 1-day CHF 15 spike on Day 3
@@ -2378,16 +2406,15 @@ def test_deal_score_weight_preset_dropdown_in_filter_bar(page: Page):
     assert '100% Rek' in page.locator('#tp-bar-weight-btn').inner_text()
 
     # Select 100% Median
-    page.locator('#tp-bar-weight-btn').click()
-    # Wait a bit for the popover to appear
-    page.wait_for_timeout(100)
-    # The previous click might have toggled it off. Re-toggle if needed.
     popover = page.locator('#tp-weight-popover')
+
+    # If the popover is not visible, click the button to show it
     if not popover.is_visible():
         page.locator('#tp-bar-weight-btn').click()
-        page.wait_for_timeout(100)
+
+    # Explicitly wait for it to be visible based on state, no timeouts or force
     popover.wait_for(state="visible")
-    page.locator('#tp-weight-popover button[data-weight="0.00"]').click(force=True)
+    page.locator('#tp-weight-popover button[data-weight="0.00"]').click()
     assert page.evaluate("() => window.ToppreiseSuite.CONFIG.BESTPREISE_WEIGHT_RECORD === 0.0")
     assert '100% Med' in page.locator('#tp-bar-weight-btn').inner_text()
 

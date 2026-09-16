@@ -1057,27 +1057,20 @@ const SHADOW_MODAL_STYLES = `
 
     const lastComma = clean.lastIndexOf(',');
     const lastDot = clean.lastIndexOf('.');
+    const lastSeparator = Math.max(lastComma, lastDot);
 
-    if (lastComma > lastDot) {
-      clean = clean.replace(/\./g, '').replace(',', '.');
-    } else if (lastDot > lastComma) {
-      clean = clean.replace(/,/g, '');
-      const parts = clean.split('.');
-      if (parts.length > 2) {
-        clean = parts.slice(0, -1).join('') + '.' + parts[parts.length - 1];
-      }
-    } else if (lastDot !== -1 && lastComma === -1) {
-      const parts = clean.split('.');
-      if (parts.length > 2) {
-        clean = parts.slice(0, -1).join('') + '.' + parts[parts.length - 1];
-      }
-    } else if (lastComma !== -1 && lastDot === -1) {
-      const parts = clean.split(',');
-      if (parts.length > 2) {
-        clean = parts.slice(0, -1).join('') + '.' + parts[parts.length - 1];
-      } else {
-        clean = clean.replace(',', '.');
-      }
+    if (lastSeparator === -1) {
+      return parseFloat(clean) || 0;
+    }
+
+    const digitsAfterSeparator = clean.length - lastSeparator - 1;
+
+    if (digitsAfterSeparator === 3) {
+      clean = clean.replace(/[.,]/g, '');
+    } else {
+      const before = clean.substring(0, lastSeparator).replace(/[.,]/g, '');
+      const after = clean.substring(lastSeparator + 1);
+      clean = before + '.' + after;
     }
 
     return parseFloat(clean) || 0;
@@ -3994,6 +3987,7 @@ const SHADOW_MODAL_STYLES = `
       runBestpreiseScan,
       cancelBestpreiseScan,
       saveConfigKey,
+      parsePrice,
       CONFIG
     };
   }
