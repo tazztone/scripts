@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.18.19
+// @version      2.18.20
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, checks real all-time Tiefstpreise, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -1287,14 +1287,31 @@ const SHADOW_MODAL_STYLES = `
     } catch (e) {}
   }
 
+  const memoryCache = new Map();
+
   function getCachedPriceStats(productId, ignoreNegative = false) {
     if (!productId) return null;
     try {
+      if (memoryCache.has(productId)) {
+        const memData = memoryCache.get(productId);
+        const now = Date.now();
+        const ageMs = now - (memData.time || 0);
+        if (memData.unavailable) {
+          if (!ignoreNegative && ageMs < (CONFIG.NEGATIVE_CACHE_HOURS || 2) * 3600 * 1000) {
+            return memData;
+          }
+        } else if (ageMs < (CONFIG.REAL_DEAL_CACHE_HOURS || 48) * 3600 * 1000) {
+          return memData;
+        }
+      }
+
       const raw = window.localStorage?.getItem(STATS_CACHE_PREFIX + productId);
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       const now = Date.now();
       const ageMs = now - (parsed.time || 0);
+
+      memoryCache.set(productId, parsed);
 
       // Handle negative cache entry (unavailable)
       if (parsed.unavailable) {
@@ -1316,18 +1333,18 @@ const SHADOW_MODAL_STYLES = `
 
   function setCachedPriceStats(productId, stats, isUnavailable = false) {
     if (!productId) return;
+    const payload = isUnavailable
+      ? { unavailable: true, time: Date.now() }
+      : { ...stats, time: Date.now() };
+
+    memoryCache.set(productId, payload);
+
     try {
       prunePriceStatsCache();
-      const payload = isUnavailable
-        ? { unavailable: true, time: Date.now() }
-        : { ...stats, time: Date.now() };
       window.localStorage?.setItem(STATS_CACHE_PREFIX + productId, JSON.stringify(payload));
     } catch (e) {
       try {
         prunePriceStatsCache(true);
-        const payload = isUnavailable
-          ? { unavailable: true, time: Date.now() }
-          : { ...stats, time: Date.now() };
         window.localStorage?.setItem(STATS_CACHE_PREFIX + productId, JSON.stringify(payload));
       } catch (err) {}
     }
@@ -1347,6 +1364,7 @@ const SHADOW_MODAL_STYLES = `
   }
 
   function clearPriceStatsCache() {
+    memoryCache.clear();
     let count = 0;
     try {
       if (window.localStorage) {
@@ -3347,7 +3365,7 @@ const SHADOW_MODAL_STYLES = `
         isProcessingDetail = false;
       }
       const fetchedStats = getCachedPriceStats(pid);
-      if (fetchedStats) {
+      if (fetchedStats && !fetchedStats.unavailable && fetchedStats.tiefstpreis > 0) {
         processProductDetailPage();
       }
     }
@@ -3893,7 +3911,7 @@ const SHADOW_MODAL_STYLES = `
     exportBtn?.addEventListener('click', () => {
       const exportData = {
         _meta: {
-          version: (typeof GM_info !== 'undefined' && GM_info?.script?.version) || '2.18.19',
+          version: (typeof GM_info !== 'undefined' && GM_info?.script?.version) || '2.18.20',
           exported: new Date().toISOString()
         },
         config: { ...CONFIG }
@@ -4097,7 +4115,8 @@ const SHADOW_MODAL_STYLES = `
       cancelBestpreiseScan,
       saveConfigKey,
       parsePrice,
-      CONFIG
+      CONFIG,
+      memoryCache
     };
   }
 })();
