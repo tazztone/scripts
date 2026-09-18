@@ -43,12 +43,19 @@ def test_competing_reference_price_resolves_to_green_low(page: Page):
     assert badge.is_visible()
 
     # Mock the time series endpoint for it
-    page.route("**/plugins/product/pricechart", lambda route: route.fulfill(
-        status=200,
-        headers={'access-control-allow-origin': '*'},
-        content_type='application/json',
-        body='[[[100000, 47.82], [200000, 37.95]]]'
-    ) if '1003795' in route.request.post_data else route.continue_())
+    def handle_pricechart(route):
+        # Fallback to post_data only if url does not contain it but we know how the mock is set up for fetch
+        if '1003795' in (route.request.post_data or '') or 'p_pc_pid=1003795' in route.request.url:
+            route.fulfill(
+                status=200,
+                headers={'access-control-allow-origin': '*'},
+                content_type='application/json',
+                body='[[[100000, 47.82], [200000, 37.95]]]'
+            )
+        else:
+            route.continue_()
+
+    page.route("**/plugins/product/pricechart*", handle_pricechart)
 
     # Click to verify
     badge.click()
@@ -60,7 +67,9 @@ def test_competing_reference_price_resolves_to_green_low(page: Page):
     assert "tp-deal-not-low" not in badge.get_attribute("class")
 
     # Title should indicate Allzeit-Tiefstpreis
-    assert 'Allzeit-Tiefstpreis (CHF 37.95)' in badge.get_attribute('title')
+    title = badge.get_attribute("title") or ""
+    assert "Allzeit-Tiefstpreis" in title
+    assert "CHF 37.95" in title
 
 
 def test_best_price_highlighting_and_dimming(page: Page):
@@ -2452,8 +2461,10 @@ def test_deal_score_weight_preset_dropdown_in_filter_bar(page: Page):
     page.evaluate("document.querySelector('#tp-bar-weight-btn').click()")
     popover.wait_for(state="visible")
 
-    # Click 100% Median without force=True by evaluating a direct click since it might be obscured or Playwright has trouble with the layout
-    page.locator('#tp-weight-popover button[data-weight="0.00"]').evaluate("node => node.click()")
+    # Click 100% Median without force=True
+    btn = page.locator('#tp-weight-popover button[data-weight="0.00"]')
+    btn.wait_for(state="visible")
+    btn.click()
     assert page.evaluate("() => window.ToppreiseSuite.CONFIG.BESTPREISE_WEIGHT_RECORD === 0.0")
     assert '100% Med' in page.locator('#tp-bar-weight-btn').inner_text()
 

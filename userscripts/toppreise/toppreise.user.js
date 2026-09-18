@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.18.18
+// @version      2.18.19
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, checks real all-time Tiefstpreise, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -1514,7 +1514,7 @@ const SHADOW_MODAL_STYLES = `
     // Calculate previous low before current price drop:
     // Look backwards from recent points while price is within 1% of current low
     let idx = prices.length - 1;
-    while (idx > 0 && priceToCents(prices[idx]) <= priceToCents(curr)) {
+    while (idx > 0 && prices[idx] <= curr * 1.01) {
       idx--;
     }
     const historicalPrices = prices.slice(0, idx + 1);
@@ -2430,11 +2430,11 @@ const SHADOW_MODAL_STYLES = `
         : (mainPriceInfo.querySelector('.productPrice .Plugin_Price') || mainPriceInfo.querySelector('.shippingPrice .Plugin_Price'));
     }
 
-    // Fallbacks
+    // Fallbacks: Explicitly restrict to price containers to avoid catching rogue reference prices.
     if (!priceEl) {
       priceEl = CONFIG.USE_SHIPPING_PRICE
-        ? (card.querySelector('.priceContainer.shippingPrice .Plugin_Price') || card.querySelector('.priceContainer.productPrice .Plugin_Price') || card.querySelector('.Plugin_Price'))
-        : (card.querySelector('.priceContainer.productPrice .Plugin_Price') || card.querySelector('.priceContainer.shippingPrice .Plugin_Price') || card.querySelector('.Plugin_Price'));
+        ? (card.querySelector('.priceContainer.shippingPrice .Plugin_Price') || card.querySelector('.priceContainer.productPrice .Plugin_Price'))
+        : (card.querySelector('.priceContainer.productPrice .Plugin_Price') || card.querySelector('.priceContainer.shippingPrice .Plugin_Price'));
     }
 
     return {
@@ -2701,9 +2701,11 @@ const SHADOW_MODAL_STYLES = `
 
           // Re-verify the card's price hasn't changed underneath us (e.g. dynamic sorting/reactivity)
           const currentTimePrice = extractCanonicalPrice(card).price;
-          if (requestTimePrice !== currentTimePrice) {
-            // Price changed during fetch, fetch might be stale or product swapped
+
+          if (!requestTimePrice || !currentTimePrice || priceToCents(requestTimePrice) !== priceToCents(currentTimePrice)) {
+            // Price changed or is missing during fetch, fetch might be stale or product swapped
             badgeDifEl.classList.remove('tp-deal-loading');
+            processListings();
             return;
           }
 
@@ -3891,7 +3893,7 @@ const SHADOW_MODAL_STYLES = `
     exportBtn?.addEventListener('click', () => {
       const exportData = {
         _meta: {
-          version: (typeof GM_info !== 'undefined' && GM_info?.script?.version) || '2.18.18',
+          version: (typeof GM_info !== 'undefined' && GM_info?.script?.version) || '2.18.19',
           exported: new Date().toISOString()
         },
         config: { ...CONFIG }
