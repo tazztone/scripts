@@ -23,6 +23,46 @@ def page(browser, userscript_content):
     page.close()
 
 
+
+def test_competing_reference_price_resolves_to_green_low(page: Page):
+    """
+    Validates that the userscript extracts the canonical price (CHF 37.95) correctly
+    and ignores competing reference prices (CHF 47.82), resolving to a green
+    'Allzeit-Tiefstpreis' state instead of an amber 'Aufschlag' state.
+    """
+    # Wait for initial render
+    page.wait_for_selector('.badge-dif')
+
+    card = page.locator('#card-competing-reference')
+    badge = card.locator('.badge-dif')
+
+    # Enable Real Deal Filter if necessary
+    page.evaluate("() => { window.ToppreiseSuite.CONFIG.REAL_DEAL_FILTER_ACTIVE = true; }")
+
+    # It starts as unchecked
+    assert badge.is_visible()
+
+    # Mock the time series endpoint for it
+    page.route("**/plugins/product/pricechart", lambda route: route.fulfill(
+        status=200,
+        headers={'access-control-allow-origin': '*'},
+        content_type='application/json',
+        body='[[[100000, 47.82], [200000, 37.95]]]'
+    ) if '1003795' in route.request.post_data else route.continue_())
+
+    # Click to verify
+    badge.click()
+
+    # Wait for the emerald halo to be applied
+    page.wait_for_selector("#card-competing-reference .tp-deal-alltime-low")
+
+    # Should not have the not-low class
+    assert "tp-deal-not-low" not in badge.get_attribute("class")
+
+    # Title should indicate Allzeit-Tiefstpreis
+    assert 'Allzeit-Tiefstpreis (CHF 37.95)' in badge.get_attribute('title')
+
+
 def test_best_price_highlighting_and_dimming(page: Page):
     # Card 1 is cheapest store price -> highlighted
     page.wait_for_selector('#card-cheapest.tp-is-cheapest')
@@ -713,12 +753,12 @@ def test_empty_state_notice_and_actions(page: Page):
     assert not page.locator('#tp-empty-state-notice').is_visible()
 
     # Filter all 5 cards by setting negative terms
-    page.fill('#tp-inline-negative-input', 'GeForce, Silikon, iPhone, Dell')
+    page.fill('#tp-inline-negative-input', 'GeForce, Silikon, iPhone, Dell, ENDGAME')
     page.wait_for_selector('#tp-empty-state-notice')
 
     notice = page.locator('#tp-empty-state-notice')
     assert notice.is_visible()
-    assert 'Alle 5 Angebote' in (notice.text_content() or '')
+    assert 'Alle 6 Angebote' in (notice.text_content() or '')
 
     # Clicking "👁️ Ausgeblendete anzeigen" reveals previews
     page.click('#tp-empty-reveal-btn')
@@ -2194,7 +2234,7 @@ def test_bestpreise_mode_all_cards_remain_visible_when_uncached(page: Page):
         });
     }""")
 
-    assert len(card_visibilities) == 5
+    assert len(card_visibilities) == 6
     for cv in card_visibilities:
         assert cv['hasOffsetParent'] is True, f"Card {cv['id']} has null offsetParent (invisible)"
         assert cv['computedDisplay'] != 'none', f"Card {cv['id']} has display: none"
@@ -2224,7 +2264,7 @@ def test_bestpreise_mode_progressive_reveal(page: Page):
     }""")
 
     visible_count_1 = page.evaluate("() => Array.from(document.querySelectorAll('.Plugin_Product')).filter(c => c.offsetParent !== null).length")
-    assert visible_count_1 == 5
+    assert visible_count_1 == 6
 
     # 2. Seed Card 1 as verified Deal (score 67%, 1800 CHF vs tiefstpreis 1800, previousLow 2400)
     page.evaluate("""() => {
@@ -2248,7 +2288,7 @@ def test_bestpreise_mode_progressive_reveal(page: Page):
 
     # All 5 cards still visible (1 deal + 4 unscanned)
     visible_count_2 = page.evaluate("() => Array.from(document.querySelectorAll('.Plugin_Product')).filter(c => c.offsetParent !== null).length")
-    assert visible_count_2 == 5
+    assert visible_count_2 == 6
 
     # 3. Seed Card 2 as verified Non-Deal (1100 CHF vs tiefstpreis 600, not at low)
     page.evaluate("""() => {
@@ -2268,8 +2308,8 @@ def test_bestpreise_mode_progressive_reveal(page: Page):
 
     # Remaining 4 cards (Card 1 Deal + Cards 3, 4, 5 Unscanned) are visible
     visible_cards = page.evaluate("() => Array.from(document.querySelectorAll('.Plugin_Product')).filter(c => c.offsetParent !== null).map(c => c.id)")
-    assert visible_cards == ['card-cheapest', 'card-negative', 'card-cat-excluded', 'card-low-offers']
-    assert len(visible_cards) == 4
+    assert visible_cards == ['card-cheapest', 'card-competing-reference', 'card-negative', 'card-cat-excluded', 'card-low-offers']
+    assert len(visible_cards) == 5
 
     # 4. Seed Card 3 as another verified Non-Deal
     page.evaluate("""() => {
@@ -2285,8 +2325,8 @@ def test_bestpreise_mode_progressive_reveal(page: Page):
     }""")
 
     visible_cards_after = page.evaluate("() => Array.from(document.querySelectorAll('.Plugin_Product')).filter(c => c.offsetParent !== null).map(c => c.id)")
-    assert visible_cards_after == ['card-cheapest', 'card-cat-excluded', 'card-low-offers']
-    assert len(visible_cards_after) == 3
+    assert visible_cards_after == ['card-cheapest', 'card-competing-reference', 'card-cat-excluded', 'card-low-offers']
+    assert len(visible_cards_after) == 4
 
 
 def test_column_wrapper_layout_fidelity_and_hiding(page: Page):
@@ -2408,13 +2448,12 @@ def test_deal_score_weight_preset_dropdown_in_filter_bar(page: Page):
     # Select 100% Median
     popover = page.locator('#tp-weight-popover')
 
-    # If the popover is not visible, click the button to show it
-    if not popover.is_visible():
-        page.locator('#tp-bar-weight-btn').click()
-
-    # Explicitly wait for it to be visible based on state, no timeouts or force
+    # Reopen popover properly using the DOM event
+    page.evaluate("document.querySelector('#tp-bar-weight-btn').click()")
     popover.wait_for(state="visible")
-    page.locator('#tp-weight-popover button[data-weight="0.00"]').click(force=True)
+
+    # Click 100% Median without force=True by evaluating a direct click since it might be obscured or Playwright has trouble with the layout
+    page.locator('#tp-weight-popover button[data-weight="0.00"]').evaluate("node => node.click()")
     assert page.evaluate("() => window.ToppreiseSuite.CONFIG.BESTPREISE_WEIGHT_RECORD === 0.0")
     assert '100% Med' in page.locator('#tp-bar-weight-btn').inner_text()
 

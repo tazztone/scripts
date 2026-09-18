@@ -1056,6 +1056,9 @@ const SHADOW_MODAL_STYLES = `
   const isPathExcluded = (catName, rootGroup, excludedCats = []) =>
     excludedCats.includes(`GROUP:${rootGroup}`) || (catName && (excludedCats.includes(catName) || excludedCats.includes(`PATH:${rootGroup}/${catName}`)));
 
+
+  const priceToCents = p => Math.round((parseFloat(p) || 0) * 100);
+
   const parsePrice = str => {
     if (!str) return 0;
     let clean = str.replace(/[.–\-]\s*$/g, '.00');
@@ -1511,7 +1514,7 @@ const SHADOW_MODAL_STYLES = `
     // Calculate previous low before current price drop:
     // Look backwards from recent points while price is within 1% of current low
     let idx = prices.length - 1;
-    while (idx > 0 && prices[idx] <= curr * 1.01) {
+    while (idx > 0 && priceToCents(prices[idx]) <= priceToCents(curr)) {
       idx--;
     }
     const historicalPrices = prices.slice(0, idx + 1);
@@ -1537,8 +1540,8 @@ const SHADOW_MODAL_STYLES = `
     const medianPrice = sortedWindow[Math.floor(sortedWindow.length / 2)];
     const avgPrice = windowPrices.reduce((a, b) => a + b, 0) / windowPrices.length;
 
-    const isNewAllTimeLow = previousLow > 0 && curr < previousLow * 0.99;
-    const isAtAllTimeLow = curr <= allTimeLow * 1.01;
+    const isNewAllTimeLow = previousLow > 0 && priceToCents(curr) < priceToCents(previousLow);
+    const isAtAllTimeLow = priceToCents(curr) <= priceToCents(allTimeLow);
     const isNonBest = !isAtAllTimeLow;
 
     const realDiscountVsPrevLow = (previousLow > 0 && isNewAllTimeLow)
@@ -1592,7 +1595,7 @@ const SHADOW_MODAL_STYLES = `
       return null;
     }
 
-    const isAtLow = cardPrice <= stats.tiefstpreis * 1.01;
+    const isAtLow = priceToCents(cardPrice) <= priceToCents(stats.tiefstpreis);
     if (!isAtLow) return null; // Auto-hide non-bestpreise
 
     const isNewRecord = !!stats.isNewAllTimeLow;
@@ -2409,14 +2412,44 @@ const SHADOW_MODAL_STYLES = `
     return rawTerms.split(/[,;\n]/).map(t => t.trim().toLowerCase()).filter(Boolean);
   }
 
+  function extractCanonicalPrice(card) {
+    if (!card) return { price: 0, el: null };
+
+    // First, try to find the specific layout for "ab CHF XX.XX" inside price_information_product
+    // which represents the actual current best price shown to the user on the card.
+    // It is typically in .productPrice .Plugin_Price or .shippingPrice .Plugin_Price,
+    // BUT we must avoid grabbing reference prices that might be hiding in tooltips or other elements.
+
+    // Select the main price container usually containing the primary displayed price
+    const mainPriceInfo = card.querySelector('.Plugin_PriceInformation, .price_information_product');
+
+    let priceEl = null;
+    if (mainPriceInfo) {
+      priceEl = CONFIG.USE_SHIPPING_PRICE
+        ? (mainPriceInfo.querySelector('.shippingPrice .Plugin_Price') || mainPriceInfo.querySelector('.productPrice .Plugin_Price'))
+        : (mainPriceInfo.querySelector('.productPrice .Plugin_Price') || mainPriceInfo.querySelector('.shippingPrice .Plugin_Price'));
+    }
+
+    // Fallbacks
+    if (!priceEl) {
+      priceEl = CONFIG.USE_SHIPPING_PRICE
+        ? (card.querySelector('.priceContainer.shippingPrice .Plugin_Price') || card.querySelector('.priceContainer.productPrice .Plugin_Price') || card.querySelector('.Plugin_Price'))
+        : (card.querySelector('.priceContainer.productPrice .Plugin_Price') || card.querySelector('.priceContainer.shippingPrice .Plugin_Price') || card.querySelector('.Plugin_Price'));
+    }
+
+    return {
+      price: priceEl ? parsePrice(priceEl.textContent) : 0,
+      el: priceEl
+    };
+  }
+
   function extractCardData(card) {
     const pid = getCardProductId(card);
-    const cardPriceEl = CONFIG.USE_SHIPPING_PRICE
-      ? (card.querySelector('.price_information_product .shippingPrice .Plugin_Price') || card.querySelector('.price_information_product .productPrice .Plugin_Price') || card.querySelector('.priceContainer.shippingPrice .Plugin_Price') || card.querySelector('.priceContainer.productPrice .Plugin_Price') || card.querySelector('.Plugin_Price'))
-      : (card.querySelector('.price_information_product .productPrice .Plugin_Price') || card.querySelector('.price_information_product .shippingPrice .Plugin_Price') || card.querySelector('.priceContainer.productPrice .Plugin_Price') || card.querySelector('.priceContainer.shippingPrice .Plugin_Price') || card.querySelector('.Plugin_Price'));
-    const cardPrice = cardPriceEl ? parsePrice(cardPriceEl.textContent) : 0;
+    const priceData = extractCanonicalPrice(card);
+    const cardPriceEl = priceData.el;
+    const cardPrice = priceData.price;
     const stats = pid ? getCachedPriceStats(pid) : null;
-    const isVerifiedNonBest = !!(stats && cardPrice > 0 && stats.tiefstpreis > 0 && cardPrice > stats.tiefstpreis * 1.01);
+    const isVerifiedNonBest = !!(stats && cardPrice > 0 && stats.tiefstpreis > 0 && priceToCents(cardPrice) > priceToCents(stats.tiefstpreis));
     const discountVal = extractCardDiscount(card);
     const catName = extractCardCategory(card);
     const rootGroup = resolveCategoryGroup(catName, card);
@@ -2663,7 +2696,17 @@ const SHADOW_MODAL_STYLES = `
 
           badgeDifEl.classList.add('tp-deal-loading');
           badgeDifEl.innerHTML = `<div class="text">Prüfe...</div><p>⏳</p>`;
+          const requestTimePrice = extractCanonicalPrice(card).price;
           const fetchedStats = await fetchSingleProductPriceStats(currentPid, 1, true);
+
+          // Re-verify the card's price hasn't changed underneath us (e.g. dynamic sorting/reactivity)
+          const currentTimePrice = extractCanonicalPrice(card).price;
+          if (requestTimePrice !== currentTimePrice) {
+            // Price changed during fetch, fetch might be stale or product swapped
+            badgeDifEl.classList.remove('tp-deal-loading');
+            return;
+          }
+
           badgeDifEl.classList.remove('tp-deal-loading');
           if (fetchedStats) {
             processListings();
@@ -2783,9 +2826,22 @@ const SHADOW_MODAL_STYLES = `
         }
 
         if (stats && cardPrice > 0 && stats.tiefstpreis > 0) {
-          const isAllTimeLow = cardPrice <= stats.tiefstpreis * 1.01;
-          const isNonBest = !isAllTimeLow;
-          const isNewRecord = !!(stats.isNewAllTimeLow || (isAllTimeLow && stats.previousLow && stats.previousLow > cardPrice * 1.01));
+          // Explicit states
+          const cPrice = priceToCents(cardPrice);
+          const cTiefstpreis = priceToCents(stats.tiefstpreis);
+
+          let state = 'unknown';
+          if (cPrice < cTiefstpreis) {
+            state = 'new-low';
+          } else if (cPrice === cTiefstpreis) {
+            state = 'at-low';
+          } else {
+            state = 'above-low';
+          }
+
+          const isAllTimeLow = (state === 'new-low' || state === 'at-low');
+          const isNonBest = (state === 'above-low');
+          const isNewRecord = (state === 'new-low') || !!(stats.isNewAllTimeLow || (isAllTimeLow && stats.previousLow && priceToCents(stats.previousLow) > cPrice));
           const prevLow = stats.previousLow;
           const realDropVsPrev = prevLow && prevLow > cardPrice ? Math.round(((prevLow - cardPrice) / prevLow) * 100) : (stats.realDiscountVsPrevLow || 0);
 
@@ -3261,7 +3317,7 @@ const SHADOW_MODAL_STYLES = `
         headingEl.appendChild(badge);
       }
 
-      const isAllTimeLow = currentPrice <= stats.tiefstpreis * 1.01;
+      const isAllTimeLow = priceToCents(currentPrice) <= priceToCents(stats.tiefstpreis);
       const hasSignificantPeak = stats.hoechstpreis && stats.hoechstpreis > stats.tiefstpreis * 1.02;
 
       if (isAllTimeLow) {
