@@ -1288,43 +1288,47 @@ const SHADOW_MODAL_STYLES = `
   }
 
   const memoryCache = new Map();
+  const MAX_MEMORY_CACHE_ITEMS = 500;
+
+  function _isCacheEntryFresh(parsed, ignoreNegative) {
+    const now = Date.now();
+    const ageMs = now - (parsed.time || 0);
+
+    if (parsed.unavailable) {
+      if (ignoreNegative) return false;
+      const negTtlMs = (CONFIG.NEGATIVE_CACHE_HOURS || 2) * 3600 * 1000;
+      return ageMs < negTtlMs;
+    }
+
+    const ttlMs = (CONFIG.REAL_DEAL_CACHE_HOURS || 48) * 3600 * 1000;
+    return ageMs < ttlMs;
+  }
 
   function getCachedPriceStats(productId, ignoreNegative = false) {
     if (!productId) return null;
     try {
       if (memoryCache.has(productId)) {
         const memData = memoryCache.get(productId);
-        const now = Date.now();
-        const ageMs = now - (memData.time || 0);
-        if (memData.unavailable) {
-          if (!ignoreNegative && ageMs < (CONFIG.NEGATIVE_CACHE_HOURS || 2) * 3600 * 1000) {
-            return memData;
-          }
-        } else if (ageMs < (CONFIG.REAL_DEAL_CACHE_HOURS || 48) * 3600 * 1000) {
+        if (_isCacheEntryFresh(memData, ignoreNegative)) {
+          // LRU update
+          memoryCache.delete(productId);
+          memoryCache.set(productId, memData);
           return memData;
+        } else {
+          memoryCache.delete(productId);
         }
       }
 
       const raw = window.localStorage?.getItem(STATS_CACHE_PREFIX + productId);
       if (!raw) return null;
       const parsed = JSON.parse(raw);
-      const now = Date.now();
-      const ageMs = now - (parsed.time || 0);
 
-      memoryCache.set(productId, parsed);
-
-      // Handle negative cache entry (unavailable)
-      if (parsed.unavailable) {
-        if (ignoreNegative) return null;
-        const negTtlMs = (CONFIG.NEGATIVE_CACHE_HOURS || 2) * 3600 * 1000;
-        if (ageMs < negTtlMs) {
-          return parsed;
+      if (_isCacheEntryFresh(parsed, ignoreNegative)) {
+        memoryCache.set(productId, parsed);
+        if (memoryCache.size > MAX_MEMORY_CACHE_ITEMS) {
+          const firstKey = memoryCache.keys().next().value;
+          memoryCache.delete(firstKey);
         }
-        return null;
-      }
-
-      const ttlMs = (CONFIG.REAL_DEAL_CACHE_HOURS || 48) * 3600 * 1000;
-      if (ageMs < ttlMs) {
         return parsed;
       }
     } catch (e) {}
@@ -1338,6 +1342,10 @@ const SHADOW_MODAL_STYLES = `
       : { ...stats, time: Date.now() };
 
     memoryCache.set(productId, payload);
+    if (memoryCache.size > MAX_MEMORY_CACHE_ITEMS) {
+      const firstKey = memoryCache.keys().next().value;
+      memoryCache.delete(firstKey);
+    }
 
     try {
       prunePriceStatsCache();
@@ -4115,8 +4123,7 @@ const SHADOW_MODAL_STYLES = `
       cancelBestpreiseScan,
       saveConfigKey,
       parsePrice,
-      CONFIG,
-      memoryCache
+      CONFIG
     };
   }
 })();
