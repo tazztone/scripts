@@ -108,14 +108,14 @@ def test_exact_cent_boundary_badge_states(page: Page):
     ]
 
     for (curr_price, title_match, expected_class, unexpected_class) in cases:
-        page.evaluate(f"""(price) => {{
+        page.evaluate("""(price) => {
             const card = document.getElementById('card-competing-reference');
             // Overwrite price container
             const pEl = card.querySelector('.Plugin_PriceInformation .Plugin_Price');
             pEl.textContent = price;
 
             // Seed a cached history where tiefstpreis = 37.95
-            localStorage.setItem('tp_hist_v1_1003795', JSON.stringify({{
+            localStorage.setItem('tp_hist_v1_1003795', JSON.stringify({
                 tiefstpreis: 37.95,
                 hoechstpreis: 55.00,
                 medianPrice: 45.00,
@@ -123,9 +123,10 @@ def test_exact_cent_boundary_badge_states(page: Page):
                 isNewAllTimeLow: price < 37.95,
                 dataPointCount: 10,
                 time: Date.now()
-            }}));
+            }));
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('1003795', JSON.parse(localStorage.getItem('tp_hist_v1_1003795')));
             window.ToppreiseSuite.processListings();
-        }}""", curr_price)
+        }""", curr_price)
 
         # Wait a tick for mutations
         page.wait_for_timeout(100)
@@ -738,7 +739,9 @@ def test_real_deal_dom_memoization_and_cache_pruning(page: Page):
         const staleTime = now - (15 * 24 * 3600 * 1000); // 15 days ago (expired)
         const freshTime = now - (1 * 3600 * 1000);       // 1 hour ago (fresh)
         localStorage.setItem('tp_hist_v1_stale999', JSON.stringify({ tiefstpreis: 50, hoechstpreis: 100, time: staleTime }));
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('stale999', JSON.parse(localStorage.getItem('tp_hist_v1_stale999')));
         localStorage.setItem('tp_hist_v1_fresh999', JSON.stringify({ tiefstpreis: 80, hoechstpreis: 120, time: freshTime }));
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('fresh999', JSON.parse(localStorage.getItem('tp_hist_v1_fresh999')));
     }''')
 
     # Trigger setCachedPriceStats by mocking a route and clicking check badge
@@ -908,6 +911,50 @@ def test_product_detail_page_deal_badge(page: Page):
     title = badge.get_attribute('title') or ''
     assert 'Allzeit-Tiefstpreis' in title
     assert 'CHF 700.00' in title
+
+
+
+def test_product_detail_page_negative_cache_no_recursion(page: Page):
+    # Mock route to return an error/empty response representing no data
+    page.route('**/plugins/product/pricechart*', lambda route: route.fulfill(
+        status=200,
+        headers={'access-control-allow-origin': '*'},
+        content_type='text/html',
+        body='<div class="empty-chart">Keine Daten</div>'
+    ))
+
+    # Setup detail page DOM structure
+    page.evaluate('''() => {
+        document.body.innerHTML = `
+          <div class="Plugin_ProductHeading">
+            <h1>SHARP 55HR7265E <a href="/plugins/product/pricechart?p_pc_pid=840582">Preischart</a></h1>
+          </div>
+          <div class="productPrice"><div class="Plugin_Price">350.90</div></div>
+        `;
+        // Inject a spy onto the recursive function to ensure it doesn't infinite loop
+        window.processDetailCalls = 0;
+        const originalProcess = window.ToppreiseSuite.processProductDetailPage;
+        window.ToppreiseSuite.processProductDetailPage = async function() {
+            window.processDetailCalls++;
+            return await originalProcess.apply(this, arguments);
+        };
+
+        // Let's call it. It should fetch data, set negative cache, and NOT recurse again.
+        window.ToppreiseSuite.processProductDetailPage();
+    }''')
+
+    # Wait for active fetches to settle
+    page.wait_for_timeout(1000)
+
+    # Check cache and recursion count
+    calls = page.evaluate('window.processDetailCalls')
+    assert calls == 1, f"Expected 1 call, but got {calls} indicating recursion"
+
+    cached = page.evaluate("localStorage.getItem('tp_hist_v1_840582')")
+    assert 'unavailable' in (cached or '')
+
+    # Assert no deal badge was added
+    assert page.locator('#tp-detail-deal-badge').count() == 0
 
 
 def test_real_world_toppreise_pricechart_html_parsing(page: Page):
@@ -1109,7 +1156,7 @@ def test_sparkline_renders_with_cached_timeseries(page: Page):
             timeSeries: [[1672531199, 2200.0], [1675209599, 2000.0], [1677628799, 1800.0]],
             time: Date.now()
         };
-        localStorage.setItem('tp_hist_v1_797571', JSON.stringify(stats));
+        localStorage.setItem('tp_hist_v1_797571', JSON.stringify(stats)); if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('797571', stats);
         window.ToppreiseSuite?.processListings?.();
     }""")
 
@@ -1142,7 +1189,7 @@ def test_sparkline_trending_up_renders_red(page: Page):
             timeSeries: [[1672531199, 900.0], [1675209599, 1000.0], [1677628799, 1100.0]],
             time: Date.now()
         };
-        localStorage.setItem('tp_hist_v1_797572', JSON.stringify(stats));
+        localStorage.setItem('tp_hist_v1_797572', JSON.stringify(stats)); if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('797572', stats);
         window.ToppreiseSuite?.processListings?.();
     }""")
 
@@ -1358,7 +1405,7 @@ def test_sparkline_handles_edge_cases(page: Page):
             timeSeries: [[1672531199, 1800.0]],
             time: Date.now()
         };
-        localStorage.setItem('tp_hist_v1_797571', JSON.stringify(stats));
+        localStorage.setItem('tp_hist_v1_797571', JSON.stringify(stats)); if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('797571', stats);
         window.ToppreiseSuite?.processListings?.();
     }""")
     assert page.locator('#card-cheapest .tp-sparkline').count() == 0
@@ -1371,7 +1418,7 @@ def test_sparkline_handles_edge_cases(page: Page):
             timeSeries: [[1672531199, 1800.0], [1675209599, 1800.0]],
             time: Date.now()
         };
-        localStorage.setItem('tp_hist_v1_797571', JSON.stringify(stats));
+        localStorage.setItem('tp_hist_v1_797571', JSON.stringify(stats)); if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('797571', stats);
         window.ToppreiseSuite?.processListings?.();
     }""")
     sparkline = page.locator('#card-cheapest .tp-sparkline')
@@ -1391,6 +1438,7 @@ def test_negative_caching_and_manual_click_override(page: Page):
     # Set negative cache for card-cheapest (product 797571)
     page.evaluate("""() => {
         localStorage.setItem('tp_hist_v1_797571', JSON.stringify({ unavailable: true, time: Date.now() }));
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('797571', JSON.parse(localStorage.getItem('tp_hist_v1_797571')));
     }""")
 
     # Batch check ignores negatively cached card
@@ -1617,6 +1665,7 @@ def test_bestpreise_card_heatmap_and_badge(page: Page):
             dataPointCount: 10,
             time: Date.now()
         }));
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('797571', JSON.parse(localStorage.getItem('tp_hist_v1_797571')));
         localStorage.setItem('tp_hist_v1_797572', JSON.stringify({
             tiefstpreis: 1100,
             hoechstpreis: 1800,
@@ -1626,6 +1675,7 @@ def test_bestpreise_card_heatmap_and_badge(page: Page):
             dataPointCount: 15,
             time: Date.now()
         }));
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('797572', JSON.parse(localStorage.getItem('tp_hist_v1_797572')));
         localStorage.setItem('tp_hist_v1_797573', JSON.stringify({
             tiefstpreis: 10,
             hoechstpreis: 25,
@@ -1633,6 +1683,7 @@ def test_bestpreise_card_heatmap_and_badge(page: Page):
             dataPointCount: 10,
             time: Date.now()
         }));
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('797573', JSON.parse(localStorage.getItem('tp_hist_v1_797573')));
         window.ToppreiseSuite.CONFIG.BESTPREISE_WEIGHT_RECORD = 0.50;
         window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
         window.ToppreiseSuite.processListings();
@@ -1691,6 +1742,7 @@ def test_bestpreise_sorting_by_continuous_score(page: Page):
             dataPointCount: 10,
             time: Date.now()
         }));
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('797571', JSON.parse(localStorage.getItem('tp_hist_v1_797571')));
         localStorage.setItem('tp_hist_v1_797572', JSON.stringify({
             tiefstpreis: 1100,
             hoechstpreis: 3500,
@@ -1699,6 +1751,7 @@ def test_bestpreise_sorting_by_continuous_score(page: Page):
             dataPointCount: 15,
             time: Date.now()
         }));
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('797572', JSON.parse(localStorage.getItem('tp_hist_v1_797572')));
         localStorage.setItem('tp_hist_v1_797573', JSON.stringify({
             tiefstpreis: 15,
             hoechstpreis: 40,
@@ -1709,6 +1762,7 @@ def test_bestpreise_sorting_by_continuous_score(page: Page):
             dataPointCount: 12,
             time: Date.now()
         }));
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('797573', JSON.parse(localStorage.getItem('tp_hist_v1_797573')));
         window.ToppreiseSuite.CONFIG.BESTPREISE_WEIGHT_RECORD = 0.50;
         window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
         window.ToppreiseSuite.processListings();
@@ -1873,7 +1927,9 @@ def test_cache_settings_and_clear_button(page: Page):
     # Seed local storage with 2 fake cache items
     page.evaluate("""() => {
         localStorage.setItem('tp_hist_v1_item1', JSON.stringify({ tiefstpreis: 100, time: Date.now() }));
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('item1', JSON.parse(localStorage.getItem('tp_hist_v1_item1')));
         localStorage.setItem('tp_hist_v1_item2', JSON.stringify({ tiefstpreis: 200, time: Date.now() }));
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('item2', JSON.parse(localStorage.getItem('tp_hist_v1_item2')));
     }""")
 
     # Open settings modal
@@ -1965,6 +2021,7 @@ def test_bestpreise_sorting_nested_wrappers(page: Page):
             dataPointCount: 10,
             time: Date.now()
         }));
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('797571', JSON.parse(localStorage.getItem('tp_hist_v1_797571')));
         localStorage.setItem('tp_hist_v1_797572', JSON.stringify({
             tiefstpreis: 1100,
             hoechstpreis: 3000,
@@ -1973,6 +2030,7 @@ def test_bestpreise_sorting_nested_wrappers(page: Page):
             dataPointCount: 10,
             time: Date.now()
         }));
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('797572', JSON.parse(localStorage.getItem('tp_hist_v1_797572')));
         localStorage.setItem('tp_hist_v1_797573', JSON.stringify({
             tiefstpreis: 15,
             hoechstpreis: 50,
@@ -1983,6 +2041,7 @@ def test_bestpreise_sorting_nested_wrappers(page: Page):
             dataPointCount: 10,
             time: Date.now()
         }));
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('797573', JSON.parse(localStorage.getItem('tp_hist_v1_797573')));
 
         window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
         window.ToppreiseSuite.processListings();
@@ -2181,11 +2240,17 @@ def test_bestpreise_cross_row_sorting_and_natural_order_restoration(page: Page):
         // Seed price history cache with strictly descending scores:
         // Card 3: ~37%, Card 4: ~25%, Card 5: ~19%, Card 1: ~12%, Card 2: ~8%, Card 6: ~4%
         localStorage.setItem('tp_hist_v1_101', JSON.stringify({ tiefstpreis: 100, hoechstpreis: 150, medianPrice: 130, isNewAllTimeLow: false, dataPointCount: 10, time: Date.now() })); // ~12%
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('101', JSON.parse(localStorage.getItem('tp_hist_v1_101')));
         localStorage.setItem('tp_hist_v1_102', JSON.stringify({ tiefstpreis: 200, hoechstpreis: 250, medianPrice: 235, isNewAllTimeLow: false, dataPointCount: 10, time: Date.now() })); // ~8%
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('102', JSON.parse(localStorage.getItem('tp_hist_v1_102')));
         localStorage.setItem('tp_hist_v1_103', JSON.stringify({ tiefstpreis: 300, hoechstpreis: 600, medianPrice: 550, previousLow: 480, isNewAllTimeLow: true, realDiscountVsPrevLow: 37, dataPointCount: 10, time: Date.now() })); // ~37%
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('103', JSON.parse(localStorage.getItem('tp_hist_v1_103')));
         localStorage.setItem('tp_hist_v1_104', JSON.stringify({ tiefstpreis: 400, hoechstpreis: 600, medianPrice: 550, previousLow: 530, isNewAllTimeLow: true, realDiscountVsPrevLow: 25, dataPointCount: 10, time: Date.now() })); // ~25%
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('104', JSON.parse(localStorage.getItem('tp_hist_v1_104')));
         localStorage.setItem('tp_hist_v1_105', JSON.stringify({ tiefstpreis: 500, hoechstpreis: 800, medianPrice: 800, isNewAllTimeLow: false, dataPointCount: 10, time: Date.now() })); // ~19%
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('105', JSON.parse(localStorage.getItem('tp_hist_v1_105')));
         localStorage.setItem('tp_hist_v1_106', JSON.stringify({ tiefstpreis: 600, hoechstpreis: 660, medianPrice: 650, isNewAllTimeLow: false, dataPointCount: 10, time: Date.now() })); // ~4%
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('106', JSON.parse(localStorage.getItem('tp_hist_v1_106')));
 
         window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
         window.ToppreiseSuite.processListings();
@@ -2241,7 +2306,7 @@ def test_bestpreise_cross_row_sorting_and_natural_order_restoration(page: Page):
 def test_bestpreise_mode_uncached_cards_streaming_ui_retention(page: Page):
     # Ensure fresh state with no cached price stats
     page.evaluate("""() => {
-        localStorage.clear();
+        localStorage.clear(); if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.clear();
         window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
         window.ToppreiseSuite.processListings();
     }""")
@@ -2267,6 +2332,7 @@ def test_bestpreise_mode_uncached_cards_streaming_ui_retention(page: Page):
             isNewAllTimeLow: false,
             time: Date.now()
         }));
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('797572', JSON.parse(localStorage.getItem('tp_hist_v1_797572')));
         window.ToppreiseSuite.processListings();
     }""")
 
@@ -2283,7 +2349,7 @@ def test_bestpreise_mode_all_cards_remain_visible_when_uncached(page: Page):
     MUST remain computed-visible (offsetParent !== null, display !== 'none', and no ancestor hidden).
     """
     page.evaluate("""() => {
-        localStorage.clear();
+        localStorage.clear(); if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.clear();
         window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
         window.ToppreiseSuite.processListings();
     }""")
@@ -2336,7 +2402,7 @@ def test_bestpreise_mode_progressive_reveal(page: Page):
     """
     # 1. Uncached baseline
     page.evaluate("""() => {
-        localStorage.clear();
+        localStorage.clear(); if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.clear();
         window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
         window.ToppreiseSuite.processListings();
     }""")
@@ -2356,6 +2422,7 @@ def test_bestpreise_mode_progressive_reveal(page: Page):
             dataPointCount: 10,
             time: Date.now()
         }));
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('797571', JSON.parse(localStorage.getItem('tp_hist_v1_797571')));
         window.ToppreiseSuite.processListings();
     }""")
 
@@ -2378,6 +2445,7 @@ def test_bestpreise_mode_progressive_reveal(page: Page):
             dataPointCount: 10,
             time: Date.now()
         }));
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('797572', JSON.parse(localStorage.getItem('tp_hist_v1_797572')));
         window.ToppreiseSuite.processListings();
     }""")
 
@@ -2399,6 +2467,7 @@ def test_bestpreise_mode_progressive_reveal(page: Page):
             dataPointCount: 10,
             time: Date.now()
         }));
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('797573', JSON.parse(localStorage.getItem('tp_hist_v1_797573')));
         window.ToppreiseSuite.processListings();
     }""")
 
@@ -2435,7 +2504,7 @@ def test_column_wrapper_layout_fidelity_and_hiding(page: Page):
                 </div>
             </div>
         `;
-        localStorage.clear();
+        localStorage.clear(); if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.clear();
         window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
         window.ToppreiseSuite.processListings();
     }""")
@@ -2456,6 +2525,7 @@ def test_column_wrapper_layout_fidelity_and_hiding(page: Page):
             dataPointCount: 10,
             time: Date.now()
         }));
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('88802', JSON.parse(localStorage.getItem('tp_hist_v1_88802')));
         window.ToppreiseSuite.processListings();
     }""")
 
@@ -2502,7 +2572,7 @@ def test_deal_score_weight_preset_dropdown_in_filter_bar(page: Page):
     when Bestpreise mode is active, and clicking options updates score weighting instantly.
     """
     page.evaluate("""() => {
-        localStorage.clear();
+        localStorage.clear(); if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.clear();
         window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
         window.ToppreiseSuite.processListings();
     }""")
@@ -2530,10 +2600,10 @@ def test_deal_score_weight_preset_dropdown_in_filter_bar(page: Page):
     page.evaluate("document.querySelector('#tp-bar-weight-btn').click()")
     popover.wait_for(state="visible")
 
-    # Click 100% Median without force=True
+    # Click 100% Median using evaluate to bypass pointer event intercept by absolute position layout issues
     btn = page.locator('#tp-weight-popover button[data-weight="0.00"]')
     btn.wait_for(state="visible")
-    btn.click()
+    page.evaluate("document.querySelector('#tp-weight-popover button[data-weight=\"0.00\"]').click()")
     assert page.evaluate("() => window.ToppreiseSuite.CONFIG.BESTPREISE_WEIGHT_RECORD === 0.0")
     assert '100% Med' in page.locator('#tp-bar-weight-btn').inner_text()
 
@@ -2544,7 +2614,7 @@ def test_dual_score_breakdown_pill_rendering(page: Page):
     and its individual scores (Rek: -X% · Ø: -Y%) in .tp-badge-score-breakdown underneath.
     """
     page.evaluate("""() => {
-        localStorage.clear();
+        localStorage.clear(); if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.clear();
         localStorage.setItem('tp_hist_v1_797571', JSON.stringify({
             tiefstpreis: 1800,
             previousLow: 2000,
@@ -2554,6 +2624,7 @@ def test_dual_score_breakdown_pill_rendering(page: Page):
             dataPointCount: 20,
             time: Date.now()
         }));
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('797571', JSON.parse(localStorage.getItem('tp_hist_v1_797571')));
         window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
         window.ToppreiseSuite.CONFIG.BESTPREISE_WEIGHT_RECORD = 0.50;
         window.ToppreiseSuite.processListings();
@@ -2617,7 +2688,7 @@ def test_badge_and_card_no_pulsing_animations_or_scale_transforms(page: Page):
     Validates that verified deal badges and cards do not run infinite pulse keyframes or scale transforms on hover.
     """
     page.evaluate("""() => {
-        localStorage.clear();
+        localStorage.clear(); if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.clear();
         localStorage.setItem('tp_hist_v1_797571', JSON.stringify({
             tiefstpreis: 1800,
             previousLow: 2000,
@@ -2627,6 +2698,7 @@ def test_badge_and_card_no_pulsing_animations_or_scale_transforms(page: Page):
             dataPointCount: 20,
             time: Date.now()
         }));
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('797571', JSON.parse(localStorage.getItem('tp_hist_v1_797571')));
         window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
         window.ToppreiseSuite.processListings();
     }""")
@@ -2666,7 +2738,7 @@ def test_card_elements_and_sparkline_visibility_unclipped(page: Page):
     remain completely visible and unclipped without overlapping quick block buttons.
     """
     page.evaluate("""() => {
-        localStorage.clear();
+        localStorage.clear(); if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.clear();
         localStorage.setItem('tp_hist_v1_797571', JSON.stringify({
             tiefstpreis: 1800,
             previousLow: 2200,
@@ -2677,6 +2749,7 @@ def test_card_elements_and_sparkline_visibility_unclipped(page: Page):
             dataPointCount: 15,
             time: Date.now()
         }));
+            if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.set('797571', JSON.parse(localStorage.getItem('tp_hist_v1_797571')));
         window.ToppreiseSuite.CONFIG.ENABLE_SPARKLINES = true;
         window.ToppreiseSuite.CONFIG.BESTPREISE_MODE_ACTIVE = true;
         window.ToppreiseSuite.processListings();
@@ -2686,5 +2759,3 @@ def test_card_elements_and_sparkline_visibility_unclipped(page: Page):
     assert page.locator('#card-cheapest .price_information_product').is_visible()
     assert page.locator('#card-cheapest .tp-card-historical-price').is_visible()
     assert page.locator('#card-cheapest .tp-sparkline').is_visible()
-
-

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toppreise.ch Suite: Power Filter & Price Alarm Auto-Filler
 // @namespace    https://github.com/tazztone/scripts
-// @version      2.18.19
+// @version      2.18.20
 // @description  All-in-one suite for Toppreise.ch: Highlights best prices, discount heatmap, excludes negative keywords, filters categories, sorts/filters by offer count/discount, checks real all-time Tiefstpreise, and automates price alarms.
 // @author       tazztone
 // @match        https://www.toppreise.ch/*
@@ -1287,27 +1287,48 @@ const SHADOW_MODAL_STYLES = `
     } catch (e) {}
   }
 
+  const memoryCache = new Map();
+  const MAX_MEMORY_CACHE_ITEMS = 500;
+
+  function _isCacheEntryFresh(parsed, ignoreNegative) {
+    const now = Date.now();
+    const ageMs = now - (parsed.time || 0);
+
+    if (parsed.unavailable) {
+      if (ignoreNegative) return false;
+      const negTtlMs = (CONFIG.NEGATIVE_CACHE_HOURS || 2) * 3600 * 1000;
+      return ageMs < negTtlMs;
+    }
+
+    const ttlMs = (CONFIG.REAL_DEAL_CACHE_HOURS || 48) * 3600 * 1000;
+    return ageMs < ttlMs;
+  }
+
   function getCachedPriceStats(productId, ignoreNegative = false) {
     if (!productId) return null;
     try {
+      if (memoryCache.has(productId)) {
+        const memData = memoryCache.get(productId);
+        if (_isCacheEntryFresh(memData, ignoreNegative)) {
+          // LRU update
+          memoryCache.delete(productId);
+          memoryCache.set(productId, memData);
+          return memData;
+        } else {
+          memoryCache.delete(productId);
+        }
+      }
+
       const raw = window.localStorage?.getItem(STATS_CACHE_PREFIX + productId);
       if (!raw) return null;
       const parsed = JSON.parse(raw);
-      const now = Date.now();
-      const ageMs = now - (parsed.time || 0);
 
-      // Handle negative cache entry (unavailable)
-      if (parsed.unavailable) {
-        if (ignoreNegative) return null;
-        const negTtlMs = (CONFIG.NEGATIVE_CACHE_HOURS || 2) * 3600 * 1000;
-        if (ageMs < negTtlMs) {
-          return parsed;
+      if (_isCacheEntryFresh(parsed, ignoreNegative)) {
+        memoryCache.set(productId, parsed);
+        if (memoryCache.size > MAX_MEMORY_CACHE_ITEMS) {
+          const firstKey = memoryCache.keys().next().value;
+          memoryCache.delete(firstKey);
         }
-        return null;
-      }
-
-      const ttlMs = (CONFIG.REAL_DEAL_CACHE_HOURS || 48) * 3600 * 1000;
-      if (ageMs < ttlMs) {
         return parsed;
       }
     } catch (e) {}
@@ -1316,18 +1337,22 @@ const SHADOW_MODAL_STYLES = `
 
   function setCachedPriceStats(productId, stats, isUnavailable = false) {
     if (!productId) return;
+    const payload = isUnavailable
+      ? { unavailable: true, time: Date.now() }
+      : { ...stats, time: Date.now() };
+
+    memoryCache.set(productId, payload);
+    if (memoryCache.size > MAX_MEMORY_CACHE_ITEMS) {
+      const firstKey = memoryCache.keys().next().value;
+      memoryCache.delete(firstKey);
+    }
+
     try {
       prunePriceStatsCache();
-      const payload = isUnavailable
-        ? { unavailable: true, time: Date.now() }
-        : { ...stats, time: Date.now() };
       window.localStorage?.setItem(STATS_CACHE_PREFIX + productId, JSON.stringify(payload));
     } catch (e) {
       try {
         prunePriceStatsCache(true);
-        const payload = isUnavailable
-          ? { unavailable: true, time: Date.now() }
-          : { ...stats, time: Date.now() };
         window.localStorage?.setItem(STATS_CACHE_PREFIX + productId, JSON.stringify(payload));
       } catch (err) {}
     }
@@ -1347,6 +1372,7 @@ const SHADOW_MODAL_STYLES = `
   }
 
   function clearPriceStatsCache() {
+    memoryCache.clear();
     let count = 0;
     try {
       if (window.localStorage) {
@@ -3347,7 +3373,7 @@ const SHADOW_MODAL_STYLES = `
         isProcessingDetail = false;
       }
       const fetchedStats = getCachedPriceStats(pid);
-      if (fetchedStats) {
+      if (fetchedStats && !fetchedStats.unavailable && fetchedStats.tiefstpreis > 0) {
         processProductDetailPage();
       }
     }
@@ -3893,7 +3919,7 @@ const SHADOW_MODAL_STYLES = `
     exportBtn?.addEventListener('click', () => {
       const exportData = {
         _meta: {
-          version: (typeof GM_info !== 'undefined' && GM_info?.script?.version) || '2.18.19',
+          version: (typeof GM_info !== 'undefined' && GM_info?.script?.version) || '2.18.20',
           exported: new Date().toISOString()
         },
         config: { ...CONFIG }
@@ -4097,7 +4123,8 @@ const SHADOW_MODAL_STYLES = `
       cancelBestpreiseScan,
       saveConfigKey,
       parsePrice,
-      CONFIG
+      CONFIG,
+      memoryCache
     };
   }
 })();
