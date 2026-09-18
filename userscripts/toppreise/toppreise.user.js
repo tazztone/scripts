@@ -1059,6 +1059,16 @@ const SHADOW_MODAL_STYLES = `
 
   const priceToCents = p => Math.round((parseFloat(p) || 0) * 100);
 
+  function getDealState(cardPrice, tiefstpreis) {
+    if (!cardPrice || !tiefstpreis || cardPrice <= 0 || tiefstpreis <= 0) return 'unknown';
+    const cPrice = priceToCents(cardPrice);
+    const cTiefstpreis = priceToCents(tiefstpreis);
+    if (cPrice < cTiefstpreis) return 'new-low';
+    if (cPrice === cTiefstpreis) return 'at-low';
+    return 'above-low';
+  }
+
+
   const parsePrice = str => {
     if (!str) return 0;
     let clean = str.replace(/[.–\-]\s*$/g, '.00');
@@ -2827,23 +2837,12 @@ const SHADOW_MODAL_STYLES = `
           badgeDifEl.classList.remove('tp-deal-loading');
         }
 
-        if (stats && cardPrice > 0 && stats.tiefstpreis > 0) {
-          // Explicit states
-          const cPrice = priceToCents(cardPrice);
-          const cTiefstpreis = priceToCents(stats.tiefstpreis);
+        const state = getDealState(cardPrice, stats?.tiefstpreis);
 
-          let state = 'unknown';
-          if (cPrice < cTiefstpreis) {
-            state = 'new-low';
-          } else if (cPrice === cTiefstpreis) {
-            state = 'at-low';
-          } else {
-            state = 'above-low';
-          }
-
+        if (state !== 'unknown') {
           const isAllTimeLow = (state === 'new-low' || state === 'at-low');
           const isNonBest = (state === 'above-low');
-          const isNewRecord = (state === 'new-low') || !!(stats.isNewAllTimeLow || (isAllTimeLow && stats.previousLow && priceToCents(stats.previousLow) > cPrice));
+          const isNewRecord = (state === 'new-low') || !!(stats.isNewAllTimeLow || (isAllTimeLow && stats.previousLow && priceToCents(stats.previousLow) > priceToCents(cardPrice)));
           const prevLow = stats.previousLow;
           const realDropVsPrev = prevLow && prevLow > cardPrice ? Math.round(((prevLow - cardPrice) / prevLow) * 100) : (stats.realDiscountVsPrevLow || 0);
 
@@ -3319,7 +3318,8 @@ const SHADOW_MODAL_STYLES = `
         headingEl.appendChild(badge);
       }
 
-      const isAllTimeLow = priceToCents(currentPrice) <= priceToCents(stats.tiefstpreis);
+      const state = getDealState(currentPrice, stats.tiefstpreis);
+      const isAllTimeLow = (state === 'new-low' || state === 'at-low');
       const hasSignificantPeak = stats.hoechstpreis && stats.hoechstpreis > stats.tiefstpreis * 1.02;
 
       if (isAllTimeLow) {

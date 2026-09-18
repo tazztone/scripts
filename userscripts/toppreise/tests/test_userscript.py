@@ -49,8 +49,23 @@ def test_competing_reference_price_resolves_to_green_low(page: Page):
             route.fulfill(
                 status=200,
                 headers={'access-control-allow-origin': '*'},
-                content_type='application/json',
-                body='[[[100000, 47.82], [200000, 37.95]]]'
+                content_type='text/html',
+                body='''
+                <div class="PriceChartLegend">
+                  <div class="col-4">
+                    <div class="title">aktueller Toppreis</div>
+                    <div class="Plugin_Price">37.95</div>
+                  </div>
+                  <div class="col-4">
+                    <div class="title">Tiefstpreis</div>
+                    <div class="Plugin_Price">37.95</div>
+                  </div>
+                  <div class="col-4">
+                    <div class="title">Höchstpreis</div>
+                    <div class="Plugin_Price">55.00</div>
+                  </div>
+                </div>
+                '''
             )
         else:
             route.continue_()
@@ -70,6 +85,60 @@ def test_competing_reference_price_resolves_to_green_low(page: Page):
     title = badge.get_attribute("title") or ""
     assert "Allzeit-Tiefstpreis" in title
     assert "CHF 37.95" in title
+
+
+
+def test_exact_cent_boundary_badge_states(page: Page):
+    """
+    Validates that the userscript accurately distinguishes between new-low, at-low, and above-low
+    based strictly on integer cents, not floating point tolerances.
+    """
+
+    # We will test this by evaluating the renderCardEffects logic or directly checking DOM after mocking
+    # Disable REAL_DEAL_FILTER_ACTIVE so the card stays in the DOM and we can inspect its badge properties
+    page.evaluate("() => { window.ToppreiseSuite.CONFIG.REAL_DEAL_FILTER_ACTIVE = false; }")
+
+    cases = [
+        # currentPrice, expected_state (Allzeit-Tiefstpreis string), expected_class, not_expected_class
+        (37.94, 'Neuer Allzeit-Tiefstpreis (CHF 37.94)', 'tp-deal-alltime-low', 'tp-deal-not-low'), # new low
+        (37.95, 'Allzeit-Tiefstpreis (CHF 37.95)', 'tp-deal-alltime-low', 'tp-deal-not-low'), # at low
+        (37.96, 'Historischer Tiefstpreis lag bei CHF 37.95', 'tp-deal-not-low', 'tp-deal-alltime-low'), # above low
+        (38.00, 'Historischer Tiefstpreis lag bei CHF 37.95', 'tp-deal-not-low', 'tp-deal-alltime-low'), # above low
+        (37.9500001, 'Allzeit-Tiefstpreis (CHF 37.95)', 'tp-deal-alltime-low', 'tp-deal-not-low'), # at low normalized
+    ]
+
+    for (curr_price, title_match, expected_class, unexpected_class) in cases:
+        page.evaluate(f"""(price) => {{
+            const card = document.getElementById('card-competing-reference');
+            // Overwrite price container
+            const pEl = card.querySelector('.Plugin_PriceInformation .Plugin_Price');
+            pEl.textContent = price;
+
+            // Seed a cached history where tiefstpreis = 37.95
+            localStorage.setItem('tp_hist_v1_1003795', JSON.stringify({{
+                tiefstpreis: 37.95,
+                hoechstpreis: 55.00,
+                medianPrice: 45.00,
+                previousLow: 47.82,
+                isNewAllTimeLow: price < 37.95,
+                dataPointCount: 10,
+                time: Date.now()
+            }}));
+            window.ToppreiseSuite.processListings();
+        }}""", curr_price)
+
+        # Wait a tick for mutations
+        page.wait_for_timeout(100)
+        badge = page.locator('#card-competing-reference .badge-dif')
+
+        # Verify classes
+        badge_class = badge.get_attribute("class") or ""
+        assert expected_class in badge_class, f"Expected {expected_class} but got {badge_class} for price {curr_price}"
+        assert unexpected_class not in badge_class, f"Did not expect {unexpected_class} but got it for price {curr_price}"
+
+        # Verify title string logic
+        title = badge.get_attribute("title") or ""
+        assert title_match in title, f"Expected {title_match} in {title} for price {curr_price}"
 
 
 def test_best_price_highlighting_and_dimming(page: Page):
