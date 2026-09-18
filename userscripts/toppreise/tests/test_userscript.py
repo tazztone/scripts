@@ -23,6 +23,124 @@ def page(browser, userscript_content):
     page.close()
 
 
+
+def test_competing_reference_price_resolves_to_green_low(page: Page):
+    """
+    Validates that the userscript extracts the canonical price (CHF 37.95) correctly
+    and ignores competing reference prices (CHF 47.82), resolving to a green
+    'Allzeit-Tiefstpreis' state instead of an amber 'Aufschlag' state.
+    """
+    # Wait for initial render
+    page.wait_for_selector('.badge-dif')
+
+    card = page.locator('#card-competing-reference')
+    badge = card.locator('.badge-dif')
+
+    # Enable Real Deal Filter if necessary
+    page.evaluate("() => { window.ToppreiseSuite.CONFIG.REAL_DEAL_FILTER_ACTIVE = true; }")
+
+    # It starts as unchecked
+    assert badge.is_visible()
+
+    # Mock the time series endpoint for it
+    def handle_pricechart(route):
+        # Fallback to post_data only if url does not contain it but we know how the mock is set up for fetch
+        if '1003795' in (route.request.post_data or '') or 'p_pc_pid=1003795' in route.request.url:
+            route.fulfill(
+                status=200,
+                headers={'access-control-allow-origin': '*'},
+                content_type='text/html',
+                body='''
+                <div class="PriceChartLegend">
+                  <div class="col-4">
+                    <div class="title">aktueller Toppreis</div>
+                    <div class="Plugin_Price">37.95</div>
+                  </div>
+                  <div class="col-4">
+                    <div class="title">Tiefstpreis</div>
+                    <div class="Plugin_Price">37.95</div>
+                  </div>
+                  <div class="col-4">
+                    <div class="title">Höchstpreis</div>
+                    <div class="Plugin_Price">55.00</div>
+                  </div>
+                </div>
+                '''
+            )
+        else:
+            route.continue_()
+
+    page.route("**/plugins/product/pricechart*", handle_pricechart)
+
+    # Click to verify
+    badge.click()
+
+    # Wait for the emerald halo to be applied
+    page.wait_for_selector("#card-competing-reference .tp-deal-alltime-low")
+
+    # Should not have the not-low class
+    assert "tp-deal-not-low" not in badge.get_attribute("class")
+
+    # Title should indicate Allzeit-Tiefstpreis
+    title = badge.get_attribute("title") or ""
+    assert "Allzeit-Tiefstpreis" in title
+    assert "CHF 37.95" in title
+
+
+
+def test_exact_cent_boundary_badge_states(page: Page):
+    """
+    Validates that the userscript accurately distinguishes between new-low, at-low, and above-low
+    based strictly on integer cents, not floating point tolerances.
+    """
+
+    # We will test this by evaluating the renderCardEffects logic or directly checking DOM after mocking
+    # Disable REAL_DEAL_FILTER_ACTIVE so the card stays in the DOM and we can inspect its badge properties
+    page.evaluate("() => { window.ToppreiseSuite.CONFIG.REAL_DEAL_FILTER_ACTIVE = false; }")
+
+    cases = [
+        # currentPrice, expected_state (Allzeit-Tiefstpreis string), expected_class, not_expected_class
+        (37.94, 'Neuer Allzeit-Tiefstpreis (CHF 37.94)', 'tp-deal-alltime-low', 'tp-deal-not-low'), # new low
+        (37.95, 'Allzeit-Tiefstpreis (CHF 37.95)', 'tp-deal-alltime-low', 'tp-deal-not-low'), # at low
+        (37.96, 'Historischer Tiefstpreis lag bei CHF 37.95', 'tp-deal-not-low', 'tp-deal-alltime-low'), # above low
+        (38.00, 'Historischer Tiefstpreis lag bei CHF 37.95', 'tp-deal-not-low', 'tp-deal-alltime-low'), # above low
+        (37.9500001, 'Allzeit-Tiefstpreis (CHF 37.95)', 'tp-deal-alltime-low', 'tp-deal-not-low'), # at low normalized
+    ]
+
+    for (curr_price, title_match, expected_class, unexpected_class) in cases:
+        page.evaluate(f"""(price) => {{
+            const card = document.getElementById('card-competing-reference');
+            // Overwrite price container
+            const pEl = card.querySelector('.Plugin_PriceInformation .Plugin_Price');
+            pEl.textContent = price;
+
+            // Seed a cached history where tiefstpreis = 37.95
+            localStorage.setItem('tp_hist_v1_1003795', JSON.stringify({{
+                tiefstpreis: 37.95,
+                hoechstpreis: 55.00,
+                medianPrice: 45.00,
+                previousLow: 47.82,
+                isNewAllTimeLow: price < 37.95,
+                dataPointCount: 10,
+                time: Date.now()
+            }}));
+            window.ToppreiseSuite.processListings();
+        }}""", curr_price)
+
+        # Wait a tick for mutations
+        page.wait_for_timeout(100)
+        badge = page.locator('#card-competing-reference .badge-dif')
+
+        # Verify classes
+        badge_class = badge.get_attribute("class") or ""
+        assert expected_class in badge_class, f"Expected {expected_class} but got {badge_class} for price {curr_price}"
+        assert unexpected_class not in badge_class, f"Did not expect {unexpected_class} but got it for price {curr_price}"
+
+        # Verify title string logic
+        title = badge.get_attribute("title") or ""
+        assert title_match in title, f"Expected {title_match} in {title} for price {curr_price}"
+
+
 def test_best_price_highlighting_and_dimming(page: Page):
     # Card 1 is cheapest store price -> highlighted
     page.wait_for_selector('#card-cheapest.tp-is-cheapest')
@@ -713,12 +831,12 @@ def test_empty_state_notice_and_actions(page: Page):
     assert not page.locator('#tp-empty-state-notice').is_visible()
 
     # Filter all 5 cards by setting negative terms
-    page.fill('#tp-inline-negative-input', 'GeForce, Silikon, iPhone, Dell')
+    page.fill('#tp-inline-negative-input', 'GeForce, Silikon, iPhone, Dell, ENDGAME')
     page.wait_for_selector('#tp-empty-state-notice')
 
     notice = page.locator('#tp-empty-state-notice')
     assert notice.is_visible()
-    assert 'Alle 5 Angebote' in (notice.text_content() or '')
+    assert 'Alle 6 Angebote' in (notice.text_content() or '')
 
     # Clicking "👁️ Ausgeblendete anzeigen" reveals previews
     page.click('#tp-empty-reveal-btn')
@@ -2194,7 +2312,7 @@ def test_bestpreise_mode_all_cards_remain_visible_when_uncached(page: Page):
         });
     }""")
 
-    assert len(card_visibilities) == 5
+    assert len(card_visibilities) == 6
     for cv in card_visibilities:
         assert cv['hasOffsetParent'] is True, f"Card {cv['id']} has null offsetParent (invisible)"
         assert cv['computedDisplay'] != 'none', f"Card {cv['id']} has display: none"
@@ -2224,7 +2342,7 @@ def test_bestpreise_mode_progressive_reveal(page: Page):
     }""")
 
     visible_count_1 = page.evaluate("() => Array.from(document.querySelectorAll('.Plugin_Product')).filter(c => c.offsetParent !== null).length")
-    assert visible_count_1 == 5
+    assert visible_count_1 == 6
 
     # 2. Seed Card 1 as verified Deal (score 67%, 1800 CHF vs tiefstpreis 1800, previousLow 2400)
     page.evaluate("""() => {
@@ -2248,7 +2366,7 @@ def test_bestpreise_mode_progressive_reveal(page: Page):
 
     # All 5 cards still visible (1 deal + 4 unscanned)
     visible_count_2 = page.evaluate("() => Array.from(document.querySelectorAll('.Plugin_Product')).filter(c => c.offsetParent !== null).length")
-    assert visible_count_2 == 5
+    assert visible_count_2 == 6
 
     # 3. Seed Card 2 as verified Non-Deal (1100 CHF vs tiefstpreis 600, not at low)
     page.evaluate("""() => {
@@ -2268,8 +2386,8 @@ def test_bestpreise_mode_progressive_reveal(page: Page):
 
     # Remaining 4 cards (Card 1 Deal + Cards 3, 4, 5 Unscanned) are visible
     visible_cards = page.evaluate("() => Array.from(document.querySelectorAll('.Plugin_Product')).filter(c => c.offsetParent !== null).map(c => c.id)")
-    assert visible_cards == ['card-cheapest', 'card-negative', 'card-cat-excluded', 'card-low-offers']
-    assert len(visible_cards) == 4
+    assert visible_cards == ['card-cheapest', 'card-competing-reference', 'card-negative', 'card-cat-excluded', 'card-low-offers']
+    assert len(visible_cards) == 5
 
     # 4. Seed Card 3 as another verified Non-Deal
     page.evaluate("""() => {
@@ -2285,8 +2403,8 @@ def test_bestpreise_mode_progressive_reveal(page: Page):
     }""")
 
     visible_cards_after = page.evaluate("() => Array.from(document.querySelectorAll('.Plugin_Product')).filter(c => c.offsetParent !== null).map(c => c.id)")
-    assert visible_cards_after == ['card-cheapest', 'card-cat-excluded', 'card-low-offers']
-    assert len(visible_cards_after) == 3
+    assert visible_cards_after == ['card-cheapest', 'card-competing-reference', 'card-cat-excluded', 'card-low-offers']
+    assert len(visible_cards_after) == 4
 
 
 def test_column_wrapper_layout_fidelity_and_hiding(page: Page):
@@ -2408,13 +2526,14 @@ def test_deal_score_weight_preset_dropdown_in_filter_bar(page: Page):
     # Select 100% Median
     popover = page.locator('#tp-weight-popover')
 
-    # If the popover is not visible, click the button to show it
-    if not popover.is_visible():
-        page.locator('#tp-bar-weight-btn').click()
-
-    # Explicitly wait for it to be visible based on state, no timeouts or force
+    # Reopen popover properly using the DOM event
+    page.evaluate("document.querySelector('#tp-bar-weight-btn').click()")
     popover.wait_for(state="visible")
-    page.locator('#tp-weight-popover button[data-weight="0.00"]').click(force=True)
+
+    # Click 100% Median without force=True
+    btn = page.locator('#tp-weight-popover button[data-weight="0.00"]')
+    btn.wait_for(state="visible")
+    btn.click()
     assert page.evaluate("() => window.ToppreiseSuite.CONFIG.BESTPREISE_WEIGHT_RECORD === 0.0")
     assert '100% Med' in page.locator('#tp-bar-weight-btn').inner_text()
 
