@@ -4123,7 +4123,8 @@ const SHADOW_MODAL_STYLES = `
       cancelBestpreiseScan,
       saveConfigKey,
       parsePrice,
-      CONFIG
+      CONFIG,
+      memoryCache
     };
   }
 })();
