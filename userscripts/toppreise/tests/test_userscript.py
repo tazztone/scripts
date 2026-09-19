@@ -1,6 +1,6 @@
 import os
-import pytest
 from playwright.sync_api import Page
+import pytest
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MOCK_HTML = f"file://{os.path.join(BASE_DIR, 'mock_toppreise.html')}"
@@ -2759,3 +2759,64 @@ def test_card_elements_and_sparkline_visibility_unclipped(page: Page):
     assert page.locator('#card-cheapest .price_information_product').is_visible()
     assert page.locator('#card-cheapest .tp-card-historical-price').is_visible()
     assert page.locator('#card-cheapest .tp-sparkline').is_visible()
+
+def test_shipping_price_mismatch(page: Page):
+    test_html_path = os.path.join(os.path.dirname(__file__), 'mock_toppreise.html')
+    # Use the local mock file and evaluate the script contents
+    page.goto(f'file://{test_html_path}')
+    with open('userscripts/toppreise/toppreise.user.js', 'r') as f:
+        page.add_script_tag(content=f.read())
+
+    page.evaluate("() => { if(window.ToppreiseSuite) { window.ToppreiseSuite.CONFIG.USE_SHIPPING_PRICE = true; window.ToppreiseSuite.processListings(); } }")
+
+    # Mock network request to return both series
+    def handle_pricechart(route):
+        if '1003795' in (route.request.post_data or '') or 'p_pc_pid=1003795' in route.request.url:
+            # Series 0: Product price (59.98)
+            # Series 1: Shipping price (65.98)
+            now = page.evaluate("Date.now()")
+            route.fulfill(
+                status=200,
+                headers={'access-control-allow-origin': '*'},
+                content_type='application/json',
+                body=f'[[[{now - 86400000}, 59.98], [{now}, 59.98]], [[{now - 86400000}, 65.98], [{now}, 65.98]]]'
+            )
+        else:
+            route.continue_()
+
+    page.route("**/plugins/product/pricechart*", handle_pricechart)
+
+    # Set the card DOM to match the issue: Product = 59.98, Shipping = 65.98
+    page.evaluate("""() => {
+        const card = document.getElementById('card-competing-reference');
+        card.dataset.tpProductId = '1003795';
+
+        const priceInfo = card.querySelector('.Plugin_PriceInformation');
+        priceInfo.innerHTML = `
+            <div class="priceContainer productPrice">ab <span class="currency">CHF </span><div class="Plugin_Price">59.98</div></div>
+            <div class="priceContainer shippingPrice">ab <span class="currency">CHF </span><div class="Plugin_Price">65.98</div></div>
+        `;
+
+        const badge = card.querySelector('.badge-dif');
+        badge.className = 'badge badge-dif tp-deal-badge-interactive';
+        badge.dataset.tpOriginalDiscount = '43';
+        badge.innerHTML = '<div class="text">Differenz</div><p>-43%</p>';
+    }""")
+
+    # Clear memory cache so it fetches fresh
+    page.evaluate("() => { if(window.ToppreiseSuite?.memoryCache) window.ToppreiseSuite.memoryCache.clear(); localStorage.clear(); }")
+
+    # Click to verify
+    page.locator('#card-competing-reference .badge-dif').click()
+
+    # Wait for the emerald halo to be applied
+    page.wait_for_selector("#card-competing-reference .tp-deal-alltime-low")
+
+    # Should not have the not-low class
+    badge = page.locator('#card-competing-reference .badge-dif')
+    assert "tp-deal-not-low" not in badge.get_attribute("class")
+
+    # Title should indicate Allzeit-Tiefstpreis
+    title = badge.get_attribute("title") or ""
+    assert "Allzeit-Tiefstpreis" in title
+    assert "CHF 65.98" in title
