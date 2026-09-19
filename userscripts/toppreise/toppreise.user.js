@@ -1685,6 +1685,10 @@ const SHADOW_MODAL_STYLES = `
       if (Array.isArray(data)) {
         // If 2D array of series [[series0], [series1]]
         if (Array.isArray(data[0]) && data[0].length > 0 && Array.isArray(data[0][0])) {
+          // If USE_SHIPPING_PRICE is true and the shipping series exists, use it
+          if (CONFIG.USE_SHIPPING_PRICE && data.length > 1 && Array.isArray(data[1]) && data[1].length > 0 && Array.isArray(data[1][0])) {
+            return data[1];
+          }
           return data[0]; // Series 0: Produktpreis
         }
         if (Array.isArray(data[0]) && typeof data[0][0] === 'number') {
