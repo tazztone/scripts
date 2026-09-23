@@ -10,21 +10,58 @@
   userscripts/venv/bin/pytest python/
   ```
 
-- **Targeted Userscript Playwright Tests (Fast & Specific):**
+- **Targeted Userscript Playwright Tests:**
+  > [!NOTE]
+  > Since system Google Chrome is not installed at `/opt/google/chrome/chrome`, pass `PLAYWRIGHT_BROWSERS_PATH` and override `addopts` to use Playwright's local Chromium:
   ```bash
-  userscripts/venv/bin/pytest userscripts/<script_folder>/tests/test_userscript.py
+  PLAYWRIGHT_BROWSERS_PATH=/home/tazztone/_coding/scripts/userscripts/.playwright-browsers userscripts/venv/bin/pytest userscripts/<script_folder>/tests/<test_file>.py -o addopts="--import-mode=importlib"
   ```
-  *Example for Toppreise:*
+  *Examples for Toppreise:*
   ```bash
-  userscripts/venv/bin/pytest userscripts/toppreise/tests/test_userscript.py
+  # Modal & settings interactions
+  PLAYWRIGHT_BROWSERS_PATH=/home/tazztone/_coding/scripts/userscripts/.playwright-browsers userscripts/venv/bin/pytest userscripts/toppreise/tests/test_ui_modal.py -o addopts="--import-mode=importlib"
+
+  # Feed scanner & deal scoring
+  PLAYWRIGHT_BROWSERS_PATH=/home/tazztone/_coding/scripts/userscripts/.playwright-browsers userscripts/venv/bin/pytest userscripts/toppreise/tests/test_feed_scanner.py -o addopts="--import-mode=importlib"
+
+  # Fast price logic & unit tests
+  PLAYWRIGHT_BROWSERS_PATH=/home/tazztone/_coding/scripts/userscripts/.playwright-browsers userscripts/venv/bin/pytest userscripts/toppreise/tests/test_price_logic.py userscripts/toppreise/tests/unit/ -o addopts="--import-mode=importlib"
   ```
 
 - **All Userscript Playwright Tests (~25s):**
   ```bash
-  userscripts/venv/bin/pytest userscripts/
+  PLAYWRIGHT_BROWSERS_PATH=/home/tazztone/_coding/scripts/userscripts/.playwright-browsers userscripts/venv/bin/pytest userscripts/ -o addopts="--import-mode=importlib"
   ```
 
 - **Full Suite (Slow — run only when explicitly necessary):**
   ```bash
   userscripts/venv/bin/pytest python/ userscripts/
+  ```
+
+---
+
+## Userscript Bundling & Development
+
+- **Building Bundles:**
+  When editing modular code in `userscripts/<script>/src/`, compile the bundled artifact before testing or committing:
+  ```bash
+  node userscripts/<script>/tools/build.js
+  ```
+- **Verifying Bundles (CI Quality Check):**
+  ```bash
+  node userscripts/<script>/tools/build.js --check
+  ```
+- **Pre-commit Quality Gates:**
+  The repository pre-commit hooks execute unit test suites and taxonomy verification, and will automatically bump the bundle version patch level upon commit.
+
+---
+
+## Violentmonkey & Firefox Testing
+
+- **Branch Testing URLs:**
+  When testing changes on a branch other than `main` (e.g. `testing`), ensure `@updateURL` and `@downloadURL` in `src/app.js` point to the raw GitHub branch URL.
+- **Dispatching Updates to Firefox:**
+  To prompt Violentmonkey to install or update the script in Firefox:
+  ```bash
+  firefox "https://raw.githubusercontent.com/tazztone/scripts/<branch>/userscripts/<script>/<script>.user.js"
   ```
