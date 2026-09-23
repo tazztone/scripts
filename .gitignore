@@ -240,3 +240,4 @@ python/put_files_into_folder_by_extension/mock_dir/
 node_modules/
 package-lock.json
 package.json
+!userscripts/toppreise/package.json
