@@ -30,8 +30,16 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+# Automatically re-exec with workspace .venv if invoked with system python
+_venv_python = Path(__file__).resolve().parent.parent.parent / ".venv" / "bin" / "python"
+if _venv_python.exists() and Path(sys.executable).resolve() != _venv_python.resolve():
+    if os.environ.get("_SIGNAL_STICKERS_BOOTSTRAPPED") != "1":
+        os.environ["_SIGNAL_STICKERS_BOOTSTRAPPED"] = "1"
+        os.execv(str(_venv_python), [str(_venv_python)] + sys.argv)
+
 try:
     import yaml
+
 except ImportError:
     sys.exit("Error: PyYAML not installed. Run: pip install PyYAML")
 
