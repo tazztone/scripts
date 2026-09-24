@@ -3,7 +3,10 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue)](#)
 
-A unified collection of automation scripts and utilities for Windows, Linux, and Python. Covers media processing, file organization, AI/ML tooling, cloud utilities, and browser userscripts.
+A unified collection of automation scripts and utilities for Windows, Linux, and Python. Covers media processing, file organization, AI/ML tooling, cloud utilities, and shell automation.
+
+> [!NOTE]
+> Browser userscripts have been moved to their own dedicated repository: [**`tazztone/userscripts`**](https://github.com/tazztone/userscripts).
 
 ## Structure
 
@@ -24,20 +27,15 @@ scripts/
 │   ├── opencode-desktop/           # OpenCode desktop application installer
 │   ├── tarball-installer/          # Universal tarball archive installer
 │   └── the-finals/                 # THE FINALS game & OBS Studio automation
-├── python/                         # Python utilities
-│   ├── bitwarden/                  # Bitwarden vault duplicate record cleaner
-│   ├── compress_png_to_webp_and_keep_comfyui_workflow/  # ComfyUI PNG to WebP compressor with workflow preservation
-│   ├── google_drive_remove_duplicates/  # Google Drive duplicate file scanner + remover
-│   ├── immich-api/                 # Immich API utilities (timelapse stacking, unstacking, album expansion, staging)
-│   ├── immich-launcher/            # Linux desktop launcher & installer for Immich
-│   ├── lora_remove_te_weights/     # Strip text encoder weights from LoRA .safetensors
-│   ├── put_files_into_folder_by_extension/  # Auto-organizer: sort files into folders by extension & category
-│   └── remove_jpg_if_raw_exists/   # Remove camera JPEGs if matching RAW photo exists
-└── userscripts/                    # Browser userscripts (Violentmonkey / Tampermonkey)
-    ├── fastlog-watcher/            # Real-time event and log stream monitor
-    ├── huggingface/                # Hugging Face inline liking, unliked highlighter, date & negative filter
-    ├── perplexity/                 # Perplexity model lock, approvals, and GitHub enhancements
-    └── toppreise/                  # Toppreise.ch Suite: best price highlight, negative & category filters, price alarm
+└── python/                         # Python utilities
+    ├── bitwarden/                  # Bitwarden vault duplicate record cleaner
+    ├── compress_png_to_webp_and_keep_comfyui_workflow/  # ComfyUI PNG to WebP compressor with workflow preservation
+    ├── google_drive_remove_duplicates/  # Google Drive duplicate file scanner + remover
+    ├── immich-api/                 # Immich API utilities (timelapse stacking, unstacking, album expansion, staging)
+    ├── immich-launcher/            # Linux desktop launcher & installer for Immich
+    ├── lora_remove_te_weights/     # Strip text encoder weights from LoRA .safetensors
+    ├── put_files_into_folder_by_extension/  # Auto-organizer: sort files into folders by extension & category
+    └── remove_jpg_if_raw_exists/   # Remove camera JPEGs if matching RAW photo exists
 ```
 
 ## Highlights
@@ -75,21 +73,15 @@ Each subdirectory contains its own documentation:
 - Bash scripts: [`sh/TOOLBOXES/README.md`](sh/TOOLBOXES/README.md), [`sh/antigravity2/README.md`](sh/antigravity2/README.md), [`sh/davinci-resolve-updater/README.md`](sh/davinci-resolve-updater/README.md), [`sh/immich/README.md`](sh/immich/README.md), [`sh/tarball-installer/README.md`](sh/tarball-installer/README.md), [`sh/the-finals/README.md`](sh/the-finals/README.md)
 - Python utilities: [`python/README.md`](python/README.md)
 - Windows Batch: [`bat/README.md`](bat/README.md)
-- Userscripts: [`userscripts/README.md`](userscripts/README.md)
+- Userscripts: [**`tazztone/userscripts`**](https://github.com/tazztone/userscripts) (dedicated repository)
 
 ### Running Tests
 
 Run the test suite from the repository root using the workspace virtualenv:
 
 ```bash
-# Run all tests (Python & Userscripts)
-userscripts/venv/bin/pytest
-
-# Run only Python tests
-userscripts/venv/bin/pytest python
-
-# Run only Userscript browser tests
-userscripts/venv/bin/pytest userscripts
+# Run Python unit tests
+.venv/bin/pytest python
 ```
 
 ## License
