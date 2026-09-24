@@ -3,7 +3,8 @@
 
 Generates a responsive HTML review page to inspect sticker images, check contrast
 against Signal Dark and Light themes, adjust assigned emojis, mark unwanted stickers
-for deletion, sort by emoji to identify duplicate stickers, and export the final `stickers.yaml`.
+for deletion, sort by emoji to identify duplicate stickers, and display in the emoji
+dropdown which emojis are already used (and how many times) vs unused.
 
 Usage:
   python review.py ./webp
@@ -143,6 +144,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     .badge-dupe {{
       color: var(--warning);
       border-color: rgba(247, 144, 9, 0.4);
+    }}
+    .badge-unused {{
+      color: #3b82f6;
+      border-color: rgba(59, 130, 246, 0.4);
     }}
 
     .header-controls {{
@@ -388,6 +393,34 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       cursor: pointer;
     }}
 
+    .emoji-select option {{
+      font-size: 15px;
+      text-align: left;
+      padding: 6px 10px;
+      background: #1c1d22;
+      color: #e1e2e6;
+    }}
+
+    .emoji-select optgroup {{
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      text-align: left;
+      padding: 8px 10px;
+      color: #8e909a;
+      background: #141518;
+    }}
+
+    body.theme-light .emoji-select option {{
+      background: #ffffff;
+      color: #1a1b1e;
+    }}
+    body.theme-light .emoji-select optgroup {{
+      background: #f0f0f4;
+      color: #555760;
+    }}
+
     .meta-row {{
       width: 100%;
       display: flex;
@@ -438,6 +471,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <h1>{title}</h1>
         <span class="badge badge-active" id="badgeActive">{count} Active</span>
         <span class="badge badge-dupe" id="badgeDupe" style="display:none;">0 Duplicates</span>
+        <span class="badge badge-unused" id="badgeUnused">0 Available Unused</span>
         <span class="badge badge-deleted" id="badgeDeleted" style="display:none;">0 Deleted</span>
         <span class="badge">Author: {author}</span>
       </div>
@@ -490,32 +524,87 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
   <script>
     const META = {meta_json};
+    const EMOJI_REGISTRY = {emoji_registry_json};
     let currentFilter = 'all';
     let currentSort = 'emoji';
 
     // Track deleted filenames
     const deletedFiles = new Set();
 
-    function updateDuplicatesAndCounts() {{
-      const emojiCounts = {{}};
-      const cards = Array.from(document.querySelectorAll('.card'));
-
-      // Count emojis only among non-deleted stickers
-      cards.forEach(card => {{
-        const fn = card.dataset.file;
-        const emoji = card.querySelector('select').value;
-        const isDel = deletedFiles.has(fn);
-        if (!isDel) {{
-          emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
-        }}
+    function getUsageCounts() {{
+      const counts = {{}};
+      document.querySelectorAll('.card').forEach(card => {{
+        if (deletedFiles.has(card.dataset.file)) return;
+        const em = card.dataset.emoji || card.querySelector('select').value;
+        counts[em] = (counts[em] || 0) + 1;
       }});
+      return counts;
+    }}
+
+    function renderOptionsForSelect(select, counts) {{
+      const currentVal = select.dataset.current || select.value;
+      let html = '';
+
+      // Current emoji option at top
+      const currCount = counts[currentVal] || 0;
+      const currInfo = EMOJI_REGISTRY[currentVal] || {{}};
+      const currName = currInfo.name ? ' (' + currInfo.name + ')' : '';
+      const currUsageText = currCount > 1 ? ' — [' + currCount + 'x used in pack]' : ' — [1x used]';
+      html += '<option value="' + currentVal + '" selected>' + currentVal + currName + currUsageText + '</option>';
+
+      const unused = [];
+      const used = [];
+
+      for (const [em, info] of Object.entries(EMOJI_REGISTRY)) {{
+        if (em === currentVal) continue;
+        const cnt = counts[em] || 0;
+        const name = info.name ? ' (' + info.name + ')' : '';
+        if (cnt === 0) {{
+          unused.push({{ em: em, label: em + name + ' — unused' }});
+        }} else {{
+          used.push({{ em: em, cnt: cnt, label: em + name + ' — ' + cnt + 'x used' }});
+        }}
+      }}
+
+      // Sort used by count descending (highest duplicates first)
+      used.sort((a, b) => b.cnt - a.cnt || a.label.localeCompare(b.label));
+
+      // Optgroup: Unused Emojis
+      html += '<optgroup label="✨ Available / Unused (' + unused.length + ')">';
+      for (const item of unused) {{
+        html += '<option value="' + item.em + '">' + item.label + '</option>';
+      }}
+      html += '</optgroup>';
+
+      // Optgroup: Already In Use
+      if (used.length > 0) {{
+        html += '<optgroup label="⚠️ Already In Use (' + used.length + ')">';
+        for (const item of used) {{
+          html += '<option value="' + item.em + '">' + item.label + '</option>';
+        }}
+        html += '</optgroup>';
+      }}
+
+      select.innerHTML = html;
+    }}
+
+    function refreshAllSelects() {{
+      const counts = getUsageCounts();
+      document.querySelectorAll('select.emoji-select').forEach(sel => {{
+        renderOptionsForSelect(sel, counts);
+      }});
+    }}
+
+    function updateDuplicatesAndCounts() {{
+      const emojiCounts = getUsageCounts();
+      const cards = Array.from(document.querySelectorAll('.card'));
 
       let dupeStickersCount = 0;
       let lowConfCount = 0;
 
       cards.forEach(card => {{
         const fn = card.dataset.file;
-        const emoji = card.querySelector('select').value;
+        const emoji = card.dataset.emoji || card.querySelector('select').value;
         const conf = parseFloat(card.dataset.conf || '1.0');
         const count = emojiCounts[emoji] || 0;
         const dupeTag = card.querySelector('.dupe-tag');
@@ -548,6 +637,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       document.getElementById('tabCountLow').textContent = lowConfCount;
       document.getElementById('tabCountDupes').textContent = dupeStickersCount;
       document.getElementById('tabCountDeleted').textContent = delCount;
+
+      // Count unused available in registry
+      let unusedCount = 0;
+      for (const em in EMOJI_REGISTRY) {{
+        if (!emojiCounts[em]) unusedCount++;
+      }}
+      const badgeUnused = document.getElementById('badgeUnused');
+      if (badgeUnused) {{
+        badgeUnused.textContent = unusedCount + ' Unused Available';
+      }}
 
       const badgeDupe = document.getElementById('badgeDupe');
       if (dupeStickersCount > 0) {{
@@ -584,13 +683,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         btn.textContent = '↺ Restore';
       }}
       updateDuplicatesAndCounts();
+      refreshAllSelects();
       filterCards();
     }}
 
     function onEmojiChange(select) {{
       const card = select.closest('.card');
       card.dataset.emoji = select.value;
+      select.dataset.current = select.value;
       updateDuplicatesAndCounts();
+      refreshAllSelects();
       if (currentSort === 'emoji') {{
         sortCards('emoji');
       }} else {{
@@ -611,8 +713,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
       cards.sort((a, b) => {{
         if (sortType === 'emoji') {{
-          const ea = a.querySelector('select').value;
-          const eb = b.querySelector('select').value;
+          const ea = a.dataset.emoji || a.querySelector('select').value;
+          const eb = b.dataset.emoji || b.querySelector('select').value;
           if (ea !== eb) return ea.localeCompare(eb, 'en', {{ numeric: true }});
           return a.dataset.file.localeCompare(b.dataset.file, 'en', {{ numeric: true }});
         }} else if (sortType === 'conf') {{
@@ -652,7 +754,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       const q = document.getElementById('searchBox').value.toLowerCase();
       document.querySelectorAll('.card').forEach(card => {{
         const fn = card.dataset.file.toLowerCase();
-        const emoji = card.querySelector('select').value;
+        const emoji = card.dataset.emoji || card.querySelector('select').value;
         const conf = parseFloat(card.dataset.conf || '1.0');
         const isDel = deletedFiles.has(card.dataset.file);
         const isDupe = card.classList.contains('is-duplicate');
@@ -665,7 +767,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }} else if (currentFilter === 'deleted') {{
           matchFilter = isDel;
         }} else {{
-          // 'all' shows non-deleted, or deleted if explicitly searched
           matchFilter = true;
         }}
 
@@ -699,9 +800,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       let exportedCount = 0;
       document.querySelectorAll('.card').forEach(card => {{
         const file = card.dataset.file;
-        if (deletedFiles.has(file)) return; // Exclude deleted stickers
+        if (deletedFiles.has(file)) return;
 
-        const emoji = card.querySelector('select').value;
+        const emoji = card.dataset.emoji || card.querySelector('select').value;
         y += '  - chr: "' + emoji + '"\\n    file: "' + file + '"\\n';
         exportedCount++;
       }});
@@ -717,9 +818,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       showToast("Exported " + exportedCount + " stickers to stickers.yaml!");
     }}
 
-    // Initial setup on load: compute duplicates and sort by emoji
+    // Initial setup on load
     window.addEventListener('DOMContentLoaded', () => {{
+      document.querySelectorAll('.card').forEach(card => {{
+        const sel = card.querySelector('select');
+        sel.dataset.current = sel.value;
+      }});
       updateDuplicatesAndCounts();
+      refreshAllSelects();
       sortCards('emoji');
     }});
   </script>
@@ -747,7 +853,6 @@ def generate_review_html(
             pass
 
     cards = []
-    all_emojis = list(EMOJI_REGISTRY.keys())
 
     for s in stickers:
         file_name = s.get("file", "")
@@ -768,12 +873,8 @@ def generate_review_html(
 
         conf_class = "conf-low" if conf < 0.6 else ("conf-mid" if conf < 0.8 else "conf-ok")
 
-        opts = [f'<option value="{current_emoji}" selected>{current_emoji}</option>']
-        for e in all_emojis:
-            if e != current_emoji:
-                desc = EMOJI_REGISTRY.get(e, {}).get("name", "")
-                opts.append(f'<option value="{e}">{e} ({desc})</option>')
-        options_html = "".join(opts)
+        # Initial fallback option before JS hydration
+        options_html = f'<option value="{current_emoji}" selected>{current_emoji}</option>'
 
         size_kb = img_path.stat().st_size / 1024
 
@@ -804,6 +905,7 @@ def generate_review_html(
         count=len(stickers),
         cards="".join(cards),
         meta_json=json.dumps(meta, ensure_ascii=False),
+        emoji_registry_json=json.dumps(EMOJI_REGISTRY, ensure_ascii=False),
     )
 
     out_path = folder / "review.html"
@@ -831,7 +933,7 @@ def main():
     out_file = generate_review_html(folder, yaml_path, cache_path)
     print(f"Generated review page: {out_file.resolve()}")
     print("Open this file in your browser to inspect and adjust sticker emojis.")
-    print("Features: Mark for deletion/exclusion, sort by emoji, detect duplicate stickers, export YAML.")
+    print("Features: Shows used counts, groups unused emojis, mark for deletion, sort by emoji.")
 
 
 if __name__ == "__main__":
