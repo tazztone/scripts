@@ -53,6 +53,18 @@
   ```
 - **Pre-commit Quality Gates:**
   The repository pre-commit hooks execute unit test suites and taxonomy verification, and will automatically bump the bundle version patch level upon commit.
+  > [!NOTE]
+  > When executing `git commit` via agent commands, `BypassSandbox: true` is required to allow write access to `.git/index.lock` and permit the pre-commit script to update bundle versions.
+
+---
+
+## Userscript UI/UX & Architecture Invariants
+
+- **No Redundant Controls:** Avoid duplicating controls that are already directly accessible in the top filter bar (such as negative terms or min-offers steppers) inside the settings modal.
+- **Single-Page Visibility over Tabs:** Keep settings modals on a single scrollable page with colored section groupings rather than multi-tab layouts that conceal options.
+- **Continuous Scales:** When rendering heatmaps or relative price differences, prefer a continuous scale (e.g., $-100\%$ hot to $+100\%$ cold with neutral parity at $0\%$) over fragmented discrete tiers.
+- **Feature Graduation:** When moving a feature out of Beta, sweep across `README.md`, UI strings, comments, and test names (`_beta_`) to keep terminology consistent.
+- **Test & Scratch Hygiene:** Never leave empty or untracked placeholder files in test suites (e.g., `tests/unit/`). Place exploratory scripts in `scratch/`.
 
 ---
 
