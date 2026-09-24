@@ -3,7 +3,7 @@
 Shared between classify_and_build.py and review.py.
 """
 
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 # Emoji dictionary: emoji -> {"name": keyword, "category": category, "description": human_desc}
 EMOJI_REGISTRY: Dict[str, Dict[str, str]] = {
@@ -139,3 +139,78 @@ def get_emoji_info(emoji: str) -> Optional[Dict[str, str]]:
 def is_valid_emoji(emoji: str) -> bool:
     """Checks if string is a valid emoji in registry."""
     return emoji in EMOJI_REGISTRY
+
+
+def extract_emojis(text: str) -> List[str]:
+    """Extracts known emojis from text, preserving order, removing duplicates."""
+    found = []
+    # Match registered emojis (longest first if multi-char like composite emojis)
+    # Sort keys by length descending to match composite sequences first
+    sorted_emojis = sorted(EMOJI_REGISTRY.keys(), key=len, reverse=True)
+    i = 0
+    while i < len(text):
+        matched = False
+        for e in sorted_emojis:
+            if text.startswith(e, i):
+                if e not in found:
+                    found.append(e)
+                i += len(e)
+                matched = True
+                break
+        if not matched:
+            i += 1
+    return found
+
+
+def format_emoji_sequence(emojis: Any, max_emojis: int = 3) -> str:
+    """Normalizes an emoji list or string to a compact string of up to max_emojis."""
+    if isinstance(emojis, str):
+        extracted = extract_emojis(emojis)
+    elif isinstance(emojis, (list, tuple)):
+        extracted = []
+        for item in emojis:
+            for e in extract_emojis(str(item)):
+                if e not in extracted:
+                    extracted.append(e)
+    else:
+        return "🙂"
+
+    if not extracted:
+        return "🙂"
+    return "".join(extracted[:max_emojis])
+
+
+def is_valid_emoji_sequence(seq: str) -> bool:
+    """Checks if sequence contains 1-3 valid registered emojis."""
+    emojis = extract_emojis(seq)
+    return 1 <= len(emojis) <= 3
+
+
+def get_prompt_emoji_catalog() -> str:
+    """Returns a structured catalog of emojis grouped by category for LLM prompts."""
+    categories: Dict[str, List[str]] = {}
+    for emoji, data in EMOJI_REGISTRY.items():
+        cat = data.get("category", "other").capitalize()
+        categories.setdefault(cat, []).append(f"{emoji} ({data['name']}: {data['description']})")
+
+    lines = []
+    for cat, items in categories.items():
+        lines.append(f"[{cat}]")
+        lines.append(", ".join(items))
+    return "\n".join(lines)
+
+
+def get_related_emojis(emoji: str, limit: int = 10) -> List[str]:
+    """Returns emojis from the same category as the input emoji for focused contrast."""
+    info = EMOJI_REGISTRY.get(emoji)
+    if not info:
+        return list(EMOJI_REGISTRY.keys())[:limit]
+    cat = info.get("category")
+    same_cat = [e for e, d in EMOJI_REGISTRY.items() if d.get("category") == cat and e != emoji]
+    # Add neighboring / neutral fallback emojis
+    fallbacks = ["🤔", "🤨", "🧐", "😏", "🙄", "😒", "😐", "😑", "😌", "😴", "😮", "😲"]
+    for fb in fallbacks:
+        if fb != emoji and fb not in same_cat:
+            same_cat.append(fb)
+    return [emoji] + same_cat[: limit - 1]
+

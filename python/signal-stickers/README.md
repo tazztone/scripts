@@ -17,9 +17,18 @@ Automates emoji classification for custom Signal stickers using Vision-Language 
   - Format validation (PNG / WebP / APNG; no GIFs).
   - Pack capacity check (1 to 200 stickers maximum).
   - Transparency & margin validation.
+- **Multi-Emoji Tagging & Nuanced Search**:
+  - Assigns 1 to 3 emojis per sticker in `chr` (e.g., primary emotion + secondary nuance tags like `🤔🤨`), enhancing discoverability in Signal.
+- **Smart Disambiguation & Deduplication (`--dedupe`)**:
+  - Sends groups of stickers sharing the same primary emoji together in a comparative multi-image VLM prompt.
+  - Honest nuance detection: differentiates subtle facial variations (smirk, raised brow, squint) while explicitly flagging truly identical ComfyUI variations as `redundant_of` rather than forcing ill-fitting emojis.
+- **Fast Perceptual Difference Hashing (Zero Extra ML Dependencies)**:
+  - 64-bit dHash calculates pairwise Hamming distances across generation batches to identify visually near-identical frames for user-driven pruning.
 - **Interactive Visual Review Page**:
+  - **Multi-Emoji Bar**: Directly edit or append emojis (up to 3) per card.
+  - **⚡ Keep Only One-Click Action**: When reviewing a cluster of duplicate variations, click "⚡ Keep Only" on the best sticker to automatically exclude all other redundant copies in that emoji group.
   - **Sort by Emoji**: Group matching stickers side-by-side to easily compare and resolve duplicate emoji assignments.
-  - **Live Duplicate Detection**: Identifies stickers with colliding emojis with orange highlights and count badges (`2x 😂`).
+  - **Live Duplicate Detection**: Identifies stickers with colliding emojis with orange highlights and count badges (`9x 🤔`).
   - **Mark for Deletion / Exclusion**: Exclude individual stickers with an `✕ Exclude` button (excluded stickers are omitted from `stickers.yaml`, with a helper to copy `rm` commands for disk cleanup).
   - **Theme Contrast Checker**: Live preview against Signal Light Theme, Dark Theme, Pure White, and Pure Black.
   - **Live Search & Filters**: Search by filename or emoji, filter by Duplicates, Needs Review (< 0.8), or Deleted stickers.
@@ -40,7 +49,7 @@ According to the [official Signal Sticker guidelines](https://support.signal.org
 | **Image Format** | Separate **PNG** or **WebP** file (animated: **APNG** <= 3 seconds, 30/60 FPS, no GIFs) |
 | **Margins** | **~16 px transparent margin** around each sticker |
 | **Background** | Transparent background (add outlines if needed for contrast on both light and dark themes) |
-| **Emoji Mapping** | Exactly **one emoji** assigned per sticker (Signal uses this for emoji-matching suggestions) |
+| **Emoji Mapping** | **1 to 3 emojis** per sticker in `chr` (Signal uses these for sticker suggestions when typing emojis) |
 | **Pack Limit** | Maximum **200 stickers** per pack |
 | **Cover Image** | 512 x 512 px PNG or WebP (defaults to first sticker in pack) |
 
@@ -106,10 +115,10 @@ python classify_and_build.py ./webp --title "Grimassen" --author "tazztone"
 python classify_and_build.py ./webp --provider gemini --model gemini-2.5-flash
 python classify_and_build.py ./webp --provider openrouter --model inclusionai/ling-3.0-flash-vl
 
-# If interrupted, resume without re-classifying existing files:
-python classify_and_build.py ./webp --resume
+# Run comparative disambiguation on duplicate emoji clusters:
+python classify_and_build.py ./webp --dedupe
 
-# Just check compliance without calling VLM APIs:
+# Just check compliance & perceptual visual variations without calling VLM APIs:
 python classify_and_build.py ./webp --check-only
 ```
 
@@ -122,11 +131,12 @@ python review.py ./webp
 ```
 
 This generates `webp/review.html`. Open it in any browser:
+- **Keep Best Variation**: Click **`⚡ Keep Only`** in a duplicate cluster to keep that image and mark all other identical/redundant variations for exclusion with one click.
 - **Sort by Emoji**: Group duplicates side-by-side to review similar expressions and differentiate them.
 - **Filter Duplicates**: Click the **Duplicates** filter tab to isolate only colliding stickers.
+- **Multi-Emoji Editing**: Type or select up to 3 emojis in the card's emoji bar.
 - **Exclude / Delete**: Click **`✕ Exclude`** on any card you do not want in your pack. Excluded stickers will not be included in the exported `stickers.yaml`.
 - **Test Contrast**: Toggle **Light**, **Dark**, **White BG**, and **Black BG** to ensure transparent stickers look sharp.
-- **Adjust Emojis**: Search or pick better emojis directly in the card dropdowns.
 - **Export**: Click **Export stickers.yaml** to save your verified pack manifest.
 
 ### 3. Preview Pack
@@ -161,7 +171,10 @@ The tool will upload the encrypted pack to Signal and output your shareable link
 | `--cache` | `"classification_cache.json"` | Cache file path |
 | `--workers` | `4` | Concurrency worker threads |
 | `--resume` | `False` | Resume skipping cached stickers |
-| `--check-only` | `False` | Validate constraints without API calls |
+| `--dedupe` | `False` | Run multi-image comparative disambiguation on duplicate clusters |
+| `--detect-visual-dupes` | `False` | Detect near-identical visual frames using perceptual dHash |
+| `--check-only` | `False` | Validate constraints and visual hashes without API calls |
+
 
 ### `review.py`
 

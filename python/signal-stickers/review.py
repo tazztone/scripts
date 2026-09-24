@@ -2,9 +2,9 @@
 """Interactive Signal Sticker Pack Review Tool.
 
 Generates a responsive HTML review page to inspect sticker images, check contrast
-against Signal Dark and Light themes, adjust assigned emojis, mark unwanted stickers
-for deletion, sort by emoji to identify duplicate stickers, and display in the emoji
-dropdown which emojis are already used (and how many times) vs unused.
+against Signal Dark and Light themes, adjust multi-emoji assignments (1-3 emojis),
+mark unwanted stickers for deletion/culling, resolve duplicates with "Keep Only",
+sort by emoji, and display unused vs used emojis in the dropdown.
 
 Usage:
   python review.py ./webp
@@ -26,9 +26,9 @@ except ImportError:
 
 # Import shared emoji registry
 try:
-    from emojis import EMOJI_REGISTRY
+    from emojis import EMOJI_REGISTRY, extract_emojis, format_emoji_sequence
 except ImportError:
-    from .emojis import EMOJI_REGISTRY
+    from .emojis import EMOJI_REGISTRY, extract_emojis, format_emoji_sequence
 
 
 HTML_TEMPLATE = """<!DOCTYPE html>
@@ -144,10 +144,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     .badge-dupe {{
       color: var(--warning);
       border-color: rgba(247, 144, 9, 0.4);
-    }}
-    .badge-unused {{
-      color: #3b82f6;
-      border-color: rgba(59, 130, 246, 0.4);
     }}
 
     .header-controls {{
@@ -315,6 +311,27 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       display: none;
     }}
 
+    .keep-btn {{
+      background: transparent;
+      border: 1px solid rgba(247, 144, 9, 0.5);
+      color: #f79009;
+      padding: 2px 7px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      margin-left: auto;
+      margin-right: 6px;
+      display: none;
+      transition: background 0.15s, color 0.15s;
+    }}
+    .card.is-duplicate .keep-btn {{
+      display: inline-block;
+    }}
+    .keep-btn:hover {{
+      background: #f79009;
+      color: #fff;
+    }}
+
     .del-btn {{
       background: transparent;
       border: 1px solid var(--border);
@@ -323,7 +340,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       border-radius: 4px;
       cursor: pointer;
       font-size: 11px;
-      margin-left: auto;
       transition: background 0.15s, color 0.15s;
     }}
     .del-btn:hover {{
@@ -380,45 +396,54 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       transform: scale(1.08);
     }}
 
-    .emoji-select {{
+    .emoji-bar {{
       width: 100%;
-      font-size: 26px;
+      display: flex;
+      gap: 4px;
+      margin-top: 8px;
+      align-items: center;
+    }}
+
+    .emoji-input {{
+      flex: 1;
+      font-size: 20px;
       text-align: center;
       background: var(--bg);
       color: var(--text);
       border: 1px solid var(--border);
       border-radius: 6px;
-      margin-top: 8px;
-      padding: 4px;
+      padding: 3px 6px;
+      height: 36px;
+      min-width: 0;
+    }}
+
+    .emoji-select {{
+      width: 36px;
+      height: 36px;
+      font-size: 16px;
+      text-align: center;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
       cursor: pointer;
+      padding: 0;
+      flex-shrink: 0;
     }}
 
-    .emoji-select option {{
-      font-size: 15px;
-      text-align: left;
-      padding: 6px 10px;
-      background: #1c1d22;
-      color: #e1e2e6;
-    }}
-
-    .emoji-select optgroup {{
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      text-align: left;
-      padding: 8px 10px;
-      color: #8e909a;
-      background: #141518;
-    }}
-
-    body.theme-light .emoji-select option {{
-      background: #ffffff;
-      color: #1a1b1e;
-    }}
-    body.theme-light .emoji-select optgroup {{
-      background: #f0f0f4;
-      color: #555760;
+    .var-badge {{
+      background: rgba(247, 144, 9, 0.12);
+      border: 1px solid rgba(247, 144, 9, 0.35);
+      color: #f79009;
+      font-size: 10px;
+      border-radius: 4px;
+      padding: 2px 6px;
+      margin-top: 5px;
+      text-align: center;
+      width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }}
 
     .meta-row {{
@@ -471,7 +496,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <h1>{title}</h1>
         <span class="badge badge-active" id="badgeActive">{count} Active</span>
         <span class="badge badge-dupe" id="badgeDupe" style="display:none;">0 Duplicates</span>
-        <span class="badge badge-unused" id="badgeUnused">0 Available Unused</span>
         <span class="badge badge-deleted" id="badgeDeleted" style="display:none;">0 Deleted</span>
         <span class="badge">Author: {author}</span>
       </div>
@@ -531,32 +555,33 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     // Track deleted filenames
     const deletedFiles = new Set();
 
+    function getCardEmoji(card) {{
+      const inp = card.querySelector('.emoji-input');
+      return (inp ? inp.value : card.dataset.emoji || '🙂').trim();
+    }}
+
+    function getPrimaryEmoji(card) {{
+      const str = getCardEmoji(card);
+      const match = str.match(/\\p{{Extended_Pictographic}}/u);
+      return match ? match[0] : (str.slice(0, 2) || '🙂');
+    }}
+
     function getUsageCounts() {{
       const counts = {{}};
       document.querySelectorAll('.card').forEach(card => {{
         if (deletedFiles.has(card.dataset.file)) return;
-        const em = card.dataset.emoji || card.querySelector('select').value;
-        counts[em] = (counts[em] || 0) + 1;
+        const primary = getPrimaryEmoji(card);
+        counts[primary] = (counts[primary] || 0) + 1;
       }});
       return counts;
     }}
 
     function renderOptionsForSelect(select, counts) {{
-      const currentVal = select.dataset.current || select.value;
-      let html = '';
-
-      // Current emoji option at top
-      const currCount = counts[currentVal] || 0;
-      const currInfo = EMOJI_REGISTRY[currentVal] || {{}};
-      const currName = currInfo.name ? ' (' + currInfo.name + ')' : '';
-      const currUsageText = currCount > 1 ? ' — [' + currCount + 'x used in pack]' : ' — [1x used]';
-      html += '<option value="' + currentVal + '" selected>' + currentVal + currName + currUsageText + '</option>';
-
+      let html = '<option value="" selected disabled>+ Add</option>';
       const unused = [];
       const used = [];
 
       for (const [em, info] of Object.entries(EMOJI_REGISTRY)) {{
-        if (em === currentVal) continue;
         const cnt = counts[em] || 0;
         const name = info.name ? ' (' + info.name + ')' : '';
         if (cnt === 0) {{
@@ -566,17 +591,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }}
       }}
 
-      // Sort used by count descending (highest duplicates first)
       used.sort((a, b) => b.cnt - a.cnt || a.label.localeCompare(b.label));
 
-      // Optgroup: Unused Emojis
       html += '<optgroup label="✨ Available / Unused (' + unused.length + ')">';
       for (const item of unused) {{
         html += '<option value="' + item.em + '">' + item.label + '</option>';
       }}
       html += '</optgroup>';
 
-      // Optgroup: Already In Use
       if (used.length > 0) {{
         html += '<optgroup label="⚠️ Already In Use (' + used.length + ')">';
         for (const item of used) {{
@@ -604,9 +626,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
       cards.forEach(card => {{
         const fn = card.dataset.file;
-        const emoji = card.dataset.emoji || card.querySelector('select').value;
+        const primary = getPrimaryEmoji(card);
         const conf = parseFloat(card.dataset.conf || '1.0');
-        const count = emojiCounts[emoji] || 0;
+        const count = emojiCounts[primary] || 0;
         const dupeTag = card.querySelector('.dupe-tag');
         const isDel = deletedFiles.has(fn);
 
@@ -614,7 +636,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           dupeStickersCount++;
           card.classList.add('is-duplicate');
           if (dupeTag) {{
-            dupeTag.textContent = count + 'x ' + emoji;
+            dupeTag.textContent = count + 'x ' + primary;
             dupeTag.style.display = 'inline-block';
           }}
         }} else {{
@@ -637,16 +659,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       document.getElementById('tabCountLow').textContent = lowConfCount;
       document.getElementById('tabCountDupes').textContent = dupeStickersCount;
       document.getElementById('tabCountDeleted').textContent = delCount;
-
-      // Count unused available in registry
-      let unusedCount = 0;
-      for (const em in EMOJI_REGISTRY) {{
-        if (!emojiCounts[em]) unusedCount++;
-      }}
-      const badgeUnused = document.getElementById('badgeUnused');
-      if (badgeUnused) {{
-        badgeUnused.textContent = unusedCount + ' Unused Available';
-      }}
 
       const badgeDupe = document.getElementById('badgeDupe');
       if (dupeStickersCount > 0) {{
@@ -687,10 +699,41 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       filterCards();
     }}
 
-    function onEmojiChange(select) {{
-      const card = select.closest('.card');
-      card.dataset.emoji = select.value;
-      select.dataset.current = select.value;
+    function keepOnlyThis(btn) {{
+      const currentCard = btn.closest('.card');
+      const currentFile = currentCard.dataset.file;
+      const currentPrimary = getPrimaryEmoji(currentCard);
+
+      let excludedCount = 0;
+      document.querySelectorAll('.card').forEach(card => {{
+        const fn = card.dataset.file;
+        if (fn !== currentFile && getPrimaryEmoji(card) === currentPrimary) {{
+          if (!deletedFiles.has(fn)) {{
+            deletedFiles.add(fn);
+            card.classList.add('is-deleted');
+            const delBtn = card.querySelector('.del-btn');
+            if (delBtn) delBtn.textContent = '↺ Restore';
+            excludedCount++;
+          }}
+        }}
+      }});
+
+      if (deletedFiles.has(currentFile)) {{
+        deletedFiles.delete(currentFile);
+        currentCard.classList.remove('is-deleted');
+        const delBtn = currentCard.querySelector('.del-btn');
+        if (delBtn) delBtn.textContent = '✕ Exclude';
+      }}
+
+      updateDuplicatesAndCounts();
+      refreshAllSelects();
+      filterCards();
+      showToast('Kept ' + currentFile + ' & excluded ' + excludedCount + ' other ' + currentPrimary + ' variations!');
+    }}
+
+    function onEmojiInput(input) {{
+      const card = input.closest('.card');
+      card.dataset.emoji = input.value.trim();
       updateDuplicatesAndCounts();
       refreshAllSelects();
       if (currentSort === 'emoji') {{
@@ -698,6 +741,21 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       }} else {{
         filterCards();
       }}
+    }}
+
+    function onEmojiAdd(select) {{
+      const chosen = select.value;
+      if (!chosen) return;
+      const card = select.closest('.card');
+      const input = card.querySelector('.emoji-input');
+      if (input) {{
+        let current = input.value.trim();
+        if (!current.includes(chosen)) {{
+          input.value = (current + chosen).trim();
+          onEmojiInput(input);
+        }}
+      }}
+      select.selectedIndex = 0;
     }}
 
     function setSort(sortType, btn) {{
@@ -713,8 +771,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
       cards.sort((a, b) => {{
         if (sortType === 'emoji') {{
-          const ea = a.dataset.emoji || a.querySelector('select').value;
-          const eb = b.dataset.emoji || b.querySelector('select').value;
+          const ea = getPrimaryEmoji(a);
+          const eb = getPrimaryEmoji(b);
           if (ea !== eb) return ea.localeCompare(eb, 'en', {{ numeric: true }});
           return a.dataset.file.localeCompare(b.dataset.file, 'en', {{ numeric: true }});
         }} else if (sortType === 'conf') {{
@@ -754,7 +812,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       const q = document.getElementById('searchBox').value.toLowerCase();
       document.querySelectorAll('.card').forEach(card => {{
         const fn = card.dataset.file.toLowerCase();
-        const emoji = card.dataset.emoji || card.querySelector('select').value;
+        const emoji = getCardEmoji(card).toLowerCase();
         const conf = parseFloat(card.dataset.conf || '1.0');
         const isDel = deletedFiles.has(card.dataset.file);
         const isDupe = card.classList.contains('is-duplicate');
@@ -767,6 +825,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }} else if (currentFilter === 'deleted') {{
           matchFilter = isDel;
         }} else {{
+          // 'all' shows non-deleted, or deleted if explicitly searched
           matchFilter = true;
         }}
 
@@ -800,9 +859,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       let exportedCount = 0;
       document.querySelectorAll('.card').forEach(card => {{
         const file = card.dataset.file;
-        if (deletedFiles.has(file)) return;
+        if (deletedFiles.has(file)) return; // Exclude deleted stickers
 
-        const emoji = card.dataset.emoji || card.querySelector('select').value;
+        const emoji = getCardEmoji(card);
         y += '  - chr: "' + emoji + '"\\n    file: "' + file + '"\\n';
         exportedCount++;
       }});
@@ -818,12 +877,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       showToast("Exported " + exportedCount + " stickers to stickers.yaml!");
     }}
 
-    // Initial setup on load
+    // Initial setup on load: compute duplicates, refresh dropdowns, and sort by emoji
     window.addEventListener('DOMContentLoaded', () => {{
-      document.querySelectorAll('.card').forEach(card => {{
-        const sel = card.querySelector('select');
-        sel.dataset.current = sel.value;
-      }});
       updateDuplicatesAndCounts();
       refreshAllSelects();
       sortCards('emoji');
@@ -857,6 +912,11 @@ def generate_review_html(
     for s in stickers:
         file_name = s.get("file", "")
         img_path = folder / file_name
+        if not img_path.exists() and (folder / "webp" / file_name).exists():
+            img_path = folder / "webp" / file_name
+        elif not img_path.exists() and (folder.parent / "webp" / file_name).exists():
+            img_path = folder.parent / "webp" / file_name
+
         if not img_path.exists():
             continue
 
@@ -866,29 +926,39 @@ def generate_review_html(
         b64 = base64.standard_b64encode(img_path.read_bytes()).decode("utf-8")
         src = f"data:{mt};base64,{b64}"
 
-        current_emoji = s.get("chr", "🙂")
         info = cache.get(file_name, {})
+        current_emoji = format_emoji_sequence(
+            info.get("emojis") or s.get("chr", "🙂")
+        )
         conf = float(info.get("confidence", 1.0))
         reason = info.get("reason", "")
+        redundant_ref = info.get("redundant_of") or info.get("visual_dupe_of")
+        var_badge_html = (
+            f'<div class="var-badge" title="Similar variation of {redundant_ref}">'
+            f'⚠ Similar: {redundant_ref}</div>'
+            if redundant_ref
+            else ""
+        )
 
         conf_class = "conf-low" if conf < 0.6 else ("conf-mid" if conf < 0.8 else "conf-ok")
-
-        # Initial fallback option before JS hydration
-        options_html = f'<option value="{current_emoji}" selected>{current_emoji}</option>'
-
         size_kb = img_path.stat().st_size / 1024
 
         card_html = f"""
         <div class="card {conf_class}" data-file="{file_name}" data-emoji="{current_emoji}" data-conf="{conf:.2f}">
           <div class="card-topbar">
             <span class="dupe-tag">Dupe</span>
+            <button type="button" class="keep-btn" onclick="keepOnlyThis(this)" title="Keep this variation and exclude all other duplicates sharing this primary emoji">⚡ Keep Only</button>
             <button type="button" class="del-btn" onclick="toggleDelete(this)" title="Exclude from sticker pack">✕ Exclude</button>
           </div>
           <div class="sticker-container">
             <div class="deleted-badge">EXCLUDED</div>
             <img class="sticker-img" src="{src}" loading="lazy" alt="{file_name}">
           </div>
-          <select class="emoji-select" onchange="onEmojiChange(this)">{options_html}</select>
+          <div class="emoji-bar">
+            <input type="text" class="emoji-input" value="{current_emoji}" title="Edit emojis (up to 3)" oninput="onEmojiInput(this)">
+            <select class="emoji-select" onchange="onEmojiAdd(this)" title="Add an emoji from registry"><option value="" selected disabled>+ Add</option></select>
+          </div>
+          {var_badge_html}
           <div class="meta-row">
             <span>{size_kb:.0f} KB</span>
             <span>conf: {conf:.2f}</span>
@@ -926,14 +996,20 @@ def main():
 
     folder = Path(args.folder)
     yaml_path = folder / args.yaml
+    if not yaml_path.exists() and (folder.parent / args.yaml).exists():
+        yaml_path = folder.parent / args.yaml
+
     cache_path = Path(args.cache)
     if not cache_path.exists():
-        cache_path = folder / args.cache
+        if (folder / args.cache).exists():
+            cache_path = folder / args.cache
+        elif (folder.parent / args.cache).exists():
+            cache_path = folder.parent / args.cache
 
     out_file = generate_review_html(folder, yaml_path, cache_path)
     print(f"Generated review page: {out_file.resolve()}")
     print("Open this file in your browser to inspect and adjust sticker emojis.")
-    print("Features: Shows used counts, groups unused emojis, mark for deletion, sort by emoji.")
+    print("Features: Multi-emoji editing, Keep Only button, duplicate sorting, and unused emoji highlighting.")
 
 
 if __name__ == "__main__":
