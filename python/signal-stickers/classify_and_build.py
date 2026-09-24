@@ -1,34 +1,38 @@
 #!/usr/bin/env python3
-"""Signal Sticker Pack Classifier & Builder.
+"""Signal Sticker Pack Classifier & Builder (Curation-First).
 
-Classifies sticker images using Vision-Language Models (OpenRouter, Gemini, Claude, OpenAI)
-and builds the `stickers.yaml` file required by `signal-sticker-tool`.
-Performs full validation against official Signal Sticker guidelines (512x512, <300KB, max 200).
+1. Inventory & Constraints: Checks 512x512, <300KB, transparency.
+2. Perceptual Clustering: Groups near-identical variations using alpha-aware dHash.
+3. Persistent Draft State: Tracks selection (keep/exclude/undecided), clusters, and tags in pack_draft.json.
+4. Targeted VLM Classification: Classifies ONLY stickers marked 'keep'.
+5. Build Manifest: Generates stickers.yaml from kept and validated stickers.
 
 Usage:
-  # Using OpenRouter (default model: inclusionai/ling-3.0-flash-vl)
-  export OPENROUTER_API_KEY=sk-or-v1-...
-  python classify_and_build.py ./webp --title "Grimassen" --author "tazztone"
+  # Scan & cluster images without API calls
+  python classify_and_build.py ./webp --scan
 
-  # Resume previously interrupted classification
-  python classify_and_build.py ./webp --resume
+  # Classify kept stickers using OpenRouter (or Gemini / Claude)
+  python classify_and_build.py ./webp --classify-kept --title "Grimassen"
 
-  # Check sticker files against Signal requirements without calling API
-  python classify_and_build.py ./webp --check-only
+  # Build stickers.yaml from approved draft
+  python classify_and_build.py ./webp --build-yaml
 """
 
 import argparse
 import base64
+import hashlib
 import json
 import mimetypes
 import os
+import re
 import sys
 import time
 import urllib.error
 import urllib.request
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 # Automatically re-exec with workspace .venv if invoked with system python
 _venv_python = Path(__file__).resolve().parent.parent.parent / ".venv" / "bin" / "python"
@@ -39,7 +43,6 @@ if _venv_python.exists() and Path(sys.executable).resolve() != _venv_python.reso
 
 try:
     import yaml
-
 except ImportError:
     sys.exit("Error: PyYAML not installed. Run: pip install PyYAML")
 
@@ -55,10 +58,12 @@ try:
         WHITELIST,
         extract_emojis,
         format_emoji_sequence,
+        get_all_emojis,
         get_emoji_info,
         get_prompt_emoji_catalog,
         get_related_emojis,
         is_valid_emoji_sequence,
+        validate_emoji_sequence,
     )
 except ImportError:
     from .emojis import (
@@ -66,22 +71,44 @@ except ImportError:
         WHITELIST,
         extract_emojis,
         format_emoji_sequence,
+        get_all_emojis,
         get_emoji_info,
         get_prompt_emoji_catalog,
         get_related_emojis,
         is_valid_emoji_sequence,
+        validate_emoji_sequence,
     )
 
+DEFAULT_DRAFT = "pack_draft.json"
 DEFAULT_CACHE = "classification_cache.json"
 SUPPORTED_EXTENSIONS = {".webp", ".png", ".apng", ".jpg", ".jpeg"}
 
+
+def compute_file_sha256(path: Path) -> str:
+    """Computes SHA-256 digest of file content for cache invalidation."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        while chunk := f.read(65536):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def compute_dhash(image_path: Path, hash_size: int = 8) -> int:
     """Computes a 64-bit difference hash (dHash) using Pillow.
-    
-    Fast, deterministic, and requires no external ML dependencies.
+
+    Alpha-aware: composites transparent images onto neutral 50% gray
+    so transparent background RGB artifacts do not distort hash gradients.
     """
     with Image.open(image_path) as img:
-        resized = img.convert("L").resize((hash_size + 1, hash_size), Image.Resampling.BILINEAR)
+        # If image has an alpha channel, composite over neutral 50% gray (128, 128, 128)
+        if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+            bg = Image.new("RGBA", img.size, (128, 128, 128, 255))
+            bg.alpha_composite(img.convert("RGBA"))
+            gray = bg.convert("L")
+        else:
+            gray = img.convert("L")
+
+        resized = gray.resize((hash_size + 1, hash_size), Image.Resampling.BILINEAR)
         pixels = (
             list(resized.get_flattened_data())
             if hasattr(resized, "get_flattened_data")
@@ -106,10 +133,15 @@ def hamming_distance(h1: int, h2: int) -> int:
     return bin(h1 ^ h2).count("1")
 
 
-def detect_visual_duplicates(files: List[Path], max_distance: int = 6) -> Dict[str, Dict[str, Any]]:
-    """Detects near-identical visual frames among sticker images.
-    
-    Returns mapping: filename -> {'reference': ref_name, 'distance': dist}
+def detect_visual_clusters(
+    files: List[Path], max_distance: int = 6
+) -> Tuple[Dict[str, List[str]], Dict[str, str], Dict[str, Dict[str, Any]]]:
+    """Finds near-identical visual variations and partitions them into connected clusters.
+
+    Returns:
+        clusters: mapping cluster_id -> list of filenames (clusters with >= 2 members)
+        file_to_cluster: mapping filename -> cluster_id
+        dupe_info: mapping filename -> {'reference': ref_name, 'distance': dist}
     """
     hashes: Dict[str, int] = {}
     for p in files:
@@ -118,21 +150,62 @@ def detect_visual_duplicates(files: List[Path], max_distance: int = 6) -> Dict[s
         except Exception:
             pass
 
-    dupe_info: Dict[str, Dict[str, Any]] = {}
     names = list(hashes.keys())
+    adj = defaultdict(list)
+    dupe_info: Dict[str, Dict[str, Any]] = {}
+
     for i in range(len(names)):
         n1 = names[i]
         for j in range(i + 1, len(names)):
             n2 = names[j]
             dist = hamming_distance(hashes[n1], hashes[n2])
             if dist <= max_distance:
+                adj[n1].append((n2, dist))
+                adj[n2].append((n1, dist))
                 if n2 not in dupe_info or dist < dupe_info[n2]["distance"]:
                     dupe_info[n2] = {"reference": n1, "distance": dist}
+
+    visited: Set[str] = set()
+    clusters: Dict[str, List[str]] = {}
+    file_to_cluster: Dict[str, str] = {}
+    cluster_idx = 1
+
+    for name in names:
+        if name in visited or name not in adj:
+            continue
+        # BFS / Connected Component
+        component = []
+        queue = [name]
+        visited.add(name)
+        while queue:
+            curr = queue.pop(0)
+            component.append(curr)
+            for neighbor, _ in adj[curr]:
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append(neighbor)
+
+        if len(component) >= 2:
+            cid = f"cluster_{cluster_idx:02d}"
+            cluster_idx += 1
+            component.sort()
+            clusters[cid] = component
+            for member in component:
+                file_to_cluster[member] = cid
+
+    return clusters, file_to_cluster, dupe_info
+
+
+def detect_visual_duplicates(
+    files: List[Path], max_distance: int = 6
+) -> Dict[str, Dict[str, Any]]:
+    """Backward-compatible wrapper returning filename -> {'reference': ref, 'distance': dist}."""
+    _, _, dupe_info = detect_visual_clusters(files, max_distance=max_distance)
     return dupe_info
 
 
 def get_classification_prompt() -> str:
-    """Builds the system prompt for single-sticker classification with multi-emoji support."""
+    """Builds system prompt for single-sticker classification with strict JSON requirement."""
     catalog = get_prompt_emoji_catalog()
     return (
         "Du bewertest Gesichtsausdruecke und Gesten auf Sticker-Bildern fuer Signal.\n"
@@ -141,47 +214,19 @@ def get_classification_prompt() -> str:
         "Erlaubte Emojis nach Kategorien:\n"
         f"{catalog}\n\n"
         "Regeln:\n"
-        "- Achte auf Augen (offen, geschlossen, verdreht, Sterne), Mund (Zunge, offen, "
-        "Zaehne, Kussmund, Schmollmund), Haende/Gesten (Kinn, Schlaefe, Lippen/Pst, Wange), "
-        "und sichtbare Overlays (Dampf/Rauch aus Ohren, Traenen, zZZ, Herz, Sterne, "
-        "Sonnenbrille, gruene Haut/Uebelkeit, Erbrechen, explodierender Kopf).\n"
+        "- Achte auf Augen, Mund, Haende/Gesten und Overlays (Dampf, Traenen, Sonnenbrille, Herz etc.).\n"
         "- Overlays, Requisiten und markante Gesten haben Vorrang vor rein neutraler Mimik.\n"
-        "- Falls ein Bild mehrere Gefuehle vereint (z.B. skeptisches Nachdenken oder weinend vor Lachen), "
-        "gib bis zu 3 Emojis als Liste an.\n"
-        "Antworte ausschliesslich als valides JSON:\n"
+        "- WICHTIG: Antworte AUSSCHLIESSLICH als valides JSON-Objekt ohne jeden Begleittext:\n"
         '{"emojis":["<emoji1>", "<emoji2_optional>"],"reason":"<max 8 Woerter Begruendung>","confidence":<0.0-1.0>}'
     )
 
 
-# Default system prompt for single image classification
 SYSTEM_PROMPT = get_classification_prompt()
 
 
 def build_disambiguation_prompt(provisional_emoji: str, filenames: List[str]) -> str:
-    """Builds the comparative prompt for multi-image nuance & redundancy disambiguation."""
-    related = get_related_emojis(provisional_emoji, limit=12)
-    related_desc = ", ".join(
-        f"{e} ({get_emoji_info(e)['name'] if get_emoji_info(e) else ''})" for e in related
-    )
-    return (
-        f"Du siehst {len(filenames)} Sticker-Bilder fuer Signal, die vorlaeufig alle das Emoji '{provisional_emoji}' erhalten haben.\n\n"
-        "Aufgabe:\n"
-        "1. Vergleiche die Bilder direkt miteinander. Achte auf feine Nuancen:\n"
-        "   - Augenbrauen (hochgezogen, gerunzelt, entspannt)\n"
-        "   - Mund (geschlossen, schief/Smirk, offen, Zaehne, Mundwinkel)\n"
-        "   - Blickrichtung (direkt, seitlich, nach oben, verdreht)\n"
-        "   - Kopfneigung und Handgesten\n"
-        "2. Falls ein Bild eine spezifischere Emotion oder Nuance zeigt, waehle 1 bis 3 passende Emojis.\n"
-        f"   Erlaubte/empfohlene Emojis zur Differenzierung: {related_desc}\n"
-        "3. WICHTIG (Keine kuenstlichen Erfindungen):\n"
-        "   Wenn mehrere Bilder wirklich die EXAKT GLEICHE Mimik/Pose ohne nennenswerte Unterschiede zeigen (z.B. nahe Duplikate einer ComfyUI-Generierung):\n"
-        f"   - Erfinde KEINE unpassenden Emojis! Behalte '{provisional_emoji}'.\n"
-        "   - Setze 'redundant_of': '<dateiname_des_ersten_bildes>' fuer die ueberfluessigen Kopien, damit der Nutzer sie loeschen kann.\n\n"
-        "Antworte ausschliesslich als valides JSON-Array:\n"
-        '[\n'
-        '  {"file":"<dateiname>", "emojis":["<primaer>", "<sekundaer_optional>"], "reason":"<kurze Begruendung>", "redundant_of": null}\n'
-        ']'
-    )
+    """Backward-compatible prompt helper."""
+    return f"Vergleiche {len(filenames)} Sticker fuer '{provisional_emoji}' (redundant_of)."
 
 
 class BaseProvider:
@@ -190,13 +235,9 @@ class BaseProvider:
     def classify(self, image_path: Path, prompt: str) -> Dict[str, Any]:
         raise NotImplementedError
 
-    def classify_group(self, images: List[Path], prompt: str) -> List[Dict[str, Any]]:
-        raise NotImplementedError
-
-
 
 class OpenRouterProvider(BaseProvider):
-    """OpenRouter provider supporting vision models (e.g., inclusionai/ling-3.0-flash-vl)."""
+    """OpenRouter provider supporting vision models (e.g. inclusionai/ling-3.0-flash-vl)."""
 
     def __init__(self, api_key: str, model: str = "inclusionai/ling-3.0-flash-vl"):
         self.api_key = api_key
@@ -216,7 +257,13 @@ class OpenRouterProvider(BaseProvider):
                             "type": "image_url",
                             "image_url": {"url": f"data:{mime_type};base64,{b64_data}"},
                         },
-                        {"type": "text", "text": "Welche 1-3 Emojis passen am besten zu diesem Sticker?"},
+                        {
+                            "type": "text",
+                            "text": (
+                                "Welche 1-3 Emojis passen am besten zu diesem Sticker? "
+                                "Antworte NUR mit dem JSON-Objekt."
+                            ),
+                        },
                     ],
                 },
             ],
@@ -237,43 +284,6 @@ class OpenRouterProvider(BaseProvider):
             msg = data["choices"][0]["message"]
             content = msg.get("content") or msg.get("reasoning") or ""
             return parse_json_response(content)
-
-    def classify_group(self, images: List[Path], prompt: str) -> List[Dict[str, Any]]:
-        content_parts: List[Dict[str, Any]] = [
-            {"type": "text", "text": prompt + "\n\nHier sind die Sticker-Bilder im direkten Vergleich:"}
-        ]
-        for idx, p in enumerate(images, 1):
-            mt, b64 = encode_image_base64(p)
-            content_parts.append({"type": "text", "text": f"\n--- Bild {idx}: {p.name} ---"})
-            content_parts.append(
-                {"type": "image_url", "image_url": {"url": f"data:{mt};base64,{b64}"}}
-            )
-
-        payload = {
-            "model": self.model,
-            "messages": [{"role": "user", "content": content_parts}],
-            "temperature": 0.1,
-            "max_tokens": 2000,
-        }
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/tazztone/scripts",
-            "X-Title": "Signal Sticker Builder",
-        }
-        req = urllib.request.Request(
-            self.url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST"
-        )
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            msg = data["choices"][0]["message"]
-            text = msg.get("content") or msg.get("reasoning") or ""
-            res = parse_json_response(text)
-            if isinstance(res, list):
-                return res
-            if isinstance(res, dict) and "stickers" in res:
-                return res["stickers"]
-            return [res]
 
 
 class GeminiProvider(BaseProvider):
@@ -298,7 +308,7 @@ class GeminiProvider(BaseProvider):
                     ]
                 }
             ],
-            "generationConfig": {"temperature": 0.1, "maxOutputTokens": 200},
+            "generationConfig": {"temperature": 0.1, "maxOutputTokens": 300},
         }
         req = urllib.request.Request(
             self.url,
@@ -310,35 +320,6 @@ class GeminiProvider(BaseProvider):
             data = json.loads(resp.read().decode("utf-8"))
             content = data["candidates"][0]["content"]["parts"][0]["text"]
             return parse_json_response(content)
-
-    def classify_group(self, images: List[Path], prompt: str) -> List[Dict[str, Any]]:
-        parts: List[Dict[str, Any]] = [
-            {"text": prompt + "\n\nHier sind die Sticker-Bilder im direkten Vergleich:"}
-        ]
-        for idx, p in enumerate(images, 1):
-            mt, b64 = encode_image_base64(p)
-            parts.append({"text": f"\n--- Bild {idx}: {p.name} ---"})
-            parts.append({"inline_data": {"mime_type": mt, "data": b64}})
-
-        payload = {
-            "contents": [{"parts": parts}],
-            "generationConfig": {"temperature": 0.1, "maxOutputTokens": 2000},
-        }
-        req = urllib.request.Request(
-            self.url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            content = data["candidates"][0]["content"]["parts"][0]["text"]
-            res = parse_json_response(content)
-            if isinstance(res, list):
-                return res
-            if isinstance(res, dict) and "stickers" in res:
-                return res["stickers"]
-            return [res]
 
 
 class AnthropicProvider(BaseProvider):
@@ -353,7 +334,7 @@ class AnthropicProvider(BaseProvider):
         mime_type, b64_data = encode_image_base64(image_path)
         payload = {
             "model": self.model,
-            "max_tokens": 200,
+            "max_tokens": 300,
             "system": prompt,
             "messages": [
                 {
@@ -363,7 +344,7 @@ class AnthropicProvider(BaseProvider):
                             "type": "image",
                             "source": {"type": "base64", "media_type": mime_type, "data": b64_data},
                         },
-                        {"type": "text", "text": "Welche 1-3 Emojis passen am besten zu diesem Sticker?"},
+                        {"text": "Welche 1-3 Emojis passen am besten zu diesem Sticker?"},
                     ],
                 }
             ],
@@ -381,40 +362,6 @@ class AnthropicProvider(BaseProvider):
             content = data["content"][0]["text"]
             return parse_json_response(content)
 
-    def classify_group(self, images: List[Path], prompt: str) -> List[Dict[str, Any]]:
-        content_parts: List[Dict[str, Any]] = [
-            {"type": "text", "text": prompt + "\n\nHier sind die Sticker-Bilder im direkten Vergleich:"}
-        ]
-        for idx, p in enumerate(images, 1):
-            mt, b64 = encode_image_base64(p)
-            content_parts.append({"type": "text", "text": f"\n--- Bild {idx}: {p.name} ---"})
-            content_parts.append(
-                {"type": "image", "source": {"type": "base64", "media_type": mt, "data": b64}}
-            )
-
-        payload = {
-            "model": self.model,
-            "max_tokens": 2000,
-            "messages": [{"role": "user", "content": content_parts}],
-        }
-        headers = {
-            "x-api-key": self.api_key,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        }
-        req = urllib.request.Request(
-            self.url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST"
-        )
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            content = data["content"][0]["text"]
-            res = parse_json_response(content)
-            if isinstance(res, list):
-                return res
-            if isinstance(res, dict) and "stickers" in res:
-                return res["stickers"]
-            return [res]
-
 
 def encode_image_base64(path: Path) -> Tuple[str, str]:
     """Encodes image file to base64 and determines MIME type."""
@@ -425,58 +372,47 @@ def encode_image_base64(path: Path) -> Tuple[str, str]:
 
 
 def parse_json_response(content: str) -> Any:
-    """Safely extracts and parses JSON response (dict or list) from LLM output."""
+    """Safely extracts and parses JSON response handling reasoning tokens and markdown."""
     content = content.strip()
-    if "```json" in content:
-        start_idx = content.find("```json") + 7
-        end_idx = content.find("```", start_idx)
-        if end_idx != -1:
-            content = content[start_idx:end_idx].strip()
-    elif "```" in content:
-        start_idx = content.find("```") + 3
-        end_idx = content.find("```", start_idx)
-        if end_idx != -1:
-            content = content[start_idx:end_idx].strip()
 
-    start_bracket = content.find("[")
-    start_brace = content.find("{")
+    # 1. Check for markdown code blocks ```json ... ```
+    m = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", content)
+    if m:
+        block = m.group(1).strip()
+        try:
+            return json.loads(block)
+        except Exception:
+            content = block
 
-    if start_bracket != -1 and (start_brace == -1 or start_bracket < start_brace):
-        end_bracket = content.rfind("]")
-        if end_bracket != -1:
-            try:
-                res = json.loads(content[start_bracket : end_bracket + 1])
-                if isinstance(res, list):
-                    return res
-            except Exception:
-                pass
+    # 2. Extract outermost JSON object { ... }
+    brace_start = content.find("{")
+    brace_end = content.rfind("}")
+    if brace_start != -1 and brace_end > brace_start:
+        try:
+            return json.loads(content[brace_start : brace_end + 1])
+        except Exception:
+            pass
 
-    if start_brace != -1:
-        end_brace = content.rfind("}")
-        if end_brace != -1:
-            try:
-                res = json.loads(content[start_brace : end_brace + 1])
-                if isinstance(res, dict):
-                    return res
-            except Exception:
-                pass
+    # 3. Extract outermost JSON array [ ... ]
+    bracket_start = content.find("[")
+    bracket_end = content.rfind("]")
+    if bracket_start != -1 and bracket_end > bracket_start:
+        try:
+            return json.loads(content[bracket_start : bracket_end + 1])
+        except Exception:
+            pass
 
+    # 4. Fallback direct parse
     try:
-        res = json.loads(content)
-        if isinstance(res, (dict, list)):
-            return res
-    except Exception:
-        pass
-
-    raise ValueError(f"Invalid JSON format in response: {content[:100]}")
-
+        return json.loads(content)
+    except Exception as e:
+        raise ValueError(f"Invalid JSON format in response: {content[:120]}") from e
 
 
 def get_configured_provider(
     name: Optional[str] = None, model: Optional[str] = None
 ) -> BaseProvider:
     """Instantiates the appropriate provider based on args or environment variables."""
-    # Priority when unspecified: OpenRouter -> Gemini -> Anthropic
     openrouter_key = os.getenv("OPENROUTER_API_KEY")
     gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     anthropic_key = os.getenv("ANTHROPIC_API_KEY")
@@ -517,13 +453,7 @@ def get_configured_provider(
 
 
 def check_signal_constraints(path: Path) -> List[str]:
-    """Validates an image against Signal sticker specifications:
-
-    - Resolution: exactly 512 x 512 px
-    - Max size: < 300 KB
-    - Format: PNG, WebP (or APNG)
-    - Has transparency
-    """
+    """Validates an image against Signal sticker specifications."""
     problems = []
     size_kb = path.stat().st_size / 1024
     if size_kb >= 300:
@@ -546,27 +476,45 @@ def check_signal_constraints(path: Path) -> List[str]:
 
 
 def classify_single_image(
-    provider: BaseProvider, path: Path, retries: int = 4
+    provider: BaseProvider, path: Path, retries: int = 3
 ) -> Dict[str, Any]:
-    """Classifies a single sticker image with retries, supporting multi-emoji tagging."""
+    """Classifies a single sticker image with retries, enforcing strict emoji validation."""
     for attempt in range(retries):
         try:
             res = provider.classify(path, SYSTEM_PROMPT)
             raw_emojis = res.get("emojis") or res.get("emoji") or []
-            valid_emojis = extract_emojis(format_emoji_sequence(raw_emojis))
-            if not valid_emojis:
-                raw_text = str(raw_emojis)
-                valid_emojis = [e for e in WHITELIST if e in raw_text][:3]
-                if not valid_emojis:
-                    valid_emojis = ["🙂"]
+            if isinstance(raw_emojis, str):
+                raw_text = raw_emojis
+            elif isinstance(raw_emojis, (list, tuple)):
+                raw_text = "".join(str(e) for e in raw_emojis)
+            else:
+                raw_text = ""
 
-            primary = valid_emojis[0]
-            return {
-                "emoji": primary,
-                "emojis": valid_emojis[:3],
-                "reason": str(res.get("reason", "OK"))[:80],
-                "confidence": float(res.get("confidence", 0.9)),
-            }
+            is_valid, valid_emojis, err_msg = validate_emoji_sequence(raw_text)
+            if not is_valid:
+                # Try extracting known emojis from text
+                extracted = extract_emojis(raw_text)
+                if extracted:
+                    valid_emojis = extracted[:3]
+                    is_valid = True
+
+            if is_valid and valid_emojis:
+                primary = valid_emojis[0]
+                return {
+                    "emoji": primary,
+                    "emojis": valid_emojis[:3],
+                    "reason": str(res.get("reason", "OK"))[:80],
+                    "confidence": float(res.get("confidence", 0.9)),
+                    "review_status": "suggested",
+                }
+            else:
+                return {
+                    "emoji": "😐",
+                    "emojis": ["😐"],
+                    "reason": f"Unrecognized emoji: {raw_text[:40]}",
+                    "confidence": 0.0,
+                    "review_status": "needs_review",
+                }
         except Exception as e:
             if attempt == retries - 1:
                 return {
@@ -574,109 +522,153 @@ def classify_single_image(
                     "emojis": ["😐"],
                     "reason": f"Classification error: {e}",
                     "confidence": 0.0,
+                    "review_status": "needs_review",
                 }
             time.sleep(1.5 * (attempt + 1))
-    return {"emoji": "😐", "emojis": ["😐"], "reason": "Timeout/Max retries", "confidence": 0.0}
+    return {
+        "emoji": "😐",
+        "emojis": ["😐"],
+        "reason": "Timeout/Max retries",
+        "confidence": 0.0,
+        "review_status": "needs_review",
+    }
 
 
-def run_disambiguation_pass(
-    provider: BaseProvider,
-    files: List[Path],
-    cache: Dict[str, Dict[str, Any]],
-    batch_size: int = 6,
-) -> int:
-    """Finds groups sharing the same primary emoji (count >= 2) and sends each group
-    
-    to the VLM to differentiate nuances and flag genuine redundancies.
-    """
-    file_map = {p.name: p for p in files}
-    groups: Dict[str, List[str]] = {}
-    for name, info in cache.items():
-        if name not in file_map:
-            continue
-        primary = info.get("emoji") or (info.get("emojis") and info["emojis"][0]) or "🙂"
-        groups.setdefault(primary, []).append(name)
+def load_or_create_draft(
+    folder: Path,
+    draft_path: Path,
+    legacy_cache_path: Optional[Path] = None,
+    files: Optional[List[Path]] = None,
+) -> Dict[str, Any]:
+    """Loads pack_draft.json, upgrading from legacy cache or scanning files if needed."""
+    draft: Dict[str, Any] = {
+        "version": 2,
+        "meta": {"title": "Grimassen", "author": "tazztone", "cover": None},
+        "similarity_groups": {},
+        "stickers": {},
+    }
 
-    # Sort groups by count descending so biggest duplicate pools are addressed first
-    sorted_groups = sorted(
-        ((emoji, names) for emoji, names in groups.items() if len(names) >= 2),
-        key=lambda x: len(x[1]),
-        reverse=True,
-    )
+    if draft_path.exists():
+        try:
+            draft = json.loads(draft_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            print(f"Warning: Could not read draft from {draft_path}: {e}")
+    elif legacy_cache_path and legacy_cache_path.exists():
+        try:
+            legacy = json.loads(legacy_cache_path.read_text(encoding="utf-8"))
+            print(f"Migrating legacy cache ({len(legacy)} items) to pack_draft.json...")
+            for fn, item in legacy.items():
+                em_seq = item.get("emojis") or ([item["emoji"]] if "emoji" in item else None)
+                sel = "exclude" if item.get("visual_dupe_of") or item.get("redundant_of") else "keep"
+                draft["stickers"][fn] = {
+                    "file_hash": "",
+                    "selection": sel,
+                    "similarity_group": None,
+                    "suggested_emojis": em_seq,
+                    "emojis": em_seq,
+                    "confidence": float(item.get("confidence", 0.9)),
+                    "reason": item.get("reason", ""),
+                    "review_status": "approved" if sel == "keep" else "culled",
+                }
+        except Exception as e:
+            print(f"Warning: Could not read legacy cache: {e}")
 
-    if not sorted_groups:
-        print("No duplicate emoji groups found to disambiguate.")
-        return 0
+    # Synchronize with files on disk
+    if files:
+        clusters, file_to_cluster, dupe_info = detect_visual_clusters(files)
+        draft["similarity_groups"] = clusters
 
-    print(f"\n--- Running Multi-Image Nuance Disambiguation ({len(sorted_groups)} groups) ---")
-    updated_count = 0
+        for p in files:
+            fhash = compute_file_sha256(p)
+            fn = p.name
+            cid = file_to_cluster.get(fn)
 
-    for emoji, names in sorted_groups:
-        print(f"\nDisambiguating group '{emoji}' ({len(names)} stickers)...")
-        for i in range(0, len(names), batch_size):
-            chunk = names[i : i + batch_size]
-            chunk_paths = [file_map[n] for n in chunk]
-            prompt = build_disambiguation_prompt(emoji, chunk)
-            try:
-                results = provider.classify_group(chunk_paths, prompt)
-                if not isinstance(results, list):
-                    results = [results]
-                for item in results:
-                    fname = item.get("file")
-                    if fname and fname in cache:
-                        new_emojis = extract_emojis(
-                            format_emoji_sequence(item.get("emojis") or item.get("emoji") or [])
-                        )
-                        if new_emojis:
-                            cache[fname]["emoji"] = new_emojis[0]
-                            cache[fname]["emojis"] = new_emojis
-                        if item.get("reason"):
-                            cache[fname]["reason"] = str(item["reason"])[:80]
-                        if item.get("redundant_of"):
-                            cache[fname]["redundant_of"] = item["redundant_of"]
-                        updated_count += 1
-                        em_str = "".join(cache[fname].get("emojis", [cache[fname]["emoji"]]))
-                        red_str = (
-                            f" [Redundant of {cache[fname]['redundant_of']}]"
-                            if cache[fname].get("redundant_of")
-                            else ""
-                        )
-                        print(f"  {fname:<28} -> {em_str:<6} {cache[fname].get('reason', '')}{red_str}")
-            except Exception as e:
-                print(f"  Disambiguation failed for batch {chunk}: {e}")
-    return updated_count
+            if fn not in draft["stickers"]:
+                # New sticker: default standalone to keep, cluster variations to undecided
+                sel = "undecided" if cid else "keep"
+                draft["stickers"][fn] = {
+                    "file_hash": fhash,
+                    "selection": sel,
+                    "similarity_group": cid,
+                    "suggested_emojis": None,
+                    "emojis": None,
+                    "confidence": 0.0,
+                    "reason": f"Cluster: {cid}" if cid else "",
+                    "review_status": "pending",
+                }
+            else:
+                entry = draft["stickers"][fn]
+                # Update cluster assignment
+                entry["similarity_group"] = cid
+                # Check for file content changes
+                if entry.get("file_hash") and entry["file_hash"] != fhash:
+                    print(f"Sticker file modified on disk: {fn} -> resetting review status.")
+                    entry["file_hash"] = fhash
+                    entry["review_status"] = "pending"
+                elif not entry.get("file_hash"):
+                    entry["file_hash"] = fhash
+
+    return draft
+
+
+def save_draft(draft_path: Path, draft: Dict[str, Any]) -> None:
+    """Saves the persistent draft state."""
+    draft_path.write_text(json.dumps(draft, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def build_stickers_yaml(
     folder: Path,
-    files: List[Path],
-    cache: Dict[str, Dict[str, Any]],
-    title: str,
-    author: str,
+    files: Optional[List[Path]] = None,
+    cache: Optional[Dict[str, Any]] = None,
+    draft: Optional[Dict[str, Any]] = None,
+    title: str = "Grimassen",
+    author: str = "tazztone",
     cover: Optional[str] = None,
     out_name: str = "stickers.yaml",
 ) -> Path:
-    """Builds and writes the stickers.yaml manifest for signal-sticker-tool."""
+    """Builds and writes stickers.yaml for signal-sticker-tool from kept stickers."""
     meta: Dict[str, Any] = {"title": title, "author": author}
-    if cover:
-        meta["cover"] = cover
-    elif files:
-        meta["cover"] = files[0].name
 
-    doc = {
-        "meta": meta,
-        "stickers": [
-            {
-                "chr": format_emoji_sequence(
-                    cache.get(p.name, {}).get("emojis")
-                    or cache.get(p.name, {}).get("emoji", "🙂")
-                ),
-                "file": p.name,
-            }
-            for p in files
-        ],
-    }
+    stickers_list = []
 
+    # If draft provided (preferred)
+    if draft and "stickers" in draft:
+        meta_draft = draft.get("meta", {})
+        meta["title"] = meta_draft.get("title", title)
+        meta["author"] = meta_draft.get("author", author)
+        cover_val = cover or meta_draft.get("cover")
+
+        for fn, item in sorted(draft["stickers"].items()):
+            if item.get("selection") != "keep":
+                continue
+            emojis = item.get("emojis") or item.get("suggested_emojis")
+            if not emojis:
+                continue
+            chr_str = format_emoji_sequence(emojis)
+            stickers_list.append({"chr": chr_str, "file": fn})
+
+        if cover_val:
+            meta["cover"] = cover_val
+        elif stickers_list:
+            meta["cover"] = stickers_list[0]["file"]
+
+    # Backward compatibility with legacy (files, cache) call
+    elif files is not None:
+        c = cache or {}
+        if cover:
+            meta["cover"] = cover
+        elif files:
+            meta["cover"] = files[0].name
+
+        for p in files:
+            info = c.get(p.name, {})
+            # Only exclude if explicitly marked redundant or deleted
+            if info.get("selection") == "exclude":
+                continue
+            emojis = info.get("emojis") or info.get("emoji", "🙂")
+            stickers_list.append({"chr": format_emoji_sequence(emojis), "file": p.name})
+
+    doc = {"meta": meta, "stickers": stickers_list}
     out_path = folder / out_name
     with open(out_path, "w", encoding="utf-8") as f:
         yaml.safe_dump(doc, f, allow_unicode=True, sort_keys=False)
@@ -685,36 +677,31 @@ def build_stickers_yaml(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Signal Sticker Pack VLM Classifier & YAML Builder"
+        description="Signal Sticker Pack Curation & Classifier"
     )
     parser.add_argument("folder", help="Directory containing sticker images")
     parser.add_argument("--title", default="Grimassen", help="Sticker pack title")
     parser.add_argument("--author", default="tazztone", help="Sticker pack author")
-    parser.add_argument("--cover", default=None, help="Cover image filename (default: first sticker)")
+    parser.add_argument("--cover", default=None, help="Cover image filename")
     parser.add_argument("--provider", default=None, help="VLM Provider: openrouter, gemini, anthropic")
-    parser.add_argument(
-        "--model",
-        default=None,
-        help="Model slug (e.g., inclusionai/ling-3.0-flash-vl for OpenRouter)",
-    )
+    parser.add_argument("--model", default=None, help="Model slug (e.g. inclusionai/ling-3.0-flash-vl)")
     parser.add_argument("--out", default="stickers.yaml", help="Output YAML filename")
-    parser.add_argument("--cache", default=DEFAULT_CACHE, help="Path to classification cache JSON")
+    parser.add_argument("--draft", default=DEFAULT_DRAFT, help="Path to draft JSON")
+    parser.add_argument("--cache", default=DEFAULT_CACHE, help="Path to legacy cache JSON")
     parser.add_argument("--workers", type=int, default=4, help="Parallel classification workers")
-    parser.add_argument("--resume", action="store_true", help="Resume from existing cache")
+    parser.add_argument("--scan", action="store_true", help="Inventory and cluster without API calls")
     parser.add_argument(
-        "--dedupe",
-        action="store_true",
-        help="Run multi-image comparative disambiguation on duplicate emoji groups",
+        "--check-only", action="store_true", help="Alias for --scan"
     )
     parser.add_argument(
-        "--detect-visual-dupes",
-        action="store_true",
-        help="Compute perceptual dHash to flag near-identical visual variations",
+        "--classify-kept", action="store_true", help="Classify only stickers marked 'keep'"
     )
     parser.add_argument(
-        "--check-only",
-        action="store_true",
-        help="Only validate Signal constraints and visual hashes without calling API",
+        "--build-yaml", action="store_true", help="Compile stickers.yaml from kept stickers"
+    )
+    parser.add_argument("--resume", action="store_true", help="Resume from existing draft/cache")
+    parser.add_argument(
+        "--dedupe", action="store_true", help="Run visual variation clustering"
     )
     args = parser.parse_args()
 
@@ -728,10 +715,7 @@ def main():
 
     print(f"Found {len(files)} sticker images in {folder}")
 
-    # Signal constraints check
-    if len(files) > 200:
-        print(f"WARNING: Signal allows a maximum of 200 stickers per pack (found {len(files)}).")
-
+    # Validate Signal constraints
     all_problems = {}
     for p in files:
         probs = check_signal_constraints(p)
@@ -742,78 +726,81 @@ def main():
         print("\nSignal Constraint Warnings:")
         for name, probs in all_problems.items():
             print(f"   {name}: {', '.join(probs)}")
-        print("   Upload might fail unless resized to 512x512 px / compressed under 300 KB.\n")
     else:
         print("All stickers adhere to Signal constraints (512x512 px, <300 KB).")
 
-    # Visual duplicate detection (dHash)
-    visual_dupes = detect_visual_duplicates(files)
-    if visual_dupes:
-        print(f"\nDetected {len(visual_dupes)} near-identical visual variation(s):")
-        for fn, info in visual_dupes.items():
-            print(f"   {fn} ~ {info['reference']} (Hamming distance: {info['distance']}/64)")
-    else:
-        print("No near-identical visual duplicates detected by perceptual hash.")
+    # Load/initialize draft
+    draft_path = folder / args.draft if not Path(args.draft).is_absolute() else Path(args.draft)
+    legacy_cache_path = folder / args.cache if not Path(args.cache).is_absolute() else Path(args.cache)
+    draft = load_or_create_draft(folder, draft_path, legacy_cache_path, files)
+    draft["meta"]["title"] = args.title
+    draft["meta"]["author"] = args.author
+    if args.cover:
+        draft["meta"]["cover"] = args.cover
 
-    if args.check_only:
-        print("Check completed. Exiting (--check-only).")
+    # Visual clusters
+    clusters = draft.get("similarity_groups", {})
+    total_clustered = sum(len(members) for members in clusters.values())
+    if clusters:
+        print(f"\nDetected {len(clusters)} visual variation cluster(s) ({total_clustered} stickers total):")
+        for cid, members in clusters.items():
+            print(f"   {cid} ({len(members)} variations): {', '.join(members)}")
+    else:
+        print("\nNo near-identical visual variation clusters detected.")
+
+    save_draft(draft_path, draft)
+
+    if args.scan or args.check_only:
+        print(f"\nScan completed. Draft saved to: {draft_path}")
+        print("Next step: Curate variations in your browser or run:")
+        print(f"  python review.py {folder}")
         return
 
-    # Cache loading
-    cache_path = Path(args.cache)
-    cache: Dict[str, Dict[str, Any]] = {}
-    if (args.resume or args.dedupe or cache_path.exists()) and cache_path.exists():
-        try:
-            cache = json.loads(cache_path.read_text(encoding="utf-8"))
-            print(f"Cache loaded: {len(cache)} existing classifications.")
-        except Exception as e:
-            print(f"Warning: Could not read cache: {e}")
+    # Classification pass (Targeted: only for stickers where selection == 'keep' and emojis is missing)
+    run_classification = args.classify_kept or not (args.scan or args.check_only or args.build_yaml)
+    if run_classification:
+        kept_unclassified = [
+            folder / fn
+            for fn, item in draft["stickers"].items()
+            if item.get("selection") == "keep"
+            and not (item.get("emojis") and item.get("confidence", 0) > 0)
+            and (folder / fn).exists()
+        ]
 
-    # Annotate cache with visual duplicate hints
-    for fn, info in visual_dupes.items():
-        if fn in cache:
-            cache[fn]["visual_dupe_of"] = info["reference"]
-
-    todo = [p for p in files if p.name not in cache]
-    provider = None
-    if todo or args.dedupe:
-        provider = get_configured_provider(args.provider, args.model)
-
-    if todo and provider:
-        print(f"Classifying {len(todo)} stickers with {args.workers} workers...")
-        done_count = [0]
-
-        def process_sticker(p: Path):
-            res = classify_single_image(provider, p)
-            cache[p.name] = res
-            done_count[0] += 1
-            em_str = "".join(res.get("emojis", [res["emoji"]]))
+        if kept_unclassified:
+            provider = get_configured_provider(args.provider, args.model)
             print(
-                f"[{done_count[0]}/{len(todo)}] {p.name} -> {em_str} "
-                f"({res['confidence']:.2f}) {res['reason']}",
-                flush=True,
+                f"\nClassifying {len(kept_unclassified)} kept sticker(s) with {args.workers} workers..."
             )
+            done_count = [0]
 
-        with ThreadPoolExecutor(max_workers=args.workers) as executor:
-            list(executor.map(process_sticker, todo))
+            def process_sticker(p: Path):
+                res = classify_single_image(provider, p)
+                draft["stickers"][p.name]["emojis"] = res.get("emojis")
+                draft["stickers"][p.name]["suggested_emojis"] = res.get("emojis")
+                draft["stickers"][p.name]["reason"] = res.get("reason", "")
+                draft["stickers"][p.name]["confidence"] = res.get("confidence", 0.0)
+                draft["stickers"][p.name]["review_status"] = res.get("review_status", "suggested")
+                done_count[0] += 1
+                em_str = "".join(res.get("emojis", []))
+                print(
+                    f"[{done_count[0]}/{len(kept_unclassified)}] {p.name} -> {em_str} "
+                    f"({res['confidence']:.2f}) {res['reason']}",
+                    flush=True,
+                )
 
-        cache_path.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"Cache saved to {cache_path}")
-    elif not args.dedupe:
-        print("All stickers already classified in cache.")
+            with ThreadPoolExecutor(max_workers=args.workers) as executor:
+                list(executor.map(process_sticker, kept_unclassified))
 
-    # Deduplication pass if requested
-    if args.dedupe and provider:
-        updated = run_disambiguation_pass(provider, files, cache)
-        if updated > 0:
-            cache_path.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
-            print(f"Cache updated with {updated} disambiguated stickers.")
+            save_draft(draft_path, draft)
+            print(f"Draft saved to {draft_path}")
+        else:
+            print("\nAll kept stickers already classified.")
 
     # Build stickers.yaml
     out_file = build_stickers_yaml(
         folder=folder,
-        files=files,
-        cache=cache,
+        draft=draft,
         title=args.title,
         author=args.author,
         cover=args.cover,
@@ -821,20 +808,14 @@ def main():
     )
     print(f"\nGenerated Signal stickers YAML: {out_file.resolve()}")
 
-    # Display least confident predictions
-    low_conf = sorted(
-        ((cache[p.name]["confidence"], p.name, cache[p.name]) for p in files if p.name in cache),
-        key=lambda x: x[0],
-    )[:10]
+    # Summary
+    kept_count = sum(1 for item in draft["stickers"].values() if item.get("selection") == "keep")
+    excluded_count = sum(1 for item in draft["stickers"].values() if item.get("selection") == "exclude")
+    undecided_count = sum(1 for item in draft["stickers"].values() if item.get("selection") == "undecided")
+    print(f"Pack Summary: {kept_count} Kept, {excluded_count} Excluded, {undecided_count} Undecided")
 
-    print("\n--- Low Confidence Classifications (Review Recommended) ---")
-    for conf, name, info in low_conf:
-        em_str = "".join(info.get("emojis", [info["emoji"]]))
-        print(f"  {conf:.2f}  {name:<28} {em_str}  {info['reason']}")
-
-    print(f"\nNext step: Review and adjust stickers in your browser:")
+    print(f"\nNext step: Open review UI to curate and finalize:")
     print(f"  python review.py {folder}")
-
 
 
 if __name__ == "__main__":

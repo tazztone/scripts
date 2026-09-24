@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Interactive Signal Sticker Pack Review Tool.
+"""Interactive Signal Sticker Pack Curation & Review Tool.
 
-Generates a responsive HTML review page to inspect sticker images, check contrast
-against Signal Dark and Light themes, adjust multi-emoji assignments (1-3 emojis),
-mark unwanted stickers for deletion/culling, resolve duplicates with "Keep Only",
-sort by emoji, and display unused vs used emojis in the dropdown.
+Supports:
+- Visual Cluster Curation: Side-by-side variation review and 1-click 'Keep Only This' per cluster.
+- Multi-Emoji Review: 1-3 emojis with strict in-page validation matching Python registry.
+- Safe YAML & Draft Export: Blocks export on invalid assignments, serializes valid YAML.
+- Contrast Previews: Dark, Light, White, and Black backgrounds.
 
 Usage:
   python review.py ./webp
@@ -29,23 +30,21 @@ if _venv_python.exists() and Path(sys.executable).resolve() != _venv_python.reso
 
 try:
     import yaml
-
 except ImportError:
     sys.exit("Error: PyYAML not installed. Run: pip install PyYAML")
 
-# Import shared emoji registry
+# Import shared emoji registry and helpers
 try:
-    from emojis import EMOJI_REGISTRY, extract_emojis, format_emoji_sequence
+    from emojis import EMOJI_REGISTRY, extract_emojis, format_emoji_sequence, validate_emoji_sequence
 except ImportError:
-    from .emojis import EMOJI_REGISTRY, extract_emojis, format_emoji_sequence
-
+    from .emojis import EMOJI_REGISTRY, extract_emojis, format_emoji_sequence, validate_emoji_sequence
 
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Signal Sticker Review — {title}</title>
+  <title>Signal Sticker Curation & Review — {title}</title>
   <style>
     :root {{
       --bg: #121316;
@@ -58,6 +57,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       --danger: #e5484d;
       --danger-hover: #f05a5f;
       --warning: #f79009;
+      --success: #12b76a;
       --sticker-bg: #222329;
       --sticker-check: repeating-conic-gradient(#2b2c34 0 25%, #222329 0 50%) 0/16px 16px;
     }}
@@ -82,13 +82,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       --sticker-check: #1b1c1d;
     }}
 
-    body.theme-white-bg .sticker-img {{
-      background: #ffffff !important;
-    }}
-
-    body.theme-black-bg .sticker-img {{
-      background: #121212 !important;
-    }}
+    body.theme-white-bg .sticker-img {{ background: #ffffff !important; }}
+    body.theme-black-bg .sticker-img {{ background: #121212 !important; }}
 
     * {{ box-sizing: border-box; }}
     body {{
@@ -141,19 +136,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       font-size: 13px;
       color: var(--subtext);
     }}
-
-    .badge-active {{
-      color: #12b76a;
-      border-color: rgba(18, 183, 106, 0.4);
-    }}
-    .badge-deleted {{
-      color: var(--danger);
-      border-color: rgba(229, 72, 77, 0.4);
-    }}
-    .badge-dupe {{
-      color: var(--warning);
-      border-color: rgba(247, 144, 9, 0.4);
-    }}
+    .badge-active {{ color: var(--success); border-color: rgba(18, 183, 106, 0.4); }}
+    .badge-deleted {{ color: var(--danger); border-color: rgba(229, 72, 77, 0.4); }}
+    .badge-cluster {{ color: var(--warning); border-color: rgba(247, 144, 9, 0.4); }}
 
     .header-controls {{
       display: flex;
@@ -176,26 +161,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       gap: 6px;
       transition: background 0.15s, opacity 0.15s;
     }}
-
-    button:hover, .btn:hover {{
-      background: var(--accent-hover);
-    }}
-
-    .btn-danger {{
-      background: var(--danger);
-    }}
-    .btn-danger:hover {{
-      background: var(--danger-hover);
-    }}
-
+    button:hover, .btn:hover {{ background: var(--accent-hover); }}
     .btn-secondary {{
       background: var(--card-bg);
       color: var(--text);
       border: 1px solid var(--border);
     }}
-    .btn-secondary:hover {{
-      background: var(--border);
-    }}
+    .btn-secondary:hover {{ background: var(--border); }}
+    .btn-danger {{ background: var(--danger); }}
+    .btn-danger:hover {{ background: var(--danger-hover); }}
 
     .search-box {{
       background: var(--card-bg);
@@ -227,21 +201,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       font-size: 12px;
       font-weight: 500;
     }}
-
-    .filter-tab.active {{
-      background: var(--accent);
-      color: #fff;
-    }}
-
-    .filter-tab.active-warning {{
-      background: var(--warning);
-      color: #fff;
-    }}
-
-    .filter-tab.active-danger {{
-      background: var(--danger);
-      color: #fff;
-    }}
+    .filter-tab.active {{ background: var(--accent); color: #fff; }}
+    .filter-tab.active-warning {{ background: var(--warning); color: #fff; }}
+    .filter-tab.active-danger {{ background: var(--danger); color: #fff; }}
 
     .ctrl-label {{
       font-size: 11px;
@@ -251,21 +213,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       padding: 0 4px 0 6px;
     }}
 
-    .deletion-banner {{
-      background: rgba(229, 72, 77, 0.12);
-      border: 1px solid rgba(229, 72, 77, 0.3);
-      border-radius: 6px;
-      padding: 8px 14px;
-      display: none;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 13px;
-      color: #ff8b8e;
-    }}
-
     .grid {{
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
       gap: 16px;
       margin-top: 16px;
     }}
@@ -286,19 +236,22 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     .card.conf-mid {{ border-color: #f79009; }}
     .card.conf-ok {{ border-color: var(--border); }}
 
-    .card.is-duplicate {{
-      border-color: #f79009;
+    .card.in-cluster {{
       box-shadow: 0 0 0 1px #f79009 inset;
+      border-color: #f79009;
     }}
 
-    .card.is-deleted {{
-      opacity: 0.4;
+    .card.is-excluded {{
+      opacity: 0.38;
       background: rgba(229, 72, 77, 0.08);
       border-color: var(--danger);
       border-style: dashed;
     }}
-    .card.is-deleted .sticker-container {{
-      filter: grayscale(80%);
+    .card.is-excluded .sticker-container {{ filter: grayscale(80%); }}
+
+    .card.card-invalid {{
+      border-color: var(--danger) !important;
+      box-shadow: 0 0 0 2px var(--danger) !important;
     }}
 
     .card-topbar {{
@@ -308,61 +261,57 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       align-items: center;
       margin-bottom: 6px;
       min-height: 22px;
+      gap: 4px;
     }}
 
-    .dupe-tag {{
+    .cluster-tag {{
       background: #f79009;
       color: #fff;
       font-size: 10px;
       font-weight: 700;
       padding: 2px 6px;
       border-radius: 10px;
-      display: none;
+      cursor: pointer;
+      white-space: nowrap;
     }}
 
-    .keep-btn {{
+    .keep-only-btn {{
       background: transparent;
-      border: 1px solid rgba(247, 144, 9, 0.5);
+      border: 1px solid rgba(247, 144, 9, 0.6);
       color: #f79009;
-      padding: 2px 7px;
+      padding: 2px 6px;
       border-radius: 4px;
       cursor: pointer;
       font-size: 11px;
-      margin-left: auto;
-      margin-right: 6px;
-      display: none;
       transition: background 0.15s, color 0.15s;
     }}
-    .card.is-duplicate .keep-btn {{
-      display: inline-block;
-    }}
-    .keep-btn:hover {{
+    .keep-only-btn:hover {{
       background: #f79009;
       color: #fff;
     }}
 
-    .del-btn {{
+    .sel-btn {{
       background: transparent;
       border: 1px solid var(--border);
       color: var(--subtext);
-      padding: 2px 7px;
+      padding: 2px 6px;
       border-radius: 4px;
       cursor: pointer;
       font-size: 11px;
-      transition: background 0.15s, color 0.15s;
+      margin-left: auto;
     }}
-    .del-btn:hover {{
+    .sel-btn:hover {{
       background: var(--danger);
       border-color: var(--danger);
       color: #fff;
     }}
-    .card.is-deleted .del-btn {{
+    .card.is-excluded .sel-btn {{
       background: var(--danger);
       color: #fff;
       border-color: var(--danger);
     }}
 
-    .deleted-badge {{
+    .excluded-badge {{
       display: none;
       position: absolute;
       top: 50%;
@@ -378,9 +327,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       letter-spacing: 1px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.5);
     }}
-    .card.is-deleted .deleted-badge {{
-      display: block;
-    }}
+    .card.is-excluded .excluded-badge {{ display: block; }}
 
     .sticker-container {{
       width: 100%;
@@ -400,10 +347,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       object-fit: contain;
       transition: transform 0.15s;
     }}
-
-    .sticker-img:hover {{
-      transform: scale(1.08);
-    }}
+    .sticker-img:hover {{ transform: scale(1.08); }}
 
     .emoji-bar {{
       width: 100%;
@@ -440,20 +384,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       flex-shrink: 0;
     }}
 
-    .var-badge {{
-      background: rgba(247, 144, 9, 0.12);
-      border: 1px solid rgba(247, 144, 9, 0.35);
-      color: #f79009;
+    .err-msg {{
+      color: var(--danger);
       font-size: 10px;
-      border-radius: 4px;
-      padding: 2px 6px;
-      margin-top: 5px;
+      margin-top: 4px;
+      display: none;
       text-align: center;
-      width: 100%;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      font-weight: 600;
     }}
+    .card.card-invalid .err-msg {{ display: block; }}
 
     .meta-row {{
       width: 100%;
@@ -472,7 +411,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 150px;
+      max-width: 155px;
     }}
 
     .filename {{
@@ -487,14 +426,22 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       position: fixed;
       bottom: 24px;
       right: 24px;
-      background: #12b76a;
+      background: #1c1d22;
+      border: 1px solid var(--border);
       color: #fff;
-      padding: 12px 20px;
+      padding: 12px 18px;
       border-radius: 8px;
       font-weight: 500;
       display: none;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
       z-index: 1000;
+      font-size: 13px;
+    }}
+    .toast.toast-undo {{
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-color: var(--accent);
     }}
   </style>
 </head>
@@ -503,34 +450,37 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <div class="header-row1">
       <div class="header-left">
         <h1>{title}</h1>
-        <span class="badge badge-active" id="badgeActive">{count} Active</span>
-        <span class="badge badge-dupe" id="badgeDupe" style="display:none;">0 Duplicates</span>
-        <span class="badge badge-deleted" id="badgeDeleted" style="display:none;">0 Deleted</span>
+        <span class="badge badge-active" id="badgeActive">{count_active} Kept</span>
+        <span class="badge badge-cluster" id="badgeCluster">{count_clusters} Clusters</span>
+        <span class="badge badge-deleted" id="badgeExcluded">{count_excluded} Excluded</span>
         <span class="badge">Author: {author}</span>
       </div>
 
       <div class="header-controls">
-        <button onclick="exportYaml()">Export stickers.yaml</button>
+        <button class="btn btn-secondary" onclick="exportDraftJson()">Save Draft (JSON)</button>
+        <button id="exportYamlBtn" onclick="exportYaml()">Export stickers.yaml</button>
       </div>
     </div>
 
     <div class="header-row1">
       <div class="header-controls">
-        <input type="text" id="searchBox" class="search-box" placeholder="Search filename or emoji..." oninput="filterCards()">
+        <input type="text" id="searchBox" class="search-box" placeholder="Search filename, emoji, or cluster..." oninput="filterCards()">
 
         <div class="filter-tabs">
           <span class="ctrl-label">Filter:</span>
-          <button class="filter-tab active" onclick="setFilter('all', this)">All (<span id="tabCountAll">{count}</span>)</button>
-          <button class="filter-tab" id="tabDupes" onclick="setFilter('dupes', this)">Duplicates (<span id="tabCountDupes">0</span>)</button>
-          <button class="filter-tab" onclick="setFilter('low', this)">Needs Review (<span id="tabCountLow">0</span>)</button>
-          <button class="filter-tab" onclick="setFilter('deleted', this)">Deleted (<span id="tabCountDeleted">0</span>)</button>
+          <button class="filter-tab active" onclick="setFilter('all', this)">All (<span id="tabCountAll">{count_total}</span>)</button>
+          <button class="filter-tab" id="tabClusters" onclick="setFilter('clusters', this)">Clusters (<span id="tabCountClusters">{count_clustered}</span>)</button>
+          <button class="filter-tab" id="tabNeedsReview" onclick="setFilter('review', this)">Needs Review (<span id="tabCountReview">0</span>)</button>
+          <button class="filter-tab" onclick="setFilter('kept', this)">Kept (<span id="tabCountKept">{count_active}</span>)</button>
+          <button class="filter-tab" onclick="setFilter('excluded', this)">Excluded (<span id="tabCountExcluded">{count_excluded}</span>)</button>
         </div>
 
         <div class="filter-tabs">
           <span class="ctrl-label">Sort:</span>
-          <button class="filter-tab active" id="sortEmojiBtn" onclick="setSort('emoji', this)">By Emoji</button>
+          <button class="filter-tab active" id="sortClusterBtn" onclick="setSort('cluster', this)">By Cluster</button>
+          <button class="filter-tab" onclick="setSort('emoji', this)">By Emoji</button>
           <button class="filter-tab" onclick="setSort('filename', this)">By Filename</button>
-          <button class="filter-tab" onclick="setSort('conf', this)">By Confidence</button>
+          <button class="filter-tab" onclick="setSort('conf', this)">By Conf</button>
         </div>
 
         <div class="filter-tabs">
@@ -542,43 +492,72 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
       </div>
     </div>
-
-    <div class="deletion-banner" id="deletionBanner">
-      <span id="deletionMsg">0 stickers marked for deletion will be excluded from stickers.yaml</span>
-      <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="copyDeleteCommand()">Copy 'rm' command</button>
-    </div>
   </div>
 
   <div class="grid" id="cardGrid">
     {cards}
   </div>
 
-  <div id="toast" class="toast">YAML exported successfully!</div>
+  <div id="toast" class="toast">Action completed!</div>
 
   <script>
     const META = {meta_json};
     const EMOJI_REGISTRY = {emoji_registry_json};
     let currentFilter = 'all';
-    let currentSort = 'emoji';
+    let currentSort = 'cluster';
 
-    // Track deleted filenames
-    const deletedFiles = new Set();
+    // Undo history stack
+    const undoStack = [];
+
+    // Track excluded files
+    const excludedFiles = new Set({excluded_files_json});
+
+    // Valid emoji set sorted by descending length for greedy matching
+    const sortedEmojiKeys = Object.keys(EMOJI_REGISTRY).sort((a, b) => b.length - a.length);
+
+    function extractKnownEmojis(text) {{
+      const found = [];
+      let i = 0;
+      while (i < text.length) {{
+        let matched = false;
+        for (const em of sortedEmojiKeys) {{
+          if (text.startsWith(em, i)) {{
+            if (!found.includes(em)) found.push(em);
+            i += em.length;
+            matched = true;
+            break;
+          }}
+        }}
+        if (!matched) i++;
+      }}
+      return found;
+    }}
+
+    function validateSequence(text) {{
+      const clean = text.replace(/\\s+/g, '');
+      if (!clean) return {{ valid: false, emojis: [], msg: 'Cannot be empty' }};
+      const found = extractKnownEmojis(clean);
+      const recon = found.join('');
+      if (recon !== clean) return {{ valid: false, emojis: found, msg: 'Invalid or unregistered character' }};
+      if (found.length < 1 || found.length > 3) return {{ valid: false, emojis: found, msg: 'Must be 1-3 emojis' }};
+      return {{ valid: true, emojis: found, msg: null }};
+    }}
 
     function getCardEmoji(card) {{
       const inp = card.querySelector('.emoji-input');
-      return (inp ? inp.value : card.dataset.emoji || '🙂').trim();
+      return (inp ? inp.value : card.dataset.emoji || '').trim();
     }}
 
     function getPrimaryEmoji(card) {{
-      const str = getCardEmoji(card);
-      const match = str.match(/\\p{{Extended_Pictographic}}/u);
-      return match ? match[0] : (str.slice(0, 2) || '🙂');
+      const text = getCardEmoji(card);
+      const found = extractKnownEmojis(text);
+      return found.length > 0 ? found[0] : '😐';
     }}
 
     function getUsageCounts() {{
       const counts = {{}};
       document.querySelectorAll('.card').forEach(card => {{
-        if (deletedFiles.has(card.dataset.file)) return;
+        if (excludedFiles.has(card.dataset.file)) return;
         const primary = getPrimaryEmoji(card);
         counts[primary] = (counts[primary] || 0) + 1;
       }});
@@ -596,160 +575,167 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         if (cnt === 0) {{
           unused.push({{ em: em, label: em + name + ' — unused' }});
         }} else {{
-          used.push({{ em: em, cnt: cnt, label: em + name + ' — ' + cnt + 'x used' }});
+          used.push({{ em: em, cnt: cnt, label: em + name + ' — ' + cnt + 'x' }});
         }}
       }}
 
-      used.sort((a, b) => b.cnt - a.cnt || a.label.localeCompare(b.label));
+      used.sort((a, b) => b.cnt - a.cnt);
 
       html += '<optgroup label="✨ Available / Unused (' + unused.length + ')">';
-      for (const item of unused) {{
-        html += '<option value="' + item.em + '">' + item.label + '</option>';
-      }}
+      for (const item of unused) html += '<option value="' + item.em + '">' + item.label + '</option>';
       html += '</optgroup>';
 
       if (used.length > 0) {{
-        html += '<optgroup label="⚠️ Already In Use (' + used.length + ')">';
-        for (const item of used) {{
-          html += '<option value="' + item.em + '">' + item.label + '</option>';
-        }}
+        html += '<optgroup label="In Use (' + used.length + ')">';
+        for (const item of used) html += '<option value="' + item.em + '">' + item.label + '</option>';
         html += '</optgroup>';
       }}
-
       select.innerHTML = html;
     }}
 
     function refreshAllSelects() {{
       const counts = getUsageCounts();
-      document.querySelectorAll('select.emoji-select').forEach(sel => {{
-        renderOptionsForSelect(sel, counts);
-      }});
+      document.querySelectorAll('select.emoji-select').forEach(sel => renderOptionsForSelect(sel, counts));
     }}
 
-    function updateDuplicatesAndCounts() {{
-      const emojiCounts = getUsageCounts();
+    function updateCountsAndValidation() {{
       const cards = Array.from(document.querySelectorAll('.card'));
-
-      let dupeStickersCount = 0;
-      let lowConfCount = 0;
+      let invalidCount = 0;
+      let reviewCount = 0;
+      let keptCount = 0;
+      let clusterStickersCount = 0;
 
       cards.forEach(card => {{
         const fn = card.dataset.file;
-        const primary = getPrimaryEmoji(card);
+        const isEx = excludedFiles.has(fn);
+        const cid = card.dataset.cluster;
         const conf = parseFloat(card.dataset.conf || '1.0');
-        const count = emojiCounts[primary] || 0;
-        const dupeTag = card.querySelector('.dupe-tag');
-        const isDel = deletedFiles.has(fn);
+        const text = getCardEmoji(card);
+        const val = validateSequence(text);
 
-        if (!isDel && count > 1) {{
-          dupeStickersCount++;
-          card.classList.add('is-duplicate');
-          if (dupeTag) {{
-            dupeTag.textContent = count + 'x ' + primary;
-            dupeTag.style.display = 'inline-block';
-          }}
+        if (cid) clusterStickersCount++;
+
+        if (!val.valid) {{
+          card.classList.add('card-invalid');
+          const errEl = card.querySelector('.err-msg');
+          if (errEl) errEl.textContent = '⚠ ' + val.msg;
+          if (!isEx) invalidCount++;
         }} else {{
-          card.classList.remove('is-duplicate');
-          if (dupeTag) dupeTag.style.display = 'none';
+          card.classList.remove('card-invalid');
         }}
 
-        if (!isDel && conf < 0.8) {{
-          lowConfCount++;
+        if (!isEx) {{
+          keptCount++;
+          if (conf < 0.8 || !val.valid || card.dataset.status === 'needs_review') {{
+            reviewCount++;
+          }}
+        }}
+
+        if (isEx) {{
+          card.classList.add('is-excluded');
+          const btn = card.querySelector('.sel-btn');
+          if (btn) btn.textContent = '↺ Restore';
+        }} else {{
+          card.classList.remove('is-excluded');
+          const btn = card.querySelector('.sel-btn');
+          if (btn) btn.textContent = '✕ Exclude';
         }}
       }});
 
-      // Update counters in header
       const totalCount = cards.length;
-      const delCount = deletedFiles.size;
-      const activeCount = totalCount - delCount;
+      const exCount = excludedFiles.size;
 
-      document.getElementById('badgeActive').textContent = activeCount + ' Active';
+      document.getElementById('badgeActive').textContent = keptCount + ' Kept';
+      document.getElementById('badgeExcluded').textContent = exCount + ' Excluded';
       document.getElementById('tabCountAll').textContent = totalCount;
-      document.getElementById('tabCountLow').textContent = lowConfCount;
-      document.getElementById('tabCountDupes').textContent = dupeStickersCount;
-      document.getElementById('tabCountDeleted').textContent = delCount;
+      document.getElementById('tabCountClusters').textContent = clusterStickersCount;
+      document.getElementById('tabCountReview').textContent = reviewCount;
+      document.getElementById('tabCountKept').textContent = keptCount;
+      document.getElementById('tabCountExcluded').textContent = exCount;
 
-      const badgeDupe = document.getElementById('badgeDupe');
-      if (dupeStickersCount > 0) {{
-        badgeDupe.textContent = dupeStickersCount + ' Duplicates';
-        badgeDupe.style.display = 'inline-block';
+      const exportBtn = document.getElementById('exportYamlBtn');
+      if (invalidCount > 0) {{
+        exportBtn.style.opacity = '0.5';
+        exportBtn.title = invalidCount + ' kept card(s) have invalid emoji sequences!';
       }} else {{
-        badgeDupe.style.display = 'none';
-      }}
-
-      const badgeDel = document.getElementById('badgeDeleted');
-      const delBanner = document.getElementById('deletionBanner');
-      if (delCount > 0) {{
-        badgeDel.textContent = delCount + ' Excluded';
-        badgeDel.style.display = 'inline-block';
-        delBanner.style.display = 'flex';
-        document.getElementById('deletionMsg').textContent =
-          delCount + ' sticker(s) marked for exclusion (will not be included in exported stickers.yaml).';
-      }} else {{
-        badgeDel.style.display = 'none';
-        delBanner.style.display = 'none';
+        exportBtn.style.opacity = '1';
+        exportBtn.title = 'Export stickers.yaml';
       }}
     }}
 
-    function toggleDelete(btn) {{
+    function toggleSelect(btn) {{
       const card = btn.closest('.card');
       const fn = card.dataset.file;
-      if (deletedFiles.has(fn)) {{
-        deletedFiles.delete(fn);
-        card.classList.remove('is-deleted');
-        btn.textContent = '✕ Exclude';
+      const prev = new Set(excludedFiles);
+
+      if (excludedFiles.has(fn)) {{
+        excludedFiles.delete(fn);
+        card.dataset.selection = 'keep';
       }} else {{
-        deletedFiles.add(fn);
-        card.classList.add('is-deleted');
-        btn.textContent = '↺ Restore';
+        excludedFiles.add(fn);
+        card.dataset.selection = 'exclude';
       }}
-      updateDuplicatesAndCounts();
+
+      undoStack.push({{
+        desc: 'Toggled ' + fn,
+        revert: () => {{
+          excludedFiles.clear();
+          prev.forEach(f => excludedFiles.add(f));
+          updateCountsAndValidation();
+          filterCards();
+        }}
+      }});
+
+      updateCountsAndValidation();
       refreshAllSelects();
       filterCards();
     }}
 
-    function keepOnlyThis(btn) {{
+    function keepOnlyInCluster(btn) {{
       const currentCard = btn.closest('.card');
       const currentFile = currentCard.dataset.file;
-      const currentPrimary = getPrimaryEmoji(currentCard);
+      const cid = currentCard.dataset.cluster;
+      if (!cid) return;
 
-      let excludedCount = 0;
+      const prev = new Set(excludedFiles);
+      let countExcluded = 0;
+
       document.querySelectorAll('.card').forEach(card => {{
-        const fn = card.dataset.file;
-        if (fn !== currentFile && getPrimaryEmoji(card) === currentPrimary) {{
-          if (!deletedFiles.has(fn)) {{
-            deletedFiles.add(fn);
-            card.classList.add('is-deleted');
-            const delBtn = card.querySelector('.del-btn');
-            if (delBtn) delBtn.textContent = '↺ Restore';
-            excludedCount++;
+        if (card.dataset.cluster === cid) {{
+          const fn = card.dataset.file;
+          if (fn !== currentFile) {{
+            excludedFiles.add(fn);
+            card.dataset.selection = 'exclude';
+            countExcluded++;
+          }} else {{
+            excludedFiles.delete(fn);
+            card.dataset.selection = 'keep';
           }}
         }}
       }});
 
-      if (deletedFiles.has(currentFile)) {{
-        deletedFiles.delete(currentFile);
-        currentCard.classList.remove('is-deleted');
-        const delBtn = currentCard.querySelector('.del-btn');
-        if (delBtn) delBtn.textContent = '✕ Exclude';
-      }}
+      undoStack.push({{
+        desc: 'Keep only ' + currentFile + ' in ' + cid,
+        revert: () => {{
+          excludedFiles.clear();
+          prev.forEach(f => excludedFiles.add(f));
+          updateCountsAndValidation();
+          filterCards();
+        }}
+      }});
 
-      updateDuplicatesAndCounts();
+      updateCountsAndValidation();
       refreshAllSelects();
       filterCards();
-      showToast('Kept ' + currentFile + ' & excluded ' + excludedCount + ' other ' + currentPrimary + ' variations!');
+      showToast('Kept ' + currentFile + ' and excluded ' + countExcluded + ' other variations in ' + cid, true);
     }}
 
     function onEmojiInput(input) {{
       const card = input.closest('.card');
       card.dataset.emoji = input.value.trim();
-      updateDuplicatesAndCounts();
+      updateCountsAndValidation();
       refreshAllSelects();
-      if (currentSort === 'emoji') {{
-        sortCards('emoji');
-      }} else {{
-        filterCards();
-      }}
+      if (currentSort === 'emoji') sortCards('emoji');
     }}
 
     function onEmojiAdd(select) {{
@@ -759,7 +745,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       const input = card.querySelector('.emoji-input');
       if (input) {{
         let current = input.value.trim();
-        if (!current.includes(chosen)) {{
+        const found = extractKnownEmojis(current);
+        if (found.length < 3 && !found.includes(chosen)) {{
           input.value = (current + chosen).trim();
           onEmojiInput(input);
         }}
@@ -779,7 +766,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       const cards = Array.from(grid.querySelectorAll('.card'));
 
       cards.sort((a, b) => {{
-        if (sortType === 'emoji') {{
+        if (sortType === 'cluster') {{
+          const ca = a.dataset.cluster || 'zzz';
+          const cb = b.dataset.cluster || 'zzz';
+          if (ca !== cb) return ca.localeCompare(cb, 'en', {{ numeric: true }});
+          return a.dataset.file.localeCompare(b.dataset.file, 'en', {{ numeric: true }});
+        }} else if (sortType === 'emoji') {{
           const ea = getPrimaryEmoji(a);
           const eb = getPrimaryEmoji(b);
           if (ea !== eb) return ea.localeCompare(eb, 'en', {{ numeric: true }});
@@ -807,13 +799,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     function setFilter(filterType, btn) {{
       currentFilter = filterType;
       btn.parentElement.querySelectorAll('.filter-tab').forEach(b => {{
-        b.classList.remove('active');
-        b.classList.remove('active-warning');
-        b.classList.remove('active-danger');
+        b.classList.remove('active', 'active-warning', 'active-danger');
       }});
-      if (filterType === 'dupes') btn.classList.add('active-warning');
-      else if (filterType === 'deleted') btn.classList.add('active-danger');
+      if (filterType === 'clusters') btn.classList.add('active-warning');
+      else if (filterType === 'excluded') btn.classList.add('active-danger');
       else btn.classList.add('active');
+      filterCards();
+    }}
+
+    function filterByCluster(cid) {{
+      document.getElementById('searchBox').value = cid;
+      setFilter('clusters', document.getElementById('tabClusters'));
       filterCards();
     }}
 
@@ -822,75 +818,135 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       document.querySelectorAll('.card').forEach(card => {{
         const fn = card.dataset.file.toLowerCase();
         const emoji = getCardEmoji(card).toLowerCase();
+        const cid = (card.dataset.cluster || '').toLowerCase();
         const conf = parseFloat(card.dataset.conf || '1.0');
-        const isDel = deletedFiles.has(card.dataset.file);
-        const isDupe = card.classList.contains('is-duplicate');
+        const isEx = excludedFiles.has(card.dataset.file);
+        const isInv = card.classList.contains('card-invalid');
 
         let matchFilter = true;
-        if (currentFilter === 'dupes') {{
-          matchFilter = !isDel && isDupe;
-        }} else if (currentFilter === 'low') {{
-          matchFilter = !isDel && conf < 0.8;
-        }} else if (currentFilter === 'deleted') {{
-          matchFilter = isDel;
-        }} else {{
-          // 'all' shows non-deleted, or deleted if explicitly searched
-          matchFilter = true;
+        if (currentFilter === 'clusters') {{
+          matchFilter = !!cid;
+        }} else if (currentFilter === 'review') {{
+          matchFilter = !isEx && (conf < 0.8 || isInv || card.dataset.status === 'needs_review');
+        }} else if (currentFilter === 'kept') {{
+          matchFilter = !isEx;
+        }} else if (currentFilter === 'excluded') {{
+          matchFilter = isEx;
         }}
 
-        let matchSearch = fn.includes(q) || emoji.includes(q);
+        let matchSearch = fn.includes(q) || emoji.includes(q) || cid.includes(q);
         card.style.display = (matchFilter && matchSearch) ? 'flex' : 'none';
       }});
     }}
 
-    function copyDeleteCommand() {{
-      if (deletedFiles.size === 0) return;
-      const cmd = "rm " + Array.from(deletedFiles).map(f => '"' + f + '"').join(" ");
-      navigator.clipboard.writeText(cmd).then(() => {{
-        showToast("Copied deletion command to clipboard!");
-      }});
+    function showToast(msg, withUndo = false) {{
+      const toast = document.getElementById('toast');
+      if (withUndo && undoStack.length > 0) {{
+        toast.className = 'toast toast-undo';
+        toast.innerHTML = '<span>' + msg + '</span> <button class="btn btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="undoLast()">Undo</button>';
+      }} else {{
+        toast.className = 'toast';
+        toast.textContent = msg;
+      }}
+      toast.style.display = 'flex';
+      setTimeout(() => {{ toast.style.display = 'none'; }}, 3500);
     }}
 
-    function showToast(msg) {{
-      const toast = document.getElementById('toast');
-      toast.textContent = msg;
-      toast.style.display = 'block';
-      setTimeout(() => toast.style.display = 'none', 2500);
+    function undoLast() {{
+      if (undoStack.length === 0) return;
+      const last = undoStack.pop();
+      last.revert();
+      showToast('Reverted: ' + last.desc, false);
+    }}
+
+    function exportDraftJson() {{
+      const draft = {{
+        version: 2,
+        meta: META,
+        similarity_groups: {{}},
+        stickers: {{}}
+      }};
+
+      document.querySelectorAll('.card').forEach(card => {{
+        const fn = card.dataset.file;
+        const isEx = excludedFiles.has(fn);
+        const text = getCardEmoji(card);
+        const val = validateSequence(text);
+        const cid = card.dataset.cluster || null;
+
+        draft.stickers[fn] = {{
+          selection: isEx ? 'exclude' : 'keep',
+          similarity_group: cid,
+          emojis: val.valid ? val.emojis : [],
+          confidence: parseFloat(card.dataset.conf || '1.0'),
+          reason: card.querySelector('.reason') ? card.querySelector('.reason').textContent : '',
+          review_status: isEx ? 'culled' : (val.valid ? 'approved' : 'needs_review')
+        }};
+      }});
+
+      const blob = new Blob([JSON.stringify(draft, null, 2)], {{ type: 'application/json' }});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'pack_draft.json';
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('Saved pack_draft.json successfully!');
+    }}
+
+    function safeYamlEscape(val) {{
+      const str = String(val);
+      return '"' + str.replace(/\\\\/g, '\\\\\\\\').replace(/"/g, '\\\\"') + '"';
     }}
 
     function exportYaml() {{
-      let y = "meta:\\n";
-      for (const k in META) {{
-        y += "  " + k + ': "' + META[k] + '"\\n';
-      }}
-      y += "stickers:\\n";
+      let hasInvalid = false;
+      const stickersList = [];
 
-      let exportedCount = 0;
       document.querySelectorAll('.card').forEach(card => {{
-        const file = card.dataset.file;
-        if (deletedFiles.has(file)) return; // Exclude deleted stickers
+        const fn = card.dataset.file;
+        if (excludedFiles.has(fn)) return;
 
-        const emoji = getCardEmoji(card);
-        y += '  - chr: "' + emoji + '"\\n    file: "' + file + '"\\n';
-        exportedCount++;
+        const text = getCardEmoji(card);
+        const val = validateSequence(text);
+        if (!val.valid) {{
+          hasInvalid = true;
+          return;
+        }}
+        stickersList.push({{ chr: val.emojis.join(''), file: fn }});
       }});
 
-      const blob = new Blob([y], {{ type: "text/yaml;charset=utf-8" }});
+      if (hasInvalid) {{
+        alert('Cannot export: Some kept stickers have invalid emoji sequences! Filter by "Needs Review" to fix them.');
+        return;
+      }}
+
+      let y = 'meta:\\n';
+      y += '  title: ' + safeYamlEscape(META.title || 'Signal Stickers') + '\\n';
+      y += '  author: ' + safeYamlEscape(META.author || 'Author') + '\\n';
+      if (stickersList.length > 0) {{
+        y += '  cover: ' + safeYamlEscape(META.cover || stickersList[0].file) + '\\n';
+      }}
+      y += 'stickers:\\n';
+      for (const item of stickersList) {{
+        y += '  - chr: ' + safeYamlEscape(item.chr) + '\\n    file: ' + safeYamlEscape(item.file) + '\\n';
+      }}
+
+      const blob = new Blob([y], {{ type: 'text/yaml;charset=utf-8' }});
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
+      const a = document.createElement('a');
       a.href = url;
-      a.download = "stickers.yaml";
+      a.download = 'stickers.yaml';
       a.click();
       URL.revokeObjectURL(url);
 
-      showToast("Exported " + exportedCount + " stickers to stickers.yaml!");
+      showToast('Exported ' + stickersList.length + ' stickers to stickers.yaml!');
     }}
 
-    // Initial setup on load: compute duplicates, refresh dropdowns, and sort by emoji
     window.addEventListener('DOMContentLoaded', () => {{
-      updateDuplicatesAndCounts();
+      updateCountsAndValidation();
       refreshAllSelects();
-      sortCards('emoji');
+      sortCards('cluster');
     }});
   </script>
 </body>
@@ -899,27 +955,40 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
 
 def generate_review_html(
-    folder: Path, yaml_path: Path, cache_path: Optional[Path] = None
+    folder: Path,
+    draft_path: Optional[Path] = None,
+    yaml_path: Optional[Path] = None,
+    cache_path: Optional[Path] = None,
 ) -> Path:
-    """Generates an interactive HTML review page from stickers.yaml and images."""
-    if not yaml_path.exists():
-        sys.exit(f"Error: {yaml_path} does not exist.")
-
-    doc = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
-    meta = doc.get("meta", {})
-    stickers = doc.get("stickers", [])
-
-    cache: Dict[str, Dict[str, Any]] = {}
-    if cache_path and cache_path.exists():
+    """Generates the responsive HTML review page from pack_draft.json (or fallback)."""
+    draft_file = draft_path or (folder / "pack_draft.json")
+    draft_data = {}
+    if draft_file.exists():
         try:
-            cache = json.loads(cache_path.read_text(encoding="utf-8"))
-        except Exception:
-            pass
+            draft_data = json.loads(draft_file.read_text(encoding="utf-8"))
+        except Exception as e:
+            print(f"Warning: Could not read {draft_file}: {e}")
+
+    stickers_items = []
+    meta = draft_data.get("meta", {"title": "Signal Stickers", "author": "tazztone"})
+
+    if draft_data and "stickers" in draft_data:
+        for fn, sdata in draft_data["stickers"].items():
+            stickers_items.append((fn, sdata))
+    else:
+        yp = yaml_path or (folder / "stickers.yaml")
+        if yp.exists():
+            doc = yaml.safe_load(yp.read_text(encoding="utf-8"))
+            meta = doc.get("meta", meta)
+            for s in doc.get("stickers", []):
+                fn = s.get("file", "")
+                stickers_items.append((fn, {"emojis": [s.get("chr", "🙂")], "selection": "keep"}))
 
     cards = []
+    excluded_files = []
+    clusters_set = set()
 
-    for s in stickers:
-        file_name = s.get("file", "")
+    for file_name, info in stickers_items:
         img_path = folder / file_name
         if not img_path.exists() and (folder / "webp" / file_name).exists():
             img_path = folder / "webp" / file_name
@@ -930,44 +999,56 @@ def generate_review_html(
             continue
 
         mt = mimetypes.guess_type(img_path.name)[0] or "image/png"
-        if mt == "image/apng":
-            mt = "image/png"
         b64 = base64.standard_b64encode(img_path.read_bytes()).decode("utf-8")
         src = f"data:{mt};base64,{b64}"
 
-        info = cache.get(file_name, {})
-        current_emoji = format_emoji_sequence(
-            info.get("emojis") or s.get("chr", "🙂")
-        )
+        cid = info.get("similarity_group") or ""
+        if cid:
+            clusters_set.add(cid)
+
+        sel = info.get("selection", "undecided" if cid else "keep")
+        if sel == "exclude":
+            excluded_files.append(file_name)
+
+        current_emojis = info.get("emojis") or info.get("suggested_emojis") or []
+        emoji_str = format_emoji_sequence(current_emojis, fallback="") or ""
         conf = float(info.get("confidence", 1.0))
         reason = info.get("reason", "")
-        redundant_ref = info.get("redundant_of") or info.get("visual_dupe_of")
-        var_badge_html = (
-            f'<div class="var-badge" title="Similar variation of {redundant_ref}">'
-            f'⚠ Similar: {redundant_ref}</div>'
-            if redundant_ref
-            else ""
-        )
+        status = info.get("review_status", "pending")
 
         conf_class = "conf-low" if conf < 0.6 else ("conf-mid" if conf < 0.8 else "conf-ok")
+        cluster_class = "in-cluster" if cid else ""
+        ex_class = "is-excluded" if sel == "exclude" else ""
         size_kb = img_path.stat().st_size / 1024
 
+        cluster_tag_html = (
+            f'<span class="cluster-tag" onclick="filterByCluster(\'{cid}\')" title="Filter by {cid}">{cid}</span>'
+            if cid
+            else ""
+        )
+        keep_only_html = (
+            f'<button type="button" class="keep-only-btn" onclick="keepOnlyInCluster(this)" title="Keep this variation and exclude other variations in {cid}">⚡ Keep Only</button>'
+            if cid
+            else ""
+        )
+        sel_label = "↺ Restore" if sel == "exclude" else "✕ Exclude"
+
         card_html = f"""
-        <div class="card {conf_class}" data-file="{file_name}" data-emoji="{current_emoji}" data-conf="{conf:.2f}">
+        <div class="card {conf_class} {cluster_class} {ex_class}" data-file="{file_name}" data-cluster="{cid}" data-selection="{sel}" data-emoji="{emoji_str}" data-conf="{conf:.2f}" data-status="{status}">
           <div class="card-topbar">
-            <span class="dupe-tag">Dupe</span>
-            <button type="button" class="keep-btn" onclick="keepOnlyThis(this)" title="Keep this variation and exclude all other duplicates sharing this primary emoji">⚡ Keep Only</button>
-            <button type="button" class="del-btn" onclick="toggleDelete(this)" title="Exclude from sticker pack">✕ Exclude</button>
+            {cluster_tag_html}
+            {keep_only_html}
+            <button type="button" class="sel-btn" onclick="toggleSelect(this)">{sel_label}</button>
           </div>
           <div class="sticker-container">
-            <div class="deleted-badge">EXCLUDED</div>
+            <div class="excluded-badge">EXCLUDED</div>
             <img class="sticker-img" src="{src}" loading="lazy" alt="{file_name}">
           </div>
           <div class="emoji-bar">
-            <input type="text" class="emoji-input" value="{current_emoji}" title="Edit emojis (up to 3)" oninput="onEmojiInput(this)">
+            <input type="text" class="emoji-input" value="{emoji_str}" placeholder="emoji" title="Edit emojis (1-3)" oninput="onEmojiInput(this)">
             <select class="emoji-select" onchange="onEmojiAdd(this)" title="Add an emoji from registry"><option value="" selected disabled>+ Add</option></select>
           </div>
-          {var_badge_html}
+          <div class="err-msg">⚠ Invalid emoji</div>
           <div class="meta-row">
             <span>{size_kb:.0f} KB</span>
             <span>conf: {conf:.2f}</span>
@@ -978,13 +1059,23 @@ def generate_review_html(
         """
         cards.append(card_html)
 
+    total_count = len(cards)
+    ex_count = len(excluded_files)
+    active_count = total_count - ex_count
+    clustered_count = sum(1 for _, info in stickers_items if info.get("similarity_group"))
+
     html_content = HTML_TEMPLATE.format(
         title=meta.get("title", "Signal Stickers"),
         author=meta.get("author", "Unknown"),
-        count=len(stickers),
+        count_total=total_count,
+        count_active=active_count,
+        count_excluded=ex_count,
+        count_clusters=len(clusters_set),
+        count_clustered=clustered_count,
         cards="".join(cards),
         meta_json=json.dumps(meta, ensure_ascii=False),
         emoji_registry_json=json.dumps(EMOJI_REGISTRY, ensure_ascii=False),
+        excluded_files_json=json.dumps(excluded_files),
     )
 
     out_path = folder / "review.html"
@@ -993,32 +1084,19 @@ def generate_review_html(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Signal Stickers Review Page Generator")
-    parser.add_argument("folder", help="Directory containing stickers and stickers.yaml")
-    parser.add_argument(
-        "--yaml", default="stickers.yaml", help="Path to stickers.yaml relative to folder"
-    )
-    parser.add_argument(
-        "--cache", default="classification_cache.json", help="Path to classification cache JSON"
-    )
+    parser = argparse.ArgumentParser(description="Signal Stickers Review & Curation Page Generator")
+    parser.add_argument("folder", help="Directory containing stickers")
+    parser.add_argument("--draft", default="pack_draft.json", help="Path to pack_draft.json")
+    parser.add_argument("--yaml", default="stickers.yaml", help="Path to stickers.yaml")
     args = parser.parse_args()
 
     folder = Path(args.folder)
-    yaml_path = folder / args.yaml
-    if not yaml_path.exists() and (folder.parent / args.yaml).exists():
-        yaml_path = folder.parent / args.yaml
+    draft_path = folder / args.draft if not Path(args.draft).is_absolute() else Path(args.draft)
+    yaml_path = folder / args.yaml if not Path(args.yaml).is_absolute() else Path(args.yaml)
 
-    cache_path = Path(args.cache)
-    if not cache_path.exists():
-        if (folder / args.cache).exists():
-            cache_path = folder / args.cache
-        elif (folder.parent / args.cache).exists():
-            cache_path = folder.parent / args.cache
-
-    out_file = generate_review_html(folder, yaml_path, cache_path)
+    out_file = generate_review_html(folder, draft_path=draft_path, yaml_path=yaml_path)
     print(f"Generated review page: {out_file.resolve()}")
-    print("Open this file in your browser to inspect and adjust sticker emojis.")
-    print("Features: Multi-emoji editing, Keep Only button, duplicate sorting, and unused emoji highlighting.")
+    print("Features: Visual cluster side-by-side curation, Keep Only per cluster, strict emoji validation, safe YAML export.")
 
 
 if __name__ == "__main__":

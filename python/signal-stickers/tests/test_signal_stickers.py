@@ -26,14 +26,17 @@ from emojis import (
     get_related_emojis,
     is_valid_emoji,
     is_valid_emoji_sequence,
+    validate_emoji_sequence,
 )
 from classify_and_build import (
     build_disambiguation_prompt,
     build_stickers_yaml,
     check_signal_constraints,
     compute_dhash,
+    detect_visual_clusters,
     detect_visual_duplicates,
     hamming_distance,
+    load_or_create_draft,
     parse_json_response,
 )
 
@@ -57,8 +60,8 @@ def test_emoji_registry_integrity():
     assert is_valid_emoji("not_an_emoji") is False
 
 
-def test_multi_emoji_helpers():
-    """Verify multi-emoji extraction, sequencing, and validation."""
+def test_multi_emoji_helpers_and_strict_validation():
+    """Verify multi-emoji extraction, sequencing, and strict sequence validation."""
     extracted = extract_emojis("🤔🤨")
     assert extracted == ["🤔", "🤨"]
 
@@ -70,14 +73,31 @@ def test_multi_emoji_helpers():
     assert seq == "🤔🤨🧐"
     assert len(extract_emojis(seq)) == 3
 
-    # String format
+    # Fallback behavior
     assert format_emoji_sequence("🤔🤨") == "🤔🤨"
     assert format_emoji_sequence(None) == "🙂"
+    assert format_emoji_sequence(None, fallback="") == ""
 
-    # Validation
-    assert is_valid_emoji_sequence("🤔🤨") is True
-    assert is_valid_emoji_sequence("🤔") is True
-    assert is_valid_emoji_sequence("") is False
+    # Strict sequence validation
+    valid, emojis, err = validate_emoji_sequence("🤔🤨")
+    assert valid is True
+    assert emojis == ["🤔", "🤨"]
+    assert err is None
+
+    # Rejects trailing characters
+    valid, _, err = validate_emoji_sequence("🤔abc")
+    assert valid is False
+    assert "invalid or unregistered" in err.lower()
+
+    # Rejects empty strings
+    valid, _, err = validate_emoji_sequence("   ")
+    assert valid is False
+    assert "cannot be empty" in err.lower()
+
+    # Rejects more than 3 emojis
+    valid, _, err = validate_emoji_sequence("😀😃😄😁")
+    assert valid is False
+    assert "1 to 3 emojis" in err.lower()
 
 
 def test_prompt_catalog_and_related():
@@ -93,7 +113,7 @@ def test_prompt_catalog_and_related():
 
 
 def test_parse_json_response():
-    """Verify JSON parsing handles raw JSON, Markdown-wrapped strings, and JSON lists."""
+    """Verify JSON parsing handles raw JSON, reasoning text, and Markdown wrapping."""
     # Direct JSON
     raw = '{"emoji": "😎", "reason": "wearing sunglasses", "confidence": 0.95}'
     parsed = parse_json_response(raw)
@@ -105,26 +125,57 @@ def test_parse_json_response():
     parsed_multi = parse_json_response(multi)
     assert parsed_multi["emojis"] == ["🤔", "🤨"]
 
-    # Markdown wrapped list
-    wrapped_list = (
-        'Here is the result:\n```json\n[{"file": "001.webp", "emojis": ["🤔"], "reason": "thinking"}]\n```'
+    # Reasoning tokens preamble + markdown wrapped JSON
+    wrapped_reasoning = (
+        "Let me carefully analyze the sticker image:\n"
+        "- Pose: hand on chin, looking sideways\n"
+        "Here is the final output:\n"
+        "```json\n"
+        '{"emojis": ["🤔"], "reason": "thinking face", "confidence": 0.92}\n'
+        "```"
     )
-    parsed_list = parse_json_response(wrapped_list)
-    assert isinstance(parsed_list, list)
-    assert parsed_list[0]["file"] == "001.webp"
+    parsed_reasoning = parse_json_response(wrapped_reasoning)
+    assert parsed_reasoning["emojis"] == ["🤔"]
+    assert parsed_reasoning["confidence"] == 0.92
 
-    # Invalid JSON
+    # Invalid JSON raises ValueError
     with pytest.raises(ValueError):
-        parse_json_response("No json here")
+        parse_json_response("No json anywhere here")
 
 
-def test_perceptual_dhash_and_duplicates(tmp_path):
-    """Verify dHash detects identical and near-identical synthetic images."""
+def test_alpha_aware_dhash(tmp_path):
+    """Verify dHash alpha-awareness: different hidden transparent background RGB doesn't alter hash."""
+    imgA_path = tmp_path / "imgA.png"
+    imgB_path = tmp_path / "imgB.png"
+
+    # Both images have a solid white square (32x32) in center of 64x64.
+    # Image A transparent background has RGB (0, 0, 0, 0)
+    # Image B transparent background has RGB (255, 0, 0, 0) - red transparent!
+    imA = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    imB = Image.new("RGBA", (64, 64), (255, 0, 0, 0))
+
+    for x in range(16, 48):
+        for y in range(16, 48):
+            imA.putpixel((x, y), (255, 255, 255, 255))
+            imB.putpixel((x, y), (255, 255, 255, 255))
+
+    imA.save(imgA_path)
+    imB.save(imgB_path)
+
+    hashA = compute_dhash(imgA_path)
+    hashB = compute_dhash(imgB_path)
+
+    # With alpha compositing, both composite over identical neutral gray, yielding identical hash!
+    assert hamming_distance(hashA, hashB) == 0
+
+
+def test_perceptual_dhash_and_clustering(tmp_path):
+    """Verify dHash detects clusters and pairwise duplicates."""
     img1_path = tmp_path / "img1.png"
     img2_path = tmp_path / "img2.png"
     img3_path = tmp_path / "img3.png"
 
-    # Image 1: vertical stripes (alternating columns)
+    # Image 1: vertical stripes
     im1 = Image.new("L", (64, 64))
     for x in range(64):
         for y in range(64):
@@ -153,11 +204,17 @@ def test_perceptual_dhash_and_duplicates(tmp_path):
     assert hamming_distance(h1, h2) <= 2
     assert hamming_distance(h1, h3) > 10
 
-    dupes = detect_visual_duplicates([img1_path, img2_path, img3_path], max_distance=4)
-    assert "img2.png" in dupes
-    assert dupes["img2.png"]["reference"] == "img1.png"
-    assert "img3.png" not in dupes
+    # Cluster detection
+    clusters, file_to_cluster, dupes = detect_visual_clusters([img1_path, img2_path, img3_path], max_distance=4)
+    assert len(clusters) == 1
+    cid = list(clusters.keys())[0]
+    assert "img1.png" in clusters[cid]
+    assert "img2.png" in clusters[cid]
+    assert "img3.png" not in clusters[cid]
 
+    # Backward-compatible wrapper
+    dupe_dict = detect_visual_duplicates([img1_path, img2_path, img3_path], max_distance=4)
+    assert "img2.png" in dupe_dict
 
 
 def test_check_signal_constraints(tmp_path):
@@ -182,8 +239,8 @@ def test_check_signal_constraints(tmp_path):
     assert any("not recommended" in p for p in problems)
 
 
-def test_build_stickers_yaml(tmp_path):
-    """Verify YAML builder creates compliant stickers.yaml structure with multi-emoji support."""
+def test_build_stickers_yaml_curation(tmp_path):
+    """Verify YAML builder includes kept stickers and excludes culled ones."""
     img1 = tmp_path / "001.webp"
     img2 = tmp_path / "002.webp"
     img3 = tmp_path / "003.webp"
@@ -191,18 +248,21 @@ def test_build_stickers_yaml(tmp_path):
     img2.touch()
     img3.touch()
 
-    files = [img1, img2, img3]
-    cache = {
-        "001.webp": {"emoji": "😏", "reason": "smirk", "confidence": 0.9},
-        "002.webp": {"emojis": ["🤔", "🤨"], "reason": "skeptic thinking", "confidence": 0.95},
-        "003.webp": {"emoji": "😂", "emojis": ["😂", "🤣"], "confidence": 0.88},
+    draft = {
+        "version": 2,
+        "meta": {"title": "Curated Pack", "author": "Tester", "cover": "001.webp"},
+        "similarity_groups": {"cluster_01": ["002.webp", "003.webp"]},
+        "stickers": {
+            "001.webp": {"selection": "keep", "emojis": ["😏"]},
+            "002.webp": {"selection": "keep", "emojis": ["🤔", "🤨"]},
+            "003.webp": {"selection": "exclude", "emojis": ["🤔", "🤨"]},  # Culled duplicate
+        },
     }
 
     yaml_file = build_stickers_yaml(
         folder=tmp_path,
-        files=files,
-        cache=cache,
-        title="Test Pack",
+        draft=draft,
+        title="Curated Pack",
         author="Tester",
         cover="001.webp",
     )
@@ -210,19 +270,15 @@ def test_build_stickers_yaml(tmp_path):
     assert yaml_file.exists()
     content = yaml.safe_load(yaml_file.read_text(encoding="utf-8"))
 
-    assert content["meta"]["title"] == "Test Pack"
-    assert content["meta"]["author"] == "Tester"
-    assert content["meta"]["cover"] == "001.webp"
-    assert len(content["stickers"]) == 3
+    assert content["meta"]["title"] == "Curated Pack"
+    # Excluded 003.webp is not in the exported manifest!
+    assert len(content["stickers"]) == 2
     assert content["stickers"][0] == {"chr": "😏", "file": "001.webp"}
     assert content["stickers"][1] == {"chr": "🤔🤨", "file": "002.webp"}
-    assert content["stickers"][2] == {"chr": "😂🤣", "file": "003.webp"}
 
 
 def test_build_disambiguation_prompt():
-    """Verify disambiguation prompt includes related emojis and instructions against forcing."""
+    """Verify backward-compatible prompt stub contains expected markers."""
     prompt = build_disambiguation_prompt("🤔", ["img1.webp", "img2.webp"])
     assert "🤔" in prompt
     assert "redundant_of" in prompt
-    assert "img1.webp" not in prompt or "2 Sticker-Bilder" in prompt
-

@@ -25,38 +25,51 @@ ACTION="${1:-review}"
 FOLDER="${2:-$DIR/webp}"
 
 case "$ACTION" in
-    review)
+    curate|review)
+        "$PYTHON" "$DIR/classify_and_build.py" "$FOLDER" --scan >/dev/null 2>&1 || true
         "$PYTHON" "$DIR/review.py" "$FOLDER"
         HTML_PATH="$FOLDER/review.html"
         if [ ! -f "$HTML_PATH" ]; then
             HTML_PATH="$DIR/review.html"
         fi
-        echo "Review ready: file://$HTML_PATH"
+        echo "Curation/Review ready: file://$HTML_PATH"
         if command -v xdg-open >/dev/null 2>&1 && [ -n "$DISPLAY" ]; then
             xdg-open "$HTML_PATH" 2>/dev/null &
         fi
         ;;
+    scan|check)
+        shift 1 || true
+        if [ -n "$1" ] && [ -d "$1" ]; then
+            FOLDER="$1"
+            shift 1
+        fi
+        "$PYTHON" "$DIR/classify_and_build.py" "$FOLDER" --scan "$@"
+        ;;
+    tag|classify)
+        shift 1 || true
+        if [ -n "$1" ] && [ -d "$1" ]; then
+            FOLDER="$1"
+            shift 1
+        fi
+        "$PYTHON" "$DIR/classify_and_build.py" "$FOLDER" --classify-kept "$@"
+        "$PYTHON" "$DIR/review.py" "$FOLDER"
+        ;;
+    export)
+        shift 1 || true
+        if [ -n "$1" ] && [ -d "$1" ]; then
+            FOLDER="$1"
+            shift 1
+        fi
+        "$PYTHON" "$DIR/classify_and_build.py" "$FOLDER" --build-yaml "$@"
+        ;;
     dedupe)
         shift 1 || true
-        # If second arg is a folder, use it; otherwise default to ./webp
         if [ -n "$1" ] && [ -d "$1" ]; then
             FOLDER="$1"
             shift 1
         fi
-        "$PYTHON" "$DIR/classify_and_build.py" "$FOLDER" --dedupe "$@"
+        "$PYTHON" "$DIR/classify_and_build.py" "$FOLDER" --scan "$@"
         "$PYTHON" "$DIR/review.py" "$FOLDER"
-        ;;
-    classify)
-        shift 1 || true
-        if [ -n "$1" ] && [ -d "$1" ]; then
-            FOLDER="$1"
-            shift 1
-        fi
-        "$PYTHON" "$DIR/classify_and_build.py" "$FOLDER" "$@"
-        "$PYTHON" "$DIR/review.py" "$FOLDER"
-        ;;
-    check)
-        "$PYTHON" "$DIR/classify_and_build.py" "$FOLDER" --check-only
         ;;
     upload)
         shift 1 || true
@@ -69,17 +82,18 @@ case "$ACTION" in
         cd "$FOLDER" && signal-sticker-tool preview "$@"
         ;;
     help|--help|-h)
-        echo "Signal Sticker Pack Helper"
+        echo "Signal Sticker Pack Curation & Build Helper"
         echo ""
-        echo "Usage: ./run.sh [action] [options]"
+        echo "Usage: ./stickers [action] [options]"
         echo ""
-        echo "Quick Actions:"
-        echo "  ./run.sh review       (default) Generate review.html and open in browser"
-        echo "  ./run.sh dedupe       Run VLM comparative deduplication on duplicate groups"
-        echo "  ./run.sh classify     Classify any unclassified sticker images in ./webp"
-        echo "  ./run.sh check        Check constraints and detect near-duplicate frames"
-        echo "  ./run.sh preview      Preview pack with signal-sticker-tool"
-        echo "  ./run.sh upload       Upload encrypted pack to Signal"
+        echo "Curation Workflow:"
+        echo "  ./stickers scan       Inventory images, check constraints & detect visual clusters"
+        echo "  ./stickers curate     (default) Open visual cluster review to pick best variations"
+        echo "  ./stickers tag        Run VLM emoji suggestions ONLY on kept stickers"
+        echo "  ./stickers review     Review tags, verify contrast & edit emojis"
+        echo "  ./stickers export     Compile stickers.yaml from approved kept stickers"
+        echo "  ./stickers preview    Preview sticker pack with signal-sticker-tool"
+        echo "  ./stickers upload     Upload encrypted pack to Signal"
         ;;
     *)
         # If user passes custom args directly like ./run.sh ./webp --dedupe

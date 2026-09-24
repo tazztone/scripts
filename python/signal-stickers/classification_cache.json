@@ -1,18 +1,29 @@
 {
   "ComfyUI-emoji_0001.webp": {
     "emoji": "😏",
-    "reason": "Seitlicher Blick, subtiler Schmunzeler",
-    "confidence": 0.75
+    "reason": "Dezenter Smirk mit geschlossenem Mund, leicht schiefe Mundwinkel, entspannte Aug",
+    "confidence": 0.75,
+    "emojis": [
+      "😏"
+    ]
   },
   "ComfyUI-emoji_0006.webp": {
     "emoji": "🤨",
-    "reason": "verdächtiger Seitenblick",
-    "confidence": 0.78
+    "reason": "Leicht hochgezogene Augenbraue, gescheiter Blick seitlich nach rechts, neutraler",
+    "confidence": 0.78,
+    "visual_dupe_of": "ComfyUI-emoji_0005.webp",
+    "emojis": [
+      "🤨"
+    ]
   },
   "ComfyUI-emoji_0005.webp": {
     "emoji": "😬",
-    "reason": "Zusammengebissene Zähne, angespannt",
-    "confidence": 0.88
+    "reason": "Weit geöffnete Augen mit leicht hochgezogenen Augenbrauen, Mund halb offen mit s",
+    "confidence": 0.88,
+    "emojis": [
+      "😬",
+      "😮"
+    ]
   },
   "ComfyUI-emoji_0007.webp": {
     "emoji": "🤔",
@@ -26,33 +37,53 @@
   },
   "ComfyUI-emoji_0008.webp": {
     "emoji": "😐",
-    "reason": "Neutraler, leicht gelangweilter Blick",
-    "confidence": 0.75
+    "reason": "Neutraler Gesichtsausdruck mit leicht seitlichem Blick und minimaler Asymmetrie ",
+    "confidence": 0.75,
+    "visual_dupe_of": "ComfyUI-emoji_0005.webp",
+    "emojis": [
+      "😐"
+    ]
   },
   "ComfyUI-emoji_0009.webp": {
-    "emoji": "😬",
-    "reason": "Geschlossene Augen, gefurterter Blick, schmerzhaft",
-    "confidence": 0.75
+    "emoji": "😒",
+    "reason": "Deutlich gerunzelte Augenbrauen mit Stirnrunzeln, geschlossene Augen und geschlo",
+    "confidence": 0.75,
+    "visual_dupe_of": "ComfyUI-emoji_0006.webp",
+    "emojis": [
+      "😒"
+    ]
   },
   "ComfyUI-emoji_0011.webp": {
     "emoji": "😏",
-    "reason": "Seitlicher Blick mit leichtem Schmunzeln",
-    "confidence": 0.9
+    "reason": "Breiterer Smirk als Bild 1, deutlich nach oben gezogene Mundwinkel, gerunzeltes ",
+    "confidence": 0.9,
+    "visual_dupe_of": "ComfyUI-emoji_0001.webp",
+    "emojis": [
+      "😏",
+      "😀"
+    ]
   },
   "ComfyUI-emoji_0012.webp": {
     "emoji": "😂",
-    "reason": "Lachendes Gesicht mit Tränen",
-    "confidence": 0.95
+    "reason": "Intensives freudiges Lachen mit stark zusammengekniffenen Augen, sichtbaren Zähn",
+    "confidence": 0.95,
+    "visual_dupe_of": "ComfyUI-emoji_0006.webp",
+    "emojis": [
+      "😂",
+      "🤣"
+    ]
   },
   "ComfyUI-emoji_0010.webp": {
     "emoji": "😲",
     "reason": "Erstaunte Mimik mit weiten Augen",
-    "confidence": 0.88
+    "confidence": 0.88,
+    "visual_dupe_of": "ComfyUI-emoji_0008.webp"
   },
   "ComfyUI-emoji_0013.webp": {
     "emoji": "🤔",
     "reason": "Hand on chin, furrowed brow, thinking pose",
-    "confidence": 0.95
+    "confidence": 0.95,
+    "visual_dupe_of": "ComfyUI-emoji_0006.webp"
   },
   "ComfyUI-emoji_0014.webp": {
     "emoji": "😌",
@@ -62,17 +93,26 @@
   "ComfyUI-emoji_0016.webp": {
     "emoji": "🤔",
     "reason": "Hand am Kinn, nachdenklicher Blick",
-    "confidence": 0.85
+    "confidence": 0.85,
+    "visual_dupe_of": "ComfyUI-emoji_0011.webp"
   },
   "ComfyUI-emoji_0017.webp": {
     "emoji": "😏",
-    "reason": "Smirk with sidelong glance",
-    "confidence": 0.9
+    "reason": "Dezenter Smirk mit geschlossenem Mund, seitlicher Blick nach links, leicht gerun",
+    "confidence": 0.9,
+    "emojis": [
+      "😏"
+    ]
   },
   "ComfyUI-emoji_0015.webp": {
     "emoji": "🤨",
-    "reason": "Erhabene Augenbraue, skeptischer Blick",
-    "confidence": 0.85
+    "reason": "Deutlich gerunzelte Augenbrauen mit sichtbaren Stirnrunzeln, schiefer Mundwinkel",
+    "confidence": 0.85,
+    "visual_dupe_of": "ComfyUI-emoji_0006.webp",
+    "emojis": [
+      "🤨",
+      "😒"
+    ]
   },
   "ComfyUI-emoji_0019.webp": {
     "emoji": "😲",
@@ -81,8 +121,11 @@
   },
   "ComfyUI-emoji_0018.webp": {
     "emoji": "🥺",
-    "reason": "Bettelnder Blick mit Dackelaugen",
-    "confidence": 0.9
+    "reason": "Bittender Ausdruck mit leicht hochgezogener Augenbrau, aufschlauendem Blick nach",
+    "confidence": 0.9,
+    "emojis": [
+      "🥺"
+    ]
   },
   "ComfyUI-emoji_0021.webp": {
     "emoji": "😠",
@@ -90,34 +133,53 @@
     "confidence": 0.85
   },
   "ComfyUI-emoji_0020.webp": {
-    "emoji": "😮",
-    "reason": "Überraschte Augen, leicht offener Mund",
-    "confidence": 0.85
+    "emoji": "🤨",
+    "reason": "Asymmetrische Augenbrauen (eine hochgezogen, eine gerunzelt), seitlicher/verdreh",
+    "confidence": 0.85,
+    "emojis": [
+      "🤨",
+      "😒"
+    ]
   },
   "ComfyUI-emoji_0025.webp": {
     "emoji": "🤢",
-    "reason": "Scrunched nose and grimace show disgust",
-    "confidence": 0.9
+    "reason": "Klassische Ekel-Miene: leicht gerunzelt, Mund schief geschlossen, Blick verdreht",
+    "confidence": 0.9,
+    "visual_dupe_of": "ComfyUI-emoji_0007.webp",
+    "emojis": [
+      "🤢"
+    ]
   },
   "ComfyUI-emoji_0023.webp": {
     "emoji": "😟",
-    "reason": "Furrowed brows, worried wide eyes",
-    "confidence": 0.85
+    "reason": "Gerunzeltes Stirn, engsinniger Blick, geschlossener Mund mit leicht nach unten g",
+    "confidence": 0.85,
+    "visual_dupe_of": "ComfyUI-emoji_0008.webp",
+    "emojis": [
+      "😟"
+    ]
   },
   "ComfyUI-emoji_0022.webp": {
     "emoji": "😬",
-    "reason": "Zusammengebissene Zähne, Panik",
-    "confidence": 0.88
+    "reason": "Breit geöffnetes grimmiges Lächeln mit deutlich sichtbaren Zähnen, angespannte M",
+    "confidence": 0.88,
+    "visual_dupe_of": "ComfyUI-emoji_0005.webp",
+    "emojis": [
+      "😬",
+      "🤨"
+    ]
   },
   "ComfyUI-emoji_0024.webp": {
     "emoji": "😭",
     "reason": "Laut weinendes Gesicht mit Tränen",
-    "confidence": 0.95
+    "confidence": 0.95,
+    "visual_dupe_of": "ComfyUI-emoji_0006.webp"
   },
   "ComfyUI-emoji_0028.webp": {
     "emoji": "🤤",
     "reason": "Geschlossene Augen, Speichelfluss",
-    "confidence": 0.97
+    "confidence": 0.97,
+    "visual_dupe_of": "ComfyUI-emoji_0008.webp"
   },
   "ComfyUI-emoji_0026.webp": {
     "emoji": "🤣",
@@ -125,54 +187,85 @@
     "confidence": 0.85
   },
   "ComfyUI-emoji_0029.webp": {
-    "emoji": "🥺",
-    "reason": "Poutiger, trauriger Gesichtsausdruck mit zusammeng",
-    "confidence": 0.78
+    "emoji": "🙁",
+    "reason": "Stirn runzelt sich deutlich, Mundwinkeln nach unten gezogen – traurig-frustriert",
+    "confidence": 0.78,
+    "emojis": [
+      "🙁",
+      "😔"
+    ]
   },
   "ComfyUI-emoji_0032.webp": {
     "emoji": "😛",
-    "reason": "Zunge raus, Augen offen",
-    "confidence": 0.9
+    "reason": "Zunge gerade herausgestreckt, Blick direkt, Augenbrauen entspannt – klassisches ",
+    "confidence": 0.9,
+    "visual_dupe_of": "ComfyUI-emoji_0022.webp",
+    "emojis": [
+      "😛"
+    ]
   },
   "ComfyUI-emoji_0031.webp": {
     "emoji": "🤨",
-    "reason": "Seitlicher Blick mit skeptischem Ausdruck",
-    "confidence": 0.78
+    "reason": "Leichte Stirnrunzel kombiniert mit seitlichem Blick und geschlossenem Mund verle",
+    "confidence": 0.78,
+    "visual_dupe_of": "ComfyUI-emoji_0027.webp",
+    "emojis": [
+      "🤨",
+      "🤔"
+    ]
   },
   "ComfyUI-emoji_0027.webp": {
     "emoji": "😉",
-    "reason": "Winkende Augen mit leichtem Lächeln",
-    "confidence": 0.95
+    "reason": "Wink mit leicht asymmetrischem Smirk und sichtbaren Nasolabialfalten — leicht sp",
+    "confidence": 0.95,
+    "emojis": [
+      "😉"
+    ]
   },
   "ComfyUI-emoji_0034.webp": {
     "emoji": "😢",
-    "reason": "Traenen auf dem Gesicht mit traurigem Ausdruck",
-    "confidence": 0.9
+    "reason": "Trauriges Gesicht mit Tränenströmen unter beiden Augen, leicht gezogene Augenbra",
+    "confidence": 0.9,
+    "visual_dupe_of": "ComfyUI-emoji_0029.webp",
+    "emojis": [
+      "😢"
+    ]
   },
   "ComfyUI-emoji_0030.webp": {
     "emoji": "😘",
-    "reason": "Pursed lips, blowing kiss gesture",
-    "confidence": 0.85
+    "reason": "Mann mit direktem Blick und gepressten Lippen (Kuss-Gesicht), keine Handgeste od",
+    "confidence": 0.85,
+    "emojis": [
+      "😘"
+    ]
   },
   "ComfyUI-emoji_0033.webp": {
     "emoji": "😲",
     "reason": "Weite Augen, offener Mund, Erschrockenheit",
-    "confidence": 0.75
+    "confidence": 0.75,
+    "visual_dupe_of": "ComfyUI-emoji_0008.webp"
   },
   "ComfyUI-emoji_0036.webp": {
     "emoji": "🤔",
     "reason": "Hand am Kinn, nachdenklicher Blick",
-    "confidence": 0.95
+    "confidence": 0.95,
+    "visual_dupe_of": "ComfyUI-emoji_0029.webp"
   },
   "ComfyUI-emoji_0035.webp": {
     "emoji": "😠",
     "reason": "Stirnrunzeln, zorniger Blick, gepresste Lippen",
-    "confidence": 0.88
+    "confidence": 0.88,
+    "visual_dupe_of": "ComfyUI-emoji_0026.webp"
   },
   "ComfyUI-emoji_0037.webp": {
-    "emoji": "😟",
-    "reason": "Furrowed brows, worried eyes, open mouth",
-    "confidence": 0.85
+    "emoji": "😨",
+    "reason": "Stark gerunzeltes Stirn mit tiefen Falten, weit geöffnete Augen, leicht seitlich",
+    "confidence": 0.85,
+    "visual_dupe_of": "ComfyUI-emoji_0031.webp",
+    "emojis": [
+      "😨",
+      "😧"
+    ]
   },
   "ComfyUI-emoji_0038.webp": {
     "emoji": "🤬",
@@ -181,18 +274,29 @@
   },
   "ComfyUI-emoji_0039.webp": {
     "emoji": "🙄",
-    "reason": "Augen verdreht, genervter Blick",
-    "confidence": 0.9
+    "reason": "Augen seitlich nach oben verdreht, Mund geschlossen und leicht schief, Stirn ent",
+    "confidence": 0.9,
+    "visual_dupe_of": "ComfyUI-emoji_0037.webp",
+    "emojis": [
+      "🙄",
+      "😒"
+    ]
   },
   "ComfyUI-emoji_0041.webp": {
     "emoji": "😊",
-    "reason": "Warmes, echtes Lächeln mit lächelnden Augen",
-    "confidence": 0.85
+    "reason": "Freundliches leicht schiefes Schmunzeln mit direktem Blick und entspannten Augen",
+    "confidence": 0.85,
+    "emojis": [
+      "😊"
+    ]
   },
   "ComfyUI-emoji_0043.webp": {
-    "emoji": "😢",
-    "reason": "Tränen, trauriger Mund, gezuckte Augenbrauen",
-    "confidence": 0.92
+    "emoji": "😭",
+    "reason": "Deutlich intensivere Verzweiflung: zahlreiche fließende Tränen, stärkere Stirnru",
+    "confidence": 0.92,
+    "emojis": [
+      "😭"
+    ]
   },
   "ComfyUI-emoji_0042.webp": {
     "emoji": "😲",
@@ -200,9 +304,13 @@
     "confidence": 0.9
   },
   "ComfyUI-emoji_0040.webp": {
-    "emoji": "😮",
-    "reason": "Überraschter Ausdruck mit weiten Augen",
-    "confidence": 0.85
+    "emoji": "😲",
+    "reason": "Extrem weit geöffnete Augen, tiefe Stirnfalten, frontal gerichteter Blick und we",
+    "confidence": 0.85,
+    "emojis": [
+      "😲",
+      "🤯"
+    ]
   },
   "ComfyUI-emoji_0046.webp": {
     "emoji": "😴",
@@ -211,8 +319,13 @@
   },
   "ComfyUI-emoji_0044.webp": {
     "emoji": "🤢",
-    "reason": "Ekelhafte Grimasse mit zusammengekniffener Nase",
-    "confidence": 0.85
+    "reason": "Intensiver Ekel mit stark gerunzelter Stirn, offenem Mund und sichtbaren Zähnen ",
+    "confidence": 0.85,
+    "visual_dupe_of": "ComfyUI-emoji_0043.webp",
+    "emojis": [
+      "🤢",
+      "🤮"
+    ]
   },
   "ComfyUI-emoji_0045.webp": {
     "emoji": "🤪",
@@ -221,8 +334,11 @@
   },
   "ComfyUI-emoji_0047.webp": {
     "emoji": "😊",
-    "reason": "Leichtes Lächeln mit lächelnden Augen",
-    "confidence": 0.85
+    "reason": "Leicht verschmitztes Lächeln mit seitlicherem Blick und gedrehter Kopfneigung; ä",
+    "confidence": 0.85,
+    "emojis": [
+      "😊"
+    ]
   },
   "ComfyUI-emoji_0049.webp": {
     "emoji": "😄",
@@ -236,23 +352,41 @@
   },
   "ComfyUI-emoji_0048.webp": {
     "emoji": "🤢",
-    "reason": "Grüne Haut, Hand vor Mund (Übelkeit)",
-    "confidence": 0.95
+    "reason": "Hand deckt den Mund, leichte Stirnrunzeln, verdutzter Blick – der typische 'glei",
+    "confidence": 0.95,
+    "visual_dupe_of": "ComfyUI-emoji_0031.webp",
+    "emojis": [
+      "🤢"
+    ]
   },
   "ComfyUI-emoji_0051.webp": {
     "emoji": "😉",
-    "reason": "Winkendes Gesicht mit Schmunzeln",
-    "confidence": 0.95
+    "reason": "Wink mit weicherem, gleichmäßigerem und wärmerem Lächeln — entspannter als Bild ",
+    "confidence": 0.95,
+    "emojis": [
+      "😉",
+      "🙂"
+    ]
   },
   "ComfyUI-emoji_0053.webp": {
     "emoji": "🙄",
-    "reason": "Verdrehte Augen, genervter Ausdruck",
-    "confidence": 0.9
+    "reason": "Deutlich hochgezogene Augenbrauen mit sichtbaren Stirnfalten, Blick nach oben, M",
+    "confidence": 0.9,
+    "visual_dupe_of": "ComfyUI-emoji_0044.webp",
+    "emojis": [
+      "🙄",
+      "😒"
+    ]
   },
   "ComfyUI-emoji_0054.webp": {
     "emoji": "😛",
-    "reason": "Zunge rausstreckend, spielerischer Ausdruck",
-    "confidence": 0.85
+    "reason": "Zunge herausgestreckt aber leicht schief, Augenbrauen deutlich hochgezogen mit S",
+    "confidence": 0.85,
+    "visual_dupe_of": "ComfyUI-emoji_0033.webp",
+    "emojis": [
+      "😛",
+      "🤪"
+    ]
   },
   "ComfyUI-emoji_0055.webp": {
     "emoji": "😠",
@@ -266,28 +400,44 @@
   },
   "ComfyUI-emoji_0056.webp": {
     "emoji": "😘",
-    "reason": "Kussmund mit Herz und Handgeste",
-    "confidence": 0.9
+    "reason": "Ähnliche Kuss-Lippen wie Bild 1, aber mit seitlichem, spielerischem Blick, Kopfn",
+    "confidence": 0.9,
+    "emojis": [
+      "😘",
+      "😉"
+    ]
   },
   "ComfyUI-emoji_0052.webp": {
     "emoji": "😱",
-    "reason": "Weite Augen, schreitend, überrascht",
-    "confidence": 0.78
+    "reason": "Augen weit geöffnet, Blick seitlich nach oben, Mund weit offen mit sichtbaren Zä",
+    "confidence": 0.78,
+    "visual_dupe_of": "ComfyUI-emoji_0008.webp",
+    "emojis": [
+      "😱"
+    ]
   },
   "ComfyUI-emoji_0060.webp": {
     "emoji": "😉",
-    "reason": "Winkende Augen mit schmunzelndem Mund",
-    "confidence": 0.95
+    "reason": "Wink mit deutlich stärkerer Kopfteilneigung und spielhaftem Ausdruck — ähnliche ",
+    "confidence": 0.95,
+    "emojis": [
+      "😉"
+    ]
   },
   "ComfyUI-emoji_0059.webp": {
-    "emoji": "😱",
-    "reason": "Hände an den Wangen, Schrei",
-    "confidence": 0.98
+    "emoji": "😧",
+    "reason": "Hände an den Wangen, Mund weniger weit offen (O-förmig), Blick geradeaus – eher ",
+    "confidence": 0.98,
+    "emojis": [
+      "😧",
+      "😱"
+    ]
   },
   "ComfyUI-emoji_0063.webp": {
     "emoji": "😂",
     "reason": "Lachen mit großen blauen Freudentränen",
-    "confidence": 0.98
+    "confidence": 0.98,
+    "visual_dupe_of": "ComfyUI-emoji_0062.webp"
   },
   "ComfyUI-emoji_0058.webp": {
     "emoji": "😠",
@@ -302,12 +452,18 @@
   "ComfyUI-emoji_0062.webp": {
     "emoji": "😒",
     "reason": "skeptischer Blick, gepresste Lippen",
-    "confidence": 0.75
+    "confidence": 0.75,
+    "visual_dupe_of": "ComfyUI-emoji_0031.webp"
   },
   "ComfyUI-emoji_0064.webp": {
     "emoji": "😮",
-    "reason": "Überraschter Gesichtsausdruck mit weiten Augen",
-    "confidence": 0.85
+    "reason": "Breite Augen und leicht geöffneter Mund mit frontalem Blick zeigen Überraschung,",
+    "confidence": 0.85,
+    "visual_dupe_of": "ComfyUI-emoji_0058.webp",
+    "emojis": [
+      "😮",
+      "😯"
+    ]
   },
   "ComfyUI-emoji_0065.webp": {
     "emoji": "🧠",
@@ -316,13 +472,19 @@
   },
   "ComfyUI-emoji_0068.webp": {
     "emoji": "😎",
-    "reason": "Sonnenbrille und selbstbewusstes Lächeln",
-    "confidence": 0.95
+    "reason": "Lächelnder Mann mit schwarzen Sonnenbrillen, breites Lächeln mit sichtbaren Zähn",
+    "confidence": 0.95,
+    "emojis": [
+      "😎"
+    ]
   },
   "ComfyUI-emoji_0067.webp": {
-    "emoji": "🤮",
-    "reason": "Grünes Erbrechen",
-    "confidence": 0.98
+    "emoji": "🤢",
+    "reason": "Mann mit grünem Gegenstand im Mund, gerunzelte Augenbrauen und angewidertes Gesi",
+    "confidence": 0.98,
+    "emojis": [
+      "🤢"
+    ]
   },
   "ComfyUI-emoji_0069.webp": {
     "emoji": "🤯",
@@ -341,13 +503,18 @@
   },
   "ComfyUI-emoji_0074.webp": {
     "emoji": "🙄",
-    "reason": "Augen verdreht, neutraler Mund",
-    "confidence": 0.9
+    "reason": "Augen seitlich nach oben verdreht, Mund leicht schief, Stirn glatter als Bild 2 ",
+    "confidence": 0.9,
+    "emojis": [
+      "🙄",
+      "😒"
+    ]
   },
   "ComfyUI-emoji_0073.webp": {
     "emoji": "😭",
     "reason": "Tränen fließen beide Wangen",
-    "confidence": 0.85
+    "confidence": 0.85,
+    "visual_dupe_of": "ComfyUI-emoji_0066.webp"
   },
   "ComfyUI-emoji_0075.webp": {
     "emoji": "🤩",
@@ -356,13 +523,22 @@
   },
   "ComfyUI-emoji_0076.webp": {
     "emoji": "😐",
-    "reason": "neutraler Gesichtsausdruck",
-    "confidence": 0.75
+    "reason": "Frontaler, ausdrucksloser Blick mit entspannten Augenbrauen und geschlossenem, g",
+    "confidence": 0.75,
+    "visual_dupe_of": "ComfyUI-emoji_0074.webp",
+    "emojis": [
+      "😐"
+    ]
   },
   "ComfyUI-emoji_0077.webp": {
     "emoji": "🤫",
-    "reason": "Finger vor Lippen, Schlucken-Geste",
-    "confidence": 0.95
+    "reason": "Finger vor dem Mund (Shushing), aber Augenbrauen leicht hochgezogen und Augen et",
+    "confidence": 0.95,
+    "visual_dupe_of": "ComfyUI-emoji_0076.webp",
+    "emojis": [
+      "🤫",
+      "🤨"
+    ]
   },
   "ComfyUI-emoji_0078.webp": {
     "emoji": "😄",
@@ -376,28 +552,46 @@
   },
   "ComfyUI-emoji_0080.webp": {
     "emoji": "🤮",
-    "reason": "Erbrechen mit grünen Erbrochenem",
-    "confidence": 0.97
+    "reason": "Aktives Erbrechen mit spritzender grüner Flüssigkeit und Tropfen, stärker verzer",
+    "confidence": 0.97,
+    "emojis": [
+      "🤮",
+      "🤢"
+    ]
   },
   "ComfyUI-emoji_0070.webp": {
-    "emoji": "😐",
-    "reason": "Neutraler Gesichtsausdruck mit leichter Spannung",
-    "confidence": 0.7
+    "emoji": "🤔",
+    "reason": "Leicht nach oben gerichteter Blick und angespannte Augenbrauen deuten auf Nachde",
+    "confidence": 0.7,
+    "emojis": [
+      "🤔",
+      "😐"
+    ]
   },
   "ComfyUI-emoji_0083.webp": {
     "emoji": "🤔",
-    "reason": "Hand am Kinn, nachdenklicher Blick",
-    "confidence": 0.95
+    "reason": "Klassisches Nachdenken: Hand am Kinn, Augen schauen nach oben-seitlich, Mund ges",
+    "confidence": 0.95,
+    "emojis": [
+      "🤔"
+    ]
   },
   "ComfyUI-emoji_0081.webp": {
     "emoji": "😎",
-    "reason": "Sonnenbrille und breites Lächeln",
-    "confidence": 0.95
+    "reason": "Nahezu identische Mimik und Pose wie Bild 1 – gleicher lächelnder Mann mit Sonne",
+    "confidence": 0.95,
+    "emojis": [
+      "😎"
+    ],
+    "redundant_of": "ComfyUI-emoji_0068.webp"
   },
   "ComfyUI-emoji_0085.webp": {
     "emoji": "🤫",
-    "reason": "Finger vor Lippen, Schleich-Geste",
-    "confidence": 0.95
+    "reason": "Finger vor dem Mund, ruhigerer und neutralerer Ausdruck mit entspannteren Augenb",
+    "confidence": 0.95,
+    "emojis": [
+      "🤫"
+    ]
   },
   "ComfyUI-emoji_0086.webp": {
     "emoji": "😲",
@@ -407,12 +601,16 @@
   "ComfyUI-emoji_0084.webp": {
     "emoji": "😭",
     "reason": "Große blaue Tränen auf beiden Wangen",
-    "confidence": 0.95
+    "confidence": 0.95,
+    "visual_dupe_of": "ComfyUI-emoji_0082.webp"
   },
   "ComfyUI-emoji_0082.webp": {
     "emoji": "😐",
-    "reason": "neutral expression with mild tension",
-    "confidence": 0.6
+    "reason": "Leicht nach oben gerichteter Blick mit Stirnrunzeln und nach unten gezogenen Mun",
+    "confidence": 0.6,
+    "emojis": [
+      "😐"
+    ]
   },
   "ComfyUI-emoji_0087.webp": {
     "emoji": "😄",
@@ -422,46 +620,72 @@
   "ComfyUI-emoji_0089.webp": {
     "emoji": "😲",
     "reason": "Wide eyes, open mouth, shocked surprise",
-    "confidence": 0.85
+    "confidence": 0.85,
+    "visual_dupe_of": "ComfyUI-emoji_0023.webp"
   },
   "ComfyUI-emoji_0088.webp": {
     "emoji": "😊",
-    "reason": "Geschlossenes Lächeln mit warmen Augen",
-    "confidence": 0.78
+    "reason": "Symmetrisches freundliches Lächeln mit direktem Blick und entspannter Mimik – kl",
+    "confidence": 0.78,
+    "visual_dupe_of": "ComfyUI-emoji_0044.webp",
+    "emojis": [
+      "😊"
+    ]
   },
   "ComfyUI-emoji_0090.webp": {
     "emoji": "😠",
-    "reason": "Stirn runzeln, Augen verengt, Mund angespannt",
-    "confidence": 0.85
+    "reason": "Furzelige Augenbrauen, intensiver direkter Blick, fest geschlossener Mund mit le",
+    "confidence": 0.85,
+    "emojis": [
+      "😠"
+    ]
   },
   "ComfyUI-emoji_0091.webp": {
     "emoji": "😭",
     "reason": "Tränen auf beiden Wangen, trauriger Mund",
-    "confidence": 0.9
+    "confidence": 0.9,
+    "visual_dupe_of": "ComfyUI-emoji_0090.webp"
   },
   "ComfyUI-emoji_0092.webp": {
     "emoji": "😊",
-    "reason": "Freudiges Schmunzeln mit zusammengekniffenen Augen",
-    "confidence": 0.9
+    "reason": "Echtes warmes Lächeln mit starkem Augenlächeln (Duchenne-Lächeln) und breiteren ",
+    "confidence": 0.9,
+    "visual_dupe_of": "ComfyUI-emoji_0088.webp",
+    "emojis": [
+      "😊",
+      "😄"
+    ]
   },
   "ComfyUI-emoji_0094.webp": {
     "emoji": "🤔",
-    "reason": "Hand am Kinn, nachdenklicher Blick",
-    "confidence": 0.92
+    "reason": "Aehnlich wie Bild 1 (Hand am Kinn, seitlicher Blick), aber Handhaltung und Blick",
+    "confidence": 0.92,
+    "emojis": [
+      "🤔"
+    ]
   },
   "ComfyUI-emoji_0095.webp": {
     "emoji": "😲",
-    "reason": "Erstaunt: weite Augen, offener Mund",
-    "confidence": 0.88
+    "reason": "Breit geöffnete Augen, hochgezogene Augenbrauen mit Stirnfalten, weit geöffneter",
+    "confidence": 0.88,
+    "emojis": [
+      "😲"
+    ]
   },
   "ComfyUI-emoji_0093.webp": {
     "emoji": "😡",
     "reason": "Wut mit gezeigten Zähnen",
-    "confidence": 0.85
+    "confidence": 0.85,
+    "visual_dupe_of": "ComfyUI-emoji_0090.webp"
   },
   "ComfyUI-emoji_0096.webp": {
     "emoji": "🤔",
-    "reason": "Furrowed brows, puzzled expression",
-    "confidence": 0.78
+    "reason": "Keine Hand sichtbar, direkter Blick, stärker gerunzelte Brauen, Mund leicht offe",
+    "confidence": 0.78,
+    "visual_dupe_of": "ComfyUI-emoji_0089.webp",
+    "emojis": [
+      "🤔",
+      "😮"
+    ]
   }
 }

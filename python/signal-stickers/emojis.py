@@ -3,7 +3,7 @@
 Shared between classify_and_build.py and review.py.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 # Emoji dictionary: emoji -> {"name": keyword, "category": category, "description": human_desc}
 EMOJI_REGISTRY: Dict[str, Dict[str, str]] = {
@@ -162,7 +162,30 @@ def extract_emojis(text: str) -> List[str]:
     return found
 
 
-def format_emoji_sequence(emojis: Any, max_emojis: int = 3) -> str:
+def validate_emoji_sequence(text: str) -> Tuple[bool, List[str], Optional[str]]:
+    """Strictly validates that text consists solely of 1-3 registered emojis.
+
+    Returns:
+        (is_valid, extracted_emojis, error_message)
+    """
+    if not isinstance(text, str):
+        return False, [], "Input must be a string."
+    clean = "".join(text.split())
+    if not clean:
+        return False, [], "Emoji assignment cannot be empty."
+
+    extracted = extract_emojis(clean)
+    reconstructed = "".join(extracted)
+    if reconstructed != clean:
+        return False, extracted, "Contains invalid or unregistered characters."
+    if not (1 <= len(extracted) <= 3):
+        return False, extracted, f"Must have 1 to 3 emojis (found {len(extracted)})."
+    return True, extracted, None
+
+
+def format_emoji_sequence(
+    emojis: Any, max_emojis: int = 3, fallback: Optional[str] = "🙂"
+) -> Optional[str]:
     """Normalizes an emoji list or string to a compact string of up to max_emojis."""
     if isinstance(emojis, str):
         extracted = extract_emojis(emojis)
@@ -173,17 +196,17 @@ def format_emoji_sequence(emojis: Any, max_emojis: int = 3) -> str:
                 if e not in extracted:
                     extracted.append(e)
     else:
-        return "🙂"
+        return fallback
 
     if not extracted:
-        return "🙂"
+        return fallback
     return "".join(extracted[:max_emojis])
 
 
 def is_valid_emoji_sequence(seq: str) -> bool:
-    """Checks if sequence contains 1-3 valid registered emojis."""
-    emojis = extract_emojis(seq)
-    return 1 <= len(emojis) <= 3
+    """Checks if sequence contains solely 1-3 valid registered emojis."""
+    valid, _, _ = validate_emoji_sequence(seq)
+    return valid
 
 
 def get_prompt_emoji_catalog() -> str:
@@ -207,7 +230,6 @@ def get_related_emojis(emoji: str, limit: int = 10) -> List[str]:
         return list(EMOJI_REGISTRY.keys())[:limit]
     cat = info.get("category")
     same_cat = [e for e, d in EMOJI_REGISTRY.items() if d.get("category") == cat and e != emoji]
-    # Add neighboring / neutral fallback emojis
     fallbacks = ["🤔", "🤨", "🧐", "😏", "🙄", "😒", "😐", "😑", "😌", "😴", "😮", "😲"]
     for fb in fallbacks:
         if fb != emoji and fb not in same_cat:
