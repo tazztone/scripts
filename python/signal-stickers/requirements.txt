@@ -1,0 +1,3 @@
+PyYAML>=6.0
+Pillow>=10.0
+signal-sticker-tool
