@@ -96,6 +96,105 @@ else
 fi
 rm -f "$serve_log"
 
+# 9. Finalize the fixture into an approved, exported pack (no API calls).
+"$PY" - "$FIX" <<'PYEOF'
+import json, sys
+from pathlib import Path
+folder = Path(sys.argv[1])
+dp = folder / "pack_draft.json"
+draft = json.loads(dp.read_text(encoding="utf-8"))
+draft.setdefault("meta", {})["title"] = "Runner Test Pack"
+draft["meta"]["author"] = "runner-test"
+for item in draft.get("stickers", {}).values():
+    item["selection"] = "keep"
+    item["emojis"] = ["\U0001F600"]
+    if item.get("tag_status") in ("error", "unresolved", "stale"):
+        item["tag_status"] = "suggested"
+dp.write_text(json.dumps(draft, ensure_ascii=False, indent=2), encoding="utf-8")
+PYEOF
+out="$(bash "$RUNNER" approve "$FIX" 2>&1)"; code=$?
+[ "$code" -eq 0 ] && ok "approve finalized fixture" || bad "approve finalized fixture (code=$code)"
+out="$(bash "$RUNNER" export "$FIX" 2>&1)"; code=$?
+[ "$code" -eq 0 ] && [ -f "$FIX/stickers.yaml" ] && ok "export finalized fixture" || bad "export finalized fixture (code=$code)"
+
+# 10. Fake signal-sticker-tool: records argv, mirrors upstream ownership of
+# uploaded.yaml (writes it on upload, refuses while it exists) and --help.
+FAKEBIN="$(mktemp -d)"
+FAKELOG="$(mktemp)"
+export FAKE_TOOL_LOG="$FAKELOG"
+cat > "$FAKEBIN/signal-sticker-tool" <<'FAKEEOF'
+#!/usr/bin/env bash
+echo "$*" >> "$FAKE_TOOL_LOG"
+cmd="${1:-}"
+case "$cmd" in
+    --help) echo "fake signal-sticker-tool"; exit 0 ;;
+    preview) touch preview.html; echo "preview ok"; exit 0 ;;
+    upload)
+        if [ -f uploaded.yaml ]; then
+            echo 'File "uploaded.yaml" found: already uploaded!'
+            echo "https://signal.art/addstickers/#pack_id=OLD&pack_key=OLD"
+            exit 0
+        fi
+        printf 'id: FAKEID\nkey: FAKEKEY\n' > uploaded.yaml
+        echo "This pack is available in URL:"
+        echo "  https://signal.art/addstickers/#pack_id=FAKEID&pack_key=FAKEKEY"
+        exit 0 ;;
+    login) echo "logged in (fake)"; exit 0 ;;
+    logout) echo "logged out (fake)"; exit 0 ;;
+    url)
+        [ -f uploaded.yaml ] || { echo "not uploaded yet" >&2; exit 1; }
+        echo "https://signal.art/addstickers/#pack_id=FAKEID&pack_key=FAKEKEY"
+        exit 0 ;;
+    *) echo "unknown command: $cmd" >&2; exit 1 ;;
+esac
+FAKEEOF
+chmod +x "$FAKEBIN/signal-sticker-tool"
+export PATH="$FAKEBIN:$PATH"
+
+# 11. login passthrough reaches the tool.
+out="$(bash "$RUNNER" login 2>&1)"; code=$?
+[ "$code" -eq 0 ] && tail -n 1 "$FAKELOG" | grep -q "^login$" && ok "login passthrough" || bad "login passthrough (code=$code)"
+
+# 12. preview works and forwards no runner flags.
+out="$(bash "$RUNNER" preview "$FIX" 2>&1)"; code=$?
+[ "$code" -eq 0 ] && [ -f "$FIX/preview.html" ] && tail -n 1 "$FAKELOG" | grep -q "^preview$" && ok "preview forwards clean argv" || bad "preview forwards clean argv (code=$code)"
+
+# 13. upload --yes succeeds; --yes never reaches the external tool.
+out="$(bash "$RUNNER" upload "$FIX" --yes 2>&1)"; code=$?
+[ "$code" -eq 0 ] && [ -f "$FIX/uploaded.yaml" ] && tail -n 1 "$FAKELOG" | grep -q "^upload$" && ok "upload filters --yes" || bad "upload filters --yes (code=$code)"
+grep -q -- "--yes" "$FAKELOG" && bad "runner flag leaked to tool" || ok "no runner flag leaked to tool"
+
+# 14. stray mode flags are dropped from preflight and the tool call too.
+out="$(bash "$RUNNER" upload "$FIX" --yes --serve 2>&1)"; code=$?
+[ "$code" -eq 0 ] && tail -n 1 "$FAKELOG" | grep -q "^upload$" && ok "upload drops --serve" || bad "upload drops --serve (code=$code)"
+
+# 15. url reprints the share link.
+out="$(bash "$RUNNER" url "$FIX" 2>&1)"; code=$?
+[ "$code" -eq 0 ] && echo "$out" | grep -q "signal.art/addstickers" && ok "url reprints link" || bad "url reprints link (code=$code)"
+
+# 16. doctor --upload fails with no Signal login, passes once configured.
+XDG_EMPTY="$(mktemp -d)"
+out="$(XDG_CONFIG_HOME="$XDG_EMPTY" bash "$RUNNER" doctor --upload "$FIX" 2>&1)"; code=$?
+[ "$code" -ne 0 ] && echo "$out" | grep -qi "login" && ok "doctor --upload gates on login" || bad "doctor --upload gates on login (code=$code)"
+XDG_FULL="$(mktemp -d)"
+mkdir -p "$XDG_FULL/signal-sticker-tool"
+printf 'username: fake-user\npassword: fake-pass\n' > "$XDG_FULL/signal-sticker-tool/credentials.yaml"
+out="$(XDG_CONFIG_HOME="$XDG_FULL" bash "$RUNNER" doctor --upload "$FIX" 2>&1)"; code=$?
+[ "$code" -eq 0 ] && echo "$out" | grep -q "Upload readiness passed" && ok "doctor --upload passes when ready" || bad "doctor --upload passes when ready (code=$code)"
+
+# 17. doctor --upload drops serve flags and stays read-only (draft untouched).
+# Note: the backup lives outside the pack so preflight never sees it.
+DRAFT_BAK="$(mktemp)"
+cp "$FIX/pack_draft.json" "$DRAFT_BAK"
+out="$(XDG_CONFIG_HOME="$XDG_FULL" bash "$RUNNER" doctor --upload "$FIX" --serve 2>&1)"; code=$?
+if [ "$code" -eq 0 ] && cmp -s "$FIX/pack_draft.json" "$DRAFT_BAK"; then
+    ok "doctor --upload drops --serve, draft untouched"
+else
+    bad "doctor --upload drops --serve, draft untouched (code=$code)"
+fi
+rm -f "$DRAFT_BAK"
+
+rm -rf "$FAKEBIN" "$FAKELOG" "$XDG_EMPTY" "$XDG_FULL" "$DRAFT_BAK"
 rm -rf "$FIX"
 
 echo "---"

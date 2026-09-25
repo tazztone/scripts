@@ -1,1 +1,8 @@
-signal-sticker-tool
+# Preview/upload tooling (kept separate so core scan/curate/tag/export
+# works without Signal credentials or this package).
+#
+# Pinned to the version exercised against this runner's flag filtering,
+# uploaded.yaml handling, and login-state check. To upgrade: install the
+# candidate, run `./stickers doctor --upload <test-pack>`, preview, and
+# (on a disposable test account) upload before changing this pin.
+signal-sticker-tool==0.5.0

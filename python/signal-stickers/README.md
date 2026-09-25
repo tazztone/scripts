@@ -17,11 +17,14 @@ the uploadable `stickers.yaml`.
 # 1. Inventory images, hard-gate check, group visually similar candidates
 ./stickers scan ./my_pack
 
-# 2. Open the review page and resolve every Undecided candidate
-./stickers curate ./my_pack --serve   # loopback direct-save; opens automatically
-
-# 3. Let OpenRouter suggest one emoji for kept stickers lacking a final pick
+# 2. Let OpenRouter suggest one emoji for kept stickers lacking a final pick
+#    (optional; manual emoji selection avoids needing an API key)
 ./stickers tag ./my_pack
+
+# 3. Open the review page (loopback direct-save; opens automatically).
+#    If you already have a review server running, restart it and reload
+#    after tagging so the page is not stale.
+./stickers curate ./my_pack --serve
 
 # 4. In the browser: resolve Undecided, set exactly one emoji per kept sticker,
 #    set title/author/cover, click Approve Pack, then Save.
@@ -30,11 +33,14 @@ the uploadable `stickers.yaml`.
 
 # 5. Approve and build. Approval is one gate with two equivalent entries:
 #    browser Approve Pack + Save (server re-validates and persists it), or
-#    CLI approval for non-browser flows. No confidence-threshold bypass.
+#    CLI approval for non-browser flows. Only one is needed.
+#    No confidence-threshold bypass.
 ./stickers approve ./my_pack --title "My Pack" --author "me"
 ./stickers export ./my_pack
 
-# 6. Preview, then upload (confirmation required; --yes for scripts)
+# 6. Check upload readiness, preview, then upload
+#    (confirmation required; --yes for scripts)
+./stickers doctor --upload ./my_pack
 ./stickers preview ./my_pack
 ./stickers upload ./my_pack
 ```
@@ -72,16 +78,18 @@ manifest against the current draft and hashes immediately before use.
 
 | Command | What it does | API calls |
 | :--- | :--- | :--- |
-| `./stickers doctor [<folder>]` | Core env/capability check; with folder also runs pack preflight | no |
+| `./stickers doctor [--upload] [<folder>]` | Core env/capability check; `--upload` also requires the uploader + Signal login; with folder also runs pack preflight | no |
 | `./stickers scan <folder>` | Inventory, hard-gate report, cluster similar candidates | no |
-| `./stickers curate <folder> [--serve]` | `scan`, then generate/open the review page | no |
 | `./stickers tag <folder>` | OpenRouter suggestions for `keep` stickers lacking final emoji | **yes** |
+| `./stickers curate <folder> [--serve]` | `scan`, then generate/open the review page | no |
 | `./stickers review <folder> [--serve]` | Regenerate/open the review page only | no |
 | `./stickers approve <folder>` | Human approval for the current revision | no |
 | `./stickers preflight <folder>` | Strict export/upload preflight only | no |
 | `./stickers export <folder>` | Preflight + write `stickers.yaml` + receipt | no |
-| `./stickers preview <folder>` | Re-verify receipt + render with `signal-sticker-tool` | no |
+| `./stickers preview <folder>` | Re-verify receipt + render locally with `signal-sticker-tool` | no |
 | `./stickers upload <folder> [--yes]` | Re-verify + confirm + upload to Signal | no |
+| `./stickers login` / `./stickers logout` | Authenticate / de-authenticate `signal-sticker-tool` | no |
+| `./stickers url <folder>` | Reprint the share URL of an uploaded pack | no |
 | `./stickers help` | Show usage (also shown with no arguments) | no |
 
 `./stickers` is a symlink to `run.sh`; both work identically. The runner finds the workspace
@@ -96,7 +104,7 @@ manifest against the current draft and hashes immediately before use.
 .venv/bin/python -m pip install -r python/signal-stickers/requirements.txt
 # or: uv pip install -r python/signal-stickers/requirements.txt
 
-# Only for preview/upload
+# Only for preview/upload (pinned; see the comment in the file before upgrading)
 .venv/bin/python -m pip install -r python/signal-stickers/requirements-upload.txt
 ```
 
@@ -197,9 +205,10 @@ proven server-side rejection.
 | :--- | :--- |
 | `pack_draft.json` | **Sole source of truth.** Schema v3: revision, title/author/cover, selection, hashes, clusters, suggested + final single emoji, tag source/status, confidence/reason, approval. |
 | `review.html` | Generated review page. Safe to delete; rebuilt by `curate`/`review`. |
+| `preview.html` | Written by `signal-sticker-tool preview`. Ignored by preflight; safe to delete. |
 | `stickers.yaml` | Build output consumed by `signal-sticker-tool`. Never trusted without its receipt. |
 | `stickers.yaml.receipt.json` | Build receipt: draft digest, ordered files/hashes, title/author/cover, manifest digest, builder version. |
-| `uploaded.yaml` | Prior-upload marker (if present); `upload` warns before re-uploading. |
+| `uploaded.yaml` | Written by `signal-sticker-tool` on upload (`id`/`key`); while present the tool refuses to re-upload. |
 | `classification_cache.json` | Legacy. Migrated once into the draft as pending suggestions, never pre-approved. |
 
 All live in your **pack folder**, not next to the scripts, so multiple packs can be
@@ -349,22 +358,44 @@ regenerable; only deleting the draft loses classification work.
    window.reduxStore.getState().items.uuid_id    // username
    window.reduxStore.getState().items.password   // password
    ```
-4. Authenticate:
+4. Authenticate (this repo never sees or stores your credentials; the
+   external tool saves them under your config home):
    ```bash
-   signal-sticker-tool login
+   ./stickers login
+   # equivalent: signal-sticker-tool login
    ```
+
+Check readiness without uploading:
+
+```bash
+./stickers doctor --upload ./my_pack
+```
+
+It requires `signal-sticker-tool`, a configured Signal login (presence only,
+never printed), and a preflight-clean pack. `OPENROUTER_API_KEY` stays
+optional (only `tag` needs it).
 
 ### Upload
 
 ```bash
+./stickers preview ./my_pack             # local render, no upload
 ./stickers upload ./my_pack              # prompts YES (irreversible)
 ./stickers upload ./my_pack --yes        # noninteractive
+./stickers url ./my_pack                 # reprint the share URL later
 ```
 
 Before the external uploader runs, the runner re-runs preflight, verifies the
 receipt (never trusts YAML by existence), prints the final title/author/count/cover/digest,
-detects `uploaded.yaml`, and requires confirmation. You get a shareable link like
+detects `uploaded.yaml`, and requires confirmation. Runner-only flags such as
+`--yes` are never forwarded to `signal-sticker-tool` (its `preview`/`upload`
+subcommands take no extra arguments). You get a shareable link like
 `https://signal.art/addstickers/#pack_id=...&pack_key=...`.
+
+`uploaded.yaml` is written by `signal-sticker-tool` itself on a successful
+upload. While it exists, the tool refuses to upload again and shows the
+previous upload instead — so an accidental re-run cannot burn a second
+immutable pack. For an intentional re-upload, delete or rename
+`uploaded.yaml` first.
 
 ---
 

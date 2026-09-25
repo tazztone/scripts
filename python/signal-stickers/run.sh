@@ -81,21 +81,29 @@ Canonical use:
   python/signal-stickers/stickers <action> <folder> [options]   # from repo root
   cd python/signal-stickers && ./stickers <action> <folder>
 
-A pack <folder> is required for scan/curate/tag/review/export/preview/upload/approve.
+A pack <folder> is required for scan/tag/curate/review/approve/export/preflight/preview/upload/url.
 With no arguments this help is shown (nothing runs implicitly).
 
-Workflow (in order):
+Canonical workflow (in order):
   scan       Inventory images, hard-gate check, group visually similar candidates
+  tag        OpenRouter suggestions for kept stickers lacking a final emoji (optional; manual emoji picks allowed)
   curate     scan + build review page (add --serve for loopback direct-save)
-  tag        OpenRouter suggestions for kept stickers lacking a final emoji
   review     Rebuild the review page only (add --serve for direct-save)
   approve    Human approval gate for the current revision (no threshold bypass)
   export     Strict preflight + write stickers.yaml + build receipt
   preview    Re-verify receipt + render locally with signal-sticker-tool
   upload     Re-verify + confirm + upload (use --yes noninteractively)
 
+Browser approval and CLI approval are alternatives: either Approve Pack + Save
+in the review page, or './stickers approve <folder>'. Only one is needed.
+If tag/curate inputs change while a review server runs, restart it and reload.
+
 Utilities:
-  doctor [<folder>]   Core env check; with a folder also runs pack preflight.
+  doctor [--upload] [<folder>]   Core env check; with a folder also runs pack preflight.
+                                 --upload also requires the uploader + Signal login.
+  login      Authenticate signal-sticker-tool (Signal Desktop credentials).
+  logout     Remove saved Signal credentials.
+  url <folder>   Reprint the share URL of an uploaded pack.
   preflight <folder>  Strict export/upload preflight only.
   help       Show this message.
 
@@ -114,16 +122,129 @@ Options:
 
 Examples:
   python/signal-stickers/stickers scan ./my_pack
-  python/signal-stickers/stickers curate ./my_pack --serve
   python/signal-stickers/stickers tag ./my_pack
+  python/signal-stickers/stickers curate ./my_pack --serve
   python/signal-stickers/stickers approve ./my_pack --title "My Pack" --author "me"
   python/signal-stickers/stickers export ./my_pack
+  python/signal-stickers/stickers preview ./my_pack
+  python/signal-stickers/stickers doctor --upload ./my_pack
+  signal-sticker-tool login   # via: ./stickers login
   python/signal-stickers/stickers upload ./my_pack --yes
 EOF
 }
 
+# Default Signal credentials location used by signal-sticker-tool
+# (XDG config home or ~/.config). Never printed, only checked for presence.
+default_cred_file() {
+    local base="${XDG_CONFIG_HOME:-}"
+    if [ -z "$base" ]; then base="$HOME/.config"; fi
+    printf '%s' "$base/signal-sticker-tool/credentials.yaml"
+}
+
+# Extract an explicit --cred-file/-c value from runner args, if the user
+# overrides the default credentials location.
+cred_file_from_args() {
+    local skip_next=0
+    for a in "$@"; do
+        if [ "$skip_next" -eq 1 ]; then printf '%s' "$a"; return 0; fi
+        case "$a" in
+            --cred-file=*) printf '%s' "${a#--cred-file=}"; return 0 ;;
+            --cred-file|-c) skip_next=1 ;;
+            *) ;;
+        esac
+    done
+    return 1
+}
+
+# Credential-safe login check: reports presence/validity only, never values.
+check_signal_login() {
+    local cred_file
+    if ! cred_file="$(cred_file_from_args "$@")"; then
+        cred_file="$(default_cred_file)"
+    fi
+    if [ ! -f "$cred_file" ]; then
+        note "  Signal login  not configured (no credentials file)"
+        note "                  run './stickers login' (Signal Desktop credentials)"
+        return 1
+    fi
+    if "$PYTHON" - "$cred_file" <<'PY' >/dev/null 2>&1; then
+import sys, yaml
+with open(sys.argv[1], encoding="utf-8") as fp:
+    creds = yaml.safe_load(fp) or {}
+ok = isinstance(creds, dict) and bool(str(creds.get("username") or "").strip()) and bool(str(creds.get("password") or "").strip())
+raise SystemExit(0 if ok else 1)
+PY
+        note "  Signal login  configured (credentials file present)"
+        return 0
+    fi
+    note "  Signal login  BROKEN: credentials file exists but has no usable username/password"
+    note "                  re-run './stickers login'"
+    return 1
+}
+
+# Runner-only flags must never reach signal-sticker-tool (its preview/upload
+# subcommands take no extra arguments). Forward credential overrides only.
+# Result in global array FILTERED.
+filter_tool_args() {
+    FILTERED=()
+    local skip_next=0
+    for a in "$@"; do
+        if [ "$skip_next" -eq 1 ]; then skip_next=0; FILTERED+=("$a"); continue; fi
+        case "$a" in
+            --cred-file|-c) FILTERED+=("$a"); skip_next=1 ;;
+            --cred-file=*) FILTERED+=("$a") ;;
+            *) ;; # drop runner-only and unknown flags
+        esac
+    done
+}
+
+# Keep preflight read-only: drop serve/prune/mode flags that either confuse
+# the validator or would mutate the draft outside their own commands.
+filter_preflight_args() {
+    FILTERED=()
+    local skip_next=0
+    local PREV_FLAG=""
+    for a in "$@"; do
+        if [ "$skip_next" -eq 1 ]; then
+            case "$PREV_FLAG" in
+                --title|--author|--cover|--model|--out|--draft|--cache|--workers|--cluster-distance) FILTERED+=("$a") ;;
+                *) ;;
+            esac
+            skip_next=0; continue
+        fi
+        case "$a" in
+            --strict-quality|--yes|--resume|--dedupe) FILTERED+=("$a") ;;
+            --title|--author|--cover|--model|--out|--draft|--cache|--workers|--cluster-distance) FILTERED+=("$a"); PREV_FLAG="$a"; skip_next=1 ;;
+            --title=*|--author=*|--cover=*|--model=*|--out=*|--draft=*|--cache=*|--workers=*|--cluster-distance=*|--linkage=*) FILTERED+=("$a") ;;
+            --linkage) FILTERED+=("$a"); PREV_FLAG="$a"; skip_next=1 ;;
+            *) ;; # drop --serve/--port/--prune/mode/unknown flags
+        esac
+    done
+}
+
 doctor() {
-    local folder="${1:-}"
+    local upload_mode=0
+    local raw=()
+    for a in "$@"; do
+        if [ "$a" = "--upload" ]; then upload_mode=1; else raw+=("$a"); fi
+    done
+    local folder="${raw[0]:-}"
+    case "$folder" in
+        -*) folder="" ;;
+    esac
+    local pre_args=()
+    if [ -n "$folder" ]; then
+        pre_args=("${raw[@]:1}")
+    else
+        pre_args=("${raw[@]}")
+    fi
+    # Unhfiltered remainder for the login check so a --cred-file/-c
+    # override is honored there (preflight itself takes no such flag).
+    local login_args=("${pre_args[@]}")
+    # Drop serve/mode flags so a doctor folder check stays read-only.
+    filter_preflight_args "${pre_args[@]}"
+    pre_args=("${FILTERED[@]}")
+
     local problems=0
     local warnings=0
 
@@ -152,10 +273,24 @@ doctor() {
 
     if command -v signal-sticker-tool >/dev/null 2>&1; then
         note "  signal-sticker-tool  $(command -v signal-sticker-tool) (preview/upload only)"
+        if [ "$upload_mode" -eq 1 ] && ! signal-sticker-tool --help >/dev/null 2>&1; then
+            note "  signal-sticker-tool  BROKEN: installed but --help fails; reinstall upload requirements"
+            problems=$((problems + 1))
+        fi
     else
         note "  signal-sticker-tool  not installed (only needed for preview/upload)"
         note "                        $PYTHON -m pip install -r $DIR/requirements-upload.txt"
-        warnings=$((warnings + 1))
+        if [ "$upload_mode" -eq 1 ]; then
+            problems=$((problems + 1))
+        else
+            warnings=$((warnings + 1))
+        fi
+    fi
+
+    if [ "$upload_mode" -eq 1 ]; then
+        if ! check_signal_login "${login_args[@]}"; then
+            problems=$((problems + 1))
+        fi
     fi
 
     if [ -n "${OPENROUTER_API_KEY:-}" ]; then
@@ -168,6 +303,14 @@ doctor() {
 
     if [ -z "$folder" ]; then
         echo
+        if [ "$upload_mode" -eq 1 ]; then
+            if [ "$problems" -eq 0 ]; then
+                note "Upload readiness passed (env only). Pass a folder for pack checks: ./stickers doctor --upload ./my_pack"
+                return 0
+            fi
+            note "$problems upload-readiness check(s) failing."
+            return 1
+        fi
         if [ "$problems" -eq 0 ]; then
             note "Core checks passed. Pass a folder for pack checks: ./stickers doctor ./my_pack"
             return 0
@@ -187,20 +330,26 @@ doctor() {
         if [ -f "$folder/$f" ]; then note "  $f present"; else note "  $f not generated yet"; fi
     done
     if [ -f "$folder/uploaded.yaml" ]; then
-        note "  uploaded.yaml present (prior upload marker; verify before re-uploading)"
+        note "  uploaded.yaml present: signal-sticker-tool wrote it on a prior upload and will refuse to re-upload while it exists"
     fi
 
     echo
     note "Running pack preflight (schema/hash/manifest freshness)..."
-    shift
-    if "$PYTHON" "$DIR/classify_and_build.py" "$folder" --preflight "$@"; then
+    if "$PYTHON" "$DIR/classify_and_build.py" "$folder" --preflight "${pre_args[@]}"; then
         note "Pack preflight passed."
     else
         note "Pack preflight FAILED (see above)."
         return 1
     fi
 
-    if [ "$problems" -ne 0 ]; then return 1; fi
+    if [ "$problems" -ne 0 ]; then
+        if [ "$upload_mode" -eq 1 ]; then note "$problems upload-readiness check(s) failing."; else note "$problems core check(s) failing."; fi
+        return 1
+    fi
+    if [ "$upload_mode" -eq 1 ]; then
+        if [ "$warnings" -ne 0 ]; then note "Upload readiness passed with $warnings optional warning(s)."; else note "Upload readiness passed."; fi
+        return 0
+    fi
     if [ "$warnings" -ne 0 ]; then note "Core ok with $warnings optional warning(s)."; fi
     return 0
 }
@@ -209,9 +358,12 @@ confirm_upload() {
     local has_yes=0
     for a in "${ARGS[@]}"; do [ "$a" = "--yes" ] && has_yes=1; done
     if [ -f "$FOLDER/uploaded.yaml" ]; then
-        echo "Note: $FOLDER/uploaded.yaml exists from a prior upload. Re-uploading creates a NEW pack link." >&2
+        echo "Note: $FOLDER/uploaded.yaml exists from a prior upload." >&2
+        echo "signal-sticker-tool will NOT create a new pack while it exists;" >&2
+        echo "it shows the previous upload instead. Delete or rename uploaded.yaml" >&2
+        echo "for an intentional re-upload (packs cannot be edited after upload)." >&2
         if [ "$has_yes" -eq 0 ]; then
-            printf 'Type YES to upload anyway (or re-run with --yes): ' >&2
+            printf 'Type YES to run the uploader anyway (or re-run with --yes): ' >&2
             read -r ans || return 1
             [ "$ans" = "YES" ] || { echo "Aborted." >&2; return 1; }
         fi
@@ -272,8 +424,29 @@ ARGS=("$@")
 case "$ACTION" in
     doctor)
         shift_folder
+        if [ -n "${FOLDER:-}" ]; then
+            doctor "$FOLDER" "${ARGS[@]}" || exit 1
+        elif [ "${#ARGS[@]}" -gt 0 ]; then
+            doctor "${ARGS[@]}" || exit 1
+        else
+            doctor || exit 1
+        fi
+        ;;
+
+    login|logout)
+        require_sticker_tool
+        filter_tool_args "${ARGS[@]}"
         # shellcheck disable=SC2128
-        doctor "${FOLDER:-}" "${ARGS[@]}" || exit 1
+        signal-sticker-tool "$ACTION" "${FILTERED[@]}"
+        ;;
+
+    url)
+        shift_folder
+        require_folder
+        require_sticker_tool
+        filter_tool_args "${ARGS[@]}"
+        # shellcheck disable=SC2128
+        ( cd "$FOLDER" && signal-sticker-tool url "${FILTERED[@]}" )
         ;;
 
     help|--help|-h)
@@ -352,15 +525,25 @@ case "$ACTION" in
         shift_folder
         require_folder
         require_sticker_tool
+        filter_preflight_args "${ARGS[@]}"
+        PRE_ARGS=("${FILTERED[@]}")
+        filter_tool_args "${ARGS[@]}"
+        TOOL_ARGS=("${FILTERED[@]}")
         [ -f "$FOLDER/stickers.yaml" ] || die "No stickers.yaml in $FOLDER. Run './stickers export $FOLDER' first."
         [ -f "$FOLDER/stickers.yaml.receipt.json" ] || die "No build receipt in $FOLDER. Re-run './stickers export $FOLDER' (stale YAML is never trusted)."
-        "$PYTHON" "$DIR/classify_and_build.py" "$FOLDER" --preflight "${ARGS[@]}"
+        # shellcheck disable=SC2128
+        "$PYTHON" "$DIR/classify_and_build.py" "$FOLDER" --preflight "${PRE_ARGS[@]}"
         print_pack_summary
         if [ "$ACTION" = "preview" ]; then
-            ( cd "$FOLDER" && signal-sticker-tool preview "${ARGS[@]}" )
+            # shellcheck disable=SC2128
+            ( cd "$FOLDER" && signal-sticker-tool preview "${TOOL_ARGS[@]}" )
         else
             confirm_upload || exit 1
-            ( cd "$FOLDER" && signal-sticker-tool upload "${ARGS[@]}" )
+            # shellcheck disable=SC2128
+            ( cd "$FOLDER" && signal-sticker-tool upload "${TOOL_ARGS[@]}" )
+            echo
+            echo "Upload finished. The tool printed the share URL above and saved it in $FOLDER/uploaded.yaml."
+            echo "Reprint later with: ./stickers url $FOLDER"
         fi
         ;;
 

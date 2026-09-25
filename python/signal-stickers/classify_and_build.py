@@ -114,9 +114,11 @@ SUPPORTED_EXTENSIONS = {".webp", ".png", ".apng", ".jpg", ".jpeg"}
 INVENTORY_EXTENSIONS = {".webp", ".png", ".apng", ".jpg", ".jpeg", ".gif", ".bmp"}
 HARD_IMAGE_EXTENSIONS = {".png", ".webp", ".apng"}
 # Files that live alongside the pack but are not sticker candidates.
+# preview.html is the documented output of `signal-sticker-tool preview`
+# run inside the pack folder, so it must not fail a later preflight.
 SIDECAR_NAMES = {
     "pack_draft.json", "stickers.yaml", "stickers.yaml.receipt.json",
-    "review.html", "classification_cache.json", "uploaded.yaml",
+    "review.html", "preview.html", "classification_cache.json", "uploaded.yaml",
 }
 SIDECAR_SUFFIXES = {".tmp", ".bak"}
 
