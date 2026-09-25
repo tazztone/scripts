@@ -38,6 +38,7 @@ from classify_and_build import (
     hamming_distance,
     load_or_create_draft,
     parse_json_response,
+    select_manifest_entries,
 )
 
 
@@ -282,3 +283,217 @@ def test_build_disambiguation_prompt():
     prompt = build_disambiguation_prompt("🤔", ["img1.webp", "img2.webp"])
     assert "🤔" in prompt
     assert "redundant_of" in prompt
+
+
+def test_select_manifest_entries():
+    """Verify only 'keep' stickers with emojis are selected for the manifest."""
+    draft = {
+        "stickers": {
+            "keep_tagged.webp": {"selection": "keep", "emojis": ["😏"]},
+            "keep_suggested.webp": {"selection": "keep", "suggested_emojis": ["🤔", "🤨"]},
+            "keep_untagged.webp": {"selection": "keep", "emojis": None},
+            "undecided.webp": {"selection": "undecided", "emojis": ["😀"]},
+            "excluded.webp": {"selection": "exclude", "emojis": ["😃"]},
+        }
+    }
+
+    entries, skipped, missing = select_manifest_entries(draft)
+
+    assert [e["file"] for e in entries] == ["keep_suggested.webp", "keep_tagged.webp"]
+    assert entries[0]["chr"] == "🤔🤨"
+    assert skipped == ["keep_untagged.webp"]
+    assert missing == []
+
+
+def test_select_manifest_entries_excludes_missing_files(tmp_path):
+    """When a folder is supplied, entries without an image on disk are dropped."""
+    (tmp_path / "here.webp").touch()
+
+    draft = {
+        "stickers": {
+            "here.webp": {"selection": "keep", "emojis": ["😀"]},
+            "gone.webp": {"selection": "keep", "emojis": ["😃"]},
+        }
+    }
+
+    entries, skipped, missing = select_manifest_entries(draft, folder=tmp_path)
+
+    assert [e["file"] for e in entries] == ["here.webp"]
+    assert skipped == []
+    assert missing == ["gone.webp"]
+
+
+def test_build_yaml_refuses_empty_manifest(tmp_path, monkeypatch):
+    """Verify the CLI exits non-zero instead of writing an empty stickers.yaml."""
+    import classify_and_build as cab
+
+    for name in ("a.webp", "b.webp"):
+        (tmp_path / name).touch()
+
+    draft = {
+        "version": 2,
+        "meta": {"title": "Test", "author": "Tester", "cover": None},
+        "similarity_groups": {},
+        "stickers": {
+            "a.webp": {"selection": "keep", "emojis": None, "confidence": 0.0},
+            "b.webp": {"selection": "undecided", "emojis": None, "confidence": 0.0},
+        },
+    }
+    (tmp_path / "pack_draft.json").write_text(json.dumps(draft), encoding="utf-8")
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["classify_and_build.py", str(tmp_path), "--build-yaml"],
+    )
+    with pytest.raises(SystemExit) as exc:
+        cab.main()
+    assert exc.value.code == 1
+    assert not (tmp_path / "stickers.yaml").exists()
+
+
+def test_build_yaml_preserves_draft_title_across_runs(tmp_path, monkeypatch):
+    """A plain --scan must not clobber a title previously stored in the draft."""
+    import classify_and_build as cab
+
+    (tmp_path / "a.webp").touch()
+
+    draft = {
+        "version": 2,
+        "meta": {"title": "Kept Title", "author": "Kept Author", "cover": None},
+        "similarity_groups": {},
+        "stickers": {
+            "a.webp": {"selection": "keep", "emojis": ["😀"], "confidence": 0.9,
+                       "file_hash": "", "suggested_emojis": ["😀"]},
+        },
+    }
+    draft_path = tmp_path / "pack_draft.json"
+    draft_path.write_text(json.dumps(draft), encoding="utf-8")
+
+    monkeypatch.setattr("sys.argv", ["classify_and_build.py", str(tmp_path), "--scan"])
+    cab.main()
+
+    reloaded = json.loads(draft_path.read_text(encoding="utf-8"))
+    assert reloaded["meta"]["title"] == "Kept Title"
+    assert reloaded["meta"]["author"] == "Kept Author"
+
+
+def test_build_yaml_applies_explicit_title_override(tmp_path, monkeypatch):
+    """An explicit --title/--author must override the draft metadata."""
+    import classify_and_build as cab
+
+    (tmp_path / "a.webp").touch()
+
+    draft = {
+        "version": 2,
+        "meta": {"title": "Old", "author": "Old Author", "cover": None},
+        "similarity_groups": {},
+        "stickers": {
+            "a.webp": {"selection": "keep", "emojis": ["😀"], "confidence": 0.9,
+                       "file_hash": "", "suggested_emojis": ["😀"]},
+        },
+    }
+    draft_path = tmp_path / "pack_draft.json"
+    draft_path.write_text(json.dumps(draft), encoding="utf-8")
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["classify_and_build.py", str(tmp_path), "--build-yaml",
+         "--title", "New Title", "--author", "New Author"],
+    )
+    cab.main()
+
+    doc = yaml.safe_load((tmp_path / "stickers.yaml").read_text(encoding="utf-8"))
+    assert doc["meta"]["title"] == "New Title"
+    assert doc["meta"]["author"] == "New Author"
+
+
+def test_build_yaml_drops_entries_with_missing_images(tmp_path, monkeypatch):
+    """A stale draft must not emit references to images that no longer exist."""
+    import classify_and_build as cab
+
+    (tmp_path / "a.webp").touch()
+
+    draft = {
+        "version": 2,
+        "meta": {"title": "T", "author": "A", "cover": None},
+        "similarity_groups": {},
+        "stickers": {
+            "a.webp": {"selection": "keep", "emojis": ["😀"], "confidence": 0.9,
+                       "file_hash": "", "suggested_emojis": ["😀"]},
+            "gone.webp": {"selection": "keep", "emojis": ["😃"], "confidence": 0.9,
+                          "file_hash": "", "suggested_emojis": ["😃"]},
+        },
+    }
+    (tmp_path / "pack_draft.json").write_text(json.dumps(draft), encoding="utf-8")
+
+    monkeypatch.setattr(
+        "sys.argv", ["classify_and_build.py", str(tmp_path), "--build-yaml"]
+    )
+    cab.main()
+
+    doc = yaml.safe_load((tmp_path / "stickers.yaml").read_text(encoding="utf-8"))
+    assert [s["file"] for s in doc["stickers"]] == ["a.webp"]
+
+
+def test_review_html_preserves_similarity_groups(tmp_path, monkeypatch):
+    """The exported draft must round-trip the clusters computed during --scan."""
+    import review as rv
+
+    img = tmp_path / "a.webp"
+    Image.new("RGBA", (512, 512), (0, 0, 0, 0)).save(img, "WEBP")
+
+    draft = {
+        "version": 2,
+        "meta": {"title": "T", "author": "A", "cover": None},
+        "similarity_groups": {"cluster_01": ["a.webp"]},
+        "stickers": {
+            "a.webp": {
+                "selection": "keep", "emojis": ["😀"], "confidence": 0.9,
+                "reason": "happy", "review_status": "approved",
+                "similarity_group": "cluster_01", "file_hash": "",
+            },
+        },
+    }
+    (tmp_path / "pack_draft.json").write_text(json.dumps(draft), encoding="utf-8")
+
+    out, stats = rv.generate_review_html(tmp_path, draft_path=tmp_path / "pack_draft.json")
+    assert out.exists()
+    assert stats["total"] == 1
+    assert stats["kept"] == 1
+    assert stats["clusters"] == 1
+    assert stats["untagged"] == 0
+    assert stats["missing"] == 0
+
+    html = out.read_text(encoding="utf-8")
+    assert "cluster_01" in html
+
+
+def test_review_stats_ignore_entries_without_images(tmp_path):
+    """Draft entries whose image is gone must not distort the reported stats."""
+    import review as rv
+
+    img = tmp_path / "present.webp"
+    Image.new("RGBA", (512, 512), (0, 0, 0, 0)).save(img, "WEBP")
+
+    draft = {
+        "version": 2,
+        "meta": {"title": "T", "author": "A", "cover": None},
+        "similarity_groups": {},
+        "stickers": {
+            "present.webp": {"selection": "keep", "emojis": ["😀"], "confidence": 0.9,
+                             "reason": "", "review_status": "approved",
+                             "similarity_group": None, "file_hash": ""},
+            "missing.webp": {"selection": "keep", "emojis": ["😃"], "confidence": 0.9,
+                             "reason": "", "review_status": "approved",
+                             "similarity_group": None, "file_hash": ""},
+        },
+    }
+    (tmp_path / "pack_draft.json").write_text(json.dumps(draft), encoding="utf-8")
+
+    out, stats = rv.generate_review_html(tmp_path, draft_path=tmp_path / "pack_draft.json")
+    assert out.exists()
+    # Only the entry backed by a real image is counted.
+    assert stats["total"] == 1
+    assert stats["missing"] == 1
+    # 'missing.webp' is tagged, so it must not inflate the untagged count.
+    assert stats["untagged"] == 0

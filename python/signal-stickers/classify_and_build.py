@@ -616,6 +616,40 @@ def save_draft(draft_path: Path, draft: Dict[str, Any]) -> None:
     draft_path.write_text(json.dumps(draft, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def select_manifest_entries(
+    draft: Dict[str, Any], folder: Optional[Path] = None
+) -> Tuple[List[Dict[str, str]], List[str], List[str]]:
+    """Picks the stickers that belong in stickers.yaml from a draft.
+
+    A sticker is eligible only if it is marked 'keep', carries an emoji
+    assignment, and — when `folder` is given — still exists on disk. A draft can
+    outlive the images it references, and emitting those would produce a manifest
+    that only fails later, at upload time.
+
+    Returns:
+        entries:  ordered [{'chr': ..., 'file': ...}, ...] for the manifest
+        skipped:  filenames of 'keep' stickers with no emoji assignment
+        missing:  filenames of tagged 'keep' stickers absent from `folder`
+    """
+    entries: List[Dict[str, str]] = []
+    skipped: List[str] = []
+    missing: List[str] = []
+
+    for fn, item in sorted(draft.get("stickers", {}).items()):
+        if item.get("selection") != "keep":
+            continue
+        emojis = item.get("emojis") or item.get("suggested_emojis")
+        if not emojis:
+            skipped.append(fn)
+            continue
+        if folder is not None and not (folder / fn).exists():
+            missing.append(fn)
+            continue
+        entries.append({"chr": format_emoji_sequence(emojis), "file": fn})
+
+    return entries, skipped, missing
+
+
 def build_stickers_yaml(
     folder: Path,
     files: Optional[List[Path]] = None,
@@ -638,14 +672,7 @@ def build_stickers_yaml(
         meta["author"] = meta_draft.get("author", author)
         cover_val = cover or meta_draft.get("cover")
 
-        for fn, item in sorted(draft["stickers"].items()):
-            if item.get("selection") != "keep":
-                continue
-            emojis = item.get("emojis") or item.get("suggested_emojis")
-            if not emojis:
-                continue
-            chr_str = format_emoji_sequence(emojis)
-            stickers_list.append({"chr": chr_str, "file": fn})
+        stickers_list, _skipped, _missing = select_manifest_entries(draft, folder=folder)
 
         if cover_val:
             meta["cover"] = cover_val
@@ -680,14 +707,26 @@ def main():
         description="Signal Sticker Pack Curation & Classifier"
     )
     parser.add_argument("folder", help="Directory containing sticker images")
-    parser.add_argument("--title", default="Grimassen", help="Sticker pack title")
-    parser.add_argument("--author", default="tazztone", help="Sticker pack author")
+    parser.add_argument(
+        "--title",
+        default=None,
+        help="Sticker pack title (default: keep the title already in pack_draft.json)",
+    )
+    parser.add_argument(
+        "--author",
+        default=None,
+        help="Sticker pack author (default: keep the author already in pack_draft.json)",
+    )
     parser.add_argument("--cover", default=None, help="Cover image filename")
     parser.add_argument("--provider", default=None, help="VLM Provider: openrouter, gemini, anthropic")
     parser.add_argument("--model", default=None, help="Model slug (e.g. inclusionai/ling-3.0-flash-vl)")
     parser.add_argument("--out", default="stickers.yaml", help="Output YAML filename")
     parser.add_argument("--draft", default=DEFAULT_DRAFT, help="Path to draft JSON")
-    parser.add_argument("--cache", default=DEFAULT_CACHE, help="Path to legacy cache JSON")
+    parser.add_argument(
+        "--cache",
+        default=DEFAULT_CACHE,
+        help="Path to legacy cache JSON (migrated into the draft on first run)",
+    )
     parser.add_argument("--workers", type=int, default=4, help="Parallel classification workers")
     parser.add_argument("--scan", action="store_true", help="Inventory and cluster without API calls")
     parser.add_argument(
@@ -699,9 +738,15 @@ def main():
     parser.add_argument(
         "--build-yaml", action="store_true", help="Compile stickers.yaml from kept stickers"
     )
-    parser.add_argument("--resume", action="store_true", help="Resume from existing draft/cache")
     parser.add_argument(
-        "--dedupe", action="store_true", help="Run visual variation clustering"
+        "--resume",
+        action="store_true",
+        help="No-op, kept for backwards compatibility (the draft is always reused)",
+    )
+    parser.add_argument(
+        "--dedupe",
+        action="store_true",
+        help="No-op, kept for backwards compatibility (visual clustering always runs)",
     )
     args = parser.parse_args()
 
@@ -733,10 +778,17 @@ def main():
     draft_path = folder / args.draft if not Path(args.draft).is_absolute() else Path(args.draft)
     legacy_cache_path = folder / args.cache if not Path(args.cache).is_absolute() else Path(args.cache)
     draft = load_or_create_draft(folder, draft_path, legacy_cache_path, files)
-    draft["meta"]["title"] = args.title
-    draft["meta"]["author"] = args.author
+
+    # Only override pack metadata when explicitly requested, so that running a
+    # plain --scan does not clobber a title/author set previously in the draft.
+    if args.title is not None:
+        draft["meta"]["title"] = args.title
+    if args.author is not None:
+        draft["meta"]["author"] = args.author
     if args.cover:
         draft["meta"]["cover"] = args.cover
+    draft["meta"].setdefault("title", "Grimassen")
+    draft["meta"].setdefault("author", "tazztone")
 
     # Visual clusters
     clusters = draft.get("similarity_groups", {})
@@ -752,8 +804,17 @@ def main():
 
     if args.scan or args.check_only:
         print(f"\nScan completed. Draft saved to: {draft_path}")
-        print("Next step: Curate variations in your browser or run:")
-        print(f"  python review.py {folder}")
+        undecided = sum(
+            1 for i in draft["stickers"].values() if i.get("selection") == "undecided"
+        )
+        if undecided:
+            print(
+                f"Next step: open the review page and resolve {undecided} 'undecided' "
+                f"variation(s)\n  (click 'Keep Only' on the best one in each cluster):"
+            )
+        else:
+            print("Next step: open the review page to verify the cluster choices:")
+        print(f"  ./stickers curate {folder}")
         return
 
     # Classification pass (Targeted: only for stickers where selection == 'keep' and emojis is missing)
@@ -798,24 +859,68 @@ def main():
             print("\nAll kept stickers already classified.")
 
     # Build stickers.yaml
+    entries, skipped_no_emoji, missing_files = select_manifest_entries(draft, folder=folder)
+
+    kept_count = sum(1 for item in draft["stickers"].values() if item.get("selection") == "keep")
+    excluded_count = sum(1 for item in draft["stickers"].values() if item.get("selection") == "exclude")
+    undecided_count = sum(1 for item in draft["stickers"].values() if item.get("selection") == "undecided")
+
+    if not entries:
+        print(
+            f"\nError: refusing to write an empty {args.out}.\n"
+            f"  {kept_count} sticker(s) are marked 'keep', but none can be written,\n"
+            f"  so the manifest would contain zero stickers and Signal would reject the upload."
+        )
+        if skipped_no_emoji:
+            print(f"  Kept but without an emoji: {', '.join(skipped_no_emoji[:10])}"
+                  + (" ..." if len(skipped_no_emoji) > 10 else ""))
+        if missing_files:
+            print(f"  Tagged but missing from disk: {', '.join(missing_files[:10])}"
+                  + (" ..." if len(missing_files) > 10 else ""))
+        print("\n  Fix this by either:")
+        print(f"    1. Running './stickers tag {folder}' to classify with a VLM, or")
+        print(f"    2. Assigning emojis in the review page, saving the draft to")
+        print(f"       {draft_path}, then re-running this command.")
+        sys.exit(1)
+
     out_file = build_stickers_yaml(
         folder=folder,
         draft=draft,
-        title=args.title,
-        author=args.author,
+        title=args.title or draft["meta"]["title"],
+        author=args.author or draft["meta"]["author"],
         cover=args.cover,
         out_name=args.out,
     )
     print(f"\nGenerated Signal stickers YAML: {out_file.resolve()}")
 
     # Summary
-    kept_count = sum(1 for item in draft["stickers"].values() if item.get("selection") == "keep")
-    excluded_count = sum(1 for item in draft["stickers"].values() if item.get("selection") == "exclude")
-    undecided_count = sum(1 for item in draft["stickers"].values() if item.get("selection") == "undecided")
-    print(f"Pack Summary: {kept_count} Kept, {excluded_count} Excluded, {undecided_count} Undecided")
+    print(f"Pack Summary: {len(entries)} Written, {excluded_count} Excluded, {undecided_count} Undecided")
 
-    print(f"\nNext step: Open review UI to curate and finalize:")
-    print(f"  python review.py {folder}")
+    if undecided_count:
+        print(
+            f"Note: {undecided_count} sticker(s) are still 'undecided' and were NOT written.\n"
+            f"      Open './stickers review {folder}' and use 'Keep Only' on each cluster,\n"
+            f"      or click 'Exclude', to settle them."
+        )
+    if skipped_no_emoji:
+        print(
+            f"Warning: {len(skipped_no_emoji)} 'keep' sticker(s) had no emoji and were skipped:\n"
+            f"         {', '.join(skipped_no_emoji[:10])}"
+            + (" ..." if len(skipped_no_emoji) > 10 else "")
+        )
+    if missing_files:
+        print(
+            f"Warning: {len(missing_files)} tagged sticker(s) are no longer on disk and\n"
+            f"         were skipped: {', '.join(missing_files[:10])}"
+            + (" ..." if len(missing_files) > 10 else "")
+            + "\n         Re-run './stickers scan' to prune them from the draft."
+        )
+    if len(entries) > 200:
+        print(f"Warning: Signal allows at most 200 stickers per pack; this manifest has {len(entries)}.")
+
+    print(f"\nNext step: preview or upload the pack:")
+    print(f"  ./stickers preview {folder}")
+    print(f"  ./stickers upload {folder}")
 
 
 if __name__ == "__main__":

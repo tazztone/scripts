@@ -241,3 +241,7 @@ package-lock.json
 package.json
 !userscripts/toppreise/package.json
 python/signal-stickers/webp/
+python/signal-stickers/review.html
+python/signal-stickers/pack_draft.json
+python/signal-stickers/classification_cache.json
+python/signal-stickers/stickers.yaml

@@ -859,7 +859,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       showToast('Reverted: ' + last.desc, false);
     }}
 
-    function exportDraftJson() {{
+    function collectDraft() {{
       const draft = {{
         version: 2,
         meta: META,
@@ -884,14 +884,35 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }};
       }});
 
-      const blob = new Blob([JSON.stringify(draft, null, 2)], {{ type: 'application/json' }});
+      // Preserve the similarity groups computed during --scan. The cards only
+      // carry a cluster id, so rebuild the membership lists from the DOM.
+      document.querySelectorAll('.card').forEach(card => {{
+        const cid = card.dataset.cluster;
+        if (!cid) return;
+        if (!draft.similarity_groups[cid]) draft.similarity_groups[cid] = [];
+        draft.similarity_groups[cid].push(card.dataset.file);
+      }});
+
+      return draft;
+    }}
+
+    function downloadBlob(content, filename, type) {{
+      const blob = new Blob([content], {{ type: type }});
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'pack_draft.json';
+      a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
-      showToast('Saved pack_draft.json successfully!');
+    }}
+
+    function exportDraftJson() {{
+      downloadBlob(
+        JSON.stringify(collectDraft(), null, 2),
+        'pack_draft.json',
+        'application/json'
+      );
+      showToast('Downloaded pack_draft.json — copy it into your pack folder to keep your edits.', true);
     }}
 
     function safeYamlEscape(val) {{
@@ -932,16 +953,23 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         y += '  - chr: ' + safeYamlEscape(item.chr) + '\\n    file: ' + safeYamlEscape(item.file) + '\\n';
       }}
 
-      const blob = new Blob([y], {{ type: 'text/yaml;charset=utf-8' }});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'stickers.yaml';
-      a.click();
-      URL.revokeObjectURL(url);
+      downloadBlob(y, 'stickers.yaml', 'text/yaml;charset=utf-8');
 
-      showToast('Exported ' + stickersList.length + ' stickers to stickers.yaml!');
+      showToast(
+        'Downloaded stickers.yaml (' + stickersList.length + ' stickers). ' +
+        'To upload from the pack folder, save the draft and run ./stickers export instead.',
+        true
+      );
     }}
+
+    // Warn before leaving the page with unsaved changes, since every edit lives
+    // only in this tab until the draft is downloaded.
+    window.addEventListener('beforeunload', (e) => {{
+      if (excludedFiles.size > 0 || undoStack.length > 0) {{
+        e.preventDefault();
+        e.returnValue = '';
+      }}
+    }});
 
     window.addEventListener('DOMContentLoaded', () => {{
       updateCountsAndValidation();
@@ -1080,7 +1108,19 @@ def generate_review_html(
 
     out_path = folder / "review.html"
     out_path.write_text(html_content, encoding="utf-8")
-    return out_path
+
+    # Counted over rendered cards, not draft entries: entries whose image is
+    # missing from disk are skipped above and never reach the page.
+    untagged = sum(1 for c in cards if 'value="" placeholder="emoji"' in c)
+    stats = {
+        "total": total_count,
+        "kept": active_count,
+        "excluded": ex_count,
+        "clusters": len(clusters_set),
+        "untagged": untagged,
+        "missing": len(stickers_items) - total_count,
+    }
+    return out_path, stats
 
 
 def main():
@@ -1094,9 +1134,32 @@ def main():
     draft_path = folder / args.draft if not Path(args.draft).is_absolute() else Path(args.draft)
     yaml_path = folder / args.yaml if not Path(args.yaml).is_absolute() else Path(args.yaml)
 
-    out_file = generate_review_html(folder, draft_path=draft_path, yaml_path=yaml_path)
-    print(f"Generated review page: {out_file.resolve()}")
-    print("Features: Visual cluster side-by-side curation, Keep Only per cluster, strict emoji validation, safe YAML export.")
+    out_file, stats = generate_review_html(
+        folder, draft_path=draft_path, yaml_path=yaml_path
+    )
+    size_mb = out_file.stat().st_size / 1024 / 1024
+
+    print(f"Review page: {out_file.resolve()} ({size_mb:.1f} MB, images embedded)")
+    print(
+        f"  {stats['total']} sticker(s): {stats['kept']} kept, "
+        f"{stats['excluded']} excluded, {stats['untagged']} awaiting an emoji"
+    )
+    if stats["clusters"]:
+        print(f"  {stats['clusters']} visual cluster(s) to curate")
+    if stats["missing"]:
+        print(
+            f"  Warning: {stats['missing']} draft entry/entries have no image on disk "
+            f"and were skipped."
+        )
+
+    print("\nIn the page:")
+    print("  1. Click 'Keep Only' on the best variation in each orange cluster.")
+    print("  2. Check the suggested emojis; fix anything wrong or untagged.")
+    print("  3. Use Light/Dark/White/Black to check contrast on transparent edges.")
+    print("\nThen save your work back to disk:")
+    print("  a. Click 'Save Draft (JSON)' and copy the downloaded file to")
+    print(f"     {draft_path}")
+    print("  b. Run: ./stickers export" + (f" {folder}" if folder else ""))
 
 
 if __name__ == "__main__":
