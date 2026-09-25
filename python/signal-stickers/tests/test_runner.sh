@@ -101,6 +101,41 @@ else
 fi
 rm -f "$serve_log"
 
+# 8b. Serve banner reaches a redirected log WITHOUT PYTHONUNBUFFERED
+# (regression: block buffering hid the banner until the server exited,
+# so the wizard polled an empty log and misreported a startup failure).
+unbuf_log="$(mktemp)"
+if "$PY" - "$DIR/review.py" "$FIX" "$unbuf_log" <<'PYEOF' >/dev/null 2>&1; then
+import os, re, subprocess, sys, time
+review_py, fix, unbuf_log = sys.argv[1], sys.argv[2], sys.argv[3]
+env = dict(os.environ)
+env.pop("PYTHONUNBUFFERED", None)
+with open(unbuf_log, "w") as f:
+    proc = subprocess.Popen([sys.executable, review_py, fix, "--serve"],
+                            stdout=f, stderr=subprocess.STDOUT, env=env)
+    found = False
+    for _ in range(75):
+        time.sleep(0.2)
+        text = open(unbuf_log, errors="replace").read()
+        if re.search(r"Review server \(loopback only\).*http://127\.0\.0\.1:\d+", text):
+            found = True
+            break
+        if proc.poll() is not None:
+            break
+    proc.terminate()
+    try:
+        proc.wait(timeout=10)
+    except Exception:
+        proc.kill()
+        proc.wait(timeout=10)
+    sys.exit(0 if found else 1)
+PYEOF
+    ok "serve banner visible without PYTHONUNBUFFERED"
+else
+    bad "serve banner visible without PYTHONUNBUFFERED"
+fi
+rm -f "$unbuf_log"
+
 # 9. Finalize the fixture into an approved, exported pack (no API calls).
 "$PY" - "$FIX" <<'PYEOF'
 import json, sys
@@ -199,9 +234,9 @@ else
 fi
 rm -f "$DRAFT_BAK"
 
-# 18. A tag run that fails its export fall-through (unapproved pack) still
-# regenerates the review page. No API calls: every kept sticker already has
-# a final emoji, so the classifier short-circuits before any request.
+# 18. Tag ends with a summary (not an export dump) and always regenerates
+# the review page, even on an unapproved pack. No API calls: every kept
+# sticker already has a final emoji, so the classifier short-circuits.
 TAGFIX="$(mktemp -d)"
 "$PY" -c "from PIL import Image; Image.new('RGBA',(512,512),(0,0,0,0)).save('$TAGFIX/a.webp','WEBP')"
 bash "$RUNNER" scan "$TAGFIX" >/dev/null 2>&1
@@ -220,10 +255,10 @@ dp.write_text(json.dumps(draft, ensure_ascii=False, indent=2), encoding="utf-8")
 PYEOF
 rm -f "$TAGFIX/review.html"
 out="$(OPENROUTER_API_KEY=fake-test-key bash "$RUNNER" tag "$TAGFIX" 2>&1)"; code=$?
-if [ "$code" -ne 0 ] && [ -f "$TAGFIX/review.html" ] && echo "$out" | grep -q "unresolved/error"; then
-    ok "failed tag still refreshes review page"
+if [ "$code" -eq 0 ] && [ -f "$TAGFIX/review.html" ] && echo "$out" | grep -q "Tag summary"; then
+    ok "tag summarizes and refreshes review page"
 else
-    bad "failed tag still refreshes review page (code=$code)"
+    bad "tag summarizes and refreshes review page (code=$code)"
 fi
 rm -rf "$TAGFIX"
 

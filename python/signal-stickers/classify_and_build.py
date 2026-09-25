@@ -311,20 +311,29 @@ def detect_visual_duplicates(
     return dupe_info
 
 
+MAX_SUGGESTIONS = 5
+
+
 def get_classification_prompt() -> str:
-    """Builds system prompt for single-emoji classification with strict JSON."""
+    """Builds system prompt for ranked emoji suggestions with strict JSON.
+
+    The model returns up to MAX_SUGGESTIONS ranked candidates (best first);
+    a human promotes one to final in review. Legacy single-emoji responses
+    are still accepted by the parser for backward compatibility.
+    """
     catalog = get_prompt_emoji_catalog()
     return (
         "Du bewertest Gesichtsausdruecke und Gesten auf Sticker-Bildern fuer Signal.\n"
-        "Waehle GENAU EIN Emoji, das den Ausdruck, die Emotion oder das Overlay "
-        "am praezisesten trifft (Signal unterstuetzt ein Emoji pro Sticker).\n\n"
-        "Vorgeschlagene Emojis nach Kategorien (du darfst auch ein anderes passendes Emoji waehlen):\n"
+        "Nenne bis zu 5 Emojis, die den Ausdruck, die Emotion oder das Overlay "
+        "treffen, BESTES ZUERST (Signal unterstuetzt ein Emoji pro Sticker, "
+        "ein Mensch waehlt spaeter eines aus).\n\n"
+        "Vorgeschlagene Emojis nach Kategorien (du darfst auch andere passende Emojis waehlen):\n"
         f"{catalog}\n\n"
         "Regeln:\n"
         "- Achte auf Augen, Mund, Haende/Gesten und Overlays (Dampf, Traenen, Sonnenbrille, Herz etc.).\n"
         "- Overlays, Requisiten und markante Gesten haben Vorrang vor rein neutraler Mimik.\n"
         "- WICHTIG: Antworte AUSSCHLIESSLICH als valides JSON-Objekt ohne jeden Begleittext:\n"
-        '{"emoji":"<genau ein Emoji>","reason":"<max 8 Woerter Begruendung>","confidence":<0.0-1.0>}'
+        '{"emojis":["<bestes Emoji>",...hoechstens 5, absteigend],"reason":"<max 8 Woerter Begruendung zum besten>","confidence":<0.0-1.0 fuer das beste>}'
     )
 
 
@@ -367,7 +376,8 @@ class OpenRouterProvider(BaseProvider):
                         {
                             "type": "text",
                             "text": (
-                                "Welches EINE Emoji passt am besten zu diesem Sticker? "
+                                "Welche Emojis passen zu diesem Sticker? "
+                                "Nenne bis zu 5, bestes zuerst. "
                                 "Antworte NUR mit dem JSON-Objekt."
                             ),
                         },
@@ -662,6 +672,33 @@ def _coerce_model_emoji_text(res: Dict[str, Any]) -> str:
     return ""
 
 
+def _coerce_ranked_emojis(res: Dict[str, Any]) -> List[str]:
+    """Extracts up to MAX_SUGGESTIONS ranked single-emoji candidates.
+
+    Accepts the current `emojis` list shape (best first) and the legacy
+    single `emoji` shape. Each candidate must validate as exactly one
+    emoji; invalid entries are dropped, duplicates collapsed. An empty
+    result means unresolved, never a fallback.
+    """
+    candidates: List[str] = []
+    raw_list = res.get("emojis")
+    if isinstance(raw_list, str):
+        raw_list = [raw_list]
+    if isinstance(raw_list, (list, tuple)):
+        candidates.extend(str(e) for e in raw_list)
+    legacy = res.get("emoji")
+    if isinstance(legacy, str) and legacy.strip():
+        candidates.append(legacy.strip())
+    ranked: List[str] = []
+    for cand in candidates:
+        valid, vals, _ = validate_single_emoji(cand.strip())
+        if valid and vals[0] not in ranked:
+            ranked.append(vals[0])
+        if len(ranked) >= MAX_SUGGESTIONS:
+            break
+    return ranked
+
+
 def classify_single_image(
     provider: BaseProvider, path: Path, retries: int = 3
 ) -> Dict[str, Any]:
@@ -670,20 +707,22 @@ def classify_single_image(
     for attempt in range(retries):
         try:
             res = provider.classify(path, SYSTEM_PROMPT)
-            raw_text = _coerce_model_emoji_text(res if isinstance(res, dict) else {})
-            valid, vals, err = validate_single_emoji(raw_text)
-            if valid:
+            if not isinstance(res, dict):
+                res = {}
+            ranked = _coerce_ranked_emojis(res)
+            if ranked:
                 return {
-                    "emoji": vals[0],
-                    "emojis": [vals[0]],
-                    "suggested_emojis": [vals[0]],
+                    "emoji": ranked[0],
+                    "emojis": [ranked[0]],
+                    "suggested_emojis": ranked,
                     "reason": str(res.get("reason", "OK"))[:80],
                     "confidence": float(res.get("confidence", 0.9)),
                     "review_status": "suggested",
                     "tag_status": "suggested",
                     "tag_source": "openrouter",
                 }
-            last_error = err or f"Unrecognized emoji: {raw_text[:40]}"
+            raw_text = _coerce_model_emoji_text(res)
+            last_error = f"Unrecognized emoji: {raw_text[:40]}" if raw_text else "No usable emoji in model response"
             # Invalid model output is not retryable as a different error; retry
             # only for transport/parse exceptions below. Record unresolved.
             return {
@@ -1548,6 +1587,17 @@ def main():
             print("Next: in review, promote each suggestion to a final single emoji, then --approve.")
         else:
             print("\nAll kept stickers already carry a final emoji.")
+
+    if args.classify_kept and not args.build_yaml:
+        # Tagging only suggests; export stays a separate explicit step so a
+        # partially tagged pack ends with a summary here, not an export dump.
+        stickers = draft.get("stickers", {}) or {}
+        suggested = sum(1 for i in stickers.values() if i.get("tag_status") == "suggested")
+        pending = sum(1 for i in stickers.values()
+                      if i.get("selection") == "keep" and not final_emoji_for_entry(i))
+        print(f"\nTag summary: {suggested} suggested, {pending} keep sticker(s) still need a final emoji.")
+        print("Next: promote suggestions in review (or re-run tag), then approve and export.")
+        return
 
     # Export (default when --build-yaml or no other action): strict preflight first.
     errors, warnings = validate_draft_for_export(draft, folder, strict_quality=args.strict_quality)

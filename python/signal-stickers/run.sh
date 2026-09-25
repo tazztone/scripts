@@ -441,10 +441,13 @@ pack_ready_quiet() {
 wizard_review_round() {
     local server_log server_pid url ans
     server_log="$(mktemp)"
-    "$PYTHON" "$DIR/review.py" "$FOLDER" --serve >"$server_log" 2>&1 &
+    echo "Starting review server (rendering the page first; this takes a few seconds)..."
+    # Unbuffered so the startup banner reaches the log even though stdout
+    # is redirected (block buffering would hide it until the server exits).
+    PYTHONUNBUFFERED=1 "$PYTHON" "$DIR/review.py" "$FOLDER" --serve >"$server_log" 2>&1 &
     server_pid=$!
     url=""
-    for _ in $(seq 1 60); do
+    for _ in $(seq 1 150); do
         sleep 0.2
         url="$(grep -o 'http://127\.0\.0\.1:[0-9]*' "$server_log" 2>/dev/null | head -n 1)"
         [ -n "$url" ] && break
@@ -453,8 +456,8 @@ wizard_review_round() {
     if [ -z "$url" ]; then
         kill "$server_pid" 2>/dev/null || true
         wait "$server_pid" 2>/dev/null || true
-        echo "Review server failed to start; log:"
-        cat "$server_log"
+        echo "Review server failed to start; log (last lines):"
+        tail -n 15 "$server_log"
         rm -f "$server_log"
         return 1
     fi

@@ -394,6 +394,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       flex-shrink: 0;
     }}
 
+    #bulkConf {{
+      max-width: 5em;
+      flex: 0 0 auto;
+    }}
+
     .err-msg {{
       color: var(--danger);
       font-size: 10px;
@@ -486,6 +491,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       </div>
     </div>
     <div class="header-row1"><div class="header-controls"><span class="ctrl-label" id="approvalSummary"></span></div></div>
+
+    <div class="header-row1">
+      <div class="header-controls">
+        <span class="ctrl-label">Bulk:</span>
+        <button class="btn btn-secondary" onclick="promoteBulk()" title="Apply every suggestion at or above the threshold as final (human-batched; review before Save)">Promote suggestions ≥</button>
+        <input type="number" id="bulkConf" class="search-box" value="0.90" min="0" max="1" step="0.05" title="Confidence threshold for bulk promote">
+        <span class="ctrl-label">as final (batched by you; still review before Save)</span>
+      </div>
+    </div>
 
     <div class="header-row1">
       <div class="header-controls">
@@ -620,6 +634,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     function renderOptionsForSelect(select, counts) {{
       let html = '<option value="" selected disabled>+ Add</option>';
+      const card = select.closest('.card');
+      const entry = card ? entryFor(card.dataset.file) : null;
+      const ranked = (entry && Array.isArray(entry.suggested_emojis)) ? entry.suggested_emojis : [];
+      if (ranked.length) {{
+        html += '<optgroup label="⭐ Suggested for this sticker">';
+        ranked.slice(0, 5).forEach(em => {{ html += '<option value="' + em + '">⭐ ' + em + '</option>'; }});
+        html += '</optgroup>';
+      }}
       const unused = [];
       const used = [];
 
@@ -851,6 +873,75 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       select.selectedIndex = 0;
     }}
 
+    function applyFinalEmoji(card, entry, emoji, auditSource) {{
+      const beforeSnap = snapshotState();
+      const prevFinal = (entry.emojis && entry.emojis[0]) || '';
+      entry.emojis = [emoji];
+      entry.review_status = 'pending';
+      entry.tag_status = 'approved';
+      if (auditSource) {{
+        const src = entry.tag_source || 'openrouter';
+        entry.tag_source = src.includes('+bulk') ? src : (src + '+' + auditSource);
+      }}
+      const input = card.querySelector('.emoji-input');
+      if (input) input.value = emoji;
+      card.dataset.emoji = emoji;
+      markApprovedDirty();
+      if (prevFinal !== emoji) undoStack.push({{ desc: 'Promote suggestion ' + card.dataset.file, snapshot: beforeSnap }});
+      updateCountsAndValidation();
+      refreshAllSelects();
+      if (currentSort === 'emoji') sortCards('emoji');
+    }}
+
+    function useSuggestion(btn) {{
+      const card = btn.closest('.card');
+      const entry = entryFor(card.dataset.file);
+      if (!entry) return;
+      const sugg = entry.suggested_emojis || [];
+      if (!sugg.length) return;
+      const v = validateSequence(String(sugg[0]));
+      if (!v.valid) {{
+        showToast('Top suggestion is not a valid single emoji.', false);
+        return;
+      }}
+      applyFinalEmoji(card, entry, v.emojis[0], null);
+    }}
+
+    function promoteBulk() {{
+      const thrInput = document.getElementById('bulkConf');
+      let thr = parseFloat(thrInput ? thrInput.value : '0.90');
+      if (!(thr >= 0 && thr <= 1)) thr = 0.90;
+      const audit = 'bulk-' + thr.toFixed(2);
+      const beforeSnap = snapshotState();
+      let n = 0;
+      document.querySelectorAll('.card').forEach(card => {{
+        const entry = entryFor(card.dataset.file);
+        if (!entry || entry.selection !== 'keep') return;
+        if (getPrimaryEmoji(card)) return;
+        const sugg = entry.suggested_emojis || [];
+        if (!sugg.length) return;
+        const conf = parseFloat(entry.confidence || 0);
+        if (!(conf >= thr)) return;
+        const v = validateSequence(String(sugg[0]));
+        if (!v.valid) return;
+        entry.emojis = v.emojis;
+        entry.review_status = 'pending';
+        entry.tag_status = 'approved';
+        const src = entry.tag_source || 'openrouter';
+        entry.tag_source = src.includes('+bulk') ? src : (src + '+' + audit);
+        const input = card.querySelector('.emoji-input');
+        if (input) input.value = v.emojis[0];
+        card.dataset.emoji = v.emojis[0];
+        n++;
+      }});
+      markApprovedDirty();
+      undoStack.push({{ desc: 'Bulk promote ≥ ' + thr.toFixed(2), snapshot: beforeSnap }});
+      updateCountsAndValidation();
+      refreshAllSelects();
+      filterCards();
+      showToast('Promoted ' + n + ' suggestion(s) at ≥ ' + thr.toFixed(2) + '. Review them, then Save.', false);
+    }}
+
     function onMetaInput() {{
       const beforeSnap = snapshotState();
       const t = document.getElementById('metaTitle');
@@ -1078,7 +1169,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }}
       }});
       if (problems.length) {{
-        alert('Cannot approve:\n- ' + problems.slice(0, 12).join('\n- ') + (problems.length > 12 ? '\n... and ' + (problems.length - 12) + ' more' : ''));
+        alert('Cannot approve:\\n- ' + problems.slice(0, 12).join('\\n- ') + (problems.length > 12 ? '\\n... and ' + (problems.length - 12) + ' more' : ''));
         return;
       }}
       DRAFT_STATE.pack_state = 'approved';
@@ -1184,9 +1275,8 @@ def generate_review_html(
             valid, vals, _ = validate_single_emoji(final)
             emoji_str = vals[0] if valid else ""
         suggested = info.get("suggested_emojis")
-        suggested_str = ""
-        if isinstance(suggested, list) and suggested:
-            suggested_str = str(suggested[0])
+        sugg_list = [str(e) for e in suggested] if isinstance(suggested, list) else []
+        suggested_str = sugg_list[0] if sugg_list else ""
         try:
             conf = float(info.get("confidence", 0.0) or 0.0)
         except Exception:
@@ -1206,7 +1296,15 @@ def generate_review_html(
         esc_emoji = html.escape(emoji_str, quote=True)
         esc_reason = html.escape(reason, quote=True)
         esc_reason_text = html.escape(reason or "—")
-        esc_suggested = html.escape(f" Suggested: {suggested_str}" if suggested_str and suggested_str != emoji_str else "")
+        if suggested_str and suggested_str != emoji_str:
+            extra = f" (+{len(sugg_list) - 1} more)" if len(sugg_list) > 1 else ""
+            esc_suggested = html.escape(f" Suggested: {suggested_str}{extra}")
+        else:
+            esc_suggested = ""
+        use_btn_html = ""
+        if sugg_list and (not emoji_str or emoji_str != sugg_list[0]):
+            top_esc = html.escape(sugg_list[0], quote=True)
+            use_btn_html = f'<button type="button" class="keep-only-btn" onclick="useSuggestion(this)" title="Apply suggested {top_esc} as final">✓ {top_esc}</button>'
 
         cluster_tag_html = (
             f'<span class="cluster-tag" onclick="filterByCluster(\'{esc_cid}\')" title="Filter by {esc_cid}">{esc_cid}</span>'
@@ -1246,6 +1344,7 @@ def generate_review_html(
           </div>
           <div class="emoji-bar">
             <input type="text" class="emoji-input" value="{esc_emoji}" placeholder="one emoji" title="Exactly one emoji" oninput="onEmojiInput(this)">
+            {use_btn_html}
             <select class="emoji-select" onchange="onEmojiAdd(this)" title="Pick a suggested emoji"><option value="" selected disabled>+ Add</option></select>
           </div>
           <div class="err-msg">⚠ Invalid emoji</div>
@@ -1489,11 +1588,13 @@ def serve_review(folder: Path, draft_path: Path, port: int = 0) -> None:
     server, _token, state = create_review_server(folder, draft_path, port=port)
     actual_port = server.server_address[1]
     url = f"http://127.0.0.1:{actual_port}/"
-    print(f"Review server (loopback only): {url}")
-    print(f"  Folder: {folder.resolve()}")
-    print(f"  Draft:  {draft_path}")
-    print(f"  Static fallback: file://{state['out_file'].resolve()}")
-    print("Press Ctrl+C to stop. Saves compare-and-swap on the draft digest and regenerate the page.")
+    # Flush: when stdout is redirected to a file (wizard server log, CI),
+    # block buffering would otherwise hide the banner indefinitely.
+    print(f"Review server (loopback only): {url}", flush=True)
+    print(f"  Folder: {folder.resolve()}", flush=True)
+    print(f"  Draft:  {draft_path}", flush=True)
+    print(f"  Static fallback: file://{state['out_file'].resolve()}", flush=True)
+    print("Press Ctrl+C to stop. Saves compare-and-swap on the draft digest and regenerate the page.", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

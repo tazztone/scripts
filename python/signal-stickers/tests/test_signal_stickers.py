@@ -523,6 +523,28 @@ def test_review_html_preserves_similarity_groups(tmp_path, monkeypatch):
     assert "cluster_01" in html
 
 
+def test_review_inline_js_parses(tmp_path):
+    """The served inline script must parse: a real newline inside a JS string
+    once silently disabled every control on the page."""
+    import re
+    import shutil
+    import subprocess
+    import review as rv
+
+    if shutil.which("node") is None:
+        pytest.skip("node unavailable for JS syntax check")
+    img = tmp_path / "a.webp"
+    Image.new("RGBA", (512, 512), (0, 0, 0, 0)).save(img, "WEBP")
+    out, _ = rv.generate_review_html(tmp_path)
+    m = re.search(r"<script>(.*)</script>", out.read_text(encoding="utf-8"), re.S)
+    assert m, "review page has no inline script"
+    js_file = tmp_path / "inline_check.js"
+    js_file.write_text(m.group(1), encoding="utf-8")
+    proc = subprocess.run(["node", "--check", str(js_file)],
+                          capture_output=True, text=True, timeout=60)
+    assert proc.returncode == 0, f"inline JS syntax error: {proc.stderr[-2000:]}"
+
+
 def test_review_stats_ignore_entries_without_images(tmp_path):
     """Draft entries whose image is gone must not distort the reported stats."""
     import review as rv
@@ -729,6 +751,37 @@ def test_openrouter_request_construction_mocked(tmp_path, monkeypatch):
     assert seen["payload"]["model"] == "inclusionai/ling-3.0-flash-vl"
     out = cab.classify_single_image(provider, tmp_path / "a.webp", retries=1)
     assert out["emojis"] == ["😀"] and out["tag_status"] == "suggested"
+
+
+def test_ranked_suggestions_coercion(tmp_path):
+    """Ranked model lists become ordered suggestions; invalid/dupes dropped, capped."""
+    import classify_and_build as cab
+
+    _make_valid_image(tmp_path / "a.webp")
+
+    class Ranked:
+        def classify(self, path, prompt):
+            return {"emojis": ["😂", "🤣", "not-an-emoji", "😂", "😭", "😀", "😎"],
+                    "reason": "laughing", "confidence": 0.92}
+
+    res = cab.classify_single_image(Ranked(), tmp_path / "a.webp", retries=1)
+    assert res["suggested_emojis"] == ["😂", "🤣", "😭", "😀", "😎"]
+    assert res["emojis"] == ["😂"] and res["tag_status"] == "suggested"
+    assert res["confidence"] == 0.92
+
+    class Legacy:
+        def classify(self, path, prompt):
+            return {"emoji": "🤔", "reason": "thinking", "confidence": 0.8}
+
+    res2 = cab.classify_single_image(Legacy(), tmp_path / "a.webp", retries=1)
+    assert res2["suggested_emojis"] == ["🤔"] and res2["tag_status"] == "suggested"
+
+    class Empty:
+        def classify(self, path, prompt):
+            return {"emojis": [], "reason": "x", "confidence": 0.0}
+
+    res3 = cab.classify_single_image(Empty(), tmp_path / "a.webp", retries=1)
+    assert res3["suggested_emojis"] is None and res3["tag_status"] == "unresolved"
 
 
 def test_export_receipt_and_stale_rejection(tmp_path):

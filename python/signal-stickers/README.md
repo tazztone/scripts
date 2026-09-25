@@ -20,8 +20,10 @@ one (same gates; quit anytime with Ctrl-C and re-run to resume).
 # 1. Inventory images, hard-gate check, group visually similar candidates
 ./stickers scan ./my_pack
 
-# 2. Let OpenRouter suggest one emoji for kept stickers lacking a final pick
-#    (optional; manual emoji selection avoids needing an API key)
+# 2. Let OpenRouter suggest ranked emojis (up to 5, best first) for kept
+#    stickers lacking a final pick (optional; manual selection avoids the key).
+#    Tag only suggests — it ends with a summary, never an export; a human
+#    promotes suggestions to final in review (one click each, or bulk ≥ threshold).
 ./stickers tag ./my_pack
 
 # 3. Open the review page (loopback direct-save; opens automatically).
@@ -111,7 +113,7 @@ The workflow is a loop around one file, `pack_draft.json`:
         |
         |  scan          group visually similar candidates, hard-gate check
         v
-  pack_draft.json  <------ tag        OpenRouter suggests one emoji per kept sticker
+  pack_draft.json  <------ tag        OpenRouter suggests ranked emojis per kept sticker
         |                  ^
         |                  |  review     browser: resolve Undecided, one emoji, title/author/cover
         |                  |  approve    human gate for the current revision
@@ -131,7 +133,7 @@ manifest against the current draft and hashes immediately before use.
 | :--- | :--- | :--- |
 | `./stickers doctor [--upload] [<folder>]` | Core env/capability check; `--upload` also requires the uploader + Signal login; with folder also runs pack preflight | no |
 | `./stickers scan <folder>` | Inventory, hard-gate report, cluster similar candidates | no |
-| `./stickers tag <folder>` | OpenRouter suggestions for `keep` stickers lacking final emoji | **yes** |
+| `./stickers tag <folder>` | Ranked OpenRouter suggestions for `keep` stickers lacking final emoji (ends with a summary, never exports) | **yes** |
 | `./stickers curate <folder> [--serve]` | `scan`, then generate/open the review page | no |
 | `./stickers review <folder> [--serve]` | Regenerate/open the review page only | no |
 | `./stickers approve <folder>` | Human approval for the current revision | no |
@@ -190,6 +192,9 @@ are base64-embedded, so expect roughly 1 MB per sticker) and works offline.
 | **⚡ Keep Only** | On a clustered card: keeps that one, explicitly excludes siblings |
 | **Keep? / ✕ Exclude / ↺ Keep / Later** | Explicit tri-state: Undecided is preserved, never auto-promoted |
 | **Emoji field** | Exactly one emoji (registry suggests; legitimate manual picks allowed) |
+| **✓ suggestion button** | One click applies the card's top-ranked suggestion as final (human act, undoable) |
+| **+ Add dropdown** | Registry emojis, plus a ⭐ group with this sticker's ranked suggestions |
+| **Bulk promote** | Applies every suggestion at or above your threshold (default 0.90) as final; still review, then Save |
 | **Title / Author / Cover** | Required pack metadata; edits invalidate approval |
 | **Save** | Loopback direct-save with `--serve` (digest compare-and-swap; page regenerates); otherwise download fallback |
 | **Approve Pack** | Same gate as CLI `--approve`: server re-validates and persists it on Save |
