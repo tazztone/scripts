@@ -2,22 +2,26 @@
 """Interactive Signal Sticker Pack Curation & Review Tool.
 
 Supports:
-- Visual Cluster Curation: Side-by-side variation review and 1-click 'Keep Only This' per cluster.
-- Multi-Emoji Review: 1-3 emojis with strict in-page validation matching Python registry.
-- Safe YAML & Draft Export: Blocks export on invalid assignments, serializes valid YAML.
-- Contrast Previews: Dark, Light, White, and Black backgrounds.
+- Visual Cluster Curation: side-by-side candidate review and explicit Keep Only.
+- Single-emoji review with strict in-page validation (one grapheme).
+- Draft-only saves: the browser never generates stickers.yaml (single implementation).
+- Contrast previews: Dark, Light, White, and Black backgrounds.
+- Optional loopback save server (127.0.0.1 + token + revision check).
 
 Usage:
-  python review.py ./webp
-  # Then open the generated review.html in any web browser.
+  python review.py ./pack
+  python review.py ./pack --serve
 """
 
 import argparse
 import base64
+import html
 import json
 import mimetypes
 import os
+import secrets
 import sys
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -35,9 +39,9 @@ except ImportError:
 
 # Import shared emoji registry and helpers
 try:
-    from emojis import EMOJI_REGISTRY, extract_emojis, format_emoji_sequence, validate_emoji_sequence
+    from emojis import EMOJI_REGISTRY, extract_emojis, format_emoji_sequence, validate_single_emoji
 except ImportError:
-    from .emojis import EMOJI_REGISTRY, extract_emojis, format_emoji_sequence, validate_emoji_sequence
+    from .emojis import EMOJI_REGISTRY, extract_emojis, format_emoji_sequence, validate_single_emoji
 
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
@@ -449,18 +453,33 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   <div class="header-bar">
     <div class="header-row1">
       <div class="header-left">
-        <h1>{title}</h1>
+        <h1 id="packHeading">{title}</h1>
         <span class="badge badge-active" id="badgeActive">{count_active} Kept</span>
         <span class="badge badge-cluster" id="badgeCluster">{count_clusters} Clusters</span>
+        <span class="badge" id="badgeUndecided">{count_undecided} Undecided</span>
         <span class="badge badge-deleted" id="badgeExcluded">{count_excluded} Excluded</span>
-        <span class="badge">Author: {author}</span>
+        <span class="badge" id="badgeApproval">{approval_label}</span>
       </div>
 
       <div class="header-controls">
-        <button class="btn btn-secondary" onclick="exportDraftJson()">Save Draft (JSON)</button>
-        <button id="exportYamlBtn" onclick="exportYaml()">Export stickers.yaml</button>
+        <button class="btn btn-secondary" id="saveServerBtn" onclick="saveDraftToServer()">Save</button>
+        <button class="btn btn-secondary" onclick="exportDraftJson()">Download draft (fallback)</button>
+        <button class="btn" id="approveBtn" onclick="approvePack()">Approve Pack</button>
       </div>
     </div>
+
+    <div class="header-row1">
+      <div class="header-controls">
+        <label class="ctrl-label" for="metaTitle">Title</label>
+        <input type="text" id="metaTitle" class="search-box" placeholder="Pack title (required)" oninput="onMetaInput()">
+        <label class="ctrl-label" for="metaAuthor">Author</label>
+        <input type="text" id="metaAuthor" class="search-box" placeholder="Author (required)" oninput="onMetaInput()">
+        <label class="ctrl-label" for="metaCover">Cover</label>
+        <input type="text" id="metaCover" class="search-box" placeholder="cover.webp (defaults to first kept)" oninput="onMetaInput()">
+        <span class="ctrl-label" id="dirtyLabel"></span>
+      </div>
+    </div>
+    <div class="header-row1"><div class="header-controls"><span class="ctrl-label" id="approvalSummary"></span></div></div>
 
     <div class="header-row1">
       <div class="header-controls">
@@ -472,6 +491,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           <button class="filter-tab" id="tabClusters" onclick="setFilter('clusters', this)">Clusters (<span id="tabCountClusters">{count_clustered}</span>)</button>
           <button class="filter-tab" id="tabNeedsReview" onclick="setFilter('review', this)">Needs Review (<span id="tabCountReview">0</span>)</button>
           <button class="filter-tab" onclick="setFilter('kept', this)">Kept (<span id="tabCountKept">{count_active}</span>)</button>
+          <button class="filter-tab" onclick="setFilter('undecided', this)">Undecided (<span id="tabCountUndecided">{count_undecided}</span>)</button>
           <button class="filter-tab" onclick="setFilter('excluded', this)">Excluded (<span id="tabCountExcluded">{count_excluded}</span>)</button>
         </div>
 
@@ -501,16 +521,33 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   <div id="toast" class="toast">Action completed!</div>
 
   <script>
-    const META = {meta_json};
+    let DRAFT_BASELINE = {draft_json};
+    let DRAFT_STATE = JSON.parse(JSON.stringify(DRAFT_BASELINE));
+    const META = DRAFT_STATE.meta || {{}};
     const EMOJI_REGISTRY = {emoji_registry_json};
+    const SAVE_ENDPOINT = {save_endpoint_json};
+    const SAVE_TOKEN = {save_token_json};
+    const PAGE_DIGEST = {save_digest_json};
+    let BASE_DIGEST = PAGE_DIGEST;
+    const DRAFT_REVISION = DRAFT_BASELINE.revision || 1;
     let currentFilter = 'all';
     let currentSort = 'cluster';
 
-    // Undo history stack
+    // Undo history stack (snapshots of DRAFT_STATE)
     const undoStack = [];
 
-    // Track excluded files
-    const excludedFiles = new Set({excluded_files_json});
+    function draftEntries() {{ return DRAFT_STATE.stickers || {{}}; }}
+    function entryFor(fn) {{ return draftEntries()[fn]; }}
+    function snapshotState() {{ return JSON.stringify(DRAFT_STATE); }}
+    function isDirty() {{ return snapshotState() !== JSON.stringify(DRAFT_BASELINE); }}
+    function pushUndo(desc) {{
+      undoStack.push({{ desc: desc, snapshot: snapshotState() }});
+      if (undoStack.length > 50) undoStack.shift();
+    }}
+    function markApprovedDirty() {{
+      DRAFT_STATE.pack_state = 'in_progress';
+      DRAFT_STATE.approval = null;
+    }}
 
     // Valid emoji set sorted by descending length for greedy matching
     const sortedEmojiKeys = Object.keys(EMOJI_REGISTRY).sort((a, b) => b.length - a.length);
@@ -536,29 +573,40 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     function validateSequence(text) {{
       const clean = text.replace(/\\s+/g, '');
       if (!clean) return {{ valid: false, emojis: [], msg: 'Cannot be empty' }};
-      const found = extractKnownEmojis(clean);
-      const recon = found.join('');
-      if (recon !== clean) return {{ valid: false, emojis: found, msg: 'Invalid or unregistered character' }};
-      if (found.length < 1 || found.length > 3) return {{ valid: false, emojis: found, msg: 'Must be 1-3 emojis' }};
-      return {{ valid: true, emojis: found, msg: null }};
+      let n = 0;
+      try {{
+        if (window.Intl && Intl.Segmenter) {{
+          n = Array.from(new Intl.Segmenter(undefined, {{ granularity: 'grapheme' }}).segment(clean)).length;
+        }} else {{
+          n = Array.from(clean).length;
+        }}
+      }} catch (e) {{ n = Array.from(clean).length; }}
+      if (n !== 1) return {{ valid: false, emojis: [], msg: 'Must be exactly one emoji (found ' + n + ')' }};
+      if (/[A-Za-z0-9]/.test(clean)) return {{ valid: false, emojis: [], msg: 'Invalid character' }};
+      return {{ valid: true, emojis: [clean], msg: null }};
     }}
 
     function getCardEmoji(card) {{
+      const fn = card.dataset.file;
+      const entry = entryFor(fn);
+      if (entry && entry.emojis && entry.emojis.length === 1) return String(entry.emojis[0]);
       const inp = card.querySelector('.emoji-input');
       return (inp ? inp.value : card.dataset.emoji || '').trim();
     }}
 
     function getPrimaryEmoji(card) {{
       const text = getCardEmoji(card);
-      const found = extractKnownEmojis(text);
-      return found.length > 0 ? found[0] : '😐';
+      const v = validateSequence(text);
+      return v.valid ? v.emojis[0] : '';
     }}
 
     function getUsageCounts() {{
       const counts = {{}};
       document.querySelectorAll('.card').forEach(card => {{
-        if (excludedFiles.has(card.dataset.file)) return;
+        const entry = entryFor(card.dataset.file);
+        if (entry && entry.selection === 'exclude') return;
         const primary = getPrimaryEmoji(card);
+        if (!primary) return;
         counts[primary] = (counts[primary] || 0) + 1;
       }});
       return counts;
@@ -607,7 +655,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
       cards.forEach(card => {{
         const fn = card.dataset.file;
-        const isEx = excludedFiles.has(fn);
+        const entry = entryFor(fn) || {{ selection: 'keep' }};
+        const sel = entry.selection || 'keep';
+        const isEx = sel === 'exclude';
+        const isUnd = sel === 'undecided';
         const cid = card.dataset.cluster;
         const conf = parseFloat(card.dataset.conf || '1.0');
         const text = getCardEmoji(card);
@@ -619,76 +670,107 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           card.classList.add('card-invalid');
           const errEl = card.querySelector('.err-msg');
           if (errEl) errEl.textContent = '⚠ ' + val.msg;
-          if (!isEx) invalidCount++;
+          if (!isEx && !isUnd) invalidCount++;
         }} else {{
           card.classList.remove('card-invalid');
         }}
 
-        if (!isEx) {{
+        if (sel === 'keep') {{
           keptCount++;
-          if (conf < 0.8 || !val.valid || card.dataset.status === 'needs_review') {{
+          if (conf < 0.8 || !val.valid || card.dataset.status === 'needs_review' || card.dataset.status === 'error') {{
             reviewCount++;
           }}
+        }} else if (isUnd) {{
+          reviewCount++;
         }}
 
-        if (isEx) {{
-          card.classList.add('is-excluded');
-          const btn = card.querySelector('.sel-btn');
-          if (btn) btn.textContent = '↺ Restore';
-        }} else {{
-          card.classList.remove('is-excluded');
-          const btn = card.querySelector('.sel-btn');
-          if (btn) btn.textContent = '✕ Exclude';
-        }}
+        card.classList.toggle('is-excluded', isEx);
+        card.classList.toggle('is-undecided', isUnd);
+        const btn = card.querySelector('.sel-btn');
+        if (btn) btn.textContent = isEx ? '↺ Keep' : (isUnd ? 'Keep?' : '✕ Exclude');
+        const laterBtn = card.querySelector('.later-btn');
+        if (laterBtn) laterBtn.style.display = isUnd ? 'none' : '';
+        card.dataset.selection = sel;
       }});
 
       const totalCount = cards.length;
-      const exCount = excludedFiles.size;
+      let exCount = 0;
+      let undecidedCount = 0;
+      Object.values(draftEntries()).forEach(e => {{
+        if (e.selection === 'exclude') exCount++;
+        if (e.selection === 'undecided') undecidedCount++;
+      }});
 
       document.getElementById('badgeActive').textContent = keptCount + ' Kept';
       document.getElementById('badgeExcluded').textContent = exCount + ' Excluded';
+      const badgeUnd = document.getElementById('badgeUndecided');
+      if (badgeUnd) badgeUnd.textContent = undecidedCount + ' Undecided';
+      const badgeAppr = document.getElementById('badgeApproval');
+      if (badgeAppr) badgeAppr.textContent = (DRAFT_STATE.pack_state === 'approved') ? ('Approved r' + DRAFT_STATE.revision) : 'In progress';
       document.getElementById('tabCountAll').textContent = totalCount;
       document.getElementById('tabCountClusters').textContent = clusterStickersCount;
       document.getElementById('tabCountReview').textContent = reviewCount;
       document.getElementById('tabCountKept').textContent = keptCount;
+      const tabUnd = document.getElementById('tabCountUndecided');
+      if (tabUnd) tabUnd.textContent = undecidedCount;
       document.getElementById('tabCountExcluded').textContent = exCount;
-
-      const exportBtn = document.getElementById('exportYamlBtn');
-      if (invalidCount > 0) {{
-        exportBtn.style.opacity = '0.5';
-        exportBtn.title = invalidCount + ' kept card(s) have invalid emoji sequences!';
-      }} else {{
-        exportBtn.style.opacity = '1';
-        exportBtn.title = 'Export stickers.yaml';
+      const dirtyEl = document.getElementById('dirtyLabel');
+      if (dirtyEl) dirtyEl.textContent = isDirty() ? '● unsaved changes' : 'saved';
+      const apprEl = document.getElementById('approvalSummary');
+      if (apprEl) {{
+        const metaOk = (DRAFT_STATE.meta.title || '').trim() && (DRAFT_STATE.meta.author || '').trim();
+        apprEl.textContent = 'Revision ' + DRAFT_STATE.revision + ' • ' + keptCount + ' keep / ' + undecidedCount + ' undecided / ' + exCount + ' excluded • ' + invalidCount + ' invalid • title/author ' + (metaOk ? 'set' : 'MISSING');
       }}
     }}
 
     function toggleSelect(btn) {{
       const card = btn.closest('.card');
       const fn = card.dataset.file;
-      const prev = new Set(excludedFiles);
-
-      if (excludedFiles.has(fn)) {{
-        excludedFiles.delete(fn);
-        card.dataset.selection = 'keep';
-      }} else {{
-        excludedFiles.add(fn);
-        card.dataset.selection = 'exclude';
-      }}
-
-      undoStack.push({{
-        desc: 'Toggled ' + fn,
-        revert: () => {{
-          excludedFiles.clear();
-          prev.forEach(f => excludedFiles.add(f));
-          updateCountsAndValidation();
-          filterCards();
-        }}
-      }});
-
+      const entry = entryFor(fn);
+      const cur = entry ? entry.selection : 'keep';
+      // Tri-state cycle: undecided -> keep -> exclude -> keep (explicit; never implicit).
+      const next = (cur === 'undecided') ? 'keep' : (cur === 'keep' ? 'exclude' : 'keep');
+      const before = snapshotState();
+      entry.selection = next;
+      entry.review_status = (next === 'exclude') ? 'culled' : 'pending';
+      markApprovedDirty();
+      undoStack.push({{ desc: cur + ' -> ' + next + ' (' + fn + ')', snapshot: before }});
+      syncCardToEntry(fn);
       updateCountsAndValidation();
       refreshAllSelects();
       filterCards();
+    }}
+
+    function markLater(btn) {{
+      const card = btn.closest('.card');
+      const fn = card.dataset.file;
+      const entry = entryFor(fn);
+      if (!entry) return;
+      const before = snapshotState();
+      entry.selection = 'undecided';
+      entry.review_status = 'pending';
+      markApprovedDirty();
+      undoStack.push({{ desc: 'marked undecided (' + fn + ')', snapshot: before }});
+      syncCardToEntry(fn);
+      updateCountsAndValidation();
+      filterCards();
+    }}
+
+    function cardForFile(fn) {{
+      // Exact dataset match: filenames may contain quotes or CSS metacharacters.
+      const cards = document.querySelectorAll('.card');
+      for (const c of cards) {{ if (c.dataset.file === fn) return c; }}
+      return null;
+    }}
+
+    function syncCardToEntry(fn) {{
+      const card = cardForFile(fn);
+      if (!card) return;
+      const entry = entryFor(fn);
+      card.dataset.selection = entry.selection;
+      card.dataset.emoji = (entry.emojis && entry.emojis[0]) || '';
+      const inp = card.querySelector('.emoji-input');
+      if (inp && document.activeElement !== inp) inp.value = card.dataset.emoji;
     }}
 
     function keepOnlyInCluster(btn) {{
@@ -696,34 +778,26 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       const currentFile = currentCard.dataset.file;
       const cid = currentCard.dataset.cluster;
       if (!cid) return;
-
-      const prev = new Set(excludedFiles);
+      const before = snapshotState();
       let countExcluded = 0;
-
       document.querySelectorAll('.card').forEach(card => {{
         if (card.dataset.cluster === cid) {{
           const fn = card.dataset.file;
+          const entry = entryFor(fn);
+          if (!entry) return;
           if (fn !== currentFile) {{
-            excludedFiles.add(fn);
-            card.dataset.selection = 'exclude';
+            entry.selection = 'exclude';
+            entry.review_status = 'culled';
             countExcluded++;
           }} else {{
-            excludedFiles.delete(fn);
-            card.dataset.selection = 'keep';
+            entry.selection = 'keep';
+            entry.review_status = 'pending';
           }}
+          syncCardToEntry(fn);
         }}
       }});
-
-      undoStack.push({{
-        desc: 'Keep only ' + currentFile + ' in ' + cid,
-        revert: () => {{
-          excludedFiles.clear();
-          prev.forEach(f => excludedFiles.add(f));
-          updateCountsAndValidation();
-          filterCards();
-        }}
-      }});
-
+      markApprovedDirty();
+      undoStack.push({{ desc: 'Keep only ' + currentFile + ' in ' + cid, snapshot: before }});
       updateCountsAndValidation();
       refreshAllSelects();
       filterCards();
@@ -732,9 +806,30 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     function onEmojiInput(input) {{
       const card = input.closest('.card');
-      card.dataset.emoji = input.value.trim();
+      const fn = card.dataset.file;
+      const entry = entryFor(fn);
+      const text = input.value.trim();
+      card.dataset.emoji = text;
+      if (entry) {{
+        const beforeSnap = snapshotState();
+        const v = validateSequence(text);
+        const prevFinal = (entry.emojis && entry.emojis[0]) || '';
+        if (v.valid) {{
+          entry.emojis = v.emojis;
+          entry.review_status = 'pending';
+          entry.tag_status = 'manual';
+          entry.tag_source = 'manual';
+          markApprovedDirty();
+          if (prevFinal !== v.emojis[0]) undoStack.push({{ desc: 'Emoji edit ' + fn, snapshot: beforeSnap }});
+        }} else if ((entry.emojis || []).length !== 0) {{
+          entry.emojis = [];
+          entry.review_status = 'pending';
+          entry.tag_status = 'pending';
+          markApprovedDirty();
+          undoStack.push({{ desc: 'Emoji cleared ' + fn, snapshot: beforeSnap }});
+        }}
+      }}
       updateCountsAndValidation();
-      refreshAllSelects();
       if (currentSort === 'emoji') sortCards('emoji');
     }}
 
@@ -744,14 +839,29 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       const card = select.closest('.card');
       const input = card.querySelector('.emoji-input');
       if (input) {{
-        let current = input.value.trim();
-        const found = extractKnownEmojis(current);
-        if (found.length < 3 && !found.includes(chosen)) {{
-          input.value = (current + chosen).trim();
-          onEmojiInput(input);
-        }}
+        input.value = chosen;
+        onEmojiInput(input);
       }}
       select.selectedIndex = 0;
+    }}
+
+    function onMetaInput() {{
+      const beforeSnap = snapshotState();
+      const t = document.getElementById('metaTitle');
+      const a = document.getElementById('metaAuthor');
+      const c = document.getElementById('metaCover');
+      const nt = t ? t.value : '', na = a ? a.value : '', nc = c ? c.value : '';
+      const changed = (DRAFT_STATE.meta.title !== nt) || (DRAFT_STATE.meta.author !== na) || ((DRAFT_STATE.meta.cover || '') !== nc);
+      DRAFT_STATE.meta.title = nt;
+      DRAFT_STATE.meta.author = na;
+      DRAFT_STATE.meta.cover = nc.trim() ? nc.trim() : null;
+      const head = document.getElementById('packHeading');
+      if (head) head.textContent = nt || 'Signal Stickers';
+      if (changed) {{
+        markApprovedDirty();
+        undoStack.push({{ desc: 'Metadata edit', snapshot: beforeSnap }});
+      }}
+      updateCountsAndValidation();
     }}
 
     function setSort(sortType, btn) {{
@@ -820,16 +930,21 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         const emoji = getCardEmoji(card).toLowerCase();
         const cid = (card.dataset.cluster || '').toLowerCase();
         const conf = parseFloat(card.dataset.conf || '1.0');
-        const isEx = excludedFiles.has(card.dataset.file);
+        const entry = entryFor(card.dataset.file) || {{ selection: 'keep' }};
+        const sel = entry.selection || 'keep';
+        const isEx = sel === 'exclude';
+        const isUnd = sel === 'undecided';
         const isInv = card.classList.contains('card-invalid');
 
         let matchFilter = true;
         if (currentFilter === 'clusters') {{
           matchFilter = !!cid;
         }} else if (currentFilter === 'review') {{
-          matchFilter = !isEx && (conf < 0.8 || isInv || card.dataset.status === 'needs_review');
+          matchFilter = (sel !== 'exclude') && (conf < 0.8 || isInv || isUnd || card.dataset.status === 'needs_review' || card.dataset.status === 'error');
         }} else if (currentFilter === 'kept') {{
-          matchFilter = !isEx;
+          matchFilter = sel === 'keep';
+        }} else if (currentFilter === 'undecided') {{
+          matchFilter = isUnd;
         }} else if (currentFilter === 'excluded') {{
           matchFilter = isEx;
         }}
@@ -841,9 +956,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     function showToast(msg, withUndo = false) {{
       const toast = document.getElementById('toast');
+      // textContent only: filenames and messages must never become HTML.
+      toast.textContent = '';
       if (withUndo && undoStack.length > 0) {{
         toast.className = 'toast toast-undo';
-        toast.innerHTML = '<span>' + msg + '</span> <button class="btn btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="undoLast()">Undo</button>';
+        const span = document.createElement('span');
+        span.textContent = msg;
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-secondary';
+        btn.setAttribute('style', 'padding:3px 8px;font-size:11px;');
+        btn.textContent = 'Undo';
+        btn.addEventListener('click', undoLast);
+        toast.appendChild(span);
+        toast.appendChild(document.createTextNode(' '));
+        toast.appendChild(btn);
       }} else {{
         toast.className = 'toast';
         toast.textContent = msg;
@@ -855,45 +981,27 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     function undoLast() {{
       if (undoStack.length === 0) return;
       const last = undoStack.pop();
-      last.revert();
+      DRAFT_STATE = JSON.parse(last.snapshot);
+      document.querySelectorAll('.card').forEach(card => syncCardToEntry(card.dataset.file));
+      syncMetaInputs();
+      updateCountsAndValidation();
+      refreshAllSelects();
+      filterCards();
       showToast('Reverted: ' + last.desc, false);
     }}
 
     function collectDraft() {{
-      const draft = {{
-        version: 2,
-        meta: META,
-        similarity_groups: {{}},
-        stickers: {{}}
-      }};
-
-      document.querySelectorAll('.card').forEach(card => {{
-        const fn = card.dataset.file;
-        const isEx = excludedFiles.has(fn);
-        const text = getCardEmoji(card);
-        const val = validateSequence(text);
-        const cid = card.dataset.cluster || null;
-
-        draft.stickers[fn] = {{
-          selection: isEx ? 'exclude' : 'keep',
-          similarity_group: cid,
-          emojis: val.valid ? val.emojis : [],
-          confidence: parseFloat(card.dataset.conf || '1.0'),
-          reason: card.querySelector('.reason') ? card.querySelector('.reason').textContent : '',
-          review_status: isEx ? 'culled' : (val.valid ? 'approved' : 'needs_review')
-        }};
-      }});
-
-      // Preserve the similarity groups computed during --scan. The cards only
-      // carry a cluster id, so rebuild the membership lists from the DOM.
+      // The full draft object is the state source; DOM is a view. Preserve
+      // file_hash, suggestions, unknown fields, and cluster membership.
+      const groups = {{}};
       document.querySelectorAll('.card').forEach(card => {{
         const cid = card.dataset.cluster;
         if (!cid) return;
-        if (!draft.similarity_groups[cid]) draft.similarity_groups[cid] = [];
-        draft.similarity_groups[cid].push(card.dataset.file);
+        if (!groups[cid]) groups[cid] = [];
+        groups[cid].push(card.dataset.file);
       }});
-
-      return draft;
+      if (Object.keys(groups).length) DRAFT_STATE.similarity_groups = groups;
+      return DRAFT_STATE;
     }}
 
     function downloadBlob(content, filename, type) {{
@@ -906,72 +1014,93 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       URL.revokeObjectURL(url);
     }}
 
+    function syncMetaInputs() {{
+      const t = document.getElementById('metaTitle');
+      const a = document.getElementById('metaAuthor');
+      const c = document.getElementById('metaCover');
+      if (t) t.value = DRAFT_STATE.meta.title || '';
+      if (a) a.value = DRAFT_STATE.meta.author || '';
+      if (c) c.value = DRAFT_STATE.meta.cover || '';
+      const head = document.getElementById('packHeading');
+      if (head) head.textContent = DRAFT_STATE.meta.title || 'Signal Stickers';
+    }}
+
+    async function saveDraftToServer() {{
+      const payload = collectDraft();
+      if (!SAVE_ENDPOINT) {{
+        exportDraftJson();
+        return;
+      }}
+      try {{
+        const res = await fetch(SAVE_ENDPOINT, {{
+          method: 'POST',
+          headers: {{ 'Content-Type': 'application/json', 'X-Session-Token': SAVE_TOKEN }},
+          body: JSON.stringify({{ base_digest: BASE_DIGEST, revision: DRAFT_STATE.revision, draft: payload }})
+        }});
+        const data = await res.json().catch(() => ({{}}));
+        if (!res.ok) {{
+          alert('Save failed: ' + (data.error || res.status));
+          return;
+        }}
+        // Adopt the server's canonical saved state (revision, digest, approval).
+        BASE_DIGEST = data.digest;
+        DRAFT_STATE.revision = data.revision;
+        if (data.approval !== undefined) DRAFT_STATE.approval = data.approval;
+        if (!data.approved && DRAFT_STATE.pack_state === 'approved') DRAFT_STATE.pack_state = 'in_progress';
+        DRAFT_BASELINE = JSON.parse(JSON.stringify(DRAFT_STATE));
+        let msg = 'Saved revision ' + DRAFT_STATE.revision + ' to pack folder.';
+        if (data.approved) msg += ' Pack approved.';
+        else if (data.approval_errors && data.approval_errors.length) msg += ' Saved, but approval needs work: ' + data.approval_errors.slice(0, 3).join('; ');
+        showToast(msg, false);
+        updateCountsAndValidation();
+      }} catch (e) {{
+        alert('Save failed (' + e + '). Use Download draft (fallback) instead.');
+      }}
+    }}
+
+    function approvePack() {{
+      const beforeSnap = snapshotState();
+      const problems = [];
+      if (!(DRAFT_STATE.meta.title || '').trim()) problems.push('Set a pack title.');
+      if (!(DRAFT_STATE.meta.author || '').trim()) problems.push('Set a pack author.');
+      Object.entries(draftEntries()).forEach(([fn, e]) => {{
+        if (e.selection === 'undecided') problems.push(fn + ': undecided — Keep or Exclude it.');
+        if (e.selection === 'keep') {{
+          const v = validateSequence((e.emojis && e.emojis[0]) || '');
+          if (!v.valid) problems.push(fn + ': needs exactly one valid emoji.');
+          if (e.tag_status === 'error') problems.push(fn + ': tag error — re-tag.');
+        }}
+      }});
+      if (problems.length) {{
+        alert('Cannot approve:\n- ' + problems.slice(0, 12).join('\n- ') + (problems.length > 12 ? '\n... and ' + (problems.length - 12) + ' more' : ''));
+        return;
+      }}
+      DRAFT_STATE.pack_state = 'approved';
+      DRAFT_STATE.approval = {{ revision: DRAFT_STATE.revision, by: 'browser', pending_server_digest: true }};
+      undoStack.push({{ desc: 'Approve pack', snapshot: beforeSnap }});
+      updateCountsAndValidation();
+      showToast('Pack approved for revision ' + DRAFT_STATE.revision + '. Click Save.', false);
+    }}
+
     function exportDraftJson() {{
       downloadBlob(
         JSON.stringify(collectDraft(), null, 2),
         'pack_draft.json',
         'application/json'
       );
-      showToast('Downloaded pack_draft.json — copy it into your pack folder to keep your edits.', true);
+      showToast('Downloaded pack_draft.json — Save writes directly when served via ./stickers curate --serve; otherwise copy this file into your pack folder.', true);
     }}
 
-    function safeYamlEscape(val) {{
-      const str = String(val);
-      return '"' + str.replace(/\\\\/g, '\\\\\\\\').replace(/"/g, '\\\\"') + '"';
-    }}
-
-    function exportYaml() {{
-      let hasInvalid = false;
-      const stickersList = [];
-
-      document.querySelectorAll('.card').forEach(card => {{
-        const fn = card.dataset.file;
-        if (excludedFiles.has(fn)) return;
-
-        const text = getCardEmoji(card);
-        const val = validateSequence(text);
-        if (!val.valid) {{
-          hasInvalid = true;
-          return;
-        }}
-        stickersList.push({{ chr: val.emojis.join(''), file: fn }});
-      }});
-
-      if (hasInvalid) {{
-        alert('Cannot export: Some kept stickers have invalid emoji sequences! Filter by "Needs Review" to fix them.');
-        return;
-      }}
-
-      let y = 'meta:\\n';
-      y += '  title: ' + safeYamlEscape(META.title || 'Signal Stickers') + '\\n';
-      y += '  author: ' + safeYamlEscape(META.author || 'Author') + '\\n';
-      if (stickersList.length > 0) {{
-        y += '  cover: ' + safeYamlEscape(META.cover || stickersList[0].file) + '\\n';
-      }}
-      y += 'stickers:\\n';
-      for (const item of stickersList) {{
-        y += '  - chr: ' + safeYamlEscape(item.chr) + '\\n    file: ' + safeYamlEscape(item.file) + '\\n';
-      }}
-
-      downloadBlob(y, 'stickers.yaml', 'text/yaml;charset=utf-8');
-
-      showToast(
-        'Downloaded stickers.yaml (' + stickersList.length + ' stickers). ' +
-        'To upload from the pack folder, save the draft and run ./stickers export instead.',
-        true
-      );
-    }}
-
-    // Warn before leaving the page with unsaved changes, since every edit lives
-    // only in this tab until the draft is downloaded.
+    // Warn on unsaved changes: compare live draft against the loaded baseline.
     window.addEventListener('beforeunload', (e) => {{
-      if (excludedFiles.size > 0 || undoStack.length > 0) {{
+      if (isDirty()) {{
         e.preventDefault();
         e.returnValue = '';
       }}
     }});
 
     window.addEventListener('DOMContentLoaded', () => {{
+      syncMetaInputs();
       updateCountsAndValidation();
       refreshAllSelects();
       sortCards('cluster');
@@ -982,38 +1111,49 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 """
 
 
+def _safe_json_for_html(obj: Any) -> str:
+    return json.dumps(obj, ensure_ascii=False).replace("</", "<\\/").replace("<!--", "<\\!--")
+
+
 def generate_review_html(
     folder: Path,
     draft_path: Optional[Path] = None,
     yaml_path: Optional[Path] = None,
     cache_path: Optional[Path] = None,
+    save_endpoint: Optional[str] = None,
+    save_token: Optional[str] = None,
+    save_digest: Optional[str] = None,
 ) -> Path:
-    """Generates the responsive HTML review page from pack_draft.json (or fallback)."""
+    """Generates the review page from pack_draft.json (sole source; no YAML trust)."""
     draft_file = draft_path or (folder / "pack_draft.json")
-    draft_data = {}
+    draft_data: Dict[str, Any] = {}
     if draft_file.exists():
         try:
             draft_data = json.loads(draft_file.read_text(encoding="utf-8"))
         except Exception as e:
             print(f"Warning: Could not read {draft_file}: {e}")
+    if not isinstance(draft_data, dict) or "stickers" not in draft_data:
+        draft_data = {
+            "version": 3,
+            "revision": 1,
+            "pack_state": "in_progress",
+            "approval": None,
+            "meta": {"title": "", "author": "", "cover": None},
+            "similarity_groups": {},
+            "stickers": {},
+        }
+    draft_data.setdefault("revision", 1)
+    draft_data.setdefault("pack_state", "in_progress")
+    draft_data.setdefault("approval", None)
+    draft_data.setdefault("meta", {"title": "", "author": "", "cover": None})
 
     stickers_items = []
-    meta = draft_data.get("meta", {"title": "Signal Stickers", "author": "tazztone"})
-
-    if draft_data and "stickers" in draft_data:
+    meta = draft_data.get("meta", {"title": "", "author": "", "cover": None})
+    if isinstance(draft_data.get("stickers"), dict):
         for fn, sdata in draft_data["stickers"].items():
-            stickers_items.append((fn, sdata))
-    else:
-        yp = yaml_path or (folder / "stickers.yaml")
-        if yp.exists():
-            doc = yaml.safe_load(yp.read_text(encoding="utf-8"))
-            meta = doc.get("meta", meta)
-            for s in doc.get("stickers", []):
-                fn = s.get("file", "")
-                stickers_items.append((fn, {"emojis": [s.get("chr", "🙂")], "selection": "keep"}))
+            stickers_items.append((fn, sdata if isinstance(sdata, dict) else {}))
 
     cards = []
-    excluded_files = []
     clusters_set = set()
 
     for file_name, info in stickers_items:
@@ -1035,86 +1175,140 @@ def generate_review_html(
             clusters_set.add(cid)
 
         sel = info.get("selection", "undecided" if cid else "keep")
-        if sel == "exclude":
-            excluded_files.append(file_name)
+        if sel not in ("keep", "exclude", "undecided"):
+            sel = "undecided" if cid else "keep"
 
-        current_emojis = info.get("emojis") or info.get("suggested_emojis") or []
-        emoji_str = format_emoji_sequence(current_emojis, fallback="") or ""
-        conf = float(info.get("confidence", 1.0))
-        reason = info.get("reason", "")
-        status = info.get("review_status", "pending")
+        final = info.get("emojis")
+        emoji_str = ""
+        if isinstance(final, list) and len(final) == 1 and isinstance(final[0], str):
+            valid, vals, _ = validate_single_emoji(final[0])
+            emoji_str = vals[0] if valid else ""
+        elif isinstance(final, str) and final:
+            valid, vals, _ = validate_single_emoji(final)
+            emoji_str = vals[0] if valid else ""
+        suggested = info.get("suggested_emojis")
+        suggested_str = ""
+        if isinstance(suggested, list) and suggested:
+            suggested_str = str(suggested[0])
+        try:
+            conf = float(info.get("confidence", 0.0) or 0.0)
+        except Exception:
+            conf = 0.0
+        reason = str(info.get("reason", "") or "")
+        status = str(info.get("review_status", "pending") or "pending")
 
         conf_class = "conf-low" if conf < 0.6 else ("conf-mid" if conf < 0.8 else "conf-ok")
         cluster_class = "in-cluster" if cid else ""
-        ex_class = "is-excluded" if sel == "exclude" else ""
-        size_kb = img_path.stat().st_size / 1024
+        ex_class = "is-excluded" if sel == "exclude" else ("is-undecided" if sel == "undecided" else "")
+        try:
+            size_kb = img_path.stat().st_size / 1024
+        except Exception:
+            size_kb = 0
+        esc_file = html.escape(file_name, quote=True)
+        esc_cid = html.escape(cid, quote=True)
+        esc_emoji = html.escape(emoji_str, quote=True)
+        esc_reason = html.escape(reason, quote=True)
+        esc_reason_text = html.escape(reason or "—")
+        esc_suggested = html.escape(f" Suggested: {suggested_str}" if suggested_str and suggested_str != emoji_str else "")
 
         cluster_tag_html = (
-            f'<span class="cluster-tag" onclick="filterByCluster(\'{cid}\')" title="Filter by {cid}">{cid}</span>'
+            f'<span class="cluster-tag" onclick="filterByCluster(\'{esc_cid}\')" title="Filter by {esc_cid}">{esc_cid}</span>'
             if cid
             else ""
         )
         keep_only_html = (
-            f'<button type="button" class="keep-only-btn" onclick="keepOnlyInCluster(this)" title="Keep this variation and exclude other variations in {cid}">⚡ Keep Only</button>'
+            f'<button type="button" class="keep-only-btn" onclick="keepOnlyInCluster(this)" title="Keep this variation and explicitly exclude its siblings in {esc_cid}">⚡ Keep Only</button>'
             if cid
             else ""
         )
-        sel_label = "↺ Restore" if sel == "exclude" else "✕ Exclude"
+        if sel == "exclude":
+            sel_label = "↺ Keep"
+        elif sel == "undecided":
+            sel_label = "Keep?"
+        else:
+            sel_label = "✕ Exclude"
+        later_html = (
+            '<button type="button" class="later-btn" onclick="markLater(this)" title="Leave undecided for later">Later</button>'
+            if sel != "undecided"
+            else ""
+        )
+        und_badge = '<div class="excluded-badge" style="background:#7a5b00;">UNDECIDED</div>' if sel == "undecided" else ""
 
         card_html = f"""
-        <div class="card {conf_class} {cluster_class} {ex_class}" data-file="{file_name}" data-cluster="{cid}" data-selection="{sel}" data-emoji="{emoji_str}" data-conf="{conf:.2f}" data-status="{status}">
+        <div class="card {conf_class} {cluster_class} {ex_class}" data-file="{esc_file}" data-cluster="{esc_cid}" data-selection="{sel}" data-emoji="{esc_emoji}" data-conf="{conf:.2f}" data-status="{html.escape(status, quote=True)}">
           <div class="card-topbar">
             {cluster_tag_html}
             {keep_only_html}
             <button type="button" class="sel-btn" onclick="toggleSelect(this)">{sel_label}</button>
+            {later_html}
           </div>
           <div class="sticker-container">
             <div class="excluded-badge">EXCLUDED</div>
-            <img class="sticker-img" src="{src}" loading="lazy" alt="{file_name}">
+            {und_badge}
+            <img class="sticker-img" src="{src}" loading="lazy" alt="{esc_file}">
           </div>
           <div class="emoji-bar">
-            <input type="text" class="emoji-input" value="{emoji_str}" placeholder="emoji" title="Edit emojis (1-3)" oninput="onEmojiInput(this)">
-            <select class="emoji-select" onchange="onEmojiAdd(this)" title="Add an emoji from registry"><option value="" selected disabled>+ Add</option></select>
+            <input type="text" class="emoji-input" value="{esc_emoji}" placeholder="one emoji" title="Exactly one emoji" oninput="onEmojiInput(this)">
+            <select class="emoji-select" onchange="onEmojiAdd(this)" title="Pick a suggested emoji"><option value="" selected disabled>+ Add</option></select>
           </div>
           <div class="err-msg">⚠ Invalid emoji</div>
           <div class="meta-row">
             <span>{size_kb:.0f} KB</span>
             <span>conf: {conf:.2f}</span>
           </div>
-          <div class="reason" title="{reason}">{reason or '—'}</div>
-          <div class="filename">{file_name}</div>
+          <div class="reason" title="{esc_reason}">{esc_reason_text}{esc_suggested}</div>
+          <div class="filename">{esc_file}</div>
         </div>
         """
         cards.append(card_html)
 
     total_count = len(cards)
-    ex_count = len(excluded_files)
-    active_count = total_count - ex_count
+    kept_count = sum(1 for _, info in stickers_items if info.get("selection") == "keep")
+    und_count = sum(1 for _, info in stickers_items if info.get("selection") == "undecided")
+    ex_count = sum(1 for _, info in stickers_items if info.get("selection") == "exclude")
     clustered_count = sum(1 for _, info in stickers_items if info.get("similarity_group"))
+    title_str = str(meta.get("title") or "Signal Stickers")
+    appr = draft_data.get("approval")
+    approval_label = ("Approved r" + str(draft_data.get("revision", 1))) if draft_data.get("pack_state") == "approved" and appr else "In progress"
 
+    if save_digest is None:
+        save_digest = _state_digest(draft_data)
     html_content = HTML_TEMPLATE.format(
-        title=meta.get("title", "Signal Stickers"),
-        author=meta.get("author", "Unknown"),
+        title=html.escape(title_str),
         count_total=total_count,
-        count_active=active_count,
+        count_active=kept_count,
+        count_undecided=und_count,
         count_excluded=ex_count,
+        approval_label=html.escape(approval_label),
         count_clusters=len(clusters_set),
         count_clustered=clustered_count,
         cards="".join(cards),
-        meta_json=json.dumps(meta, ensure_ascii=False),
-        emoji_registry_json=json.dumps(EMOJI_REGISTRY, ensure_ascii=False),
-        excluded_files_json=json.dumps(excluded_files),
+        draft_json=_safe_json_for_html(draft_data),
+        emoji_registry_json=_safe_json_for_html(EMOJI_REGISTRY),
+        save_endpoint_json=_safe_json_for_html(save_endpoint),
+        save_token_json=_safe_json_for_html(save_token),
+        save_digest_json=_safe_json_for_html(save_digest),
     )
 
     out_path = folder / "review.html"
     out_path.write_text(html_content, encoding="utf-8")
 
-    # Counted over rendered cards, not draft entries: entries whose image is
-    # missing from disk are skipped above and never reach the page.
-    untagged = sum(1 for c in cards if 'value="" placeholder="emoji"' in c)
+    untagged = 0
+    for _, info in stickers_items:
+        final = info.get("emojis")
+        ok = False
+        if isinstance(final, list) and len(final) == 1 and isinstance(final[0], str):
+            valid, _, _ = validate_single_emoji(final[0])
+            ok = valid
+        elif isinstance(final, str) and final:
+            valid, _, _ = validate_single_emoji(final)
+            ok = valid
+        if info.get("selection") == "keep" and not ok:
+            untagged += 1
     stats = {
         "total": total_count,
-        "kept": active_count,
+        "kept": kept_count,
+        "undecided": und_count,
         "excluded": ex_count,
         "clusters": len(clusters_set),
         "untagged": untagged,
@@ -1123,43 +1317,228 @@ def generate_review_html(
     return out_path, stats
 
 
+def _state_digest(obj: Any) -> str:
+    """Canonical digest for compare-and-swap (same form as draft_digest)."""
+    import hashlib as _hashlib
+
+    canonical = json.dumps(obj, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return _hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _server_validate_approval(draft: Dict[str, Any]) -> List[str]:
+    """Authoritative approval check used when the browser claims approval."""
+    try:
+        from classify_and_build import approve_pack as _approve
+    except Exception:
+        _approve = None  # type: ignore
+    if _approve is None:
+        # No validator available: never persist an unverified approval.
+        return ["server validator unavailable; approve via CLI"]
+    probe = json.loads(json.dumps(draft))
+    probe["pack_state"] = "in_progress"
+    probe["approval"] = None
+    return _approve(probe)
+
+
+def create_review_server(folder: Path, draft_path: Path, port: int = 0):
+    """Builds (but does not run) the loopback save server.
+
+    Returns (server, token, state). Compare-and-swap uses the persisted draft
+    digest, so a stale page cannot overwrite a draft changed by a later scan.
+    The served page is regenerated after every accepted save.
+    """
+    token = secrets.token_urlsafe(24)
+    try:
+        current = json.loads(draft_path.read_text(encoding="utf-8")) if draft_path.exists() else {}
+    except Exception:
+        current = {}
+    state: Dict[str, Any] = {
+        "folder": folder,
+        "draft_path": draft_path,
+        "token": token,
+        "expected_digest": _state_digest(current),
+        "expected_revision": int(current.get("revision") or 1),
+        "out_file": None,
+    }
+
+    def _render() -> None:
+        out_file, _ = generate_review_html(
+            folder,
+            draft_path=draft_path,
+            save_endpoint="/save",
+            save_token=token,
+            save_digest=state["expected_digest"],
+        )
+        state["out_file"] = out_file
+
+    _render()
+
+    class Handler(BaseHTTPRequestHandler):
+        def _headers(self, code: int = 200, ctype: str = "text/html; charset=utf-8") -> None:
+            self.send_response(code)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Security-Policy", "default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.end_headers()
+
+        def log_message(self, *a: Any) -> None:
+            pass
+
+        def do_GET(self) -> None:
+            if self.path.split("?")[0] not in ("/", "/review.html"):
+                self._headers(404, "text/plain")
+                self.wfile.write(b"not found")
+                return
+            try:
+                data = state["out_file"].read_bytes()
+            except Exception as e:
+                self._headers(500, "text/plain")
+                self.wfile.write(f"cannot read review page: {e}".encode())
+                return
+            self._headers(200, "text/html; charset=utf-8")
+            self.wfile.write(data)
+
+        def do_POST(self) -> None:
+            if self.path.split("?")[0] != "/save":
+                self._headers(404, "text/plain")
+                self.wfile.write(b"not found")
+                return
+            if self.headers.get("X-Session-Token") != state["token"]:
+                self._headers(403, "application/json")
+                self.wfile.write(b'{"error":"bad session token"}')
+                return
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except Exception:
+                length = 0
+            if length <= 0 or length > 100 * 1024 * 1024:
+                self._headers(400, "application/json")
+                self.wfile.write(b'{"error":"bad payload size"}')
+                return
+            try:
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            except Exception:
+                self._headers(400, "application/json")
+                self.wfile.write(b'{"error":"invalid JSON"}')
+                return
+            incoming = payload.get("draft")
+            if not isinstance(incoming, dict) or not isinstance(incoming.get("stickers"), dict):
+                self._headers(400, "application/json")
+                self.wfile.write(b'{"error":"invalid draft"}')
+                return
+            # Compare-and-swap on the persisted digest: a scan (or any other
+            # writer) that changed the draft after this page was generated fails
+            # the save instead of being silently overwritten.
+            try:
+                disk = json.loads(draft_path.read_text(encoding="utf-8")) if draft_path.exists() else {}
+            except Exception as e:
+                self._headers(409, "application/json")
+                self.wfile.write(json.dumps({"error": f"draft unreadable on disk ({e}); back it up before saving"}).encode())
+                return
+            disk_digest = _state_digest(disk)
+            if payload.get("base_digest") != state["expected_digest"] or disk_digest != state["expected_digest"]:
+                self._headers(409, "application/json")
+                self.wfile.write(b'{"error":"draft changed since page load (stale page); regenerate the page"}')
+                return
+            incoming["version"] = 3
+            incoming["revision"] = int(disk.get("revision") or 1) + 1
+            # Authoritative approval: the browser's claim is re-validated here and
+            # persisted with a server-computed digest, never silently dropped.
+            approval_errors: List[str] = []
+            approved = False
+            if incoming.get("pack_state") == "approved":
+                approval_errors = _server_validate_approval(incoming)
+                if approval_errors:
+                    incoming["pack_state"] = "in_progress"
+                    incoming["approval"] = None
+                else:
+                    try:
+                        from classify_and_build import approve_pack as _approve
+                    except Exception:
+                        _approve = None  # type: ignore
+                    if _approve is None:
+                        incoming["pack_state"] = "in_progress"
+                        incoming["approval"] = None
+                        approval_errors = ["server validator unavailable; approve via CLI"]
+                    else:
+                        _approve(incoming)
+                        approved = True
+            tmp = draft_path.parent / f".{draft_path.name}.{os.getpid()}.tmp"
+            tmp.write_text(json.dumps(incoming, ensure_ascii=False, indent=2), encoding="utf-8")
+            os.replace(tmp, draft_path)
+            state["expected_digest"] = _state_digest(incoming)
+            state["expected_revision"] = int(incoming.get("revision") or 1)
+            _render()
+            self._headers(200, "application/json")
+            self.wfile.write(json.dumps({
+                "ok": True,
+                "revision": state["expected_revision"],
+                "digest": state["expected_digest"],
+                "approved": approved,
+                "approval": incoming.get("approval"),
+                "approval_errors": approval_errors,
+            }).encode())
+
+    server = HTTPServer(("127.0.0.1", port), Handler)
+    return server, token, state
+
+
+def serve_review(folder: Path, draft_path: Path, port: int = 0) -> None:
+    """Runs the loopback save server until interrupted."""
+    server, _token, state = create_review_server(folder, draft_path, port=port)
+    actual_port = server.server_address[1]
+    url = f"http://127.0.0.1:{actual_port}/"
+    print(f"Review server (loopback only): {url}")
+    print(f"  Folder: {folder.resolve()}")
+    print(f"  Draft:  {draft_path}")
+    print(f"  Static fallback: file://{state['out_file'].resolve()}")
+    print("Press Ctrl+C to stop. Saves compare-and-swap on the draft digest and regenerate the page.")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+
+
 def main():
     parser = argparse.ArgumentParser(description="Signal Stickers Review & Curation Page Generator")
-    parser.add_argument("folder", help="Directory containing stickers")
+    parser.add_argument("folder", help="Directory containing stickers (explicit; required)")
     parser.add_argument("--draft", default="pack_draft.json", help="Path to pack_draft.json")
-    parser.add_argument("--yaml", default="stickers.yaml", help="Path to stickers.yaml")
+    parser.add_argument("--yaml", default="stickers.yaml", help="Legacy manifest name (never trusted as input)")
+    parser.add_argument("--serve", action="store_true", help="Serve the page on loopback with direct save")
+    parser.add_argument("--port", type=int, default=0, help="Loopback port (0 = random)")
     args = parser.parse_args()
 
     folder = Path(args.folder)
+    if not folder.is_dir():
+        sys.exit(f"Error: pack folder '{folder}' does not exist.")
     draft_path = folder / args.draft if not Path(args.draft).is_absolute() else Path(args.draft)
-    yaml_path = folder / args.yaml if not Path(args.yaml).is_absolute() else Path(args.yaml)
 
-    out_file, stats = generate_review_html(
-        folder, draft_path=draft_path, yaml_path=yaml_path
-    )
+    if args.serve:
+        serve_review(folder, draft_path, port=args.port)
+        return
+    out_file, stats = generate_review_html(folder, draft_path=draft_path)
     size_mb = out_file.stat().st_size / 1024 / 1024
 
     print(f"Review page: {out_file.resolve()} ({size_mb:.1f} MB, images embedded)")
     print(
         f"  {stats['total']} sticker(s): {stats['kept']} kept, "
-        f"{stats['excluded']} excluded, {stats['untagged']} awaiting an emoji"
+        f"{stats.get('undecided', 0)} undecided, {stats['excluded']} excluded, "
+        f"{stats['untagged']} awaiting a final single emoji"
     )
     if stats["clusters"]:
-        print(f"  {stats['clusters']} visual cluster(s) to curate")
+        print(f"  {stats['clusters']} visually similar group(s) to curate (candidates, not duplicates)")
     if stats["missing"]:
-        print(
-            f"  Warning: {stats['missing']} draft entry/entries have no image on disk "
-            f"and were skipped."
-        )
+        print(f"  Warning: {stats['missing']} draft entry/entries have no image on disk and were skipped.")
 
     print("\nIn the page:")
-    print("  1. Click 'Keep Only' on the best variation in each orange cluster.")
-    print("  2. Check the suggested emojis; fix anything wrong or untagged.")
-    print("  3. Use Light/Dark/White/Black to check contrast on transparent edges.")
-    print("\nThen save your work back to disk:")
-    print("  a. Click 'Save Draft (JSON)' and copy the downloaded file to")
+    print("  1. Resolve every Undecided card (Keep Only / Keep? / Exclude / Later).")
+    print("  2. Give each kept sticker exactly one emoji; Save marks dirty state.")
+    print("  3. Set title/author/cover, then Approve Pack and Save.")
+    print("  4. For turnkey saves: ./stickers curate --serve (loopback server).")
+    print("\nStatic fallback: click Download draft and copy it over")
     print(f"     {draft_path}")
-    print("  b. Run: ./stickers export" + (f" {folder}" if folder else ""))
+    print("  then run: ./stickers export" + (f" {folder}" if folder else ""))
 
 
 if __name__ == "__main__":

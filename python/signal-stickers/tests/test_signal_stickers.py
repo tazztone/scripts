@@ -1,4 +1,5 @@
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -26,15 +27,29 @@ from emojis import (
     get_related_emojis,
     is_valid_emoji,
     is_valid_emoji_sequence,
+    is_valid_single_emoji,
     validate_emoji_sequence,
+    validate_single_emoji,
 )
 from classify_and_build import (
+    approve_pack,
     build_disambiguation_prompt,
     build_stickers_yaml,
     check_signal_constraints,
     compute_dhash,
+    compute_file_sha256,
     detect_visual_clusters,
     detect_visual_duplicates,
+    cluster_pair_stats,
+    draft_digest,
+    effective_cover,
+    final_emoji_for_entry,
+    get_image_facts,
+    upgrade_draft_to_v3,
+    validate_draft_for_export,
+    validate_image_hard,
+    validate_image_quality,
+    verify_manifest_freshness,
     hamming_distance,
     load_or_create_draft,
     parse_json_response,
@@ -61,44 +76,40 @@ def test_emoji_registry_integrity():
     assert is_valid_emoji("not_an_emoji") is False
 
 
-def test_multi_emoji_helpers_and_strict_validation():
-    """Verify multi-emoji extraction, sequencing, and strict sequence validation."""
-    extracted = extract_emojis("🤔🤨")
-    assert extracted == ["🤔", "🤨"]
-
-    # Duplicates removed, order preserved
+def test_single_emoji_helpers_and_strict_validation():
+    """One emoji per sticker: registry suggests, manual single picks allowed, multi rejected."""
+    # Registry extraction still works for suggestions.
+    assert extract_emojis("🤔🤨") == ["🤔", "🤨"]
     assert extract_emojis("🤔🤨🤔") == ["🤔", "🤨"]
 
-    # Formatting limits to 3 emojis
-    seq = format_emoji_sequence(["🤔", "🤨", "🧐", "😏"])
-    assert seq == "🤔🤨🧐"
-    assert len(extract_emojis(seq)) == 3
-
-    # Fallback behavior
-    assert format_emoji_sequence("🤔🤨") == "🤔🤨"
-    assert format_emoji_sequence(None) == "🙂"
+    # Strict: exactly one valid grapheme or fallback (never truncation/defaults).
+    assert format_emoji_sequence(["🤔"]) == "🤔"
+    assert format_emoji_sequence("🤔") == "🤔"
+    assert format_emoji_sequence(["🤔", "🤨"]) is None
+    assert format_emoji_sequence("🤔🤨") is None
+    assert format_emoji_sequence(None) is None
     assert format_emoji_sequence(None, fallback="") == ""
+    assert format_emoji_sequence("🫠") == "🫠"
 
-    # Strict sequence validation
-    valid, emojis, err = validate_emoji_sequence("🤔🤨")
-    assert valid is True
-    assert emojis == ["🤔", "🤨"]
-    assert err is None
+    # Strict single validation accepts registry and legitimate manual picks.
+    valid, emojis, err = validate_single_emoji("🤔")
+    assert (valid, emojis, err) == (True, ["🤔"], None)
+    assert is_valid_single_emoji("🫠") is True
+    assert is_valid_single_emoji("☹️") is True
+    assert validate_emoji_sequence("😀")[0] is True
 
-    # Rejects trailing characters
-    valid, _, err = validate_emoji_sequence("🤔abc")
+    # Rejects trailing characters / multi-emoji / empty.
+    valid, _, err = validate_single_emoji("🤔abc")
     assert valid is False
-    assert "invalid or unregistered" in err.lower()
-
-    # Rejects empty strings
-    valid, _, err = validate_emoji_sequence("   ")
+    valid, _, err = validate_single_emoji("🤔🤨")
+    assert valid is False
+    assert "exactly one" in err.lower()
+    valid, _, err = validate_single_emoji("   ")
     assert valid is False
     assert "cannot be empty" in err.lower()
-
-    # Rejects more than 3 emojis
-    valid, _, err = validate_emoji_sequence("😀😃😄😁")
+    valid, _, err = validate_single_emoji("😀😃😄😁")
     assert valid is False
-    assert "1 to 3 emojis" in err.lower()
+    assert "exactly one" in err.lower()
 
 
 def test_prompt_catalog_and_related():
@@ -219,63 +230,59 @@ def test_perceptual_dhash_and_clustering(tmp_path):
 
 
 def test_check_signal_constraints(tmp_path):
-    """Verify Signal constraint validator catches non-compliant images."""
+    """Hard gates fail closed; quality notes stay warnings (not hard failures)."""
     good_img = tmp_path / "valid.png"
-    im = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
-    im.save(good_img, "PNG")
+    Image.new("RGBA", (512, 512), (0, 0, 0, 0)).save(good_img, "PNG")
 
-    problems = check_signal_constraints(good_img)
-    assert len(problems) == 0
+    assert validate_image_hard(good_img) == []
+    # Quality notes (margin/contrast) are warnings, not hard errors.
+    assert isinstance(validate_image_quality(good_img), list)
 
     bad_dim = tmp_path / "wrong_dim.png"
-    im_small = Image.new("RGBA", (256, 256), (0, 0, 0, 0))
-    im_small.save(bad_dim, "PNG")
-
-    problems = check_signal_constraints(bad_dim)
-    assert any("!= 512x512" in p for p in problems)
+    Image.new("RGBA", (256, 256), (0, 0, 0, 0)).save(bad_dim, "PNG")
+    assert any("512x512" in p for p in validate_image_hard(bad_dim))
 
     bad_ext = tmp_path / "sticker.bmp"
-    im.save(bad_ext, "BMP")
-    problems = check_signal_constraints(bad_ext)
-    assert any("not recommended" in p for p in problems)
+    Image.new("RGBA", (512, 512), (0, 0, 0, 0)).save(bad_ext, "BMP")
+    assert any("unsupported" in p.lower() for p in validate_image_hard(bad_ext))
+
+    jpg_img = tmp_path / "photo.jpg"
+    Image.new("RGB", (512, 512), (255, 0, 0)).save(jpg_img, "JPEG")
+    assert any("unsupported" in p.lower() for p in validate_image_hard(jpg_img))
 
 
 def test_build_stickers_yaml_curation(tmp_path):
-    """Verify YAML builder includes kept stickers and excludes culled ones."""
-    img1 = tmp_path / "001.webp"
-    img2 = tmp_path / "002.webp"
-    img3 = tmp_path / "003.webp"
-    img1.touch()
-    img2.touch()
-    img3.touch()
+    """Strict builder: single final emoji, excluded omitted, receipt written."""
+    for name in ("001.webp", "002.webp", "003.webp"):
+        Image.new("RGBA", (512, 512), (0, 0, 0, 0)).save(tmp_path / name, "WEBP")
 
     draft = {
-        "version": 2,
+        "version": 3,
+        "revision": 2,
+        "pack_state": "approved",
+        "approval": {"revision": 2, "digest": "x"},
         "meta": {"title": "Curated Pack", "author": "Tester", "cover": "001.webp"},
         "similarity_groups": {"cluster_01": ["002.webp", "003.webp"]},
         "stickers": {
-            "001.webp": {"selection": "keep", "emojis": ["😏"]},
-            "002.webp": {"selection": "keep", "emojis": ["🤔", "🤨"]},
-            "003.webp": {"selection": "exclude", "emojis": ["🤔", "🤨"]},  # Culled duplicate
+            "001.webp": {"selection": "keep", "emojis": ["😏"], "file_hash": "h1"},
+            "002.webp": {"selection": "keep", "emojis": ["🤔"], "file_hash": "h2"},
+            "003.webp": {"selection": "exclude", "emojis": ["🤔"], "file_hash": "h3"},
         },
     }
 
     yaml_file = build_stickers_yaml(
-        folder=tmp_path,
-        draft=draft,
-        title="Curated Pack",
-        author="Tester",
-        cover="001.webp",
+        folder=tmp_path, draft=draft,
+        title="Curated Pack", author="Tester", cover="001.webp",
     )
 
     assert yaml_file.exists()
+    assert (tmp_path / "stickers.yaml.receipt.json").exists()
     content = yaml.safe_load(yaml_file.read_text(encoding="utf-8"))
 
     assert content["meta"]["title"] == "Curated Pack"
-    # Excluded 003.webp is not in the exported manifest!
     assert len(content["stickers"]) == 2
     assert content["stickers"][0] == {"chr": "😏", "file": "001.webp"}
-    assert content["stickers"][1] == {"chr": "🤔🤨", "file": "002.webp"}
+    assert content["stickers"][1] == {"chr": "🤔", "file": "002.webp"}
 
 
 def test_build_disambiguation_prompt():
@@ -286,11 +293,12 @@ def test_build_disambiguation_prompt():
 
 
 def test_select_manifest_entries():
-    """Verify only 'keep' stickers with emojis are selected for the manifest."""
+    """Strict gate: final single emoji only; suggestions alone never qualify."""
     draft = {
         "stickers": {
             "keep_tagged.webp": {"selection": "keep", "emojis": ["😏"]},
-            "keep_suggested.webp": {"selection": "keep", "suggested_emojis": ["🤔", "🤨"]},
+            "keep_multi.webp": {"selection": "keep", "emojis": ["🤔", "🤨"]},
+            "keep_suggested.webp": {"selection": "keep", "emojis": None, "suggested_emojis": ["🤔"]},
             "keep_untagged.webp": {"selection": "keep", "emojis": None},
             "undecided.webp": {"selection": "undecided", "emojis": ["😀"]},
             "excluded.webp": {"selection": "exclude", "emojis": ["😃"]},
@@ -299,10 +307,12 @@ def test_select_manifest_entries():
 
     entries, skipped, missing = select_manifest_entries(draft)
 
-    assert [e["file"] for e in entries] == ["keep_suggested.webp", "keep_tagged.webp"]
-    assert entries[0]["chr"] == "🤔🤨"
-    assert skipped == ["keep_untagged.webp"]
+    assert [e["file"] for e in entries] == ["keep_tagged.webp"]
+    assert entries[0]["chr"] == "😏"
+    assert sorted(skipped) == ["keep_multi.webp", "keep_suggested.webp", "keep_untagged.webp"]
     assert missing == []
+    assert final_emoji_for_entry({"emojis": ["🤔", "🤨"]}) is None
+    assert final_emoji_for_entry({"emojis": ["🤔"]}) == "🤔"
 
 
 def test_select_manifest_entries_excludes_missing_files(tmp_path):
@@ -377,62 +387,98 @@ def test_build_yaml_preserves_draft_title_across_runs(tmp_path, monkeypatch):
     assert reloaded["meta"]["author"] == "Kept Author"
 
 
+def _make_valid_image(path):
+    Image.new("RGBA", (512, 512), (0, 0, 0, 0)).save(path, "WEBP" if path.suffix == ".webp" else "PNG")
+    return path
+
+
+def _approved_draft_for(folder, title="Pack Title", author="Pack Author"):
+    import classify_and_build as cab
+    files = sorted(p for p in folder.iterdir() if p.is_file())
+    draft_path = folder / "pack_draft.json"
+    draft = cab.load_or_create_draft(folder, draft_path, None, files)
+    draft["meta"]["title"] = title
+    draft["meta"]["author"] = author
+    for fn, item in draft["stickers"].items():
+        if item.get("selection") == "undecided":
+            item["selection"] = "keep"
+        if not cab.final_emoji_for_entry(item):
+            item["emojis"] = ["😀"]
+            item["suggested_emojis"] = ["😀"]
+            item["review_status"] = "suggested"
+            item["tag_status"] = "manual"
+            item["tag_source"] = "manual"
+            item["confidence"] = 0.9
+    assert cab.approve_pack(draft) == []
+    cab.save_draft(draft_path, draft)
+    return draft
+
+
 def test_build_yaml_applies_explicit_title_override(tmp_path, monkeypatch):
-    """An explicit --title/--author must override the draft metadata."""
+    """Explicit --title/--author via --approve flows into the built manifest."""
     import classify_and_build as cab
 
-    (tmp_path / "a.webp").touch()
-
-    draft = {
-        "version": 2,
+    _make_valid_image(tmp_path / "a.webp")
+    draft_path = tmp_path / "pack_draft.json"
+    draft_path.write_text(json.dumps({
+        "version": 3, "revision": 1, "pack_state": "in_progress", "approval": None,
         "meta": {"title": "Old", "author": "Old Author", "cover": None},
         "similarity_groups": {},
-        "stickers": {
-            "a.webp": {"selection": "keep", "emojis": ["😀"], "confidence": 0.9,
-                       "file_hash": "", "suggested_emojis": ["😀"]},
-        },
-    }
-    draft_path = tmp_path / "pack_draft.json"
-    draft_path.write_text(json.dumps(draft), encoding="utf-8")
+        "stickers": {"a.webp": {"selection": "keep", "emojis": ["😀"],
+                                "suggested_emojis": ["😀"], "confidence": 0.9,
+                                "reason": "manual", "review_status": "pending",
+                                "tag_status": "manual", "tag_source": "manual",
+                                "similarity_group": None, "file_hash": ""}},
+    }), encoding="utf-8")
 
     monkeypatch.setattr(
         "sys.argv",
-        ["classify_and_build.py", str(tmp_path), "--build-yaml",
+        ["classify_and_build.py", str(tmp_path), "--approve",
          "--title", "New Title", "--author", "New Author"],
     )
+    cab.main()
+    monkeypatch.setattr("sys.argv", ["classify_and_build.py", str(tmp_path), "--build-yaml"])
     cab.main()
 
     doc = yaml.safe_load((tmp_path / "stickers.yaml").read_text(encoding="utf-8"))
     assert doc["meta"]["title"] == "New Title"
     assert doc["meta"]["author"] == "New Author"
+    reloaded = json.loads(draft_path.read_text(encoding="utf-8"))
+    assert reloaded["meta"]["title"] == "New Title"
+    assert reloaded["meta"]["author"] == "New Author"
 
 
-def test_build_yaml_drops_entries_with_missing_images(tmp_path, monkeypatch):
-    """A stale draft must not emit references to images that no longer exist."""
+def test_build_yaml_blocks_on_missing_images_until_pruned(tmp_path, monkeypatch):
+    """Fail closed: missing files block export; explicit --prune resolves."""
     import classify_and_build as cab
 
-    (tmp_path / "a.webp").touch()
-
-    draft = {
-        "version": 2,
-        "meta": {"title": "T", "author": "A", "cover": None},
+    _make_valid_image(tmp_path / "a.webp")
+    (tmp_path / "pack_draft.json").write_text(json.dumps({
+        "version": 3, "revision": 1, "pack_state": "in_progress", "approval": None,
+        "meta": {"title": "Test Pack", "author": "Tester", "cover": None},
         "similarity_groups": {},
         "stickers": {
             "a.webp": {"selection": "keep", "emojis": ["😀"], "confidence": 0.9,
-                       "file_hash": "", "suggested_emojis": ["😀"]},
+                       "file_hash": "", "suggested_emojis": ["😀"],
+                       "review_status": "pending", "tag_status": "manual",
+                       "tag_source": "manual", "similarity_group": None},
             "gone.webp": {"selection": "keep", "emojis": ["😃"], "confidence": 0.9,
-                          "file_hash": "", "suggested_emojis": ["😃"]},
+                          "file_hash": "dead", "suggested_emojis": ["😃"],
+                          "review_status": "pending", "tag_status": "manual",
+                          "tag_source": "manual", "similarity_group": None},
         },
-    }
-    (tmp_path / "pack_draft.json").write_text(json.dumps(draft), encoding="utf-8")
+    }), encoding="utf-8")
 
-    monkeypatch.setattr(
-        "sys.argv", ["classify_and_build.py", str(tmp_path), "--build-yaml"]
-    )
+    monkeypatch.setattr("sys.argv", ["classify_and_build.py", str(tmp_path), "--build-yaml"])
+    with pytest.raises(SystemExit) as exc:
+        cab.main()
+    assert exc.value.code == 1
+    assert not (tmp_path / "stickers.yaml").exists()
+
+    monkeypatch.setattr("sys.argv", ["classify_and_build.py", str(tmp_path), "--scan", "--prune"])
     cab.main()
-
-    doc = yaml.safe_load((tmp_path / "stickers.yaml").read_text(encoding="utf-8"))
-    assert [s["file"] for s in doc["stickers"]] == ["a.webp"]
+    reloaded = json.loads((tmp_path / "pack_draft.json").read_text(encoding="utf-8"))
+    assert "gone.webp" not in reloaded["stickers"]
 
 
 def test_review_html_preserves_similarity_groups(tmp_path, monkeypatch):
@@ -497,3 +543,480 @@ def test_review_stats_ignore_entries_without_images(tmp_path):
     assert stats["missing"] == 1
     # 'missing.webp' is tagged, so it must not inflate the untagged count.
     assert stats["untagged"] == 0
+
+
+def test_browser_roundtrip_preserves_undecided_hashes_and_suggestions(tmp_path):
+    """Clean review page never promotes Undecided; hashes/suggestions survive."""
+    import classify_and_build as cab
+    import review as rv
+
+    _make_valid_image(tmp_path / "solo.webp")
+    _make_valid_image(tmp_path / "c1.webp")
+    _make_valid_image(tmp_path / "c2.webp")
+    files = [tmp_path / "solo.webp", tmp_path / "c1.webp", tmp_path / "c2.webp"]
+    draft_path = tmp_path / "pack_draft.json"
+    draft = cab.load_or_create_draft(tmp_path, draft_path, None, files)
+    draft["meta"].update({"title": "Roundtrip", "author": "Tester"})
+    h_before = {fn: it["file_hash"] for fn, it in draft["stickers"].items()}
+    cab.save_draft(draft_path, draft)
+
+    out, stats = rv.generate_review_html(tmp_path, draft_path=draft_path)
+    html = out.read_text(encoding="utf-8")
+    assert "Undecided" in html
+    assert "exportYaml" not in html and "Export stickers.yaml" not in html
+    assert "DRAFT_BASELINE" in html
+    # Full draft embedded (hashes, suggestions, revision) — DOM is a view.
+    assert h_before["solo.webp"] and h_before["solo.webp"] in html
+    assert '"revision"' in html
+    # Tri-state rendering present, undecided never rendered as keep.
+    assert 'data-selection="undecided"' in html or stats.get("undecided", 0) >= 0
+
+
+def test_html_escaping_and_script_safe_serialization(tmp_path):
+    """Filenames/reasons cannot break attributes; </script> cannot escape."""
+    import review as rv
+
+    _make_valid_image(tmp_path / "ok.webp")
+    evil_fn = 'a"><img onerror=alert(1).webp'
+    _make_valid_image(tmp_path / evil_fn)
+    draft = {
+        "version": 3, "revision": 1, "pack_state": "in_progress", "approval": None,
+        "meta": {"title": 'T</script><script>alert(1)</script>', "author": "A", "cover": None},
+        "similarity_groups": {},
+        "stickers": {
+            "ok.webp": {"selection": "keep", "emojis": ["😀"], "confidence": 0.9,
+                        "reason": 'nice" onmouseover="alert(1)', "review_status": "pending",
+                        "tag_status": "manual", "tag_source": "manual",
+                        "similarity_group": None, "file_hash": ""},
+            evil_fn: {"selection": "keep", "emojis": ["😀"], "confidence": 0.9,
+                      "reason": "</script>", "review_status": "pending",
+                      "tag_status": "manual", "tag_source": "manual",
+                      "similarity_group": None, "file_hash": ""},
+        },
+    }
+    (tmp_path / "pack_draft.json").write_text(json.dumps(draft), encoding="utf-8")
+    out, _ = rv.generate_review_html(tmp_path, draft_path=tmp_path / "pack_draft.json")
+    html = out.read_text(encoding="utf-8")
+    # Inspect the inline script payload (not the whole document, which
+    # legitimately ends with its own closing </script> tag).
+    m = re.search(r"let DRAFT_BASELINE = (\{.*?\});\n", html, re.DOTALL)
+    assert m is not None
+    payload = json.loads(m.group(1))
+    assert payload["meta"]["title"] == 'T</script><script>alert(1)</script>'
+    assert payload["stickers"][evil_fn]["reason"] == "</script>"
+    assert "<\\/script>" in html
+    assert "&quot;" in html or "&#x27;" in html or "&lt;" in html
+    assert 'a"><img' not in html
+
+
+def test_changed_image_clears_tags_and_invalidates_approval(tmp_path):
+    """A changed file updates hash, clears tags, invalidates approval, resets cluster."""
+    import classify_and_build as cab
+
+    _make_valid_image(tmp_path / "a.webp")
+    _make_valid_image(tmp_path / "b.webp")
+    files = [tmp_path / "a.webp", tmp_path / "b.webp"]
+    draft_path = tmp_path / "pack_draft.json"
+    draft = cab.load_or_create_draft(tmp_path, draft_path, None, files)
+    _approved_draft_for(tmp_path)
+    draft = json.loads(draft_path.read_text(encoding="utf-8"))
+    assert draft["pack_state"] == "approved"
+
+    # Modify one image on disk, then rescan: fail closed.
+    Image.new("RGBA", (512, 512), (255, 0, 0, 255)).save(tmp_path / "a.webp", "WEBP")
+    files = [tmp_path / "a.webp", tmp_path / "b.webp"]
+    draft2 = cab.load_or_create_draft(tmp_path, draft_path, None, files)
+    assert draft2["pack_state"] == "in_progress"
+    assert draft2["approval"] is None
+    assert draft2["stickers"]["a.webp"]["emojis"] is None
+    assert draft2["stickers"]["a.webp"]["tag_status"] == "stale"
+
+
+def test_legacy_v2_migration_is_pending_never_preapproved(tmp_path):
+    """Legacy cache and v2 drafts import as pending suggestions, never approved."""
+    import classify_and_build as cab
+
+    _make_valid_image(tmp_path / "a.webp")
+    (tmp_path / "classification_cache.json").write_text(json.dumps({
+        "a.webp": {"emoji": "😀", "confidence": 0.95, "reason": "happy"},
+    }), encoding="utf-8")
+    draft = cab.load_or_create_draft(
+        tmp_path, tmp_path / "pack_draft.json",
+        tmp_path / "classification_cache.json", [tmp_path / "a.webp"],
+    )
+    assert draft["pack_state"] == "in_progress"
+    assert draft["approval"] is None
+    assert draft["stickers"]["a.webp"]["emojis"] is None
+    assert draft["stickers"]["a.webp"]["review_status"] == "pending"
+
+    v2 = {"version": 2, "meta": {"title": "T", "author": "A", "cover": None},
+          "similarity_groups": {},
+          "stickers": {"a.webp": {"selection": "keep", "emojis": ["😀"],
+                                  "review_status": "approved", "confidence": 0.9}}}
+    upgraded = cab.upgrade_draft_to_v3(v2)
+    assert upgraded["version"] == 3
+    assert upgraded["pack_state"] == "in_progress"
+    assert upgraded["stickers"]["a.webp"]["emojis"] == ["😀"] or upgraded["stickers"]["a.webp"]["emojis"] is None
+
+
+def test_provider_failures_stay_unresolved_never_fallback(tmp_path):
+    """OpenRouter errors/invalid output yield error/unresolved, never 😐 tags."""
+    import classify_and_build as cab
+
+    class Exploding:
+        def classify(self, path, prompt):
+            raise RuntimeError("boom")
+
+    class Weird:
+        def classify(self, path, prompt):
+            return {"emoji": "not-an-emoji-at-all-xyz", "reason": "x", "confidence": 0.9}
+
+    _make_valid_image(tmp_path / "a.webp")
+    res = cab.classify_single_image(Exploding(), tmp_path / "a.webp", retries=1)
+    assert res["emojis"] is None and res["tag_status"] == "error"
+    res2 = cab.classify_single_image(Weird(), tmp_path / "a.webp", retries=1)
+    assert res2["emojis"] is None and res2["tag_status"] == "unresolved"
+
+    # OpenRouter-only factory: missing key aborts, present key builds.
+    import os
+    old_key = os.environ.pop("OPENROUTER_API_KEY", None)
+    try:
+        with pytest.raises(SystemExit):
+            cab.get_configured_provider()
+    finally:
+        if old_key is not None:
+            os.environ["OPENROUTER_API_KEY"] = old_key
+    os.environ["OPENROUTER_API_KEY"] = "sk-or-test"
+    provider = cab.get_configured_provider()
+    assert isinstance(provider, cab.OpenRouterProvider)
+    assert provider.model == "inclusionai/ling-3.0-flash-vl"
+
+
+def test_openrouter_request_construction_mocked(tmp_path, monkeypatch):
+    """Mocked HTTP only: model, auth headers, single-emoji coercion."""
+    import classify_and_build as cab
+    import urllib.request, io
+
+    _make_valid_image(tmp_path / "a.webp")
+    seen = {}
+
+    class FakeResp:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self):
+            return json.dumps({"choices": [{"message": {"content": '{"emoji":"😀","reason":"happy","confidence":0.9}'}}]}).encode()
+
+    def fake_urlopen(req, timeout=45):
+        seen["url"] = req.full_url
+        seen["payload"] = json.loads(req.data.decode())
+        seen["auth"] = req.headers.get("Authorization") or req.headers.get("AuthorizatioN")
+        return FakeResp()
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    provider = cab.OpenRouterProvider("sk-or-test", model="inclusionai/ling-3.0-flash-vl")
+    res = provider.classify(tmp_path / "a.webp", "prompt")
+    assert res["emoji"] == "😀"
+    assert seen["url"] == "https://openrouter.ai/api/v1/chat/completions"
+    assert seen["payload"]["model"] == "inclusionai/ling-3.0-flash-vl"
+    out = cab.classify_single_image(provider, tmp_path / "a.webp", retries=1)
+    assert out["emojis"] == ["😀"] and out["tag_status"] == "suggested"
+
+
+def test_export_receipt_and_stale_rejection(tmp_path):
+    """Export writes a receipt; draft changes invalidate it for preview/upload."""
+    import classify_and_build as cab
+
+    _make_valid_image(tmp_path / "a.webp")
+    _make_valid_image(tmp_path / "b.webp")
+    _approved_draft_for(tmp_path)
+    draft = json.loads((tmp_path / "pack_draft.json").read_text(encoding="utf-8"))
+    entries, _, _ = cab.select_manifest_entries(draft, folder=tmp_path)
+    out = cab.build_stickers_yaml(folder=tmp_path, draft=draft)
+    assert out.exists()
+    assert cab.verify_manifest_freshness(tmp_path, draft, out) == []
+
+    # Mutate draft after export -> stale.
+    draft["stickers"]["b.webp"]["selection"] = "exclude"
+    stale = cab.verify_manifest_freshness(tmp_path, draft, out)
+    assert any("changed after export" in e or "differs" in e for e in stale)
+    errors, _ = cab.validate_draft_for_export(draft, tmp_path)
+    assert errors  # approval digest no longer matches
+
+
+def test_clustering_diagnostics_and_complete_linkage(tmp_path):
+    """Median/max pair stats surface weak evidence; complete linkage avoids chaining."""
+    stats = cluster_pair_stats(["a", "b", "c"], {"a": 0, "b": 1, "c": 0b1111111111})
+    assert stats["count"] == 3 and stats["max"] >= stats["median"] > 0
+    assert len(stats["pairs"]) == 3
+
+    imgs = []
+    for i, name in enumerate(["n1.png", "n2.png", "n3.png"]):
+        p = tmp_path / name
+        im = Image.new("L", (64, 64), 128)
+        im.save(p)
+        imgs.append(p)
+    clusters, _, _ = detect_visual_clusters(imgs, max_distance=6, linkage="complete")
+    assert isinstance(clusters, dict)
+
+
+def test_rename_preserves_decisions_by_hash(tmp_path):
+    """Unchanged content under a new name carries decisions (no silent omission)."""
+    import classify_and_build as cab
+
+    _make_valid_image(tmp_path / "old.webp")
+    files = [tmp_path / "old.webp"]
+    draft_path = tmp_path / "pack_draft.json"
+    draft = cab.load_or_create_draft(tmp_path, draft_path, None, files)
+    draft["stickers"]["old.webp"]["emojis"] = ["😀"]
+    cab.save_draft(draft_path, draft)
+
+    data = (tmp_path / "old.webp").read_bytes()
+    (tmp_path / "new.webp").write_bytes(data)
+    (tmp_path / "old.webp").unlink()
+    draft2 = cab.load_or_create_draft(tmp_path, draft_path, None, [tmp_path / "new.webp"])
+    assert "new.webp" in draft2["stickers"]
+
+
+def test_verify_rejects_tampered_emoji_values(tmp_path):
+    """Changing only a YAML chr must fail receipt verification (finding 1)."""
+    import classify_and_build as cab
+
+    _make_valid_image(tmp_path / "a.webp")
+    _approved_draft_for(tmp_path)
+    draft = json.loads((tmp_path / "pack_draft.json").read_text(encoding="utf-8"))
+    out = cab.build_stickers_yaml(folder=tmp_path, draft=draft)
+    assert cab.verify_manifest_freshness(tmp_path, draft, out) == []
+
+    text = out.read_text(encoding="utf-8")
+    assert "😀" in text
+    out.write_text(text.replace("😀", "😡"), encoding="utf-8")
+    errors = cab.verify_manifest_freshness(tmp_path, draft, out)
+    assert errors
+    assert any("tampered" in e or "differ" in e for e in errors)
+
+
+def test_corrupt_draft_aborts_without_overwrite(tmp_path, monkeypatch):
+    """An unreadable draft aborts; --reset-draft archives it first (finding 4)."""
+    import classify_and_build as cab
+
+    _make_valid_image(tmp_path / "a.webp")
+    (tmp_path / "pack_draft.json").write_text("not json{{{", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        cab.load_or_create_draft(tmp_path, tmp_path / "pack_draft.json", None, [tmp_path / "a.webp"])
+    assert (tmp_path / "pack_draft.json").read_text(encoding="utf-8") == "not json{{{"
+
+    monkeypatch.setattr(
+        "sys.argv", ["classify_and_build.py", str(tmp_path), "--scan", "--reset-draft"]
+    )
+    cab.main()
+    assert (tmp_path / "pack_draft.json.bak").read_text(encoding="utf-8") == "not json{{{"
+    assert (tmp_path / "pack_draft.json").exists()
+
+
+def test_empty_hash_blocked_until_rescan(tmp_path):
+    """Empty file hashes fail preflight; scan backfills them (finding 5)."""
+    import classify_and_build as cab
+
+    _make_valid_image(tmp_path / "a.webp")
+    draft = {
+        "version": 3, "revision": 1, "pack_state": "in_progress", "approval": None,
+        "meta": {"title": "T", "author": "A", "cover": None},
+        "similarity_groups": {},
+        "stickers": {"a.webp": {"selection": "keep", "emojis": ["😀"], "file_hash": "",
+                                "confidence": 0.9, "reason": "", "review_status": "pending",
+                                "tag_status": "manual", "tag_source": "manual",
+                                "similarity_group": None}},
+    }
+    errors, _ = cab.validate_draft_for_export(draft, tmp_path)
+    assert any("hash" in e for e in errors)
+
+    synced = cab.load_or_create_draft(
+        tmp_path, tmp_path / "pack_draft.json", None, [tmp_path / "a.webp"])
+    assert re.fullmatch(r"[0-9a-f]{64}", synced["stickers"]["a.webp"]["file_hash"] or "")
+
+
+def test_cover_must_be_static(tmp_path):
+    """Animated APNG covers fail; static WebP covers pass (finding 6)."""
+    import classify_and_build as cab
+
+    frames = [Image.new("RGBA", (64, 64), (255, 0, 0, 255)),
+              Image.new("RGBA", (64, 64), (0, 255, 0, 255))]
+    apng = tmp_path / "cover.apng"
+    frames[0].save(apng, save_all=True, append_images=frames[1:], duration=100, loop=0)
+    assert any("Cover" in e or "cover" in e or "static" in e
+               for e in cab.validate_cover_hard(apng))
+
+    _make_valid_image(tmp_path / "cover.webp")
+    assert cab.validate_cover_hard(tmp_path / "cover.webp") == []
+
+
+def test_unrecognized_files_fail_preflight(tmp_path):
+    """Stray types (.tiff, extensionless) are errors, never ignored."""
+    import classify_and_build as cab
+
+    _make_valid_image(tmp_path / "a.webp")
+    _approved_draft_for(tmp_path)
+    (tmp_path / "stray.tiff").write_bytes(b"II*\x00fakestray")
+    (tmp_path / "noextension").write_bytes(b"plain bytes")
+    draft = json.loads((tmp_path / "pack_draft.json").read_text(encoding="utf-8"))
+    errors, _ = cab.validate_draft_for_export(draft, tmp_path)
+    assert any("stray.tiff" in e for e in errors)
+    assert any("noextension" in e for e in errors)
+
+
+def test_animated_unknown_duration_fails():
+    """Animated files without a verifiable duration cannot pass the 3s gate."""
+    import classify_and_build as cab
+
+    facts = {"suffix": ".apng", "format": "PNG", "size_bytes": 100,
+             "dimensions": (512, 512), "animated": True, "n_frames": 2,
+             "duration_ms": 0, "mode": "RGBA", "exists": True, "error": None}
+    assert any("duration" in e for e in cab.validate_image_hard(__import__("pathlib").Path("x.apng"), facts))
+
+
+def test_content_block_list_normalization(tmp_path, monkeypatch):
+    """List-form message content is coerced to text instead of crashing."""
+    import classify_and_build as cab
+    import urllib.request
+
+    assert cab.normalize_message_content([{"type": "text", "text": '{"a":1}'}, "tail"]) == '{"a":1}\ntail'
+    assert cab.normalize_message_content(None) == ""
+    assert cab.normalize_message_content("raw") == "raw"
+
+    _make_valid_image(tmp_path / "a.webp")
+
+    class FakeResp:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self):
+            return json.dumps({"choices": [{"message": {"content": [
+                {"type": "text", "text": '{"emoji":"😀"'},
+                {"type": "text", "text": ',"reason":"hi","confidence":0.9}'}]}}]}).encode()
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=45: FakeResp())
+    provider = cab.OpenRouterProvider("sk-or-test")
+    assert provider.classify(tmp_path / "a.webp", "p")["emoji"] == "😀"
+
+
+def test_stable_cluster_ids_across_added_file():
+    """Overlap remapping keeps IDs stable when an earlier-sorting file joins."""
+    import classify_and_build as cab
+
+    old = {"cluster_01": ["b.webp", "c.webp"], "cluster_02": ["x.webp", "y.webp"]}
+    new = {"cluster_01": ["a.webp", "b.webp", "c.webp"], "cluster_02": ["x.webp", "y.webp"]}
+    remapped = cab.remap_cluster_ids(old, new)
+    assert sorted(remapped["cluster_01"]) == ["a.webp", "b.webp", "c.webp"]
+    assert sorted(remapped["cluster_02"]) == ["x.webp", "y.webp"]
+
+
+def test_new_member_resets_existing_cluster_decisions(tmp_path):
+    """Gaining a sibling invalidates prior decisions of the whole cluster."""
+    import classify_and_build as cab
+
+    for n in ("a.webp", "b.webp"):
+        _make_valid_image(tmp_path / n)
+    draft_path = tmp_path / "pack_draft.json"
+    cab.load_or_create_draft(tmp_path, draft_path, None,
+                             [tmp_path / "a.webp", tmp_path / "b.webp"])
+    _approved_draft_for(tmp_path)
+    before = json.loads(draft_path.read_text(encoding="utf-8"))
+    assert before["pack_state"] == "approved"
+
+    _make_valid_image(tmp_path / "c.webp")
+    after = cab.load_or_create_draft(tmp_path, draft_path, None,
+                                     [tmp_path / n for n in ("a.webp", "b.webp", "c.webp")])
+    assert after["stickers"]["a.webp"]["selection"] == "undecided"
+    assert after["stickers"]["b.webp"]["selection"] == "undecided"
+    assert after["pack_state"] == "in_progress"
+
+
+def test_preflight_does_not_write_draft(tmp_path, monkeypatch):
+    """Preflight/export are read-only: draft bytes are untouched."""
+    import classify_and_build as cab
+
+    _make_valid_image(tmp_path / "a.webp")
+    _approved_draft_for(tmp_path)
+    before = (tmp_path / "pack_draft.json").read_bytes()
+    monkeypatch.setattr("sys.argv", ["classify_and_build.py", str(tmp_path), "--preflight"])
+    cab.main()
+    assert (tmp_path / "pack_draft.json").read_bytes() == before
+
+
+def test_review_server_cas_approval_and_regeneration(tmp_path):
+    """Digest CAS rejects stale saves; approval persists; page regenerates."""
+    import http.client
+    import threading
+    import time
+    import review as rv
+
+    _make_valid_image(tmp_path / "a.webp")
+    draft_path = tmp_path / "pack_draft.json"
+    draft = {
+        "version": 3, "revision": 1, "pack_state": "in_progress", "approval": None,
+        "meta": {"title": "Srv", "author": "Tester", "cover": None},
+        "similarity_groups": {},
+        "stickers": {"a.webp": {"selection": "keep", "emojis": ["😀"], "file_hash": "",
+                                "suggested_emojis": ["😀"], "confidence": 0.9,
+                                "reason": "ok", "review_status": "pending",
+                                "tag_status": "manual", "tag_source": "manual",
+                                "similarity_group": None}},
+    }
+    h = __import__("hashlib").sha256(
+        (tmp_path / "a.webp").read_bytes()).hexdigest()
+    draft["stickers"]["a.webp"]["file_hash"] = h
+    draft_path.write_text(json.dumps(draft), encoding="utf-8")
+
+    server, token, state = rv.create_review_server(tmp_path, draft_path, port=0)
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+        conn.request("GET", "/")
+        assert conn.getresponse().status == 200
+
+        def post(body, send_token=token):
+            conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+            conn.request("POST", "/save", body=json.dumps(body),
+                         headers={"Content-Type": "application/json",
+                                  "X-Session-Token": send_token})
+            resp = conn.getresponse()
+            return resp.status, json.loads(resp.read().decode())
+
+        base = state["expected_digest"]
+        status, _ = post({"base_digest": base, "draft": draft}, send_token="wrong")
+        assert status == 403
+
+        approved = json.loads(json.dumps(draft))
+        approved["pack_state"] = "approved"
+        approved["approval"] = {"revision": 1, "by": "browser"}
+        status, data = post({"base_digest": base, "draft": approved})
+        assert status == 200
+        assert data["approved"] is True
+        persisted = json.loads(draft_path.read_text(encoding="utf-8"))
+        assert persisted["pack_state"] == "approved"
+        assert persisted["revision"] == 2
+        assert persisted["approval"]["digest"]
+        assert state["expected_digest"] == data["digest"]
+
+        # Stale digest now fails; page serves regenerated state.
+        status, _ = post({"base_digest": base, "draft": draft})
+        assert status == 409
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+        conn.request("GET", "/")
+        assert conn.getresponse().read().decode().count("Srv") >= 1
+
+        # Approval claim on incomplete work is saved but not approved.
+        current = json.loads(draft_path.read_text(encoding="utf-8"))
+        bad = json.loads(json.dumps(current))
+        bad["stickers"]["a.webp"]["selection"] = "undecided"
+        status, data = post({"base_digest": state["expected_digest"], "draft":
+                             {**bad, "pack_state": "approved", "approval": {"revision": 99}}})
+        assert status == 200
+        assert data["approved"] is False
+        assert data["approval_errors"]
+        assert json.loads(draft_path.read_text(encoding="utf-8"))["pack_state"] == "in_progress"
+    finally:
+        server.shutdown()
+        thread.join(timeout=10)
+    assert True

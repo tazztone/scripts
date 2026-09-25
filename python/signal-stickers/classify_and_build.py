@@ -1,21 +1,24 @@
 #!/usr/bin/env python3
 """Signal Sticker Pack Classifier & Builder (Curation-First).
 
-1. Inventory & Constraints: Checks 512x512, <300KB, transparency.
-2. Perceptual Clustering: Groups near-identical variations using alpha-aware dHash.
-3. Persistent Draft State: Tracks selection (keep/exclude/undecided), clusters, and tags in pack_draft.json.
-4. Targeted VLM Classification: Classifies ONLY stickers marked 'keep'.
-5. Build Manifest: Generates stickers.yaml from kept and validated stickers.
+1. Inventory & Constraints: Checks 512x512 project policy, 300KB max,
+   static PNG/WebP or animated APNG<=3s (hard gates) plus quality warnings.
+2. Perceptual Clustering: Groups visually similar candidates requiring review
+   using alpha-aware dHash (connected components by default).
+3. Persistent Draft State: Tracks selection (keep/exclude/undecided), hashes,
+   clusters, tags, and pack approval in pack_draft.json (schema v3).
+4. Targeted VLM Classification: OpenRouter-only; classifies ONLY 'keep'
+   stickers lacking a final emoji. Failures stay unresolved, never 😐 fallback.
+5. Build Manifest: Generates stickers.yaml plus a build receipt from an
+   approved, fully reviewed draft. Preview/upload re-verify before use.
 
 Usage:
-  # Scan & cluster images without API calls
-  python classify_and_build.py ./webp --scan
-
-  # Classify kept stickers using OpenRouter (or Gemini / Claude)
-  python classify_and_build.py ./webp --classify-kept --title "Grimassen"
-
-  # Build stickers.yaml from approved draft
-  python classify_and_build.py ./webp --build-yaml
+  python classify_and_build.py ./pack --scan
+  python classify_and_build.py ./pack --classify-kept --title "My Pack" --author "me"
+  python classify_and_build.py ./pack --approve --title "My Pack" --author "me"
+  python classify_and_build.py ./pack --build-yaml
+  python classify_and_build.py ./pack --preflight
+  python classify_and_build.py ./pack --scan --prune
 """
 
 import argparse
@@ -63,7 +66,9 @@ try:
         get_prompt_emoji_catalog,
         get_related_emojis,
         is_valid_emoji_sequence,
+        is_valid_single_emoji,
         validate_emoji_sequence,
+        validate_single_emoji,
     )
 except ImportError:
     from .emojis import (
@@ -76,12 +81,33 @@ except ImportError:
         get_prompt_emoji_catalog,
         get_related_emojis,
         is_valid_emoji_sequence,
+        is_valid_single_emoji,
         validate_emoji_sequence,
+        validate_single_emoji,
     )
 
 DEFAULT_DRAFT = "pack_draft.json"
 DEFAULT_CACHE = "classification_cache.json"
 SUPPORTED_EXTENSIONS = {".webp", ".png", ".apng", ".jpg", ".jpeg"}
+# Extensions eligible for sticker candidacy. Anything else on disk is either an
+# expected sidecar or a hard-gate failure — never silently ignored.
+INVENTORY_EXTENSIONS = {".webp", ".png", ".apng", ".jpg", ".jpeg", ".gif", ".bmp"}
+HARD_IMAGE_EXTENSIONS = {".png", ".webp", ".apng"}
+# Files that live alongside the pack but are not sticker candidates.
+SIDECAR_NAMES = {
+    "pack_draft.json", "stickers.yaml", "stickers.yaml.receipt.json",
+    "review.html", "classification_cache.json", "uploaded.yaml",
+}
+SIDECAR_SUFFIXES = {".tmp", ".bak"}
+
+DRAFT_SCHEMA_VERSION = 3
+BUILDER_VERSION = "signal-stickers-builder/3.0"
+MAX_STICKERS = 200
+MAX_BYTES = 300 * 1024
+REQUIRED_DIMENSIONS = (512, 512)
+
+PLACEHOLDER_TITLES = {"", "signal stickers", "author", "unknown", "untitled", "todo", "test"}
+PLACEHOLDER_AUTHORS = {"", "author", "unknown", "untitled", "todo", "test"}
 
 
 def compute_file_sha256(path: Path) -> str:
@@ -134,9 +160,13 @@ def hamming_distance(h1: int, h2: int) -> int:
 
 
 def detect_visual_clusters(
-    files: List[Path], max_distance: int = 6
+    files: List[Path], max_distance: int = 6, linkage: str = "single"
 ) -> Tuple[Dict[str, List[str]], Dict[str, str], Dict[str, Dict[str, Any]]]:
-    """Finds near-identical visual variations and partitions them into connected clusters.
+    """Groups visually similar candidates requiring review.
+
+    Connected components ("single" linkage, default) may chain through
+    intermediate images; "complete" linkage only groups images where every
+    pair is within max_distance, preventing single-link chaining.
 
     Returns:
         clusters: mapping cluster_id -> list of filenames (clusters with >= 2 members)
@@ -165,15 +195,51 @@ def detect_visual_clusters(
                 if n2 not in dupe_info or dist < dupe_info[n2]["distance"]:
                     dupe_info[n2] = {"reference": n1, "distance": dist}
 
+    # Pairwise distances for diagnostics (symmetric).
+    pair_dist: Dict[Tuple[str, str], int] = {}
+    for i in range(len(names)):
+        for j in range(i + 1, len(names)):
+            d = hamming_distance(hashes[names[i]], hashes[names[j]])
+            pair_dist[(names[i], names[j])] = d
+            pair_dist[(names[j], names[i])] = d
+
     visited: Set[str] = set()
     clusters: Dict[str, List[str]] = {}
     file_to_cluster: Dict[str, str] = {}
     cluster_idx = 1
 
+    if linkage == "complete":
+        # Greedy complete-linkage: grow groups only while every pair stays
+        # within max_distance, preventing single-link chaining.
+        unassigned = set(names)
+        for seed in names:
+            if seed not in unassigned:
+                continue
+            group = [seed]
+            for cand in names:
+                if cand not in unassigned or cand == seed:
+                    continue
+                if all(pair_dist.get((cand, m), 10**9) <= max_distance for m in group):
+                    group.append(cand)
+            if len(group) >= 2:
+                for m in group:
+                    unassigned.discard(m)
+                    visited.add(m)
+                group.sort()
+                cid = f"cluster_{cluster_idx:02d}"
+                cluster_idx += 1
+                clusters[cid] = group
+                for member in group:
+                    file_to_cluster[member] = cid
+            else:
+                unassigned.discard(seed)
+                visited.add(seed)
+        return clusters, file_to_cluster, dupe_info
+
     for name in names:
         if name in visited or name not in adj:
             continue
-        # BFS / Connected Component
+        # BFS / Connected Component (single linkage; may chain).
         component = []
         queue = [name]
         visited.add(name)
@@ -196,6 +262,23 @@ def detect_visual_clusters(
     return clusters, file_to_cluster, dupe_info
 
 
+def cluster_pair_stats(members: List[str], hashes: Dict[str, int]) -> Dict[str, Any]:
+    """Median/max all-pairs dHash distance plus pair data for diagnostics."""
+    dists: List[int] = []
+    pairs: List[Dict[str, Any]] = []
+    for i in range(len(members)):
+        for j in range(i + 1, len(members)):
+            d = hamming_distance(hashes[members[i]], hashes[members[j]])
+            dists.append(d)
+            pairs.append({"a": members[i], "b": members[j], "distance": d})
+    if not dists:
+        return {"count": len(members), "median": 0, "max": 0, "pairs": []}
+    ordered = sorted(dists)
+    mid = len(ordered) // 2
+    median = float(ordered[mid]) if len(ordered) % 2 else (ordered[mid - 1] + ordered[mid]) / 2.0
+    return {"count": len(members), "median": median, "max": max(dists), "pairs": pairs}
+
+
 def detect_visual_duplicates(
     files: List[Path], max_distance: int = 6
 ) -> Dict[str, Dict[str, Any]]:
@@ -205,19 +288,19 @@ def detect_visual_duplicates(
 
 
 def get_classification_prompt() -> str:
-    """Builds system prompt for single-sticker classification with strict JSON requirement."""
+    """Builds system prompt for single-emoji classification with strict JSON."""
     catalog = get_prompt_emoji_catalog()
     return (
         "Du bewertest Gesichtsausdruecke und Gesten auf Sticker-Bildern fuer Signal.\n"
-        "Waehle 1 bis 3 Emojis (Reihenfolge: primaere Emotion, gefolgt von feineren Nuancen), "
-        "die den Ausdruck, die Emotion oder das Overlay am praezisesten treffen.\n\n"
-        "Erlaubte Emojis nach Kategorien:\n"
+        "Waehle GENAU EIN Emoji, das den Ausdruck, die Emotion oder das Overlay "
+        "am praezisesten trifft (Signal unterstuetzt ein Emoji pro Sticker).\n\n"
+        "Vorgeschlagene Emojis nach Kategorien (du darfst auch ein anderes passendes Emoji waehlen):\n"
         f"{catalog}\n\n"
         "Regeln:\n"
         "- Achte auf Augen, Mund, Haende/Gesten und Overlays (Dampf, Traenen, Sonnenbrille, Herz etc.).\n"
         "- Overlays, Requisiten und markante Gesten haben Vorrang vor rein neutraler Mimik.\n"
         "- WICHTIG: Antworte AUSSCHLIESSLICH als valides JSON-Objekt ohne jeden Begleittext:\n"
-        '{"emojis":["<emoji1>", "<emoji2_optional>"],"reason":"<max 8 Woerter Begruendung>","confidence":<0.0-1.0>}'
+        '{"emoji":"<genau ein Emoji>","reason":"<max 8 Woerter Begruendung>","confidence":<0.0-1.0>}'
     )
 
 
@@ -260,7 +343,7 @@ class OpenRouterProvider(BaseProvider):
                         {
                             "type": "text",
                             "text": (
-                                "Welche 1-3 Emojis passen am besten zu diesem Sticker? "
+                                "Welches EINE Emoji passt am besten zu diesem Sticker? "
                                 "Antworte NUR mit dem JSON-Objekt."
                             ),
                         },
@@ -282,85 +365,39 @@ class OpenRouterProvider(BaseProvider):
         with urllib.request.urlopen(req, timeout=45) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             msg = data["choices"][0]["message"]
-            content = msg.get("content") or msg.get("reasoning") or ""
-            return parse_json_response(content)
+            content = msg.get("content")
+            if content is None:
+                content = msg.get("reasoning") or ""
+            return parse_json_response(normalize_message_content(content))
 
 
-class GeminiProvider(BaseProvider):
-    """Google Gemini provider via direct REST API."""
-
-    def __init__(self, api_key: str, model: str = "gemini-2.5-flash"):
-        self.api_key = api_key
-        self.model = model
-        self.url = (
-            f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-        )
-
-    def classify(self, image_path: Path, prompt: str) -> Dict[str, Any]:
-        mime_type, b64_data = encode_image_base64(image_path)
-        payload = {
-            "system_instruction": {"parts": [{"text": prompt}]},
-            "contents": [
-                {
-                    "parts": [
-                        {"inline_data": {"mime_type": mime_type, "data": b64_data}},
-                        {"text": "Welche 1-3 Emojis passen am besten zu diesem Sticker?"},
-                    ]
-                }
-            ],
-            "generationConfig": {"temperature": 0.1, "maxOutputTokens": 300},
-        }
-        req = urllib.request.Request(
-            self.url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=45) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            content = data["candidates"][0]["content"]["parts"][0]["text"]
-            return parse_json_response(content)
+# NOTE: OpenRouter-only by product decision. Gemini/Anthropic support was
+# removed; provider failures must surface as unresolved entries, never fallbacks.
 
 
-class AnthropicProvider(BaseProvider):
-    """Anthropic Claude provider via direct REST API."""
-
-    def __init__(self, api_key: str, model: str = "claude-3-7-sonnet-latest"):
-        self.api_key = api_key
-        self.model = model
-        self.url = "https://api.anthropic.com/v1/messages"
-
-    def classify(self, image_path: Path, prompt: str) -> Dict[str, Any]:
-        mime_type, b64_data = encode_image_base64(image_path)
-        payload = {
-            "model": self.model,
-            "max_tokens": 300,
-            "system": prompt,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {"type": "base64", "media_type": mime_type, "data": b64_data},
-                        },
-                        {"text": "Welche 1-3 Emojis passen am besten zu diesem Sticker?"},
-                    ],
-                }
-            ],
-        }
-        headers = {
-            "x-api-key": self.api_key,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        }
-        req = urllib.request.Request(
-            self.url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST"
-        )
-        with urllib.request.urlopen(req, timeout=45) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            content = data["content"][0]["text"]
-            return parse_json_response(content)
+def normalize_message_content(content: Any) -> str:
+    """Coerces chat message content to text (string or content-block list)."""
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        texts: List[str] = []
+        for block in content:
+            if isinstance(block, str):
+                texts.append(block)
+            elif isinstance(block, dict):
+                text = block.get("text")
+                if isinstance(text, str):
+                    texts.append(text)
+                    continue
+                nested = block.get("content")
+                if isinstance(nested, str):
+                    texts.append(nested)
+                elif isinstance(nested, list):
+                    texts.append(normalize_message_content(nested))
+        return "\n".join(t for t in texts if t)
+    return str(content)
 
 
 def encode_image_base64(path: Path) -> Tuple[str, str]:
@@ -409,129 +446,436 @@ def parse_json_response(content: str) -> Any:
         raise ValueError(f"Invalid JSON format in response: {content[:120]}") from e
 
 
-def get_configured_provider(
-    name: Optional[str] = None, model: Optional[str] = None
-) -> BaseProvider:
-    """Instantiates the appropriate provider based on args or environment variables."""
+def get_configured_provider(model: Optional[str] = None) -> BaseProvider:
+    """OpenRouter-only provider factory."""
     openrouter_key = os.getenv("OPENROUTER_API_KEY")
-    gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+    if not openrouter_key:
+        sys.exit("Error: OPENROUTER_API_KEY environment variable not set.")
+    m = model or "inclusionai/ling-3.0-flash-vl"
+    print(f"Using Provider: OpenRouter (model: {m})")
+    return OpenRouterProvider(openrouter_key, model=m)
 
-    target = name.lower() if name else None
-    if not target:
-        if openrouter_key:
-            target = "openrouter"
-        elif gemini_key:
-            target = "gemini"
-        elif anthropic_key:
-            target = "anthropic"
-        else:
-            sys.exit(
-                "Error: No API key found. Please set OPENROUTER_API_KEY, GEMINI_API_KEY, or ANTHROPIC_API_KEY."
-            )
 
-    if target == "openrouter":
-        if not openrouter_key:
-            sys.exit("Error: OPENROUTER_API_KEY environment variable not set.")
-        m = model or "inclusionai/ling-3.0-flash-vl"
-        print(f"Using Provider: OpenRouter (model: {m})")
-        return OpenRouterProvider(openrouter_key, model=m)
-    elif target in ("gemini", "google"):
-        if not gemini_key:
-            sys.exit("Error: GEMINI_API_KEY or GOOGLE_API_KEY environment variable not set.")
-        m = model or "gemini-2.5-flash"
-        print(f"Using Provider: Google Gemini (model: {m})")
-        return GeminiProvider(gemini_key, model=m)
-    elif target in ("anthropic", "claude"):
-        if not anthropic_key:
-            sys.exit("Error: ANTHROPIC_API_KEY environment variable not set.")
-        m = model or "claude-3-7-sonnet-latest"
-        print(f"Using Provider: Anthropic (model: {m})")
-        return AnthropicProvider(anthropic_key, model=m)
+def get_image_facts(path: Path) -> Dict[str, Any]:
+    """Reads format, animation, duration, size, and dimensions without mutating."""
+    facts: Dict[str, Any] = {
+        "exists": path.exists(),
+        "size_bytes": 0,
+        "suffix": path.suffix.lower(),
+        "format": None,
+        "mode": None,
+        "dimensions": None,
+        "animated": False,
+        "n_frames": 1,
+        "duration_ms": 0,
+        "error": None,
+    }
+    if not path.exists():
+        facts["error"] = "missing file"
+        return facts
+    try:
+        facts["size_bytes"] = path.stat().st_size
+    except Exception as e:
+        facts["error"] = f"Cannot stat file: {e}"
+        return facts
+    try:
+        with Image.open(path) as img:
+            facts["format"] = (img.format or "").upper() or None
+            facts["mode"] = img.mode
+            facts["dimensions"] = tuple(img.size)
+            animated = bool(getattr(img, "is_animated", False))
+            try:
+                n_frames = int(getattr(img, "n_frames", 1) or 1)
+            except Exception:
+                n_frames = 2 if animated else 1
+            facts["animated"] = animated or n_frames > 1
+            facts["n_frames"] = max(n_frames, 2 if facts["animated"] else 1)
+            total = 0
+            if facts["animated"]:
+                try:
+                    for i in range(facts["n_frames"]):
+                        try:
+                            img.seek(i)
+                        except EOFError:
+                            facts["n_frames"] = i
+                            break
+                        total += int(img.info.get("duration", 0) or 0)
+                except Exception:
+                    pass
+            facts["duration_ms"] = total
+    except Exception as e:
+        facts["error"] = f"Cannot read image: {e}"
+    return facts
+
+
+def validate_image_hard(path: Path, facts: Optional[Dict[str, Any]] = None) -> List[str]:
+    """Signal/tool hard gates. Invalid input must error, never normalize."""
+    facts = facts if facts is not None else get_image_facts(path)
+    errors: List[str] = []
+    if facts.get("error"):
+        return [str(facts["error"])]
+    ext = facts["suffix"]
+    fmt = (facts.get("format") or "").upper()
+    size_bytes = int(facts.get("size_bytes") or 0)
+    if size_bytes > MAX_BYTES:
+        errors.append(f"Size {size_bytes/1024:.1f} KB exceeds 300 KB limit")
+    if ext not in HARD_IMAGE_EXTENSIONS:
+        errors.append(f"Format {ext or '(none)'} unsupported: use PNG, WebP, or APNG")
+        return errors
+    # Actual-format checks (extension/format mismatch fails closed).
+    if ext in (".png", ".apng") and fmt not in ("PNG", "APNG"):
+        errors.append(f"Format/extension mismatch: {ext} holds {fmt or 'unknown'}")
+    if ext == ".webp" and fmt != "WEBP":
+        errors.append(f"Format/extension mismatch: .webp holds {fmt or 'unknown'}")
+    if ext == ".webp" and facts.get("animated"):
+        errors.append("Animated WebP is not supported: use static WebP or animated APNG")
+    if ext == ".apng":
+        if fmt not in ("PNG", "APNG"):
+            errors.append(f"APNG must hold PNG data (found {fmt or 'unknown'})")
+        if not facts.get("animated"):
+            errors.append("Static file presented as APNG: APNG must be animated")
+    if ext == ".png" and facts.get("animated"):
+        errors.append("Animated PNG must use .apng, not .png")
+    if facts.get("animated"):
+        dur = int(facts.get("duration_ms") or 0)
+        if dur <= 0:
+            errors.append("Animated image has unknown duration; cannot verify 3 s maximum")
+        elif dur > 3000:
+            errors.append(f"Animation {dur} ms exceeds 3 s maximum")
+    dims = facts.get("dimensions")
+    if dims != REQUIRED_DIMENSIONS:
+        errors.append(
+            f"Dimensions {dims[0]}x{dims[1]} != 512x512 px (project safe-output policy)"
+            if dims
+            else "Dimensions unknown"
+        )
+    return errors
+
+
+def validate_image_quality(path: Path, facts: Optional[Dict[str, Any]] = None) -> List[str]:
+    """Signal recommendations (warnings, or errors under --strict-quality)."""
+    facts = facts if facts is not None else get_image_facts(path)
+    warnings: List[str] = []
+    if facts.get("error"):
+        return []
+    mode = str(facts.get("mode") or "")
+    if mode not in ("RGBA", "LA", "PA", "P"):
+        warnings.append(f"Image mode {mode} might lack transparency (recommend transparent background)")
     else:
-        sys.exit(f"Error: Unknown provider '{name}'. Supported: openrouter, gemini, anthropic")
+        # ~16px transparent margin check (best-effort; warns only).
+        try:
+            with Image.open(path) as img:
+                rgba = img.convert("RGBA") if img.mode != "RGBA" else img
+                w, h = rgba.size
+                margin = 16
+                if w >= 2 * margin and h >= 2 * margin:
+                    alpha = rgba.split()[3]
+                    edge_opaque = False
+                    for x in range(w):
+                        for y in list(range(margin)) + list(range(h - margin, h)):
+                            if alpha.getpixel((x, y)) > 8:
+                                edge_opaque = True
+                                break
+                        if edge_opaque:
+                            break
+                    if not edge_opaque:
+                        for y in range(h):
+                            for x in list(range(margin)) + list(range(w - margin, w)):
+                                if alpha.getpixel((x, y)) > 8:
+                                    edge_opaque = True
+                                    break
+                            if edge_opaque:
+                                break
+                    if edge_opaque:
+                        warnings.append("No ~16 px transparent margin (recommendation)")
+        except Exception:
+            pass
+    if facts.get("animated"):
+        dur = int(facts.get("duration_ms") or 0)
+        frames = int(facts.get("n_frames") or 0)
+        if dur > 0 and frames > 0:
+            fps = frames / (dur / 1000.0)
+            if not (24 <= fps <= 62):
+                warnings.append(f"Animation FPS {fps:.1f} outside recommended 30/60")
+        warnings.append("Check seamless looping and first-frame clarity (recommendation)")
+    else:
+        warnings.append("Check contrast outline for light/dark themes (recommendation)")
+    return warnings
+
+
+def validate_cover_hard(path: Path, facts: Optional[Dict[str, Any]] = None) -> List[str]:
+    """Cover gate: static PNG or WebP only (Signal covers are never animated)."""
+    facts = facts if facts is not None else get_image_facts(path)
+    errors = validate_image_hard(path, facts)
+    ext = (facts.get("suffix") or path.suffix.lower())
+    fmt = (facts.get("format") or "").upper()
+    if facts.get("animated"):
+        errors.append("Cover must be static; animated covers are not supported")
+    if ext == ".apng":
+        errors.append("Cover must be static PNG or WebP, not APNG")
+    if fmt not in ("PNG", "WEBP"):
+        errors.append(f"Cover must be PNG or WebP data (found {fmt or 'unknown'})")
+    return errors
 
 
 def check_signal_constraints(path: Path) -> List[str]:
-    """Validates an image against Signal sticker specifications."""
-    problems = []
-    size_kb = path.stat().st_size / 1024
-    if size_kb >= 300:
-        problems.append(f"Size {size_kb:.1f} KB exceeds 300 KB limit")
+    """Backward-compatible validator: hard errors plus quality notes."""
+    facts = get_image_facts(path)
+    return validate_image_hard(path, facts) + validate_image_quality(path, facts)
 
-    ext = path.suffix.lower()
-    if ext not in {".png", ".webp", ".apng"}:
-        problems.append(f"Format {ext} not recommended by Signal (PNG/WebP/APNG)")
 
-    try:
-        with Image.open(path) as img:
-            if img.size != (512, 512):
-                problems.append(f"Dimensions {img.size[0]}x{img.size[1]} != 512x512 px")
-            if img.mode not in ("RGBA", "LA", "P"):
-                problems.append(f"Image mode {img.mode} might lack transparency")
-    except Exception as e:
-        problems.append(f"Cannot read image: {e}")
-
-    return problems
+def _coerce_model_emoji_text(res: Dict[str, Any]) -> str:
+    raw = res.get("emoji")
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()
+    raw_list = res.get("emojis")
+    if isinstance(raw_list, str) and raw_list.strip():
+        return raw_list.strip()
+    if isinstance(raw_list, (list, tuple)) and raw_list:
+        # A single-element list is the supported shape; longer legacy lists
+        # are joined only so validation can reject them as multi-emoji.
+        return "".join(str(e) for e in raw_list)
+    return ""
 
 
 def classify_single_image(
     provider: BaseProvider, path: Path, retries: int = 3
 ) -> Dict[str, Any]:
-    """Classifies a single sticker image with retries, enforcing strict emoji validation."""
+    """Classifies one sticker. Failures stay unresolved; never 😐 fallback tags."""
+    last_error: Optional[str] = None
     for attempt in range(retries):
         try:
             res = provider.classify(path, SYSTEM_PROMPT)
-            raw_emojis = res.get("emojis") or res.get("emoji") or []
-            if isinstance(raw_emojis, str):
-                raw_text = raw_emojis
-            elif isinstance(raw_emojis, (list, tuple)):
-                raw_text = "".join(str(e) for e in raw_emojis)
-            else:
-                raw_text = ""
-
-            is_valid, valid_emojis, err_msg = validate_emoji_sequence(raw_text)
-            if not is_valid:
-                # Try extracting known emojis from text
-                extracted = extract_emojis(raw_text)
-                if extracted:
-                    valid_emojis = extracted[:3]
-                    is_valid = True
-
-            if is_valid and valid_emojis:
-                primary = valid_emojis[0]
+            raw_text = _coerce_model_emoji_text(res if isinstance(res, dict) else {})
+            valid, vals, err = validate_single_emoji(raw_text)
+            if valid:
                 return {
-                    "emoji": primary,
-                    "emojis": valid_emojis[:3],
+                    "emoji": vals[0],
+                    "emojis": [vals[0]],
+                    "suggested_emojis": [vals[0]],
                     "reason": str(res.get("reason", "OK"))[:80],
                     "confidence": float(res.get("confidence", 0.9)),
                     "review_status": "suggested",
+                    "tag_status": "suggested",
+                    "tag_source": "openrouter",
                 }
-            else:
-                return {
-                    "emoji": "😐",
-                    "emojis": ["😐"],
-                    "reason": f"Unrecognized emoji: {raw_text[:40]}",
-                    "confidence": 0.0,
-                    "review_status": "needs_review",
-                }
+            last_error = err or f"Unrecognized emoji: {raw_text[:40]}"
+            # Invalid model output is not retryable as a different error; retry
+            # only for transport/parse exceptions below. Record unresolved.
+            return {
+                "emoji": None,
+                "emojis": None,
+                "suggested_emojis": None,
+                "reason": last_error[:80],
+                "confidence": 0.0,
+                "review_status": "needs_review",
+                "tag_status": "unresolved",
+                "tag_source": "openrouter",
+            }
         except Exception as e:
+            last_error = f"Classification error: {e}"
             if attempt == retries - 1:
                 return {
-                    "emoji": "😐",
-                    "emojis": ["😐"],
-                    "reason": f"Classification error: {e}",
+                    "emoji": None,
+                    "emojis": None,
+                    "suggested_emojis": None,
+                    "reason": str(last_error)[:80],
                     "confidence": 0.0,
-                    "review_status": "needs_review",
+                    "review_status": "error",
+                    "tag_status": "error",
+                    "tag_source": "openrouter",
                 }
             time.sleep(1.5 * (attempt + 1))
     return {
-        "emoji": "😐",
-        "emojis": ["😐"],
-        "reason": "Timeout/Max retries",
+        "emoji": None,
+        "emojis": None,
+        "suggested_emojis": None,
+        "reason": (last_error or "Timeout/Max retries")[:80],
         "confidence": 0.0,
-        "review_status": "needs_review",
+        "review_status": "error",
+        "tag_status": "error",
+        "tag_source": "openrouter",
     }
+
+
+def atomic_write_text(path: Path, content: str) -> None:
+    """Writes text atomically so interrupted writes cannot corrupt state."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.parent / f".{path.name}.{os.getpid()}.tmp"
+    tmp.write_text(content, encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def new_draft_empty() -> Dict[str, Any]:
+    return {
+        "version": DRAFT_SCHEMA_VERSION,
+        "revision": 1,
+        "draft_id": hashlib.sha256(str(time.time()).encode()).hexdigest()[:16],
+        "pack_state": "in_progress",
+        "approval": None,
+        "meta": {"title": "", "author": "", "cover": None},
+        "similarity_groups": {},
+        "stickers": {},
+    }
+
+
+def upgrade_draft_to_v3(draft: Dict[str, Any]) -> Dict[str, Any]:
+    """Migrates v2/legacy drafts to v3; imported tags are pending, never pre-approved."""
+    if not isinstance(draft, dict):
+        return new_draft_empty()
+    version = draft.get("version")
+    if version == DRAFT_SCHEMA_VERSION and "revision" in draft:
+        draft.setdefault("pack_state", "in_progress")
+        draft.setdefault("approval", None)
+        draft.setdefault("meta", {}).setdefault("title", "")
+        draft["meta"].setdefault("author", "")
+        draft["meta"].setdefault("cover", None)
+        return draft
+    upgraded = new_draft_empty()
+    upgraded["draft_id"] = str(draft.get("draft_id") or upgraded["draft_id"])
+    old_meta = draft.get("meta", {}) if isinstance(draft.get("meta"), dict) else {}
+    upgraded["meta"] = {
+        "title": str(old_meta.get("title") or ""),
+        "author": str(old_meta.get("author") or ""),
+        "cover": old_meta.get("cover"),
+    }
+    upgraded["similarity_groups"] = draft.get("similarity_groups", {}) or {}
+    for fn, item in (draft.get("stickers", {}) or {}).items():
+        if not isinstance(item, dict):
+            continue
+        suggested = item.get("suggested_emojis")
+        if suggested is None:
+            legacy_seq = item.get("emojis") or ([item["emoji"]] if item.get("emoji") else None)
+            if isinstance(legacy_seq, str):
+                legacy_seq = [legacy_seq]
+            suggested = legacy_seq
+        # v2 "approved" tags become pending suggestions requiring human approval.
+        status = item.get("review_status")
+        tag_status = item.get("tag_status")
+        if status in ("approved", "culled") or tag_status in ("approved",):
+            review_status = "pending"
+            tag_status = "suggested" if suggested else "pending"
+        else:
+            review_status = status or "pending"
+            tag_status = tag_status or ("suggested" if suggested else "pending")
+        # Legacy multi-emoji lists collapse to unresolved; human picks one.
+        final = item.get("emojis")
+        final_single: Optional[List[str]] = None
+        if isinstance(final, list) and len(final) == 1 and isinstance(final[0], str):
+            valid, vals, _ = validate_single_emoji(final[0])
+            final_single = vals if valid else None
+        elif isinstance(final, str):
+            valid, vals, _ = validate_single_emoji(final)
+            final_single = vals if valid else None
+        if final_single is None:
+            review_status = "pending" if (suggested and review_status != "error") else review_status
+        upgraded["stickers"][fn] = {
+            "file_hash": str(item.get("file_hash") or ""),
+            "selection": item.get("selection") if item.get("selection") in ("keep", "exclude", "undecided") else "undecided",
+            "similarity_group": item.get("similarity_group"),
+            "suggested_emojis": suggested,
+            "emojis": final_single,
+            "confidence": float(item.get("confidence", 0.0) or 0.0),
+            "reason": str(item.get("reason", "") or ""),
+            "review_status": review_status,
+            "tag_status": tag_status,
+            "tag_source": item.get("tag_source") or "legacy-migration",
+        }
+        # Preserve unknown fields conservatively.
+        for k, v in item.items():
+            if k not in upgraded["stickers"][fn]:
+                upgraded["stickers"][fn][k] = v
+    upgraded["revision"] = int(draft.get("revision") or 1)
+    upgraded["pack_state"] = "in_progress"
+    upgraded["approval"] = None
+    return upgraded
+
+
+def draft_digest(draft: Dict[str, Any]) -> str:
+    canonical = json.dumps(draft, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def invalidate_approval(draft: Dict[str, Any], reason: str = "") -> None:
+    draft["pack_state"] = "in_progress"
+    draft["approval"] = None
+    if reason:
+        draft["last_invalidation"] = reason
+
+
+def bump_revision(draft: Dict[str, Any], reason: str = "revision bump") -> None:
+    draft["revision"] = int(draft.get("revision") or 1) + 1
+    invalidate_approval(draft, reason)
+
+
+def remap_cluster_ids(
+    old_groups: Dict[str, List[str]], new_clusters: Dict[str, List[str]]
+) -> Dict[str, List[str]]:
+    """Reuses stable cluster IDs across rescans by member overlap.
+
+    Fresh `cluster_NN` IDs are regenerated on every scan, so an added file can
+    shift unrelated IDs. Greedy maximum-overlap matching keeps IDs stable;
+    genuinely new groups take unused IDs past the previous maximum.
+    """
+    old_sets = {cid: set(m) for cid, m in (old_groups or {}).items()}
+    max_n = 0
+    for cid in old_sets:
+        m = re.fullmatch(r"cluster_(\d+)", str(cid))
+        if m:
+            max_n = max(max_n, int(m.group(1)))
+    ordered = sorted(new_clusters.items(), key=lambda kv: (-len(kv[1]), kv[0]))
+    used: Set[str] = set()
+    remapped: Dict[str, List[str]] = {}
+    counter = [max_n]
+
+    def fresh_id() -> str:
+        counter[0] += 1
+        cid = f"cluster_{counter[0]:02d}"
+        while cid in used or cid in old_sets:
+            counter[0] += 1
+            cid = f"cluster_{counter[0]:02d}"
+        return cid
+
+    for _, members in ordered:
+        mset = set(members)
+        best: Optional[str] = None
+        best_score = 0
+        for oid, oset in old_sets.items():
+            if oid in used:
+                continue
+            inter = len(mset & oset)
+            if inter > best_score:
+                best, best_score = oid, inter
+        cid = best if best and best_score > 0 else fresh_id()
+        used.add(cid)
+        remapped[cid] = sorted(members)
+    return remapped
+
+
+def is_sidecar(path: Path) -> bool:
+    name = path.name
+    if name in SIDECAR_NAMES or name.startswith("."):
+        return True
+    lowered = name.lower()
+    return any(lowered.endswith(s) for s in SIDECAR_SUFFIXES)
+
+
+def inventory_folder(folder: Path) -> List[Path]:
+    """Every non-sidecar file on disk. Unlisted types fail closed, never ignored."""
+    if not folder.is_dir():
+        return []
+    return sorted(
+        (p for p in folder.iterdir() if p.is_file() and not is_sidecar(p)),
+        key=lambda p: p.name,
+    )
+
+
+def candidate_files(folder: Path) -> List[Path]:
+    """Sticker-eligible subset of the inventory (known image extensions)."""
+    return sorted(
+        (p for p in inventory_folder(folder) if p.suffix.lower() in INVENTORY_EXTENSIONS),
+        key=lambda p: p.name,
+    )
 
 
 def load_or_create_draft(
@@ -539,96 +883,211 @@ def load_or_create_draft(
     draft_path: Path,
     legacy_cache_path: Optional[Path] = None,
     files: Optional[List[Path]] = None,
+    cluster_distance: int = 6,
+    linkage: str = "single",
 ) -> Dict[str, Any]:
-    """Loads pack_draft.json, upgrading from legacy cache or scanning files if needed."""
-    draft: Dict[str, Any] = {
-        "version": 2,
-        "meta": {"title": "Grimassen", "author": "tazztone", "cover": None},
-        "similarity_groups": {},
-        "stickers": {},
-    }
+    """Loads pack_draft.json (migrating v2/legacy to pending), then fail-closed sync.
+
+    A present-but-unreadable draft aborts instead of being replaced: overwriting
+    it would destroy the only review state. Use --reset-draft to back it up
+    explicitly and start over.
+    """
+    draft = new_draft_empty()
+    migrated_legacy = False
+    pre_existing = draft_path.exists()
+    schema_changed = False
 
     if draft_path.exists():
         try:
-            draft = json.loads(draft_path.read_text(encoding="utf-8"))
+            raw = json.loads(draft_path.read_text(encoding="utf-8"))
         except Exception as e:
-            print(f"Warning: Could not read draft from {draft_path}: {e}")
+            sys.exit(
+                f"Error: draft {draft_path} exists but cannot be parsed ({e}). "
+                "Refusing to overwrite it. Back it up, then re-run with --reset-draft "
+                "to start over explicitly."
+            )
+        schema_changed = raw.get("version") != DRAFT_SCHEMA_VERSION or "revision" not in raw
+        draft = upgrade_draft_to_v3(raw)
     elif legacy_cache_path and legacy_cache_path.exists():
         try:
             legacy = json.loads(legacy_cache_path.read_text(encoding="utf-8"))
-            print(f"Migrating legacy cache ({len(legacy)} items) to pack_draft.json...")
+            print(f"Migrating legacy cache ({len(legacy)} items) to pack_draft.json (pending)...")
             for fn, item in legacy.items():
                 em_seq = item.get("emojis") or ([item["emoji"]] if "emoji" in item else None)
+                if isinstance(em_seq, str):
+                    em_seq = [em_seq]
                 sel = "exclude" if item.get("visual_dupe_of") or item.get("redundant_of") else "keep"
                 draft["stickers"][fn] = {
                     "file_hash": "",
                     "selection": sel,
                     "similarity_group": None,
                     "suggested_emojis": em_seq,
-                    "emojis": em_seq,
-                    "confidence": float(item.get("confidence", 0.9)),
-                    "reason": item.get("reason", ""),
-                    "review_status": "approved" if sel == "keep" else "culled",
+                    "emojis": None,
+                    "confidence": float(item.get("confidence", 0.0) or 0.0),
+                    "reason": str(item.get("reason", "") or ""),
+                    "review_status": "pending",
+                    "tag_status": "suggested" if em_seq else "pending",
+                    "tag_source": "legacy-migration",
                 }
+            migrated_legacy = True
         except Exception as e:
             print(f"Warning: Could not read legacy cache: {e}")
 
-    # Synchronize with files on disk
-    if files:
-        clusters, file_to_cluster, dupe_info = detect_visual_clusters(files)
-        draft["similarity_groups"] = clusters
+    if files is None:
+        return draft
 
-        for p in files:
-            fhash = compute_file_sha256(p)
-            fn = p.name
-            cid = file_to_cluster.get(fn)
+    # Only cluster supported still-image inputs; unsupported files are still
+    # inventoried for hard-gate failures but excluded from hashing/clusters.
+    hashable = [p for p in files if p.suffix.lower() in HARD_IMAGE_EXTENSIONS]
+    raw_clusters, _, _dupe = detect_visual_clusters(
+        hashable, max_distance=cluster_distance, linkage=linkage
+    )
+    old_groups = dict(draft.get("similarity_groups", {}) or {})
+    clusters = remap_cluster_ids(old_groups, raw_clusters)
+    file_to_cluster: Dict[str, str] = {}
+    for cid, members in clusters.items():
+        for m in members:
+            file_to_cluster[m] = cid
+    draft["similarity_groups"] = clusters
+    # Any cluster whose membership changed affects every member, including
+    # members that merely gained a sibling (their own ID is unchanged).
+    affected_clusters: Set[str] = set()
+    for cid in set(old_groups) | set(clusters):
+        if set(old_groups.get(cid, [])) != set(clusters.get(cid, [])):
+            affected_clusters.add(cid)
+    # Digest before per-file sync (rename carry-over, new/changed entries) so any
+    # material rescan change advances the revision for compare-and-swap.
+    pre_sync_digest = draft_digest(draft)
 
-            if fn not in draft["stickers"]:
-                # New sticker: default standalone to keep, cluster variations to undecided
-                sel = "undecided" if cid else "keep"
-                draft["stickers"][fn] = {
-                    "file_hash": fhash,
-                    "selection": sel,
-                    "similarity_group": cid,
-                    "suggested_emojis": None,
-                    "emojis": None,
-                    "confidence": 0.0,
-                    "reason": f"Cluster: {cid}" if cid else "",
-                    "review_status": "pending",
-                }
+    # Hash current files.
+    current_hashes: Dict[str, str] = {}
+    for p in files:
+        try:
+            current_hashes[p.name] = compute_file_sha256(p)
+        except Exception:
+            continue
+
+    # Rename preservation: match new filenames to missing entries by unchanged hash.
+    missing_names = [fn for fn in draft.get("stickers", {}) if fn not in current_hashes]
+    hash_to_missing: Dict[str, str] = {}
+    for fn in missing_names:
+        h = draft["stickers"][fn].get("file_hash")
+        if h:
+            hash_to_missing.setdefault(h, fn)
+    for p in files:
+        fn = p.name
+        if fn not in draft["stickers"]:
+            h = current_hashes.get(fn, "")
+            donor = hash_to_missing.get(h, "") if h else ""
+            if donor and donor in draft["stickers"]:
+                carried = dict(draft["stickers"][donor])
+                carried["file_hash"] = h
+                draft["stickers"][fn] = carried
+                print(f"Preserved decision across rename: {donor} -> {fn} (hash unchanged).")
+
+    for p in files:
+        fhash = current_hashes.get(p.name, "")
+        fn = p.name
+        cid = file_to_cluster.get(fn)
+
+        if fn not in draft["stickers"]:
+            sel = "undecided" if cid else "keep"
+            draft["stickers"][fn] = {
+                "file_hash": fhash,
+                "selection": sel,
+                "similarity_group": cid,
+                "suggested_emojis": None,
+                "emojis": None,
+                "confidence": 0.0,
+                "reason": f"Cluster: {cid}" if cid else "",
+                "review_status": "pending",
+                "tag_status": "pending",
+                "tag_source": "scan",
+            }
+            if sel == "undecided":
+                invalidate_approval(draft, f"new clustered file {fn}")
             else:
-                entry = draft["stickers"][fn]
-                # Update cluster assignment
-                entry["similarity_group"] = cid
-                # Check for file content changes
-                if entry.get("file_hash") and entry["file_hash"] != fhash:
-                    print(f"Sticker file modified on disk: {fn} -> resetting review status.")
-                    entry["file_hash"] = fhash
-                    entry["review_status"] = "pending"
-                elif not entry.get("file_hash"):
-                    entry["file_hash"] = fhash
+                invalidate_approval(draft, f"new file {fn}")
+        else:
+            entry = draft["stickers"][fn]
+            old_cid = entry.get("similarity_group")
+            entry["similarity_group"] = cid
+            if entry.get("file_hash") and entry["file_hash"] != fhash:
+                print(f"Sticker file modified on disk: {fn} -> clearing tags, invalidating approval.")
+                entry["file_hash"] = fhash
+                entry["suggested_emojis"] = None
+                entry["emojis"] = None
+                entry["confidence"] = 0.0
+                entry["reason"] = "Image changed; re-tag required"
+                entry["review_status"] = "pending"
+                entry["tag_status"] = "stale"
+                entry["tag_source"] = "scan"
+                if cid:
+                    entry["selection"] = "undecided"
+                invalidate_approval(draft, f"changed image {fn}")
+            elif not entry.get("file_hash"):
+                entry["file_hash"] = fhash
 
+    if affected_clusters:
+        reset = 0
+        for fn, entry in draft.get("stickers", {}).items():
+            if fn not in current_hashes:
+                continue
+            if entry.get("tag_status") == "stale":
+                continue
+            if entry.get("similarity_group") in affected_clusters:
+                entry["selection"] = "undecided"
+                entry["review_status"] = "pending"
+                entry["tag_status"] = "pending"
+                reset += 1
+        invalidate_approval(draft, "cluster membership changed")
+        print(
+            f"Warning: {len(affected_clusters)} cluster(s) changed membership; "
+            f"decisions for {reset} affected member(s) reset to undecided."
+        )
+
+    if migrated_legacy:
+        invalidate_approval(draft, "legacy migration")
+    if pre_existing and (schema_changed or draft_digest(draft) != pre_sync_digest):
+        # A persisted draft materially changed on rescan: advance the revision so
+        # stale pages/servers fail their compare-and-swap instead of overwriting.
+        draft["revision"] = int(draft.get("revision") or 1) + 1
+        if draft.get("pack_state") == "approved" or draft.get("approval"):
+            draft["pack_state"] = "in_progress"
+            draft["approval"] = None
     return draft
 
 
 def save_draft(draft_path: Path, draft: Dict[str, Any]) -> None:
-    """Saves the persistent draft state."""
-    draft_path.write_text(json.dumps(draft, ensure_ascii=False, indent=2), encoding="utf-8")
+    """Saves the persistent draft state atomically."""
+    draft.setdefault("version", DRAFT_SCHEMA_VERSION)
+    atomic_write_text(draft_path, json.dumps(draft, ensure_ascii=False, indent=2))
+
+
+def final_emoji_for_entry(item: Dict[str, Any]) -> Optional[str]:
+    """Strict single-emoji gate: final `emojis` only, never suggestions/fallbacks."""
+    final = item.get("emojis")
+    if isinstance(final, list) and len(final) == 1 and isinstance(final[0], str):
+        valid, vals, _ = validate_single_emoji(final[0])
+        return vals[0] if valid else None
+    if isinstance(final, str) and final:
+        valid, vals, _ = validate_single_emoji(final)
+        return vals[0] if valid else None
+    return None
 
 
 def select_manifest_entries(
     draft: Dict[str, Any], folder: Optional[Path] = None
 ) -> Tuple[List[Dict[str, str]], List[str], List[str]]:
-    """Picks the stickers that belong in stickers.yaml from a draft.
+    """Picks exportable stickers: 'keep' + valid final single emoji + on-disk.
 
-    A sticker is eligible only if it is marked 'keep', carries an emoji
-    assignment, and — when `folder` is given — still exists on disk. A draft can
-    outlive the images it references, and emitting those would produce a manifest
-    that only fails later, at upload time.
+    Suggested emojis alone do not qualify; a human must promote them to final
+    via review/approve. Invalid input is skipped here and hard-fails in
+    preflight; never normalized to 🙂/😐.
 
     Returns:
         entries:  ordered [{'chr': ..., 'file': ...}, ...] for the manifest
-        skipped:  filenames of 'keep' stickers with no emoji assignment
+        skipped:  filenames of 'keep' stickers without a valid final emoji
         missing:  filenames of tagged 'keep' stickers absent from `folder`
     """
     entries: List[Dict[str, str]] = []
@@ -638,16 +1097,247 @@ def select_manifest_entries(
     for fn, item in sorted(draft.get("stickers", {}).items()):
         if item.get("selection") != "keep":
             continue
-        emojis = item.get("emojis") or item.get("suggested_emojis")
-        if not emojis:
+        single = final_emoji_for_entry(item)
+        if not single:
             skipped.append(fn)
             continue
         if folder is not None and not (folder / fn).exists():
             missing.append(fn)
             continue
-        entries.append({"chr": format_emoji_sequence(emojis), "file": fn})
+        entries.append({"chr": single, "file": fn})
 
     return entries, skipped, missing
+
+
+def effective_cover(draft: Dict[str, Any], entries: List[Dict[str, str]]) -> Optional[str]:
+    meta = draft.get("meta", {}) if isinstance(draft.get("meta"), dict) else {}
+    cover = meta.get("cover")
+    if isinstance(cover, str) and cover.strip():
+        return cover.strip()
+    if entries:
+        return entries[0]["file"]
+    return None
+
+
+def validate_draft_for_export(
+    draft: Dict[str, Any], folder: Path, strict_quality: bool = False
+) -> Tuple[List[str], List[str]]:
+    """Central preflight used by scan import, export, preview, and upload."""
+    errors: List[str] = []
+    warnings: List[str] = []
+
+    if draft.get("version") != DRAFT_SCHEMA_VERSION:
+        errors.append(f"Draft schema v{draft.get('version')} != v{DRAFT_SCHEMA_VERSION}; re-run scan to migrate.")
+    meta = draft.get("meta", {}) if isinstance(draft.get("meta"), dict) else {}
+    title = str(meta.get("title") or "").strip()
+    author = str(meta.get("author") or "").strip()
+    if not title or title.lower() in PLACEHOLDER_TITLES:
+        errors.append("Missing or placeholder pack title; set an explicit --title.")
+    if not author or author.lower() in PLACEHOLDER_AUTHORS:
+        errors.append("Missing or placeholder pack author; set an explicit --author.")
+
+    stickers = draft.get("stickers", {}) if isinstance(draft.get("stickers"), dict) else {}
+    on_disk = {p.name: p for p in inventory_folder(folder)}
+    # Missing/extra inventory checks (fail closed; never silently omit).
+    for fn in sorted(stickers):
+        if fn not in on_disk:
+            errors.append(f"Draft references missing file: {fn} (restore it or run scan --prune).")
+    for fn in sorted(on_disk):
+        if fn not in stickers:
+            errors.append(f"On-disk file not in draft: {fn} (re-run scan; new images are never auto-omitted).")
+    # Hash verification: every current entry needs a valid recorded SHA-256.
+    # Empty hashes are never accepted (and preflight never silently repairs them).
+    for fn, item in sorted(stickers.items()):
+        if fn not in on_disk:
+            continue
+        recorded = item.get("file_hash") or ""
+        if not re.fullmatch(r"[0-9a-f]{64}", recorded):
+            errors.append(f"{fn}: missing or invalid file hash; re-run scan to reconcile.")
+            continue
+        try:
+            actual = compute_file_sha256(on_disk[fn])
+        except Exception as e:
+            errors.append(f"Cannot hash {fn}: {e}")
+            continue
+        if recorded != actual:
+            errors.append(f"Hash mismatch (image changed after draft): {fn}.")
+    undecided = sorted(fn for fn, it in stickers.items() if it.get("selection") == "undecided")
+    if undecided:
+        errors.append(f"Unresolved cluster decisions ({len(undecided)}): {', '.join(undecided[:8])}" + (" ..." if len(undecided) > 8 else ""))
+    # Approval gate: human approval for the current revision only.
+    approval = draft.get("approval") or {}
+    if draft.get("pack_state") != "approved" or not approval:
+        errors.append("Pack is not approved; resolve all clusters/emojis then run --approve.")
+    elif int(approval.get("revision") or 0) != int(draft.get("revision") or 0):
+        errors.append("Approval is stale (draft changed after approval); re-approve.")
+    elif approval.get("digest") != draft_digest({k: v for k, v in draft.items() if k not in ("approval",)}):
+        # Digest covers everything except the approval envelope itself.
+        errors.append("Approval digest mismatch (metadata/selection/tag changed); re-approve.")
+
+    entries, skipped, missing = select_manifest_entries(draft, folder=folder)
+    for fn in skipped:
+        item = stickers.get(fn, {})
+        if item.get("tag_status") in ("error", "unresolved", "stale"):
+            errors.append(f"{fn}: provider tag {item.get('tag_status')} ({item.get('reason','')[:60]}); re-tag required.")
+        else:
+            errors.append(f"{fn}: kept but missing exactly one valid final emoji.")
+    for fn in missing:
+        errors.append(f"{fn}: tagged but missing from disk.")
+    if len(entries) > MAX_STICKERS:
+        errors.append(f"Pack has {len(entries)} stickers; Signal allows at most {MAX_STICKERS}.")
+    if not entries and not errors:
+        errors.append("No exportable stickers (all excluded or unresolved).")
+
+    # Per-file hard image gates + cover.
+    for entry in entries:
+        errs = validate_image_hard(folder / entry["file"])
+        for e in errs:
+            errors.append(f"{entry['file']}: {e}")
+    cover = effective_cover(draft, entries)
+    if not cover:
+        errors.append("Missing cover (no stickers to default from).")
+    elif cover not in on_disk:
+        errors.append(f"Cover missing from disk: {cover}.")
+    else:
+        for e in validate_cover_hard(folder / cover):
+            errors.append(f"Cover {cover}: {e}")
+
+    # Quality warnings (or errors under --strict-quality).
+    for entry in entries:
+        for w in validate_image_quality(folder / entry["file"]):
+            (errors if strict_quality else warnings).append(f"{entry['file']}: {w}")
+    # Unsupported or unrecognized files anywhere in the folder fail closed.
+    # inventory_folder() already excludes expected sidecars.
+    for fn, p in sorted(on_disk.items()):
+        if p.suffix.lower() not in HARD_IMAGE_EXTENSIONS:
+            if p.suffix.lower() in INVENTORY_EXTENSIONS:
+                errors.append(f"{fn}: unsupported format {p.suffix}; convert explicitly (no silent conversion).")
+            else:
+                errors.append(f"{fn}: unrecognized file type {p.suffix or '(no extension)'}; remove it or convert explicitly.")
+    return errors, warnings
+
+
+def manifest_digest(title: str, author: str, cover: Optional[str], entries: List[Dict[str, str]]) -> str:
+    canonical = json.dumps(
+        {"title": title, "author": author, "cover": cover, "stickers": entries},
+        ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def receipt_path_for_yaml(yaml_path: Path) -> Path:
+    return yaml_path.parent / (yaml_path.name + ".receipt.json")
+
+
+def build_receipt(
+    draft: Dict[str, Any], folder: Path, entries: List[Dict[str, str]],
+    title: str, author: str, cover: Optional[str],
+) -> Dict[str, Any]:
+    stickers = draft.get("stickers", {}) or {}
+    ordered = [
+        {"file": e["file"], "hash": str(stickers.get(e["file"], {}).get("file_hash") or "")}
+        for e in entries
+    ]
+    return {
+        "builder": BUILDER_VERSION,
+        "draft_schema_version": DRAFT_SCHEMA_VERSION,
+        "draft_revision": int(draft.get("revision") or 0),
+        "draft_digest": draft_digest(draft),
+        "title": title,
+        "author": author,
+        "cover": cover,
+        "files": ordered,
+        "manifest_digest": manifest_digest(title, author, cover, entries),
+    }
+
+
+def verify_manifest_freshness(
+    folder: Path, draft: Dict[str, Any], yaml_path: Path
+) -> List[str]:
+    """Preview/upload boundary: never trust stickers.yaml by existence alone."""
+    errors: List[str] = []
+    if not yaml_path.exists():
+        return [f"No manifest at {yaml_path}; run export first."]
+    rpath = receipt_path_for_yaml(yaml_path)
+    if not rpath.exists():
+        return [f"No build receipt at {rpath}; re-run export (stale YAML is never trusted)."]
+    try:
+        receipt = json.loads(rpath.read_text(encoding="utf-8"))
+    except Exception as e:
+        return [f"Cannot read build receipt: {e}."]
+    try:
+        doc = yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
+    except Exception as e:
+        return [f"Cannot read manifest YAML: {e}."]
+    entries, _, _ = select_manifest_entries(draft, folder=folder)
+    meta = draft.get("meta", {}) or {}
+    title = str(meta.get("title") or "")
+    author = str(meta.get("author") or "")
+    cover = effective_cover(draft, entries)
+    expected_digest = manifest_digest(title, author, cover, entries)
+    if receipt.get("manifest_digest") != expected_digest:
+        errors.append("Manifest receipt digest mismatch: draft changed after export; re-run export.")
+    if receipt.get("draft_digest") != draft_digest(draft):
+        errors.append("Draft changed after export (receipt digest mismatch); re-run export.")
+    # Canonicalize the on-disk YAML and verify its complete content, including
+    # emoji values: filename-only comparison would miss chr tampering.
+    yaml_meta = doc.get("meta", {}) or {}
+    yaml_stickers_raw = doc.get("stickers", []) or []
+    yaml_entries: List[Dict[str, str]] = []
+    for s in yaml_stickers_raw:
+        if not isinstance(s, dict) or not s.get("file"):
+            errors.append("stickers.yaml contains a malformed entry; re-run export.")
+            continue
+        chr_val = s.get("chr")
+        if not isinstance(chr_val, str) or not validate_single_emoji(chr_val)[0]:
+            errors.append(f"stickers.yaml has invalid emoji for {s.get('file')}; re-run export.")
+            continue
+        yaml_entries.append({"chr": chr_val, "file": s["file"]})
+    yaml_digest = manifest_digest(
+        str(yaml_meta.get("title") or ""),
+        str(yaml_meta.get("author") or ""),
+        yaml_meta.get("cover"),
+        yaml_entries,
+    )
+    if yaml_digest != receipt.get("manifest_digest"):
+        errors.append("stickers.yaml content differs from its build receipt (tampered or stale); re-run export.")
+    if yaml_entries != entries:
+        errors.append("stickers.yaml entries differ from current draft; re-run export.")
+    if yaml_meta.get("title") != title or yaml_meta.get("author") != author:
+        errors.append("stickers.yaml title/author differs from draft; re-run export.")
+    if yaml_meta.get("cover") != cover:
+        errors.append("stickers.yaml cover differs from draft; re-run export.")
+    return errors
+
+
+def approve_pack(draft: Dict[str, Any]) -> List[str]:
+    """Human approval gate: review-complete, no undecided, single emoji, meta set."""
+    errors: List[str] = []
+    meta = draft.get("meta", {}) if isinstance(draft.get("meta"), dict) else {}
+    if not str(meta.get("title") or "").strip() or str(meta.get("title") or "").strip().lower() in PLACEHOLDER_TITLES:
+        errors.append("Set an explicit pack title before approving.")
+    if not str(meta.get("author") or "").strip() or str(meta.get("author") or "").strip().lower() in PLACEHOLDER_AUTHORS:
+        errors.append("Set an explicit pack author before approving.")
+    stickers = draft.get("stickers", {}) or {}
+    undecided = [fn for fn, it in stickers.items() if it.get("selection") == "undecided"]
+    if undecided:
+        errors.append(f"Resolve {len(undecided)} undecided entries before approving.")
+    for fn, item in sorted(stickers.items()):
+        if item.get("selection") != "keep":
+            continue
+        if item.get("tag_status") in ("error", "unresolved", "stale"):
+            errors.append(f"{fn}: tag {item.get('tag_status')}; re-tag before approving.")
+        elif not final_emoji_for_entry(item):
+            errors.append(f"{fn}: needs exactly one valid final emoji before approving.")
+    if errors:
+        return errors
+    draft["pack_state"] = "approved"
+    draft["approval"] = {
+        "revision": int(draft.get("revision") or 0),
+        "digest": draft_digest({k: v for k, v in draft.items() if k != "approval"}),
+        "approved_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+    return []
 
 
 def build_stickers_yaml(
@@ -655,272 +1345,308 @@ def build_stickers_yaml(
     files: Optional[List[Path]] = None,
     cache: Optional[Dict[str, Any]] = None,
     draft: Optional[Dict[str, Any]] = None,
-    title: str = "Grimassen",
-    author: str = "tazztone",
+    title: str = "",
+    author: str = "",
     cover: Optional[str] = None,
     out_name: str = "stickers.yaml",
 ) -> Path:
-    """Builds and writes stickers.yaml for signal-sticker-tool from kept stickers."""
-    meta: Dict[str, Any] = {"title": title, "author": author}
-
-    stickers_list = []
-
-    # If draft provided (preferred)
-    if draft and "stickers" in draft:
-        meta_draft = draft.get("meta", {})
-        meta["title"] = meta_draft.get("title", title)
-        meta["author"] = meta_draft.get("author", author)
-        cover_val = cover or meta_draft.get("cover")
-
-        stickers_list, _skipped, _missing = select_manifest_entries(draft, folder=folder)
-
-        if cover_val:
-            meta["cover"] = cover_val
-        elif stickers_list:
-            meta["cover"] = stickers_list[0]["file"]
-
-    # Backward compatibility with legacy (files, cache) call
-    elif files is not None:
-        c = cache or {}
-        if cover:
-            meta["cover"] = cover
-        elif files:
-            meta["cover"] = files[0].name
-
-        for p in files:
-            info = c.get(p.name, {})
-            # Only exclude if explicitly marked redundant or deleted
-            if info.get("selection") == "exclude":
-                continue
-            emojis = info.get("emojis") or info.get("emoji", "🙂")
-            stickers_list.append({"chr": format_emoji_sequence(emojis), "file": p.name})
-
+    """Builds stickers.yaml plus receipt from an approved draft (strict, atomic)."""
+    if not (draft and "stickers" in draft):
+        raise ValueError("pack_draft.json is the sole source of truth; legacy files/cache builds were removed.")
+    meta_draft = draft.get("meta", {}) or {}
+    eff_title = str(meta_draft.get("title") or title or "").strip()
+    eff_author = str(meta_draft.get("author") or author or "").strip()
+    stickers_list, skipped, missing = select_manifest_entries(draft, folder=folder)
+    cover_val = (cover or meta_draft.get("cover") or effective_cover(draft, stickers_list))
+    if skipped or missing:
+        raise ValueError(
+            "Refusing to build manifest with unresolved entries: "
+            f"skipped={skipped[:5]} missing={missing[:5]}"
+        )
+    meta: Dict[str, Any] = {"title": eff_title, "author": eff_author}
+    if cover_val:
+        meta["cover"] = cover_val
     doc = {"meta": meta, "stickers": stickers_list}
     out_path = folder / out_name
-    with open(out_path, "w", encoding="utf-8") as f:
-        yaml.safe_dump(doc, f, allow_unicode=True, sort_keys=False)
+    yaml_text = yaml.safe_dump(doc, allow_unicode=True, sort_keys=False)
+    atomic_write_text(out_path, yaml_text)
+    receipt = build_receipt(draft, folder, stickers_list, eff_title, eff_author, cover_val)
+    atomic_write_text(receipt_path_for_yaml(out_path), json.dumps(receipt, ensure_ascii=False, indent=2))
     return out_path
 
 
+def _apply_meta_overrides(draft: Dict[str, Any], args: Any) -> bool:
+    """Applies explicit --title/--author/--cover; returns True if metadata changed."""
+    changed = False
+    meta = draft.setdefault("meta", {})
+    if getattr(args, "title", None) is not None and meta.get("title") != args.title:
+        meta["title"] = args.title
+        changed = True
+    if getattr(args, "author", None) is not None and meta.get("author") != args.author:
+        meta["author"] = args.author
+        changed = True
+    if getattr(args, "cover", None) and meta.get("cover") != args.cover:
+        meta["cover"] = args.cover
+        changed = True
+    if changed:
+        invalidate_approval(draft, "metadata changed")
+    return changed
+
+
+def _print_clusters(draft: Dict[str, Any], files: List[Path]) -> None:
+    clusters = draft.get("similarity_groups", {}) or {}
+    total_clustered = sum(len(m) for m in clusters.values())
+    # Pairwise diagnostics: median/max per cluster + suspicious-cluster warnings.
+    hashes: Dict[str, int] = {}
+    for p in files:
+        if p.suffix.lower() not in HARD_IMAGE_EXTENSIONS:
+            continue
+        try:
+            hashes[p.name] = compute_dhash(p)
+        except Exception:
+            pass
+    if clusters:
+        print(f"\nDetected {len(clusters)} visually similar group(s) ({total_clustered} stickers total):")
+        for cid, members in sorted(clusters.items()):
+            stats = cluster_pair_stats(members, hashes) if all(m in hashes for m in members) else {"median": "?", "max": "?", "count": len(members)}
+            print(f"   {cid} ({len(members)} candidates, median={stats['median']} max={stats['max']}): {', '.join(members)}")
+            if isinstance(stats.get("count"), int) and stats["count"] >= 8:
+                print(f"      Warning: large cluster ({stats['count']} members) — review carefully; may chain distinct expressions.")
+            if isinstance(stats.get("max"), (int, float)) and stats["max"] > 10:
+                print(f"      Warning: weak evidence (max distance {stats['max']}); treat as candidates, not duplicates.")
+    else:
+        print("\nNo visually similar groups detected.")
+
+
 def main():
-    parser = argparse.ArgumentParser(
-        description="Signal Sticker Pack Curation & Classifier"
-    )
-    parser.add_argument("folder", help="Directory containing sticker images")
-    parser.add_argument(
-        "--title",
-        default=None,
-        help="Sticker pack title (default: keep the title already in pack_draft.json)",
-    )
-    parser.add_argument(
-        "--author",
-        default=None,
-        help="Sticker pack author (default: keep the author already in pack_draft.json)",
-    )
+    parser = argparse.ArgumentParser(description="Signal Sticker Pack Curation & Classifier")
+    parser.add_argument("folder", help="Directory containing sticker images (explicit; required)")
+    parser.add_argument("--title", default=None, help="Pack title (explicit; preserved in draft when omitted)")
+    parser.add_argument("--author", default=None, help="Pack author (explicit; preserved in draft when omitted)")
     parser.add_argument("--cover", default=None, help="Cover image filename")
-    parser.add_argument("--provider", default=None, help="VLM Provider: openrouter, gemini, anthropic")
-    parser.add_argument("--model", default=None, help="Model slug (e.g. inclusionai/ling-3.0-flash-vl)")
+    parser.add_argument("--model", default=None, help="OpenRouter model slug (e.g. inclusionai/ling-3.0-flash-vl)")
     parser.add_argument("--out", default="stickers.yaml", help="Output YAML filename")
     parser.add_argument("--draft", default=DEFAULT_DRAFT, help="Path to draft JSON")
-    parser.add_argument(
-        "--cache",
-        default=DEFAULT_CACHE,
-        help="Path to legacy cache JSON (migrated into the draft on first run)",
-    )
+    parser.add_argument("--cache", default=DEFAULT_CACHE, help="Legacy cache JSON (migrated once, pending)")
     parser.add_argument("--workers", type=int, default=4, help="Parallel classification workers")
     parser.add_argument("--scan", action="store_true", help="Inventory and cluster without API calls")
-    parser.add_argument(
-        "--check-only", action="store_true", help="Alias for --scan"
-    )
-    parser.add_argument(
-        "--classify-kept", action="store_true", help="Classify only stickers marked 'keep'"
-    )
-    parser.add_argument(
-        "--build-yaml", action="store_true", help="Compile stickers.yaml from kept stickers"
-    )
-    parser.add_argument(
-        "--resume",
-        action="store_true",
-        help="No-op, kept for backwards compatibility (the draft is always reused)",
-    )
-    parser.add_argument(
-        "--dedupe",
-        action="store_true",
-        help="No-op, kept for backwards compatibility (visual clustering always runs)",
-    )
+    parser.add_argument("--check-only", action="store_true", help="Alias for --scan")
+    parser.add_argument("--classify-kept", action="store_true", help="Classify only 'keep' stickers lacking final emoji")
+    parser.add_argument("--build-yaml", action="store_true", help="Preflight + write stickers.yaml + receipt")
+    parser.add_argument("--approve", action="store_true", help="Record human approval for the current revision")
+    parser.add_argument("--preflight", action="store_true", help="Run strict export/upload preflight only (no writes)")
+    parser.add_argument("--prune", action="store_true", help="With --scan: explicitly drop draft entries for missing files")
+    parser.add_argument("--reset-draft", action="store_true", help="Back up the existing draft to .bak and start over (required for corrupt drafts)")
+    parser.add_argument("--cluster-distance", type=int, default=6, help="dHash Hamming edge threshold (default 6)")
+    parser.add_argument("--linkage", choices=["single", "complete"], default="single", help="Cluster linkage (default single; complete prevents chaining)")
+    parser.add_argument("--strict-quality", action="store_true", help="Promote quality recommendations to errors")
+    parser.add_argument("--yes", action="store_true", help="Noninteractive: allow writes without prompting (export only)")
+    parser.add_argument("--resume", action="store_true", help="No-op, kept for backwards compatibility")
+    parser.add_argument("--dedupe", action="store_true", help="No-op, kept for backwards compatibility")
     args = parser.parse_args()
 
     folder = Path(args.folder)
     if not folder.exists() or not folder.is_dir():
-        sys.exit(f"Error: Directory '{folder}' does not exist.")
+        sys.exit(f"Error: pack folder '{folder}' does not exist. Pass an explicit folder, e.g. ./stickers scan ./my_pack.")
 
-    files = sorted(p for p in folder.iterdir() if p.suffix.lower() in SUPPORTED_EXTENSIONS)
-    if not files:
-        sys.exit(f"Error: No image files found in '{folder}'. Supported: {SUPPORTED_EXTENSIONS}")
-
-    print(f"Found {len(files)} sticker images in {folder}")
-
-    # Validate Signal constraints
-    all_problems = {}
-    for p in files:
-        probs = check_signal_constraints(p)
-        if probs:
-            all_problems[p.name] = probs
-
-    if all_problems:
-        print("\nSignal Constraint Warnings:")
-        for name, probs in all_problems.items():
-            print(f"   {name}: {', '.join(probs)}")
-    else:
-        print("All stickers adhere to Signal constraints (512x512 px, <300 KB).")
-
-    # Load/initialize draft
     draft_path = folder / args.draft if not Path(args.draft).is_absolute() else Path(args.draft)
     legacy_cache_path = folder / args.cache if not Path(args.cache).is_absolute() else Path(args.cache)
-    draft = load_or_create_draft(folder, draft_path, legacy_cache_path, files)
+    if args.reset_draft:
+        if draft_path.exists():
+            backup = draft_path.parent / (draft_path.name + ".bak")
+            atomic_write_text(backup, draft_path.read_text(encoding="utf-8"))
+            draft_path.unlink()
+            print(f"Backed up existing draft to {backup}; starting over.")
+        else:
+            print("No existing draft to reset.")
 
-    # Only override pack metadata when explicitly requested, so that running a
-    # plain --scan does not clobber a title/author set previously in the draft.
-    if args.title is not None:
-        draft["meta"]["title"] = args.title
-    if args.author is not None:
-        draft["meta"]["author"] = args.author
-    if args.cover:
-        draft["meta"]["cover"] = args.cover
-    draft["meta"].setdefault("title", "Grimassen")
-    draft["meta"].setdefault("author", "tazztone")
+    files = inventory_folder(folder)
+    images = candidate_files(folder)
+    if not images:
+        sys.exit(f"Error: No image files found in '{folder}'. Supported: {sorted(INVENTORY_EXTENSIONS)}")
 
-    # Visual clusters
-    clusters = draft.get("similarity_groups", {})
-    total_clustered = sum(len(members) for members in clusters.values())
-    if clusters:
-        print(f"\nDetected {len(clusters)} visual variation cluster(s) ({total_clustered} stickers total):")
-        for cid, members in clusters.items():
-            print(f"   {cid} ({len(members)} variations): {', '.join(members)}")
+    print(f"Found {len(images)} image file(s) in {folder}")
+    non_candidate = [p.name for p in files if p not in images]
+    if non_candidate:
+        print(f"Note: {len(non_candidate)} non-candidate file(s) will fail preflight until removed/converted: "
+              + ", ".join(sorted(non_candidate)[:8]))
+
+    # Hard image gates are reported here as early signal; export/preflight enforces.
+    hard_problems: Dict[str, List[str]] = {}
+    quality_notes: Dict[str, List[str]] = {}
+    for p in images:
+        facts = get_image_facts(p)
+        errs = validate_image_hard(p, facts)
+        if errs:
+            hard_problems[p.name] = errs
+        quals = validate_image_quality(p, facts)
+        if quals:
+            quality_notes[p.name] = quals
+    if hard_problems:
+        print("\nImage hard-gate failures (export will fail until fixed):")
+        for name in sorted(hard_problems)[:15]:
+            print(f"   {name}: {'; '.join(hard_problems[name])}")
+        if len(hard_problems) > 15:
+            print(f"   ... and {len(hard_problems) - 15} more")
     else:
-        print("\nNo near-identical visual variation clusters detected.")
+        print("Image hard gates: pass (512x512 project policy, 300KB, PNG/WebP/APNG<=3s).")
 
-    save_draft(draft_path, draft)
+    draft = load_or_create_draft(
+        folder, draft_path, legacy_cache_path, images,
+        cluster_distance=args.cluster_distance, linkage=args.linkage,
+    )
+    read_only = bool(args.preflight or args.build_yaml)
+    if _apply_meta_overrides(draft, args):
+        print("Metadata updated; approval invalidated (re-approve after review).")
+        bump_revision(draft, "metadata changed")
+    _print_clusters(draft, images)
+    # Preflight and export are read-only: they validate the synchronized draft
+    # without persisting migration/sync side effects.
+    mutating = bool(args.scan or args.check_only or args.classify_kept or args.approve or args.prune)
+    if mutating and not read_only:
+        save_draft(draft_path, draft)
+
+    if args.prune:
+        stickers = draft.get("stickers", {}) or {}
+        on_disk_names = {p.name for p in images}
+        pruned = sorted(fn for fn in stickers if fn not in on_disk_names)
+        if pruned:
+            for fn in pruned:
+                del stickers[fn]
+            bump_revision(draft, f"pruned {len(pruned)} missing")
+            save_draft(draft_path, draft)
+            print(f"\nPruned {len(pruned)} missing entr(y/ies): {', '.join(pruned[:10])}" + (" ..." if len(pruned) > 10 else ""))
+        else:
+            print("\nPrune: nothing missing; draft already matches disk.")
 
     if args.scan or args.check_only:
         print(f"\nScan completed. Draft saved to: {draft_path}")
-        undecided = sum(
-            1 for i in draft["stickers"].values() if i.get("selection") == "undecided"
-        )
+        undecided = sum(1 for i in draft["stickers"].values() if i.get("selection") == "undecided")
         if undecided:
-            print(
-                f"Next step: open the review page and resolve {undecided} 'undecided' "
-                f"variation(s)\n  (click 'Keep Only' on the best one in each cluster):"
-            )
+            print(f"Next: resolve {undecided} 'undecided' candidate(s) in review (Keep/Exclude per cluster).")
         else:
-            print("Next step: open the review page to verify the cluster choices:")
+            print("Next: verify emojis in review, then approve:")
         print(f"  ./stickers curate {folder}")
         return
 
-    # Classification pass (Targeted: only for stickers where selection == 'keep' and emojis is missing)
-    run_classification = args.classify_kept or not (args.scan or args.check_only or args.build_yaml)
+    if args.preflight:
+        errors, warnings = validate_draft_for_export(draft, folder, strict_quality=args.strict_quality)
+        out_guess = folder / args.out
+        errors += verify_manifest_freshness(folder, draft, out_guess) if out_guess.exists() else []
+        if warnings:
+            print("\nQuality warnings:")
+            for w in warnings[:20]:
+                print(f"   {w}")
+        if errors:
+            print("\nPreflight FAILED:")
+            for e in errors:
+                print(f"   - {e}")
+            sys.exit(1)
+        print("\nPreflight passed.")
+        entries, _, _ = select_manifest_entries(draft, folder=folder)
+        meta = draft.get("meta", {}) or {}
+        print(f"  Title: {meta.get('title')}  Author: {meta.get('author')}  "
+              f"Stickers: {len(entries)}  Cover: {effective_cover(draft, entries)}  "
+              f"Manifest: {manifest_digest(str(meta.get('title')), str(meta.get('author')), effective_cover(draft, entries), entries)[:12]}")
+        return
+
+    if args.approve:
+        errs = approve_pack(draft)
+        if errs:
+            print("\nCannot approve:")
+            for e in errs:
+                print(f"   - {e}")
+            sys.exit(1)
+        save_draft(draft_path, draft)
+        print(f"\nApproved pack revision {draft['revision']} (digest {draft['approval']['digest'][:12]}). Export is now allowed if image gates pass.")
+        return
+
+    run_classification = args.classify_kept or not (args.build_yaml or args.approve or args.preflight)
     if run_classification:
         kept_unclassified = [
             folder / fn
             for fn, item in draft["stickers"].items()
             if item.get("selection") == "keep"
-            and not (item.get("emojis") and item.get("confidence", 0) > 0)
+            and not final_emoji_for_entry(item)
             and (folder / fn).exists()
         ]
-
         if kept_unclassified:
-            provider = get_configured_provider(args.provider, args.model)
-            print(
-                f"\nClassifying {len(kept_unclassified)} kept sticker(s) with {args.workers} workers..."
-            )
+            provider = get_configured_provider(args.model)
+            print(f"\nClassifying {len(kept_unclassified)} kept sticker(s) with {args.workers} workers (OpenRouter)...")
             done_count = [0]
 
             def process_sticker(p: Path):
                 res = classify_single_image(provider, p)
-                draft["stickers"][p.name]["emojis"] = res.get("emojis")
-                draft["stickers"][p.name]["suggested_emojis"] = res.get("emojis")
-                draft["stickers"][p.name]["reason"] = res.get("reason", "")
-                draft["stickers"][p.name]["confidence"] = res.get("confidence", 0.0)
-                draft["stickers"][p.name]["review_status"] = res.get("review_status", "suggested")
+                entry = draft["stickers"][p.name]
+                entry["suggested_emojis"] = res.get("suggested_emojis")
+                # Model suggestions never auto-approve: human promotes to final in review.
+                entry["reason"] = res.get("reason", "")
+                entry["confidence"] = res.get("confidence", 0.0)
+                entry["review_status"] = res.get("review_status", "suggested")
+                entry["tag_status"] = res.get("tag_status", "suggested")
+                entry["tag_source"] = res.get("tag_source", "openrouter")
+                invalidate_approval(draft, f"tag suggestion for {p.name}")
                 done_count[0] += 1
-                em_str = "".join(res.get("emojis", []))
-                print(
-                    f"[{done_count[0]}/{len(kept_unclassified)}] {p.name} -> {em_str} "
-                    f"({res['confidence']:.2f}) {res['reason']}",
-                    flush=True,
-                )
+                em_str = "".join(res.get("suggested_emojis") or []) or "(unresolved)"
+                print(f"[{done_count[0]}/{len(kept_unclassified)}] {p.name} -> {em_str} ({res['confidence']:.2f}) {res['reason']}", flush=True)
 
             with ThreadPoolExecutor(max_workers=args.workers) as executor:
                 list(executor.map(process_sticker, kept_unclassified))
-
+            bump_revision(draft, "tag suggestions")
             save_draft(draft_path, draft)
             print(f"Draft saved to {draft_path}")
+            print("Next: in review, promote each suggestion to a final single emoji, then --approve.")
         else:
-            print("\nAll kept stickers already classified.")
+            print("\nAll kept stickers already carry a final emoji.")
 
-    # Build stickers.yaml
-    entries, skipped_no_emoji, missing_files = select_manifest_entries(draft, folder=folder)
-
-    kept_count = sum(1 for item in draft["stickers"].values() if item.get("selection") == "keep")
-    excluded_count = sum(1 for item in draft["stickers"].values() if item.get("selection") == "exclude")
-    undecided_count = sum(1 for item in draft["stickers"].values() if item.get("selection") == "undecided")
-
-    if not entries:
-        print(
-            f"\nError: refusing to write an empty {args.out}.\n"
-            f"  {kept_count} sticker(s) are marked 'keep', but none can be written,\n"
-            f"  so the manifest would contain zero stickers and Signal would reject the upload."
-        )
-        if skipped_no_emoji:
-            print(f"  Kept but without an emoji: {', '.join(skipped_no_emoji[:10])}"
-                  + (" ..." if len(skipped_no_emoji) > 10 else ""))
-        if missing_files:
-            print(f"  Tagged but missing from disk: {', '.join(missing_files[:10])}"
-                  + (" ..." if len(missing_files) > 10 else ""))
-        print("\n  Fix this by either:")
-        print(f"    1. Running './stickers tag {folder}' to classify with a VLM, or")
-        print(f"    2. Assigning emojis in the review page, saving the draft to")
-        print(f"       {draft_path}, then re-running this command.")
+    # Export (default when --build-yaml or no other action): strict preflight first.
+    errors, warnings = validate_draft_for_export(draft, folder, strict_quality=args.strict_quality)
+    if warnings:
+        print("\nQuality warnings (non-blocking; use --strict-quality to enforce):")
+        for w in warnings[:15]:
+            print(f"   {w}")
+    if errors:
+        print(f"\nExport blocked by {len(errors)} preflight error(s):")
+        for e in errors:
+            print(f"   - {e}")
+        # A failed export must not leave an apparently usable old YAML.
+        out_guess = folder / args.out
+        if out_guess.exists():
+            try:
+                out_guess.unlink()
+                print(f"Removed stale {out_guess} so it cannot be mistaken for a good build.")
+            except Exception:
+                pass
+            try:
+                receipt_path_for_yaml(out_guess).unlink()
+            except Exception:
+                pass
         sys.exit(1)
 
-    out_file = build_stickers_yaml(
-        folder=folder,
-        draft=draft,
-        title=args.title or draft["meta"]["title"],
-        author=args.author or draft["meta"]["author"],
-        cover=args.cover,
-        out_name=args.out,
-    )
+    try:
+        out_file = build_stickers_yaml(
+            folder=folder, draft=draft,
+            title=args.title or draft["meta"].get("title", ""),
+            author=args.author or draft["meta"].get("author", ""),
+            cover=args.cover, out_name=args.out,
+        )
+    except ValueError as e:
+        print(f"\nExport failed: {e}")
+        out_guess = folder / args.out
+        if out_guess.exists():
+            try:
+                out_guess.unlink()
+            except Exception:
+                pass
+        sys.exit(1)
     print(f"\nGenerated Signal stickers YAML: {out_file.resolve()}")
-
-    # Summary
-    print(f"Pack Summary: {len(entries)} Written, {excluded_count} Excluded, {undecided_count} Undecided")
-
-    if undecided_count:
-        print(
-            f"Note: {undecided_count} sticker(s) are still 'undecided' and were NOT written.\n"
-            f"      Open './stickers review {folder}' and use 'Keep Only' on each cluster,\n"
-            f"      or click 'Exclude', to settle them."
-        )
-    if skipped_no_emoji:
-        print(
-            f"Warning: {len(skipped_no_emoji)} 'keep' sticker(s) had no emoji and were skipped:\n"
-            f"         {', '.join(skipped_no_emoji[:10])}"
-            + (" ..." if len(skipped_no_emoji) > 10 else "")
-        )
-    if missing_files:
-        print(
-            f"Warning: {len(missing_files)} tagged sticker(s) are no longer on disk and\n"
-            f"         were skipped: {', '.join(missing_files[:10])}"
-            + (" ..." if len(missing_files) > 10 else "")
-            + "\n         Re-run './stickers scan' to prune them from the draft."
-        )
-    if len(entries) > 200:
-        print(f"Warning: Signal allows at most 200 stickers per pack; this manifest has {len(entries)}.")
-
-    print(f"\nNext step: preview or upload the pack:")
-    print(f"  ./stickers preview {folder}")
-    print(f"  ./stickers upload {folder}")
+    receipt = json.loads(receipt_path_for_yaml(out_file).read_text(encoding="utf-8"))
+    entries, _, _ = select_manifest_entries(draft, folder=folder)
+    print(f"Pack: {receipt['title']} by {receipt['author']} — {len(entries)} stickers, cover {receipt['cover']}, manifest {receipt['manifest_digest'][:12]}")
+    uploaded_marker = folder / "uploaded.yaml"
+    if uploaded_marker.exists():
+        print(f"Note: {uploaded_marker} exists from a prior upload; verify before re-uploading.")
+    print(f"\nNext: ./stickers preview {folder}  (then ./stickers upload {folder} --yes for noninteractive)")
 
 
 if __name__ == "__main__":

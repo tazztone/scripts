@@ -47,7 +47,13 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install pytest requests python-dotenv Pillow piexif safetensors
+        python -m pip install -r python/signal-stickers/requirements.txt
 
     - name: Run Python tests
       run: |
         pytest python
+
+    - name: Run signal-stickers runner checks
+      run: |
+        bash -n python/signal-stickers/run.sh
+        bash python/signal-stickers/tests/test_runner.sh

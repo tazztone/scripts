@@ -162,49 +162,145 @@ def extract_emojis(text: str) -> List[str]:
     return found
 
 
-def validate_emoji_sequence(text: str) -> Tuple[bool, List[str], Optional[str]]:
-    """Strictly validates that text consists solely of 1-3 registered emojis.
+def _split_graphemes(s: str) -> List[str]:
+    """Naive extended-grapheme splitter sufficient for single-emoji counting.
 
-    Returns:
-        (is_valid, extracted_emojis, error_message)
+    Groups ZWJ sequences, variation selectors, skin-tone modifiers, tag
+    characters, and regional-indicator pairs so a composite emoji such as
+    ``😮‍💨`` or ``☹️`` counts as one grapheme while ``🤔🤨`` counts as two.
+    """
+    clusters: List[str] = []
+    cur = ""
+    for ch in s:
+        if not cur:
+            cur = ch
+            continue
+        o = ord(ch)
+        if (
+            ch in ("‍", "️", "︎")
+            or "\u200d" == ch
+            or "\ufe0f" == ch
+            or "\ufe0e" == ch
+            or 0x1F3FB <= o <= 0x1F3FF
+            or 0xE0020 <= o <= 0xE007F
+        ):
+            cur += ch
+        elif cur.endswith("‍") or cur.endswith("\u200d"):
+            cur += ch
+        elif (
+            len(cur) == 1
+            and 0x1F1E6 <= ord(cur) <= 0x1F1FF
+            and 0x1F1E6 <= o <= 0x1F1FF
+        ):
+            cur += ch
+        else:
+            clusters.append(cur)
+            cur = ch
+    if cur:
+        clusters.append(cur)
+    return clusters
+
+
+def _grapheme_looks_like_emoji(g: str) -> bool:
+    """Heuristic: a single grapheme containing emoji content, not text."""
+    import unicodedata
+
+    if not g or not g.strip():
+        return False
+    for ch in g:
+        if ch in ("‍", "️", "︎") or ch in ("\u200d", "\ufe0f", "\ufe0e"):
+            continue
+        o = ord(ch)
+        if 0x1F3FB <= o <= 0x1F3FF or 0xE0020 <= o <= 0xE007F:
+            continue
+        if "A" <= ch <= "Z" or "a" <= ch <= "z" or "0" <= ch <= "9":
+            return False
+    for ch in g:
+        if ch in ("‍", "️", "︎") or ch in ("\u200d", "\ufe0f", "\ufe0e"):
+            continue
+        o = ord(ch)
+        if ch in EMOJI_REGISTRY:
+            return True
+        if (
+            0x231A <= o <= 0x231B
+            or 0x23E9 <= o <= 0x23F3
+            or 0x25AA <= o <= 0x25FF
+            or 0x2600 <= o <= 0x27BF
+            or 0x2B00 <= o <= 0x2BFF
+            or 0x1F000 <= o <= 0x1FAFF
+            or o in (0x2764, 0x2665, 0x2763, 0x2767, 0x2733, 0x2744, 0x2B05, 0x2B06, 0x2B07)
+        ):
+            return True
+        try:
+            cat = unicodedata.category(ch)
+        except Exception:
+            cat = ""
+        if cat in ("So", "Sk"):
+            return True
+    return False
+
+
+def validate_single_emoji(text: str) -> Tuple[bool, List[str], Optional[str]]:
+    """Validates exactly one Unicode emoji grapheme (registry or legitimate manual pick).
+
+    The fixed registry remains the suggestion source, but manual picks outside
+    it are accepted when they form a single emoji grapheme.
     """
     if not isinstance(text, str):
         return False, [], "Input must be a string."
     clean = "".join(text.split())
     if not clean:
         return False, [], "Emoji assignment cannot be empty."
+    graphemes = _split_graphemes(clean)
+    if len(graphemes) != 1:
+        return False, [], f"Must be exactly one emoji (found {len(graphemes)})."
+    if not _grapheme_looks_like_emoji(graphemes[0]):
+        return False, [], "Contains invalid or unregistered characters."
+    return True, [graphemes[0]], None
 
-    extracted = extract_emojis(clean)
-    reconstructed = "".join(extracted)
-    if reconstructed != clean:
-        return False, extracted, "Contains invalid or unregistered characters."
-    if not (1 <= len(extracted) <= 3):
-        return False, extracted, f"Must have 1 to 3 emojis (found {len(extracted)})."
-    return True, extracted, None
+
+def is_valid_single_emoji(text: str) -> bool:
+    """Checks whether text is exactly one emoji grapheme."""
+    valid, _, _ = validate_single_emoji(text)
+    return valid
+
+
+def validate_emoji_sequence(text: str) -> Tuple[bool, List[str], Optional[str]]:
+    """Strictly validates exactly one emoji grapheme (supported output contract).
+
+    Returns:
+        (is_valid, extracted_emojis, error_message)
+    """
+    return validate_single_emoji(text)
 
 
 def format_emoji_sequence(
-    emojis: Any, max_emojis: int = 3, fallback: Optional[str] = "🙂"
+    emojis: Any, max_emojis: int = 1, fallback: Optional[str] = None
 ) -> Optional[str]:
-    """Normalizes an emoji list or string to a compact string of up to max_emojis."""
+    """Strict single-emoji normalization: no silent truncation or default tags.
+
+    Returns the emoji only when the input is exactly one valid grapheme;
+    otherwise returns `fallback` (default None). Export paths must validate
+    explicitly instead of relying on this helper.
+    """
+    _ = max_emojis
+    candidates: List[str] = []
     if isinstance(emojis, str):
-        extracted = extract_emojis(emojis)
-    elif isinstance(emojis, (list, tuple)):
-        extracted = []
-        for item in emojis:
-            for e in extract_emojis(str(item)):
-                if e not in extracted:
-                    extracted.append(e)
+        candidates = [emojis]
+    elif isinstance(emojis, (list, tuple)) and len(emojis) == 1 and isinstance(emojis[0], str):
+        candidates = [emojis[0]]
     else:
         return fallback
 
-    if not extracted:
-        return fallback
-    return "".join(extracted[:max_emojis])
+    for cand in candidates:
+        valid, vals, _ = validate_single_emoji(cand)
+        if valid:
+            return vals[0]
+    return fallback
 
 
 def is_valid_emoji_sequence(seq: str) -> bool:
-    """Checks if sequence contains solely 1-3 valid registered emojis."""
+    """Checks if sequence is exactly one valid emoji grapheme."""
     valid, _, _ = validate_emoji_sequence(seq)
     return valid
 

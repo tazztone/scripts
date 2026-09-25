@@ -11,40 +11,37 @@ the uploadable `stickers.yaml`.
 ## Quick Start
 
 ```bash
-# 0. Check your environment (Python, deps, API key, pack folder)
-./stickers doctor
+# 0. Check the core environment (add a folder for pack preflight)
+./stickers doctor ./my_pack
 
-# 1. Inventory images, check Signal constraints, find duplicate variations
-./stickers scan
+# 1. Inventory images, hard-gate check, group visually similar candidates
+./stickers scan ./my_pack
 
-# 2. Open the review page, pick the best variation per cluster
-./stickers curate          # opens your browser automatically
+# 2. Open the review page and resolve every Undecided candidate
+./stickers curate ./my_pack --serve   # loopback direct-save; opens automatically
 
-# 3. Let a VLM suggest emojis for the stickers you kept
-./stickers tag
+# 3. Let OpenRouter suggest one emoji for kept stickers lacking a final pick
+./stickers tag ./my_pack
 
-# 4. In the browser: verify emojis, check contrast, click "Save Draft (JSON)",
-#    then copy the downloaded file back into your pack folder
-cp ~/Downloads/pack_draft.json ./webp/
+# 4. In the browser: resolve Undecided, set exactly one emoji per kept sticker,
+#    set title/author/cover, click Approve Pack, then Save.
+#    With --serve the Save button writes pack_draft.json directly.
+#    Static fallback: Download draft and copy it over pack_draft.json.
 
-# 5. Build the manifest
-./stickers export
+# 5. Approve and build. Approval is one gate with two equivalent entries:
+#    browser Approve Pack + Save (server re-validates and persists it), or
+#    CLI approval for non-browser flows. No confidence-threshold bypass.
+./stickers approve ./my_pack --title "My Pack" --author "me"
+./stickers export ./my_pack
 
-# 6. Preview, then upload
-./stickers preview
-./stickers upload
+# 6. Preview, then upload (confirmation required; --yes for scripts)
+./stickers preview ./my_pack
+./stickers upload ./my_pack
 ```
 
-All commands default to the `./webp` folder. Pass a different one as the first argument:
-
-```bash
-./stickers scan ./my_stickers
-```
-
-> [!IMPORTANT]
-> Step 4 is not optional. The review page is a static file and cannot write to your disk,
-> so **every edit you make in the browser exists only in that tab**. Save the draft and copy
-> it back before exporting, or your changes are lost when you close the page.
+A pack `<folder>` is required for every pack action; nothing defaults to a bundled
+pack. From the repo root use `python/signal-stickers/stickers <action> <folder>`;
+inside `python/signal-stickers` use `./stickers <action> <folder>`.
 
 ---
 
@@ -55,34 +52,37 @@ The workflow is a loop around one file, `pack_draft.json`:
 ```
   images on disk
         |
-        |  scan          group near-identical images, check Signal constraints
+        |  scan          group visually similar candidates, hard-gate check
         v
-  pack_draft.json  <------ tag        suggest emojis for kept stickers
+  pack_draft.json  <------ tag        OpenRouter suggests one emoji per kept sticker
         |                  ^
-        |                  |  review     browser page: pick variations, edit emojis
-        |                  |
-        |  export
+        |                  |  review     browser: resolve Undecided, one emoji, title/author/cover
+        |                  |  approve    human gate for the current revision
+        |  export (preflight + receipt)
         v
-  stickers.yaml  ------->  preview / upload  (signal-sticker-tool)
+  stickers.yaml (+ receipt)  ------->  preview / upload  (re-verify, then tool)
 ```
 
-`pack_draft.json` in your pack folder is the single source of truth. `scan` and `tag` write
-it, the review page reads it, and `export` turns it into `stickers.yaml`. Losing it means
-re-classifying from scratch.
+`pack_draft.json` (schema v3) in your pack folder is the sole source of truth. `scan`
+and `tag` write it, the review page reads/writes it, `approve` gates it, and `export`
+turns it into `stickers.yaml` + receipt. `preview`/`upload` rebuild or verify the
+manifest against the current draft and hashes immediately before use.
 
 ### Workflow Commands
 
 | Command | What it does | API calls |
 | :--- | :--- | :--- |
-| `./stickers doctor` | Verify Python, dependencies, API key, and pack folder (non-zero exit if anything is missing) | no |
-| `./stickers scan` | Inventory images, validate Signal constraints, cluster near-identical variations | no |
-| `./stickers curate` | `scan`, then generate and open the review page | no |
-| `./stickers tag` | Ask a VLM for emoji suggestions on `keep` stickers, then rebuild the review page | **yes** |
-| `./stickers review` | Regenerate and open the review page only | no |
-| `./stickers export` | Write `stickers.yaml` from the approved draft | no |
-| `./stickers preview` | Render the pack locally with `signal-sticker-tool` | no |
-| `./stickers upload` | Encrypt and upload to Signal, printing a share link | no |
-| `./stickers help` | Show usage | no |
+| `./stickers doctor [<folder>]` | Core env/capability check; with folder also runs pack preflight | no |
+| `./stickers scan <folder>` | Inventory, hard-gate report, cluster similar candidates | no |
+| `./stickers curate <folder> [--serve]` | `scan`, then generate/open the review page | no |
+| `./stickers tag <folder>` | OpenRouter suggestions for `keep` stickers lacking final emoji | **yes** |
+| `./stickers review <folder> [--serve]` | Regenerate/open the review page only | no |
+| `./stickers approve <folder>` | Human approval for the current revision | no |
+| `./stickers preflight <folder>` | Strict export/upload preflight only | no |
+| `./stickers export <folder>` | Preflight + write `stickers.yaml` + receipt | no |
+| `./stickers preview <folder>` | Re-verify receipt + render with `signal-sticker-tool` | no |
+| `./stickers upload <folder> [--yes]` | Re-verify + confirm + upload to Signal | no |
+| `./stickers help` | Show usage (also shown with no arguments) | no |
 
 `./stickers` is a symlink to `run.sh`; both work identically. The runner finds the workspace
 `.venv` on its own, so you do not need to activate anything.
@@ -92,27 +92,27 @@ re-classifying from scratch.
 ## Installation
 
 ```bash
-# From the repository root
-.venv/bin/pip install -r python/signal-stickers/requirements.txt
+# From the repository root — core (scan/curate/tag/export/review/approve)
+.venv/bin/python -m pip install -r python/signal-stickers/requirements.txt
+# or: uv pip install -r python/signal-stickers/requirements.txt
+
+# Only for preview/upload
+.venv/bin/python -m pip install -r python/signal-stickers/requirements-upload.txt
 ```
 
-This installs `PyYAML`, `Pillow`, and `signal-sticker-tool` (needed for `preview` / `upload`).
-The scripts auto-re-exec into the workspace `.venv`, so a bare `python classify_and_build.py`
-also works.
-
-Confirm with `./stickers doctor`.
+The scripts auto-re-exec into the workspace `.venv`, so a bare
+`python classify_and_build.py` also works. Confirm with `./stickers doctor`.
 
 ### API Keys
 
-`tag` is the only step that needs a key. Set whichever provider you prefer:
+OpenRouter-only. `tag` is the only step that needs a key:
 
 ```bash
-export OPENROUTER_API_KEY=sk-or-v1-...   # default provider
-export GEMINI_API_KEY=...                # or GOOGLE_API_KEY=...
-export ANTHROPIC_API_KEY=sk-ant-...
+export OPENROUTER_API_KEY=sk-or-v1-...
 ```
 
-With more than one set, OpenRouter wins. Pass `--provider` to be explicit.
+Model override: `--model <slug>` (default `inclusionai/ling-3.0-flash-vl`).
+Provider failures leave entries unresolved/error — never `😐` fallback tags.
 
 ---
 
@@ -123,51 +123,67 @@ are base64-embedded, so expect roughly 1 MB per sticker) and works offline.
 
 | Control | Purpose |
 | :--- | :--- |
-| **Filter tabs** | All / Clusters / Needs Review / Kept / Excluded |
+| **Filter tabs** | All / Clusters / Needs Review / Kept / Undecided / Excluded |
 | **Sort tabs** | By Cluster, By Emoji, By Filename, By Confidence |
 | **Theme tabs** | Light, Dark, White, Black — check contrast on transparent edges |
 | **Search** | Match filename, emoji, or cluster id |
-| **⚡ Keep Only** | On a clustered card: keeps that one, excludes its siblings |
-| **✕ Exclude / ↺ Restore** | Mark a sticker out of (or back into) the pack |
-| **Emoji field** | Type up to 3 emojis, or use the `+ Add` dropdown |
-| **Save Draft (JSON)** | Download your edits as `pack_draft.json` — **this is the one to use** |
-| **Export stickers.yaml** | Download a manifest snapshot (see the note below) |
+| **⚡ Keep Only** | On a clustered card: keeps that one, explicitly excludes siblings |
+| **Keep? / ✕ Exclude / ↺ Keep / Later** | Explicit tri-state: Undecided is preserved, never auto-promoted |
+| **Emoji field** | Exactly one emoji (registry suggests; legitimate manual picks allowed) |
+| **Title / Author / Cover** | Required pack metadata; edits invalidate approval |
+| **Save** | Loopback direct-save with `--serve` (digest compare-and-swap; page regenerates); otherwise download fallback |
+| **Approve Pack** | Same gate as CLI `--approve`: server re-validates and persists it on Save |
 
-Cards are outlined by confidence: red below 0.6, orange below 0.8, neutral above.
-The **Needs Review** filter collects low-confidence and unassigned stickers.
+Cards are outlined by confidence (warning/triage only — never an export gate): red
+below 0.6, orange below 0.8, neutral above. The **Needs Review** filter collects
+low-confidence, unassigned, error, and Undecided stickers.
 
-> [!NOTE]
-> The **Export stickers.yaml** button downloads a file to your browser's download folder, which
-> `signal-sticker-tool` will not read. To build the manifest in the pack folder, use
-> **Save Draft (JSON)**, copy it back over `pack_draft.json`, then run `./stickers export`.
+The browser never generates `stickers.yaml` (single Python implementation only).
+`export`/`preview`/`upload` rebuild or verify the manifest from the current draft
+and image hashes immediately before use; existing `stickers.yaml` files are never
+trusted by existence alone.
 
 ### Getting your edits back into the pack
 
-1. Click **Save Draft (JSON)**.
-2. Copy the downloaded `pack_draft.json` into your pack folder, overwriting the old one.
-3. Run `./stickers export`.
+Turnkey: `./stickers curate ./my_pack --serve`, then click **Save** (writes the
+draft directly; revision-checked, loopback-only with a session token).
 
-The page warns before you close it with unsaved changes.
+Static fallback:
+
+1. Click **Download draft (fallback)**.
+2. Copy the downloaded `pack_draft.json` over your pack folder's draft.
+3. Run `./stickers export ./my_pack`.
+
+The page warns before you close it with unsaved changes (baseline-compared dirty
+state; filter/sort/theme never mark dirty).
 
 ---
 
 ## Signal Sticker Requirements
 
-Per the [official Signal guidelines](https://support.signal.org/hc/en-us/articles/360031836512-Stickers#sticker_creator):
+Per the [official Signal guidelines](https://support.signal.org/hc/en-us/articles/360031836512-Stickers#sticker_creator),
+split here into hard gates (export fails) versus quality recommendations (warnings
+unless `--strict-quality`).
 
-| Requirement | Specification |
-| :--- | :--- |
-| **Dimensions** | Exactly **512 x 512 px** |
-| **Max file size** | **300 KB** per sticker |
-| **Format** | **PNG** or **WebP** (animated: **APNG** <= 3 s, 30/60 FPS; no GIFs) |
-| **Margins** | ~**16 px** transparent margin |
-| **Background** | Transparent; add outlines for contrast on light and dark themes |
-| **Emoji mapping** | **1 to 3** emojis in `chr`, used for sticker suggestions |
-| **Pack limit** | **200** stickers |
-| **Cover** | 512 x 512 px PNG or WebP (defaults to the first sticker) |
+Hard gates (Signal/tool):
 
-`scan` reports every violation it finds. Note the actual Signal limit is 200 stickers, and
-`export` warns if your manifest exceeds it.
+- Static PNG or WebP; animated APNG only
+- 3 s animation maximum
+- 300 KB maximum per sticker
+- 200 stickers maximum
+- Exactly one emoji per sticker (`chr`)
+- Required title/author; valid PNG/WebP cover (defaults to first kept sticker)
+- Current, approved draft state; no missing/extra files or hash mismatches
+
+Quality warnings (recommendations, not server rejections):
+
+- Transparent background; contrast outline for light/dark themes
+- Approximately 16 px transparent margin
+- 30/60 FPS; seamless looping; first frame expressing the main idea
+
+Project safe-output policy: exactly 512x512 px is enforced at export. Signal
+states that it resizes images, so this is our own safe-output rule rather than a
+proven server-side rejection.
 
 > [!WARNING]
 > **Uploaded packs cannot be edited.** Signal gives you no way to change emojis or remove
@@ -179,17 +195,21 @@ Per the [official Signal guidelines](https://support.signal.org/hc/en-us/article
 
 | File | Role |
 | :--- | :--- |
-| `pack_draft.json` | **Source of truth.** Selection, clusters, emoji suggestions, confidence. |
-| `review.html` | Generated review page. Safe to delete; rebuilt by `curate`. |
-| `stickers.yaml` | Build output consumed by `signal-sticker-tool`. |
-| `classification_cache.json` | Legacy. Migrated into the draft on first run. |
+| `pack_draft.json` | **Sole source of truth.** Schema v3: revision, title/author/cover, selection, hashes, clusters, suggested + final single emoji, tag source/status, confidence/reason, approval. |
+| `review.html` | Generated review page. Safe to delete; rebuilt by `curate`/`review`. |
+| `stickers.yaml` | Build output consumed by `signal-sticker-tool`. Never trusted without its receipt. |
+| `stickers.yaml.receipt.json` | Build receipt: draft digest, ordered files/hashes, title/author/cover, manifest digest, builder version. |
+| `uploaded.yaml` | Prior-upload marker (if present); `upload` warns before re-uploading. |
+| `classification_cache.json` | Legacy. Migrated once into the draft as pending suggestions, never pre-approved. |
 
-All four live in your **pack folder** (e.g. `./webp/`), not next to the scripts, so multiple
-packs can be curated independently. They are gitignored for that reason.
+All live in your **pack folder**, not next to the scripts, so multiple packs can be
+curated independently.
 
-Note that only `keep` stickers with an emoji assignment **and an image still on disk** reach
-`stickers.yaml`. `export` reports how many were written, skipped, or left undecided, and
-refuses to write an empty manifest.
+Only `keep` stickers with exactly one valid final emoji **and an image still on
+disk** reach `stickers.yaml`. Suggested-only tags do not qualify. `export` hard-fails
+on undecided, unapproved, missing/extra, hash-mismatch, invalid emoji, image-gate,
+count, cover, or stale-manifest problems — and removes a stale YAML on failure so it
+cannot be mistaken for a good build. Draft and YAML writes are atomic.
 
 ---
 
@@ -201,91 +221,105 @@ Prefer `./stickers`. For anything the runner does not wrap, call the Python dire
 ### `classify_and_build.py`
 
 ```bash
-python classify_and_build.py ./webp --scan
+python classify_and_build.py ./my_pack --scan
 ```
 
 | Flag | Default | Description |
 | :--- | :--- | :--- |
-| `folder` | *(required)* | Directory containing sticker images |
-| `--scan` | off | Inventory, validate, and cluster without API calls |
+| `folder` | *(required, explicit)* | Directory containing sticker images |
+| `--scan` | off | Inventory, hard-gate report, and cluster (no API calls) |
 | `--check-only` | off | Alias for `--scan` |
-| `--classify-kept` | off | Classify only stickers marked `keep` |
-| `--build-yaml` | off | Write `stickers.yaml` from kept stickers |
-| `--title` | keep draft value | Pack title. Omitting it preserves the title in `pack_draft.json`. |
-| `--author` | keep draft value | Pack author |
-| `--cover` | first sticker | Cover image filename |
-| `--provider` | auto-detect | `openrouter`, `gemini`, or `anthropic` |
-| `--model` | provider default | e.g. `inclusionai/ling-3.0-flash-vl`, `gemini-2.5-flash` |
+| `--classify-kept` | off | Suggest one emoji for `keep` stickers lacking a final emoji |
+| `--approve` | off | Human approval gate for the current revision |
+| `--preflight` | off | Strict export/upload preflight only (read-only; never writes the draft) |
+| `--build-yaml` | off | Preflight + write `stickers.yaml` + receipt |
+| `--prune` | off | With `--scan`: explicitly drop entries for missing files |
+| `--cluster-distance` | `6` | dHash Hamming edge threshold |
+| `--linkage` | `single` | `single` (may chain) or `complete` (prevents chaining) |
+| `--strict-quality` | off | Promote quality recommendations to errors |
+| `--title` | keep draft value | Explicit pack title (required before approve) |
+| `--author` | keep draft value | Explicit pack author (required before approve) |
+| `--cover` | first kept | Cover image filename |
+| `--model` | OpenRouter default | e.g. `inclusionai/ling-3.0-flash-vl` |
 | `--out` | `stickers.yaml` | Output filename |
 | `--draft` | `pack_draft.json` | Draft state file |
-| `--cache` | `classification_cache.json` | Legacy cache, auto-migrated |
-| `--workers` | `4` | Parallel VLM requests |
+| `--cache` | `classification_cache.json` | Legacy cache, migrated once as pending |
+| `--workers` | `4` | Parallel suggestion requests |
+| `--yes` | off | Noninteractive export marker (upload confirmation lives in runner) |
 
-With no action flag, the tool classifies kept stickers and then writes the manifest.
-
-`--dedupe` and `--resume` are accepted but do nothing; clustering always runs and the draft
-is always reused.
+With no action flag, the tool suggests tags for kept stickers lacking a final emoji
+and then runs the strict export path. `--dedupe` and `--resume` are accepted but do
+nothing.
 
 ### `review.py`
 
 ```bash
-python review.py ./webp
+python review.py ./my_pack
+python review.py ./my_pack --serve
 ```
 
 | Flag | Default | Description |
 | :--- | :--- | :--- |
-| `folder` | *(required)* | Pack folder |
-| `--draft` | `pack_draft.json` | Draft to read |
-| `--yaml` | `stickers.yaml` | Manifest to fall back on when no draft exists |
+| `folder` | *(required, explicit)* | Pack folder |
+| `--draft` | `pack_draft.json` | Draft to read (sole source; YAML never trusted) |
+| `--yaml` | `stickers.yaml` | Legacy name only; never used as input |
+| `--serve` | off | Loopback save server (127.0.0.1, token, revision-checked) |
+| `--port` | `0` | Loopback port (0 = random) |
 
 ---
 
 ## How Classification Works
 
 A perceptual hash (64-bit dHash) is computed for every image, compositing transparency over
-neutral grey first so hidden RGB in transparent pixels cannot distort the hash. Images whose
-Hamming distance is within a threshold are grouped into connected components and flagged as
-variations of one another.
+neutral grey first so hidden RGB in transparent pixels cannot distort the hash. Images within
+`--cluster-distance` (default 6) are grouped as visually similar candidates requiring review
+— not proven duplicates. Single linkage (default) may chain through intermediates; `--linkage
+complete` prevents chaining. Scan reports per-cluster member count and median/max all-pairs
+distance plus pair data; large or high-max clusters are surfaced as suspicious.
 
-Emojis come from a fixed registry in `emojis.py` (94 entries). Every assignment is validated
-against it: 1 to 3 registered emojis, nothing else. Invalid input falls back to `😐` with
-confidence `0.0` and is flagged for review rather than being dropped.
+One emoji per sticker is the supported output contract. The fixed registry in `emojis.py`
+remains the suggestion source, but legitimate manual picks outside it are accepted when they
+form a single emoji grapheme. Invalid input is an error, never a silent `🙂`/`😐` fallback;
+provider failures stay unresolved/error and block approval/export until re-tagged.
 
-Providers are plain `urllib` HTTP calls — no vendor SDKs:
+OpenRouter is the only provider (plain `urllib`, no vendor SDK; default
+`inclusionai/ling-3.0-flash-vl`, key `OPENROUTER_API_KEY`).
 
-| Provider | Default model | Key |
-| :--- | :--- | :--- |
-| OpenRouter | `inclusionai/ling-3.0-flash-vl` | `OPENROUTER_API_KEY` |
-| Google Gemini | `gemini-2.5-flash` | `GEMINI_API_KEY` / `GOOGLE_API_KEY` |
-| Anthropic | `claude-3-7-sonnet-latest` | `ANTHROPIC_API_KEY` |
-
-Each sticker costs one request. Only `keep` stickers without a confident assignment are sent,
-so re-running `tag` after new curation is cheap.
+Each sticker costs one request. Only `keep` stickers lacking a valid final emoji are sent,
+and suggestions never auto-approve — a human promotes each to final in review, then records
+`--approve` for the current revision. Any later metadata/selection/tag/cover/hash change
+invalidates approval. Confidence stays a UI warning/triage signal only.
 
 ---
 
 ## Troubleshooting
 
-**`No API key found`** — `tag` needs one of the three environment variables. See
-[API Keys](#api-keys).
+**`OPENROUTER_API_KEY ... not set`** — `tag` needs it. See [API Keys](#api-keys).
 
 **`Error: 'signal-sticker-tool' is not installed`** — only affects `preview` / `upload`:
 
 ```bash
-.venv/bin/pip install signal-sticker-tool
+.venv/bin/python -m pip install -r python/signal-stickers/requirements-upload.txt
 ```
 
-**`refusing to write an empty stickers.yaml`** — `export` found no `keep` sticker it could
-write. Usually means the draft has not been classified yet, or your saved draft landed in the
-wrong folder. Run `./stickers tag`, or check that the `pack_draft.json` you copied back is the
-one in your pack folder.
+**`Export blocked by N preflight error(s)`** — resolve every listed item (undecided,
+unapproved, missing/placeholder title/author, invalid single emoji, provider-error tags,
+missing/extra files, hash mismatch, image hard-gates, >200, bad cover, unsupported
+formats, stale manifest). A failed export removes a stale YAML so it cannot be reused.
+`preview`/`upload` re-run the same preflight plus receipt verification.
 
-**`tagged sticker(s) are no longer on disk`** — the draft references images you deleted or
-moved. They are excluded from the manifest so the upload cannot fail on them. Re-run
-`./stickers scan` to prune them from the draft permanently.
+**`Draft references missing file`** — restore the image or run explicit
+`scan --prune` (pruning is never silent; approval is invalidated).
 
-**Your review edits vanished** — they only ever existed in the browser tab. Click
-**Save Draft (JSON)** before closing.
+**`draft ... exists but cannot be parsed`** — the draft is corrupt and will not be
+overwritten. Back it up, then re-run with `--reset-draft` (which archives the old
+file to `pack_draft.json.bak` first).
+
+**`On-disk file not in draft`** — re-run `scan`; new images are never silently omitted.
+Renames with unchanged hashes preserve decisions automatically.
+
+**Your review edits vanished** — with static `review.html` they only existed in the tab.
+Use `curate --serve` + **Save**, or Download + copy-back before closing.
 
 **`review.html` is huge and slow** — every image is base64-embedded, so roughly 1 MB per
 sticker. For large packs, review in batches by pointing at a subset folder.
@@ -323,10 +357,14 @@ regenerable; only deleting the draft loses classification work.
 ### Upload
 
 ```bash
-./stickers upload        # or: cd ./webp && signal-sticker-tool upload
+./stickers upload ./my_pack              # prompts YES (irreversible)
+./stickers upload ./my_pack --yes        # noninteractive
 ```
 
-You get a shareable link like `https://signal.art/addstickers/#pack_id=...&pack_key=...`.
+Before the external uploader runs, the runner re-runs preflight, verifies the
+receipt (never trusts YAML by existence), prints the final title/author/count/cover/digest,
+detects `uploaded.yaml`, and requires confirmation. You get a shareable link like
+`https://signal.art/addstickers/#pack_id=...&pack_key=...`.
 
 ---
 
@@ -351,7 +389,7 @@ From the repository root:
   draft is always reused. They exist so old command lines keep working.
 - `build_disambiguation_prompt()` and `detect_visual_duplicates()` in
   `classify_and_build.py` are dead code retained only for backwards compatibility.
-- The review page cannot write to disk, so browser edits require a manual
-  **Save Draft (JSON)** and copy-back. This is inherent to a static page; a local HTTP
-  server would remove the step.
+- Static `review.html` cannot write to disk; use `curate --serve` for turnkey saves
+  or the download fallback. Served saves are loopback-only (127.0.0.1), token-gated,
+  revision-checked, with restrictive CSP and no CORS.
 - `review.html` embeds every image as base64, so page size grows linearly with the pack.
