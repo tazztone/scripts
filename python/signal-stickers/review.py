@@ -43,6 +43,12 @@ try:
 except ImportError:
     from .emojis import EMOJI_REGISTRY, extract_emojis, format_emoji_sequence, validate_single_emoji
 
+# Single draft-state implementation shared with classify_and_build.py.
+try:
+    from draft_state import DraftError, load_draft_for_review
+except ImportError:
+    from .draft_state import DraftError, load_draft_for_review
+
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1124,24 +1130,15 @@ def generate_review_html(
     save_token: Optional[str] = None,
     save_digest: Optional[str] = None,
 ) -> Path:
-    """Generates the review page from pack_draft.json (sole source; no YAML trust)."""
+    """Generates the review page from pack_draft.json (sole source; no YAML trust).
+
+    Fail-closed: a present-but-unreadable draft raises DraftError instead of
+    rendering an empty replacement page. Only a missing file yields an empty
+    draft. v2/legacy drafts migrate via the shared loader.
+    """
     draft_file = draft_path or (folder / "pack_draft.json")
-    draft_data: Dict[str, Any] = {}
-    if draft_file.exists():
-        try:
-            draft_data = json.loads(draft_file.read_text(encoding="utf-8"))
-        except Exception as e:
-            print(f"Warning: Could not read {draft_file}: {e}")
-    if not isinstance(draft_data, dict) or "stickers" not in draft_data:
-        draft_data = {
-            "version": 3,
-            "revision": 1,
-            "pack_state": "in_progress",
-            "approval": None,
-            "meta": {"title": "", "author": "", "cover": None},
-            "similarity_groups": {},
-            "stickers": {},
-        }
+    # Shared loader aborts on malformed/incomplete/unmigratable drafts.
+    draft_data = load_draft_for_review(draft_file)
     draft_data.setdefault("revision", 1)
     draft_data.setdefault("pack_state", "in_progress")
     draft_data.setdefault("approval", None)
@@ -1346,12 +1343,13 @@ def create_review_server(folder: Path, draft_path: Path, port: int = 0):
     Returns (server, token, state). Compare-and-swap uses the persisted draft
     digest, so a stale page cannot overwrite a draft changed by a later scan.
     The served page is regenerated after every accepted save.
+
+    Fail-closed: a present-but-unreadable draft raises DraftError before any
+    page is rendered or served.
     """
     token = secrets.token_urlsafe(24)
-    try:
-        current = json.loads(draft_path.read_text(encoding="utf-8")) if draft_path.exists() else {}
-    except Exception:
-        current = {}
+    # Shared loader: aborts on malformed/incomplete drafts; missing file -> empty.
+    current = load_draft_for_review(draft_path)
     state: Dict[str, Any] = {
         "folder": folder,
         "draft_path": draft_path,
@@ -1431,8 +1429,10 @@ def create_review_server(folder: Path, draft_path: Path, port: int = 0):
             # writer) that changed the draft after this page was generated fails
             # the save instead of being silently overwritten.
             try:
-                disk = json.loads(draft_path.read_text(encoding="utf-8")) if draft_path.exists() else {}
-            except Exception as e:
+                # Use the same loader as page generation so a missing file or
+                # a v2 migration has one canonical digest on both sides of CAS.
+                disk = load_draft_for_review(draft_path)
+            except DraftError as e:
                 self._headers(409, "application/json")
                 self.wfile.write(json.dumps({"error": f"draft unreadable on disk ({e}); back it up before saving"}).encode())
                 return
@@ -1515,9 +1515,15 @@ def main():
     draft_path = folder / args.draft if not Path(args.draft).is_absolute() else Path(args.draft)
 
     if args.serve:
-        serve_review(folder, draft_path, port=args.port)
+        try:
+            serve_review(folder, draft_path, port=args.port)
+        except DraftError as e:
+            sys.exit(f"Error: {e}")
         return
-    out_file, stats = generate_review_html(folder, draft_path=draft_path)
+    try:
+        out_file, stats = generate_review_html(folder, draft_path=draft_path)
+    except DraftError as e:
+        sys.exit(f"Error: {e}")
     size_mb = out_file.stat().st_size / 1024 / 1024
 
     print(f"Review page: {out_file.resolve()} ({size_mb:.1f} MB, images embedded)")

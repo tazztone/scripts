@@ -53,6 +53,49 @@ rm -f "$FIX/stray.tiff"
 out="$(bash "$RUNNER" help 2>&1)"; code=$?
 echo "$out" | grep -q "\-\-serve" && ok "help documents --serve" || bad "help documents --serve"
 
+# 8. Bounded curate --serve smoke: scanner never sees --serve, loopback server
+# starts (bind+render proven by the banner), and the process stops cleanly.
+# No cross-process HTTP fetch here: sandboxes may block child-process loopback
+# while in-process serving is already covered by the pytest CAS test.
+serve_log="$(mktemp)"
+if PYTHONUNBUFFERED=1 "$PY" - "$RUNNER" "$FIX" "$serve_log" <<'PYEOF' >/dev/null 2>&1; then
+import os, re, subprocess, sys, time
+runner, fix, serve_log = sys.argv[1], sys.argv[2], sys.argv[3]
+env = dict(os.environ, PYTHONUNBUFFERED="1")
+with open(serve_log, "w") as f:
+    proc = subprocess.Popen(["bash", runner, "curate", fix, "--serve"],
+                            stdout=f, stderr=subprocess.STDOUT, env=env)
+    url = None
+    for _ in range(100):
+        time.sleep(0.2)
+        text = open(serve_log, errors="replace").read()
+        if "Review server (loopback only)" in text:
+            m = re.search(r"http://127\.0\.0\.1:\d+", text)
+            url = m.group(0) if m else None
+            break
+        if proc.poll() is not None:
+            break
+    ok = bool(url) and proc.poll() is None
+    ok = ok and "unrecognized arguments" not in open(serve_log, errors="replace").read()
+    proc.terminate()
+    try:
+        proc.wait(timeout=10)
+    except Exception:
+        proc.kill()
+        proc.wait(timeout=10)
+    sys.exit(0 if ok else 1)
+PYEOF
+    ok "curate --serve smoke (loopback starts, --serve filtered, clean stop)"
+else
+    bad "curate --serve smoke (see $serve_log)"
+fi
+if grep -q "unrecognized arguments.*--serve" "$serve_log" 2>/dev/null; then
+    bad "curate --serve leaked to scanner"
+else
+    ok "curate --serve keeps --serve from scanner"
+fi
+rm -f "$serve_log"
+
 rm -rf "$FIX"
 
 echo "---"

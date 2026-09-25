@@ -86,6 +86,26 @@ except ImportError:
         validate_single_emoji,
     )
 
+# Single draft-state implementation shared with review.py (fail-closed).
+try:
+    from draft_state import (
+        DRAFT_SCHEMA_VERSION,
+        DraftError,
+        draft_digest,
+        load_draft_for_review,
+        new_draft_empty,
+        upgrade_draft_to_v3,
+    )
+except ImportError:
+    from .draft_state import (
+        DRAFT_SCHEMA_VERSION,
+        DraftError,
+        draft_digest,
+        load_draft_for_review,
+        new_draft_empty,
+        upgrade_draft_to_v3,
+    )
+
 DEFAULT_DRAFT = "pack_draft.json"
 DEFAULT_CACHE = "classification_cache.json"
 SUPPORTED_EXTENSIONS = {".webp", ".png", ".apng", ".jpg", ".jpeg"}
@@ -100,7 +120,9 @@ SIDECAR_NAMES = {
 }
 SIDECAR_SUFFIXES = {".tmp", ".bak"}
 
-DRAFT_SCHEMA_VERSION = 3
+# DRAFT_SCHEMA_VERSION, DraftError, draft_digest, load_draft_for_review,
+# new_draft_empty, upgrade_draft_to_v3 are imported from draft_state above
+# (single implementation shared with review.py).
 BUILDER_VERSION = "signal-stickers-builder/3.0"
 MAX_STICKERS = 200
 MAX_BYTES = 300 * 1024
@@ -371,8 +393,8 @@ class OpenRouterProvider(BaseProvider):
             return parse_json_response(normalize_message_content(content))
 
 
-# NOTE: OpenRouter-only by product decision. Gemini/Anthropic support was
-# removed; provider failures must surface as unresolved entries, never fallbacks.
+# NOTE: OpenRouter-only by product decision; provider failures must surface
+# as unresolved entries, never fallbacks.
 
 
 def normalize_message_content(content: Any) -> str:
@@ -706,94 +728,8 @@ def atomic_write_text(path: Path, content: str) -> None:
     os.replace(tmp, path)
 
 
-def new_draft_empty() -> Dict[str, Any]:
-    return {
-        "version": DRAFT_SCHEMA_VERSION,
-        "revision": 1,
-        "draft_id": hashlib.sha256(str(time.time()).encode()).hexdigest()[:16],
-        "pack_state": "in_progress",
-        "approval": None,
-        "meta": {"title": "", "author": "", "cover": None},
-        "similarity_groups": {},
-        "stickers": {},
-    }
-
-
-def upgrade_draft_to_v3(draft: Dict[str, Any]) -> Dict[str, Any]:
-    """Migrates v2/legacy drafts to v3; imported tags are pending, never pre-approved."""
-    if not isinstance(draft, dict):
-        return new_draft_empty()
-    version = draft.get("version")
-    if version == DRAFT_SCHEMA_VERSION and "revision" in draft:
-        draft.setdefault("pack_state", "in_progress")
-        draft.setdefault("approval", None)
-        draft.setdefault("meta", {}).setdefault("title", "")
-        draft["meta"].setdefault("author", "")
-        draft["meta"].setdefault("cover", None)
-        return draft
-    upgraded = new_draft_empty()
-    upgraded["draft_id"] = str(draft.get("draft_id") or upgraded["draft_id"])
-    old_meta = draft.get("meta", {}) if isinstance(draft.get("meta"), dict) else {}
-    upgraded["meta"] = {
-        "title": str(old_meta.get("title") or ""),
-        "author": str(old_meta.get("author") or ""),
-        "cover": old_meta.get("cover"),
-    }
-    upgraded["similarity_groups"] = draft.get("similarity_groups", {}) or {}
-    for fn, item in (draft.get("stickers", {}) or {}).items():
-        if not isinstance(item, dict):
-            continue
-        suggested = item.get("suggested_emojis")
-        if suggested is None:
-            legacy_seq = item.get("emojis") or ([item["emoji"]] if item.get("emoji") else None)
-            if isinstance(legacy_seq, str):
-                legacy_seq = [legacy_seq]
-            suggested = legacy_seq
-        # v2 "approved" tags become pending suggestions requiring human approval.
-        status = item.get("review_status")
-        tag_status = item.get("tag_status")
-        if status in ("approved", "culled") or tag_status in ("approved",):
-            review_status = "pending"
-            tag_status = "suggested" if suggested else "pending"
-        else:
-            review_status = status or "pending"
-            tag_status = tag_status or ("suggested" if suggested else "pending")
-        # Legacy multi-emoji lists collapse to unresolved; human picks one.
-        final = item.get("emojis")
-        final_single: Optional[List[str]] = None
-        if isinstance(final, list) and len(final) == 1 and isinstance(final[0], str):
-            valid, vals, _ = validate_single_emoji(final[0])
-            final_single = vals if valid else None
-        elif isinstance(final, str):
-            valid, vals, _ = validate_single_emoji(final)
-            final_single = vals if valid else None
-        if final_single is None:
-            review_status = "pending" if (suggested and review_status != "error") else review_status
-        upgraded["stickers"][fn] = {
-            "file_hash": str(item.get("file_hash") or ""),
-            "selection": item.get("selection") if item.get("selection") in ("keep", "exclude", "undecided") else "undecided",
-            "similarity_group": item.get("similarity_group"),
-            "suggested_emojis": suggested,
-            "emojis": final_single,
-            "confidence": float(item.get("confidence", 0.0) or 0.0),
-            "reason": str(item.get("reason", "") or ""),
-            "review_status": review_status,
-            "tag_status": tag_status,
-            "tag_source": item.get("tag_source") or "legacy-migration",
-        }
-        # Preserve unknown fields conservatively.
-        for k, v in item.items():
-            if k not in upgraded["stickers"][fn]:
-                upgraded["stickers"][fn][k] = v
-    upgraded["revision"] = int(draft.get("revision") or 1)
-    upgraded["pack_state"] = "in_progress"
-    upgraded["approval"] = None
-    return upgraded
-
-
-def draft_digest(draft: Dict[str, Any]) -> str:
-    canonical = json.dumps(draft, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+# new_draft_empty, upgrade_draft_to_v3, draft_digest live in draft_state.py
+# (imported above; re-exported here for backwards compatibility).
 
 
 def invalidate_approval(draft: Dict[str, Any], reason: str = "") -> None:
@@ -899,15 +835,16 @@ def load_or_create_draft(
 
     if draft_path.exists():
         try:
-            raw = json.loads(draft_path.read_text(encoding="utf-8"))
-        except Exception as e:
-            sys.exit(
-                f"Error: draft {draft_path} exists but cannot be parsed ({e}). "
-                "Refusing to overwrite it. Back it up, then re-run with --reset-draft "
-                "to start over explicitly."
-            )
-        schema_changed = raw.get("version") != DRAFT_SCHEMA_VERSION or "revision" not in raw
-        draft = upgrade_draft_to_v3(raw)
+            draft = load_draft_for_review(draft_path)
+        except DraftError as e:
+            sys.exit(f"Error: {e}")
+        try:
+            _raw_check = json.loads(draft_path.read_text(encoding="utf-8"))
+        except Exception:
+            _raw_check = {}
+        if not isinstance(_raw_check, dict):
+            _raw_check = {}
+        schema_changed = _raw_check.get("version") != DRAFT_SCHEMA_VERSION or "revision" not in _raw_check
     elif legacy_cache_path and legacy_cache_path.exists():
         try:
             legacy = json.loads(legacy_cache_path.read_text(encoding="utf-8"))
@@ -1349,10 +1286,21 @@ def build_stickers_yaml(
     author: str = "",
     cover: Optional[str] = None,
     out_name: str = "stickers.yaml",
+    strict_quality: bool = False,
 ) -> Path:
-    """Builds stickers.yaml plus receipt from an approved draft (strict, atomic)."""
+    """Builds stickers.yaml plus receipt from an approved draft (strict, atomic).
+
+    Runs the central preflight itself so direct callers cannot bypass the
+    approval/hash/inventory/image-gate invariants (CLI preflights first too).
+    """
     if not (draft and "stickers" in draft):
         raise ValueError("pack_draft.json is the sole source of truth; legacy files/cache builds were removed.")
+    if folder is not None:
+        errors, _ = validate_draft_for_export(draft, folder, strict_quality=strict_quality)
+        if errors:
+            raise ValueError(
+                "Refusing to build manifest: preflight failed: " + "; ".join(errors[:8])
+            )
     meta_draft = draft.get("meta", {}) or {}
     eff_title = str(meta_draft.get("title") or title or "").strip()
     eff_author = str(meta_draft.get("author") or author or "").strip()
@@ -1629,6 +1577,7 @@ def main():
             title=args.title or draft["meta"].get("title", ""),
             author=args.author or draft["meta"].get("author", ""),
             cover=args.cover, out_name=args.out,
+            strict_quality=args.strict_quality,
         )
     except ValueError as e:
         print(f"\nExport failed: {e}")

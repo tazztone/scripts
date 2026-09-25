@@ -253,22 +253,31 @@ def test_check_signal_constraints(tmp_path):
 
 def test_build_stickers_yaml_curation(tmp_path):
     """Strict builder: single final emoji, excluded omitted, receipt written."""
+    import classify_and_build as cab
+
     for name in ("001.webp", "002.webp", "003.webp"):
         Image.new("RGBA", (512, 512), (0, 0, 0, 0)).save(tmp_path / name, "WEBP")
-
-    draft = {
-        "version": 3,
-        "revision": 2,
-        "pack_state": "approved",
-        "approval": {"revision": 2, "digest": "x"},
-        "meta": {"title": "Curated Pack", "author": "Tester", "cover": "001.webp"},
-        "similarity_groups": {"cluster_01": ["002.webp", "003.webp"]},
-        "stickers": {
-            "001.webp": {"selection": "keep", "emojis": ["😏"], "file_hash": "h1"},
-            "002.webp": {"selection": "keep", "emojis": ["🤔"], "file_hash": "h2"},
-            "003.webp": {"selection": "exclude", "emojis": ["🤔"], "file_hash": "h3"},
-        },
-    }
+    files = [tmp_path / n for n in ("001.webp", "002.webp", "003.webp")]
+    draft_path = tmp_path / "pack_draft.json"
+    draft = cab.load_or_create_draft(tmp_path, draft_path, None, files)
+    draft["meta"].update({"title": "Curated Pack", "author": "Tester", "cover": "001.webp"})
+    draft["stickers"]["001.webp"].update({
+        "selection": "keep", "emojis": ["😏"], "suggested_emojis": ["😏"],
+        "confidence": 0.9, "review_status": "pending", "tag_status": "manual",
+        "tag_source": "manual",
+    })
+    draft["stickers"]["002.webp"].update({
+        "selection": "keep", "emojis": ["🤔"], "suggested_emojis": ["🤔"],
+        "confidence": 0.9, "review_status": "pending", "tag_status": "manual",
+        "tag_source": "manual",
+    })
+    draft["stickers"]["003.webp"].update({
+        "selection": "exclude", "emojis": ["🤔"], "suggested_emojis": ["🤔"],
+        "confidence": 0.9, "review_status": "pending", "tag_status": "manual",
+        "tag_source": "manual",
+    })
+    assert cab.approve_pack(draft) == []
+    cab.save_draft(draft_path, draft)
 
     yaml_file = build_stickers_yaml(
         folder=tmp_path, draft=draft,
@@ -1020,3 +1029,133 @@ def test_review_server_cas_approval_and_regeneration(tmp_path):
         server.shutdown()
         thread.join(timeout=10)
     assert True
+
+
+def test_review_server_first_run_cas_without_existing_draft(tmp_path):
+    """A fresh missing-draft page can save once without a false stale-state 409."""
+    import http.client
+    import threading
+    import review as rv
+
+    _make_valid_image(tmp_path / "a.webp")
+    draft_path = tmp_path / "pack_draft.json"
+    assert not draft_path.exists()
+    server, token, state = rv.create_review_server(tmp_path, draft_path, port=0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        incoming = rv.load_draft_for_review(draft_path)
+        body = json.dumps({
+            "base_digest": state["expected_digest"],
+            "draft": incoming,
+        }).encode("utf-8")
+        conn = http.client.HTTPConnection("127.0.0.1", server.server_address[1], timeout=10)
+        conn.request("POST", "/save", body=body, headers={
+            "Content-Type": "application/json",
+            "X-Session-Token": token,
+        })
+        response = conn.getresponse()
+        assert response.status == 200, response.read().decode("utf-8")
+        conn.close()
+        assert draft_path.exists()
+        assert json.loads(draft_path.read_text(encoding="utf-8"))["revision"] == 2
+    finally:
+        server.shutdown()
+        thread.join(timeout=10)
+        server.server_close()
+
+
+def test_review_rejects_corrupt_and_incomplete_drafts(tmp_path):
+    """Direct review entrypoints fail closed: no empty replacement page."""
+    import review as rv
+    from draft_state import DraftError
+
+    _make_valid_image(tmp_path / "a.webp")
+    cases = {
+        "invalid json": "not json{{{",
+        "json list": json.dumps(["a.webp"]),
+        "missing stickers": json.dumps({"revision": 1, "version": 3}),
+        "stickers not object": json.dumps({"revision": 1, "version": 3, "stickers": ["a.webp"]}),
+    }
+    for name, payload in cases.items():
+        draft_path = tmp_path / "pack_draft.json"
+        draft_path.write_text(payload, encoding="utf-8")
+        before = draft_path.read_bytes()
+        out_html = tmp_path / "review.html"
+        if out_html.exists():
+            out_html.unlink()
+        with pytest.raises(DraftError):
+            rv.generate_review_html(tmp_path, draft_path=draft_path)
+        assert draft_path.read_bytes() == before, name
+        assert not out_html.exists(), name
+        with pytest.raises(DraftError):
+            rv.create_review_server(tmp_path, draft_path, port=0)
+        assert draft_path.read_bytes() == before, name
+
+
+def test_review_migrates_v2_draft_without_overwrite(tmp_path):
+    """v2 drafts render via the shared v2->v3 migration; file untouched."""
+    import review as rv
+
+    _make_valid_image(tmp_path / "a.webp")
+    v2 = {
+        "version": 2,
+        "meta": {"title": "V2 Pack", "author": "Tester", "cover": None},
+        "similarity_groups": {},
+        "stickers": {
+            "a.webp": {"selection": "keep", "emojis": ["\U0001F600"], "confidence": 0.9,
+                       "reason": "happy", "review_status": "approved",
+                       "similarity_group": None, "file_hash": ""},
+        },
+    }
+    draft_path = tmp_path / "pack_draft.json"
+    draft_path.write_text(json.dumps(v2), encoding="utf-8")
+    before = draft_path.read_bytes()
+    out, stats = rv.generate_review_html(tmp_path, draft_path=draft_path)
+    assert out.exists()
+    assert stats["total"] == 1
+    assert draft_path.read_bytes() == before
+    html = out.read_text(encoding="utf-8")
+    assert "V2 Pack" in html
+
+
+def test_review_serve_refuses_corrupt_draft(tmp_path):
+    """Direct `review.py --serve` path aborts before serving a replacement."""
+    import review as rv
+    from draft_state import DraftError
+
+    _make_valid_image(tmp_path / "a.webp")
+    draft_path = tmp_path / "pack_draft.json"
+    draft_path.write_text('{"revision": 1}', encoding="utf-8")
+    before = draft_path.read_bytes()
+    with pytest.raises(DraftError):
+        rv.create_review_server(tmp_path, draft_path, port=0)
+    assert draft_path.read_bytes() == before
+
+
+def test_builder_runs_central_preflight_directly(tmp_path):
+    """Direct build_stickers_yaml() cannot bypass approval/hash gates."""
+    import classify_and_build as cab
+
+    _make_valid_image(tmp_path / "a.webp")
+    draft_path = tmp_path / "pack_draft.json"
+    files = [tmp_path / "a.webp"]
+    draft = cab.load_or_create_draft(tmp_path, draft_path, None, files)
+    draft["meta"].update({"title": "Direct Pack", "author": "Tester"})
+    for item in draft["stickers"].values():
+        item["selection"] = "keep"
+        item["emojis"] = ["\U0001F600"]
+        item["suggested_emojis"] = ["\U0001F600"]
+        item["review_status"] = "pending"
+        item["tag_status"] = "manual"
+        item["tag_source"] = "manual"
+        item["confidence"] = 0.9
+    # Deliberately unapproved: direct builder must refuse, writing nothing.
+    draft["pack_state"] = "in_progress"
+    draft["approval"] = None
+    with pytest.raises(ValueError, match="[Aa]pprov|preflight"):
+        cab.build_stickers_yaml(folder=tmp_path, draft=draft)
+    assert not (tmp_path / "stickers.yaml").exists()
+    assert cab.approve_pack(draft) == []
+    out = cab.build_stickers_yaml(folder=tmp_path, draft=draft)
+    assert out.exists()
