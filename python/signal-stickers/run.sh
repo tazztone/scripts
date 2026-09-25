@@ -435,6 +435,10 @@ case "$ACTION" in
 
     login|logout)
         require_sticker_tool
+        if [ "$ACTION" = "login" ]; then
+            echo "Have your Signal Desktop credentials ready (see README 'Uploading':" >&2
+            echo "Desktop --enable-dev-tools, DevTools console in 'Electron Isolated Context')." >&2
+        fi
         filter_tool_args "${ARGS[@]}"
         # shellcheck disable=SC2128
         signal-sticker-tool "$ACTION" "${FILTERED[@]}"
@@ -480,6 +484,9 @@ case "$ACTION" in
         if [ "$serve_flag" -eq 1 ]; then
             filtered=()
             for a in "${ARGS[@]}"; do [ "$a" = "--serve" ] || filtered+=("$a"); done
+            echo "Review server starting (loopback only). Leave this terminal running and"
+            echo "use another terminal for tag/approve/export. If you tag while serving,"
+            echo "restart this server and reload the page before approving."
             exec "$PYTHON" "$DIR/review.py" "$FOLDER" --serve "${filtered[@]}"
         fi
         "$PYTHON" "$DIR/review.py" "$FOLDER"

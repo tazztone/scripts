@@ -94,6 +94,11 @@ if grep -q "unrecognized arguments.*--serve" "$serve_log" 2>/dev/null; then
 else
     ok "curate --serve keeps --serve from scanner"
 fi
+if grep -q "another terminal" "$serve_log" 2>/dev/null; then
+    ok "curate --serve hints at second terminal"
+else
+    bad "curate --serve hints at second terminal"
+fi
 rm -f "$serve_log"
 
 # 9. Finalize the fixture into an approved, exported pack (no API calls).
@@ -151,9 +156,9 @@ FAKEEOF
 chmod +x "$FAKEBIN/signal-sticker-tool"
 export PATH="$FAKEBIN:$PATH"
 
-# 11. login passthrough reaches the tool.
+# 11. login passthrough reaches the tool and points at credential help.
 out="$(bash "$RUNNER" login 2>&1)"; code=$?
-[ "$code" -eq 0 ] && tail -n 1 "$FAKELOG" | grep -q "^login$" && ok "login passthrough" || bad "login passthrough (code=$code)"
+[ "$code" -eq 0 ] && tail -n 1 "$FAKELOG" | grep -q "^login$" && echo "$out" | grep -qi "isolated context" && ok "login passthrough + hint" || bad "login passthrough + hint (code=$code)"
 
 # 12. preview works and forwards no runner flags.
 out="$(bash "$RUNNER" preview "$FIX" 2>&1)"; code=$?

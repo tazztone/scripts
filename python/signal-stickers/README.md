@@ -51,6 +51,54 @@ inside `python/signal-stickers` use `./stickers <action> <folder>`.
 
 ---
 
+## Preparing images
+
+`scan` deliberately rejects rather than silently fixes: images must already be
+512×512 PNG/WebP (or animated APNG), ≤300 KB each. If your source files are
+anything else, normalize them into a **new** folder first — the command below
+never touches the source folder:
+
+```bash
+mkdir ./my_pack
+.venv/bin/python - <<'PY'
+from pathlib import Path
+from PIL import Image, ImageOps
+
+src = Path("./input_images")   # your files; never modified
+dst = Path("./my_pack")        # normalized pack folder
+dst.mkdir(exist_ok=True)
+
+for p in sorted(src.iterdir()):
+    if p.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}:
+        print(f"SKIP (not an image): {p.name}")
+        continue
+    try:
+        im = Image.open(p).convert("RGBA")
+    except Exception as e:  # corrupt/unsupported files fail closed
+        print(f"SKIP (unreadable): {p.name}: {e}")
+        continue
+    im = ImageOps.contain(im, (512, 512))  # keep aspect ratio; never stretched
+    canvas = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
+    canvas.paste(im, ((512 - im.width) // 2, (512 - im.height) // 2), im)
+    out = dst / (p.stem + ".png")
+    canvas.save(out)
+    print(f"{p.name} -> {out.name}")
+PY
+./stickers scan ./my_pack
+```
+
+Caveats:
+
+- Animation is **not** preserved (only a still frame is taken). Animated
+  stickers must be prepared as APNG (≤3 s) by hand.
+- `scan` still reports oversize files (>300 KB); re-export those at higher
+  compression and re-scan.
+- Every conversion is printed; skipped files are reported, never silently dropped.
+- The output folder then goes through the normal workflow below, including
+  human review — normalization is not approval.
+
+---
+
 ## How It Works
 
 The workflow is a loop around one file, `pack_draft.json`:
