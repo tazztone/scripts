@@ -199,6 +199,64 @@ else
 fi
 rm -f "$DRAFT_BAK"
 
+# 18. A tag run that fails its export fall-through (unapproved pack) still
+# regenerates the review page. No API calls: every kept sticker already has
+# a final emoji, so the classifier short-circuits before any request.
+TAGFIX="$(mktemp -d)"
+"$PY" -c "from PIL import Image; Image.new('RGBA',(512,512),(0,0,0,0)).save('$TAGFIX/a.webp','WEBP')"
+bash "$RUNNER" scan "$TAGFIX" >/dev/null 2>&1
+"$PY" - "$TAGFIX" <<'PYEOF'
+import json, sys
+from pathlib import Path
+folder = Path(sys.argv[1])
+dp = folder / "pack_draft.json"
+draft = json.loads(dp.read_text(encoding="utf-8"))
+draft.setdefault("meta", {})["title"] = "Tag Page Test"
+draft["meta"]["author"] = "runner-test"
+for item in draft.get("stickers", {}).values():
+    item["selection"] = "keep"
+    item["emojis"] = ["\U0001F600"]
+dp.write_text(json.dumps(draft, ensure_ascii=False, indent=2), encoding="utf-8")
+PYEOF
+rm -f "$TAGFIX/review.html"
+out="$(OPENROUTER_API_KEY=fake-test-key bash "$RUNNER" tag "$TAGFIX" 2>&1)"; code=$?
+if [ "$code" -ne 0 ] && [ -f "$TAGFIX/review.html" ] && echo "$out" | grep -q "unresolved/error"; then
+    ok "failed tag still refreshes review page"
+else
+    bad "failed tag still refreshes review page (code=$code)"
+fi
+rm -rf "$TAGFIX"
+
+# 19. Wizard end-to-end on an approved pack with piped answers: scan, skip
+# tag (nothing missing), skip server (preflight clean), export, preview,
+# upload. The fake tool records argv; XDG creds satisfy the login gate.
+WIZFIX="$(mktemp -d)"
+"$PY" -c "from PIL import Image; Image.new('RGBA',(512,512),(0,0,0,0)).save('$WIZFIX/a.webp','WEBP')"
+bash "$RUNNER" scan "$WIZFIX" >/dev/null 2>&1
+"$PY" - "$WIZFIX" <<'PYEOF'
+import json, sys
+from pathlib import Path
+folder = Path(sys.argv[1])
+dp = folder / "pack_draft.json"
+draft = json.loads(dp.read_text(encoding="utf-8"))
+draft.setdefault("meta", {})["title"] = "Wizard Test Pack"
+draft["meta"]["author"] = "runner-test"
+for item in draft.get("stickers", {}).values():
+    item["selection"] = "keep"
+    item["emojis"] = ["\U0001F600"]
+dp.write_text(json.dumps(draft, ensure_ascii=False, indent=2), encoding="utf-8")
+PYEOF
+bash "$RUNNER" approve "$WIZFIX" >/dev/null 2>&1
+bash "$RUNNER" export "$WIZFIX" >/dev/null 2>&1
+: > "$FAKELOG"
+out="$(printf 'y\ny\ny\ny\n' | XDG_CONFIG_HOME="$XDG_FULL" bash "$RUNNER" wizard "$WIZFIX" 2>&1)"; code=$?
+if [ "$code" -eq 0 ] && [ -f "$WIZFIX/uploaded.yaml" ] && grep -qx "upload" "$FAKELOG" && echo "$out" | grep -q "Wizard done"; then
+    ok "wizard piped run reaches upload"
+else
+    bad "wizard piped run reaches upload (code=$code)"
+fi
+rm -rf "$WIZFIX"
+
 rm -rf "$FAKEBIN" "$FAKELOG" "$XDG_EMPTY" "$XDG_FULL" "$DRAFT_BAK"
 rm -rf "$FIX"
 

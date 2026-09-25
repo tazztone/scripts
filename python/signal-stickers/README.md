@@ -10,6 +10,9 @@ the uploadable `stickers.yaml`.
 
 ## Quick Start
 
+Prefer guidance? `./stickers wizard ./my_pack` walks the steps below one by
+one (same gates; quit anytime with Ctrl-C and re-run to resume).
+
 ```bash
 # 0. Check the core environment (add a folder for pack preflight)
 ./stickers doctor ./my_pack
@@ -138,6 +141,7 @@ manifest against the current draft and hashes immediately before use.
 | `./stickers upload <folder> [--yes]` | Re-verify + confirm + upload to Signal | no |
 | `./stickers login` / `./stickers logout` | Authenticate / de-authenticate `signal-sticker-tool` | no |
 | `./stickers url <folder>` | Reprint the share URL of an uploaded pack | no |
+| `./stickers wizard <folder>` | Guided walkthrough (same steps and gates, upload still confirmed) | mixed |
 | `./stickers help` | Show usage (also shown with no arguments) | no |
 
 `./stickers` is a symlink to `run.sh`; both work identically. The runner finds the workspace

@@ -81,8 +81,11 @@ Canonical use:
   python/signal-stickers/stickers <action> <folder> [options]   # from repo root
   cd python/signal-stickers && ./stickers <action> <folder>
 
-A pack <folder> is required for scan/tag/curate/review/approve/export/preflight/preview/upload/url.
+A pack <folder> is required for scan/tag/curate/review/approve/export/preflight/preview/upload/url/wizard.
 With no arguments this help is shown (nothing runs implicitly).
+
+Prefer guidance? './stickers wizard <folder>' walks the workflow below step by
+step (same gates; upload still confirmed explicitly).
 
 Canonical workflow (in order):
   scan       Inventory images, hard-gate check, group visually similar candidates
@@ -104,6 +107,7 @@ Utilities:
   login      Authenticate signal-sticker-tool (Signal Desktop credentials).
   logout     Remove saved Signal credentials.
   url <folder>   Reprint the share URL of an uploaded pack.
+  wizard <folder>  Guided walkthrough (scan/tag/review/export/preview/upload).
   preflight <folder>  Strict export/upload preflight only.
   help       Show this message.
 
@@ -396,6 +400,150 @@ except Exception as e:
 PY
 }
 
+# ask "prompt" Y|N → exit 0 on yes. Empty answer takes the default;
+# EOF aborts the wizard. Reads stdin so answers can be piped in tests.
+ask() {
+    local prompt="$1" def="$2" ans=""
+    if [ "$def" = "Y" ]; then printf '%s [Y/n] ' "$prompt"
+    else printf '%s [y/N] ' "$prompt"; fi
+    if ! IFS= read -r ans; then printf '\nAborted.\n' >&2; exit 1; fi
+    case "$ans" in
+        "") [ "$def" = "Y" ] ;;
+        [Yy]|[Yy][Ee][Ss]) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# Space-separated draft census: undecided keep-no-final-emoji tag-errors state.
+# Prints "0 0 0 none" when no usable draft exists yet.
+draft_counts() {
+    "$PYTHON" - "$FOLDER" "$DIR" <<'PY'
+import json, sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[2])
+try:
+    from classify_and_build import final_emoji_for_entry
+    draft = json.loads((Path(sys.argv[1]) / "pack_draft.json").read_text(encoding="utf-8"))
+    stickers = draft.get("stickers", {}) or {}
+    und = sum(1 for i in stickers.values() if i.get("selection") == "undecided")
+    noem = sum(1 for i in stickers.values() if i.get("selection") == "keep" and not final_emoji_for_entry(i))
+    err = sum(1 for i in stickers.values() if i.get("tag_status") in ("error", "unresolved", "stale"))
+    print(f"{und} {noem} {err} {draft.get('pack_state', 'none')}")
+except Exception:
+    print("0 0 0 none")
+PY
+}
+
+pack_ready_quiet() {
+    "$PYTHON" "$DIR/classify_and_build.py" "$FOLDER" --preflight >/dev/null 2>&1
+}
+
+wizard_review_round() {
+    local server_log server_pid url ans
+    server_log="$(mktemp)"
+    "$PYTHON" "$DIR/review.py" "$FOLDER" --serve >"$server_log" 2>&1 &
+    server_pid=$!
+    url=""
+    for _ in $(seq 1 60); do
+        sleep 0.2
+        url="$(grep -o 'http://127\.0\.0\.1:[0-9]*' "$server_log" 2>/dev/null | head -n 1)"
+        [ -n "$url" ] && break
+        kill -0 "$server_pid" 2>/dev/null || break
+    done
+    if [ -z "$url" ]; then
+        kill "$server_pid" 2>/dev/null || true
+        wait "$server_pid" 2>/dev/null || true
+        echo "Review server failed to start; log:"
+        cat "$server_log"
+        rm -f "$server_log"
+        return 1
+    fi
+    echo "Review page: $url"
+    open_url "$url"
+    echo "In the browser: resolve Undecided, set exactly one emoji per kept sticker,"
+    echo "set title/author/cover, click Approve Pack, then Save."
+    echo "Press Enter when done ('q' then Enter quits the wizard)."
+    if ! IFS= read -r ans; then ans="q"; fi
+    kill "$server_pid" 2>/dev/null || true
+    wait "$server_pid" 2>/dev/null || true
+    rm -f "$server_log"
+    [ "$ans" = "q" ] && return 1
+    return 0
+}
+
+wizard_flow() {
+    note "=== Sticker pack wizard: $FOLDER ==="
+    note "Quit anytime (Ctrl-C or 'q'); completed steps are kept, re-run to resume."
+    echo
+    note "Step 0: environment"
+    if ! doctor; then
+        echo "Fix the environment above, then re-run the wizard."
+        exit 1
+    fi
+    echo
+    if ask "Step 1: run scan (inventory + similar-image groups)?" Y; then
+        "$PYTHON" "$DIR/classify_and_build.py" "$FOLDER" --scan || note "Scan reported issues; continuing with the existing draft."
+    fi
+    read -r und noem err state <<< "$(draft_counts)"
+    echo
+    note "Draft: $und undecided, $noem keep without final emoji, $err provider errors (state: $state)."
+    if [ "$noem" -gt 0 ] || [ "$err" -gt 0 ]; then
+        if [ -n "${OPENROUTER_API_KEY:-}" ]; then
+            if ask "Step 2: run tag (OpenRouter suggestions)?" Y; then
+                "$PYTHON" "$DIR/classify_and_build.py" "$FOLDER" --classify-kept || note "Tagging left entries unresolved; they stay for manual review."
+                "$PYTHON" "$DIR/review.py" "$FOLDER" >/dev/null
+            fi
+        else
+            note "Step 2: OPENROUTER_API_KEY not set, skipping tag — assign emojis by hand in review."
+        fi
+    else
+        note "Step 2: tagging not needed (every kept sticker has a final emoji)."
+    fi
+    echo
+    while ! pack_ready_quiet; do
+        note "Step 3: the pack is not export-ready yet:"
+        "$PYTHON" "$DIR/classify_and_build.py" "$FOLDER" --preflight 2>&1 | tail -n 12
+        if ! ask "Open the review page (loopback server) to resolve this?" Y; then
+            echo "Stopped before approval. Re-run the wizard to resume."
+            exit 1
+        fi
+        wizard_review_round || { echo "Stopped. Re-run the wizard to resume."; exit 1; }
+        echo
+    done
+    note "Step 3: pack is approved and preflight-clean."
+    echo
+    if ask "Step 4: export stickers.yaml + receipt?" Y; then
+        "$PYTHON" "$DIR/classify_and_build.py" "$FOLDER" --build-yaml || { echo "Export failed (see above)."; exit 1; }
+    else
+        echo "Stopped before export. Re-run the wizard to resume."
+        exit 1
+    fi
+    echo
+    if command -v signal-sticker-tool >/dev/null 2>&1; then
+        if ask "Step 5: preview locally?" Y; then
+            ( cd "$FOLDER" && signal-sticker-tool preview ) || { echo "Preview failed (see above)."; exit 1; }
+        fi
+        echo
+        if check_signal_login; then
+            print_pack_summary
+            if ask "Step 6: UPLOAD to Signal? Irreversible (packs cannot be edited)." N; then
+                ( cd "$FOLDER" && signal-sticker-tool upload ) || { echo "Upload failed (see above)."; exit 1; }
+                echo
+                echo "Upload finished. Reprint the link later with: ./stickers url $FOLDER"
+            else
+                echo "Skipped upload. Run './stickers upload $FOLDER' when ready."
+            fi
+        else
+            echo "Skipped upload: no Signal login. Run './stickers login', then './stickers upload $FOLDER'."
+        fi
+    else
+        echo "Skipped preview/upload: signal-sticker-tool not installed."
+        echo "Install it, run './stickers login', then './stickers preview $FOLDER' and './stickers upload $FOLDER'."
+    fi
+    echo
+    note "Wizard done."
+}
+
 FOLDER=""
 
 shift_folder() {
@@ -453,6 +601,12 @@ case "$ACTION" in
         ( cd "$FOLDER" && signal-sticker-tool url "${FILTERED[@]}" )
         ;;
 
+    wizard)
+        shift_folder
+        require_folder
+        wizard_flow
+        ;;
+
     help|--help|-h)
         usage
         ;;
@@ -502,10 +656,19 @@ case "$ACTION" in
         shift_folder
         require_folder
         [ -n "${OPENROUTER_API_KEY:-}" ] || die "OPENROUTER_API_KEY is not set. Export it before 'tag'."
-        "$PYTHON" "$DIR/classify_and_build.py" "$FOLDER" --classify-kept "${ARGS[@]}"
+        # The classifier falls through to the strict export gate, so a pack
+        # with remaining errors exits non-zero. Regenerate the review page
+        # regardless so new suggestions are never hidden behind a stale page.
+        classify_ok=1
+        "$PYTHON" "$DIR/classify_and_build.py" "$FOLDER" --classify-kept "${ARGS[@]}" || classify_ok=0
         "$PYTHON" "$DIR/review.py" "$FOLDER"
         echo
         echo "Review page: file://$FOLDER/review.html"
+        if [ "$classify_ok" -eq 0 ]; then
+            echo "Note: tagging left unresolved/error entries (see above); resolve them"
+            echo "in review or re-run tag, then Approve, Save, and export."
+            exit 1
+        fi
         echo "Next: promote each suggestion to one final emoji, Approve, Save,"
         echo "      then run './stickers export $FOLDER'."
         ;;
