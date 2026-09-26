@@ -277,8 +277,16 @@ def scan_and_remove(root: Path, trash_dir: Path | None, args):
     logging.info("-" * 60)
 
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
-        for dirpath, _, files in os.walk(root):
+        for dirpath, dirnames, files in os.walk(root):
             dir_ = Path(dirpath)
+
+            # Never rescan the trash: it may live inside the scan root
+            # (e.g. <root>/_TRASH) and holds only already-moved files.
+            if trash_dir and (
+                dir_ == trash_dir or trash_dir in dir_.parents
+            ):
+                dirnames[:] = []
+                continue
 
             raw_map = {
                 p.stem.lower(): p
@@ -361,15 +369,13 @@ def run_wizard(args) -> dict:
         else:
             print(f"  Not a directory: {answer or '(empty)'}")
 
-    default_trash = str(Path.home() / "Desktop" / "photo-trash" / root.name)
+    default_trash = str(root / "_TRASH")
     trash_dir = None
     while trash_dir is None:
         answer = prompt("Trash folder (files are moved here)", args.trash or default_trash)
         candidate = Path(answer).expanduser().resolve() if answer else None
         if candidate is None:
             print("  Please enter a trash folder.")
-        elif root in candidate.parents or root == candidate:
-            print("  Trash folder must be outside the scan directory.")
         else:
             trash_dir = candidate
 
@@ -420,9 +426,8 @@ def main():
     if args.trash:
         trash_dir = Path(args.trash).resolve()
         trash_dir.mkdir(parents=True, exist_ok=True)
-        if root in trash_dir.parents or root == trash_dir:
-            logging.error("Trash folder must be outside the scan directory.")
-            sys.exit(1)
+        # Trash may live inside the scan root: scan_and_remove prunes it
+        # from the walk so trashed files are never rescanned.
 
     scan_and_remove(root, trash_dir, args)
 

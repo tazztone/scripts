@@ -41,7 +41,7 @@ example command:
 | Flag | Description |
 |---|---|
 | `--dry-run` | Preview deletions — no files are touched. |
-| `--trash DIR` | Move matched JPEGs to `DIR` (mirrored tree) instead of deleting. Refuses to overwrite existing files. |
+| `--trash DIR` | Move matched JPEGs to `DIR` (mirrored tree) instead of deleting. Refuses to overwrite existing files. May live inside the scan dir — it is skipped during scans. |
 | `--log FILE` | Write a high-fidelity audit log with timestamps to `FILE`. Paths are logged relative to the scan root. |
 | `--workers N` | Number of parallel threads, must be `>= 1` (default: `4`). Use `2` for HDDs, `8+` for SSDs. |
 | `--wizard` | Interactive mode: prompts for folder and trash dir, shows a dry-run preview, and only moves files after explicit confirmation. |
@@ -78,9 +78,10 @@ uv run remove_jpg_if_raw_exists.py /Photos/2024 \
 ```bash
 uv run remove_jpg_if_raw_exists.py --wizard
 ```
-Asks for the photo folder (re-prompts on typos), suggests a trash folder
-under `~/Desktop/photo-trash/`, runs a dry-run preview, then moves files
-only after you answer `y`. Ctrl-C aborts at any prompt without touching files.
+Asks for the photo folder (re-prompts on typos), suggests a `_TRASH`
+subfolder inside it (same-drive instant moves, travels with the library),
+runs a dry-run preview, then moves files only after you answer `y`.
+Ctrl-C aborts at any prompt without touching files.
 
 ---
 

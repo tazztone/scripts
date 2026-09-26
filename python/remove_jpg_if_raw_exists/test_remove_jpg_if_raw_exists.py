@@ -251,12 +251,30 @@ def test_scan_and_remove_dry_run_end_to_end(mock_read_exif, tmp_path: Path, capl
     assert "No RAW match  : 1" in caplog.text
 
 
-def test_main_rejects_trash_inside_scan_dir(monkeypatch, tmp_path: Path):
+@patch("remove_jpg_if_raw_exists.read_exif")
+def test_main_allows_inside_trash_and_skips_it(
+    mock_read_exif, monkeypatch, tmp_path: Path
+):
+    mock_read_exif.return_value = dict(CAMERA_TAGS)
+    photos = tmp_path / "photos"
+    photos.mkdir()
+    sub = photos / "sub"
+    sub.mkdir()
+    jpg = sub / "IMG_0001.JPG"
+    jpg.write_bytes(b"dummy")
+    (sub / "IMG_0001.ARW").write_bytes(b"0" * 200_000)  # over default min-raw-size
+    trash = photos / "_TRASH"
+    trash.mkdir()
+    (trash / "stale.JPG").write_bytes(b"dummy")
+    (trash / "stale.ARW").write_bytes(b"0" * 64)
     monkeypatch.setattr(
-        sys, "argv",
-        ["prog", str(tmp_path), "--trash", str(tmp_path / "trash-inside")])
-    with pytest.raises(SystemExit):
-        main()
+        sys, "argv", ["prog", str(photos), "--trash", str(trash)])
+    main()
+    assert not jpg.exists()
+    assert (trash / "sub" / "IMG_0001.JPG").exists()
+    # Pre-existing trash contents are never rescanned or re-trashed
+    assert (trash / "stale.JPG").exists()
+    assert not (trash / "_TRASH").exists()
 
 
 def _wizard_args(**overrides):
@@ -310,7 +328,7 @@ def test_wizard_abort_moves_nothing(mock_read_exif, monkeypatch, tmp_path: Path)
 
 
 @patch("remove_jpg_if_raw_exists.read_exif")
-def test_wizard_reprompts_bad_dir_and_inside_trash(
+def test_wizard_reprompts_bad_dir(
     mock_read_exif, monkeypatch, tmp_path: Path, capsys
 ):
     mock_read_exif.return_value = dict(CAMERA_TAGS)
@@ -318,17 +336,25 @@ def test_wizard_reprompts_bad_dir_and_inside_trash(
     photos.mkdir()
     jpg = _pair(photos)
     trash = tmp_path / "trash"
-    _answers(
-        monkeypatch,
-        "/no/such/dir", str(photos),  # bad folder, then good folder
-        str(photos / "inside"), str(trash),  # inside trash, then good trash
-        "n",
-    )
+    _answers(monkeypatch, "/no/such/dir", str(photos), str(trash), "n")
     run_wizard(_wizard_args())
-    out = capsys.readouterr().out
-    assert "Not a directory" in out
-    assert "must be outside the scan directory" in out
+    assert "Not a directory" in capsys.readouterr().out
     assert jpg.exists()
+
+
+@patch("remove_jpg_if_raw_exists.read_exif")
+def test_wizard_default_trash_is_inside_root(
+    mock_read_exif, monkeypatch, tmp_path: Path
+):
+    mock_read_exif.return_value = dict(CAMERA_TAGS)
+    photos = tmp_path / "photos"
+    photos.mkdir()
+    jpg = _pair(photos)
+    _answers(monkeypatch, str(photos), "", "y")  # accept default trash
+    result = run_wizard(_wizard_args())
+    assert result["deleted"] == 1
+    assert not jpg.exists()
+    assert (photos / "_TRASH" / "sub" / "IMG_0001.JPG").exists()
 
 
 @patch("remove_jpg_if_raw_exists.read_exif")
