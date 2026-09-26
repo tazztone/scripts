@@ -89,7 +89,7 @@ step (same gates; upload still confirmed explicitly).
 
 Canonical workflow (in order):
   scan       Inventory images, hard-gate check, group visually similar candidates
-  tag        OpenRouter suggestions for kept stickers lacking a final emoji (optional; manual emoji picks allowed)
+  tag        Ranked suggestions for stickers missing them (skips suggested/final; --retage forces all)
   curate     scan + build review page (add --serve for loopback direct-save)
   review     Rebuild the review page only (add --serve for direct-save)
   approve    Human approval gate for the current revision (no threshold bypass)
@@ -414,7 +414,7 @@ ask() {
     esac
 }
 
-# Space-separated draft census: undecided keep-no-final-emoji tag-errors state.
+# Space-separated draft census: undecided no-final-emoji tag-errors state.
 # Prints "0 0 0 none" when no usable draft exists yet.
 draft_counts() {
     "$PYTHON" - "$FOLDER" "$DIR" <<'PY'
@@ -426,7 +426,8 @@ try:
     draft = json.loads((Path(sys.argv[1]) / "pack_draft.json").read_text(encoding="utf-8"))
     stickers = draft.get("stickers", {}) or {}
     und = sum(1 for i in stickers.values() if i.get("selection") == "undecided")
-    noem = sum(1 for i in stickers.values() if i.get("selection") == "keep" and not final_emoji_for_entry(i))
+    noem = sum(1 for i in stickers.values()
+               if i.get("selection") in ("keep", "undecided") and not final_emoji_for_entry(i))
     err = sum(1 for i in stickers.values() if i.get("tag_status") in ("error", "unresolved", "stale"))
     print(f"{und} {noem} {err} {draft.get('pack_state', 'none')}")
 except Exception:
@@ -489,7 +490,7 @@ wizard_flow() {
     fi
     read -r und noem err state <<< "$(draft_counts)"
     echo
-    note "Draft: $und undecided, $noem keep without final emoji, $err provider errors (state: $state)."
+    note "Draft: $und undecided, $noem without final emoji, $err provider errors (state: $state)."
     if [ "$noem" -gt 0 ] || [ "$err" -gt 0 ]; then
         if [ -n "${OPENROUTER_API_KEY:-}" ]; then
             if ask "Step 2: run tag (OpenRouter suggestions)?" Y; then

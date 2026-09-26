@@ -1054,6 +1054,42 @@ def final_emoji_for_entry(item: Dict[str, Any]) -> Optional[str]:
     return None
 
 
+TAG_SELECTIONS = ("keep", "undecided")
+RETRY_TAG_STATUSES = ("error", "unresolved", "stale")
+
+
+def stickers_needing_tags(
+    draft: Dict[str, Any], folder: Optional[Path] = None, refresh: bool = False
+) -> List[str]:
+    """Filenames to send to the VLM: every non-excluded sticker without a
+    valid final emoji that still exists on disk.
+
+    Undecided cluster members are included deliberately: suggestions arrive
+    before the Keep/Exclude decision, so review sorts by dupes with emojis
+    already proposed. Excluded stickers are skipped until re-kept; stickers
+    with a final emoji are never re-sent.
+
+    Stickers that already hold usable suggestions are skipped so re-runs
+    only cover new and failed entries (VLM calls cost money); pass
+    refresh=True (--retage) to force a full re-tag.
+    """
+    out: List[str] = []
+    for fn in sorted(draft.get("stickers", {}).keys()):
+        item = draft["stickers"][fn]
+        if item.get("selection") not in TAG_SELECTIONS:
+            continue
+        if final_emoji_for_entry(item):
+            continue
+        if folder is not None and not (folder / fn).exists():
+            continue
+        if not refresh and item.get("tag_status") not in RETRY_TAG_STATUSES:
+            suggested = item.get("suggested_emojis")
+            if isinstance(suggested, list) and any(str(e).strip() for e in suggested):
+                continue
+        out.append(fn)
+    return out
+
+
 def select_manifest_entries(
     draft: Dict[str, Any], folder: Optional[Path] = None
 ) -> Tuple[List[Dict[str, str]], List[str], List[str]]:
@@ -1420,7 +1456,8 @@ def main():
     parser.add_argument("--workers", type=int, default=4, help="Parallel classification workers")
     parser.add_argument("--scan", action="store_true", help="Inventory and cluster without API calls")
     parser.add_argument("--check-only", action="store_true", help="Alias for --scan")
-    parser.add_argument("--classify-kept", action="store_true", help="Classify only 'keep' stickers lacking final emoji")
+    parser.add_argument("--classify-kept", action="store_true", help="Suggest emojis for non-excluded stickers lacking final emoji")
+    parser.add_argument("--retage", action="store_true", help="Re-send even stickers that already hold suggestions")
     parser.add_argument("--build-yaml", action="store_true", help="Preflight + write stickers.yaml + receipt")
     parser.add_argument("--approve", action="store_true", help="Record human approval for the current revision")
     parser.add_argument("--preflight", action="store_true", help="Run strict export/upload preflight only (no writes)")
@@ -1552,16 +1589,10 @@ def main():
 
     run_classification = args.classify_kept or not (args.build_yaml or args.approve or args.preflight)
     if run_classification:
-        kept_unclassified = [
-            folder / fn
-            for fn, item in draft["stickers"].items()
-            if item.get("selection") == "keep"
-            and not final_emoji_for_entry(item)
-            and (folder / fn).exists()
-        ]
-        if kept_unclassified:
+        unclassified = [folder / fn for fn in stickers_needing_tags(draft, folder, refresh=args.retage)]
+        if unclassified:
             provider = get_configured_provider(args.model)
-            print(f"\nClassifying {len(kept_unclassified)} kept sticker(s) with {args.workers} workers (OpenRouter)...")
+            print(f"\nClassifying {len(unclassified)} sticker(s) with {args.workers} workers (OpenRouter)...")
             done_count = [0]
 
             def process_sticker(p: Path):
@@ -1570,32 +1601,31 @@ def main():
                 entry["suggested_emojis"] = res.get("suggested_emojis")
                 # Model suggestions never auto-approve: human promotes to final in review.
                 entry["reason"] = res.get("reason", "")
-                entry["confidence"] = res.get("confidence", 0.0)
+                entry["confidence"] = float(res.get("confidence", 0.0))
                 entry["review_status"] = res.get("review_status", "suggested")
                 entry["tag_status"] = res.get("tag_status", "suggested")
                 entry["tag_source"] = res.get("tag_source", "openrouter")
                 invalidate_approval(draft, f"tag suggestion for {p.name}")
                 done_count[0] += 1
                 em_str = "".join(res.get("suggested_emojis") or []) or "(unresolved)"
-                print(f"[{done_count[0]}/{len(kept_unclassified)}] {p.name} -> {em_str} ({res['confidence']:.2f}) {res['reason']}", flush=True)
+                print(f"[{done_count[0]}/{len(unclassified)}] {p.name} -> {em_str} {res['reason']}", flush=True)
 
             with ThreadPoolExecutor(max_workers=args.workers) as executor:
-                list(executor.map(process_sticker, kept_unclassified))
+                list(executor.map(process_sticker, unclassified))
             bump_revision(draft, "tag suggestions")
             save_draft(draft_path, draft)
             print(f"Draft saved to {draft_path}")
             print("Next: in review, promote each suggestion to a final single emoji, then --approve.")
         else:
-            print("\nAll kept stickers already carry a final emoji.")
+            print("\nAll stickers already carry a final emoji.")
 
     if args.classify_kept and not args.build_yaml:
         # Tagging only suggests; export stays a separate explicit step so a
         # partially tagged pack ends with a summary here, not an export dump.
         stickers = draft.get("stickers", {}) or {}
         suggested = sum(1 for i in stickers.values() if i.get("tag_status") == "suggested")
-        pending = sum(1 for i in stickers.values()
-                      if i.get("selection") == "keep" and not final_emoji_for_entry(i))
-        print(f"\nTag summary: {suggested} suggested, {pending} keep sticker(s) still need a final emoji.")
+        pending = len(stickers_needing_tags(draft, folder))
+        print(f"\nTag summary: {suggested} suggested, {pending} sticker(s) still need a final emoji.")
         print("Next: promote suggestions in review (or re-run tag), then approve and export.")
         return
 
