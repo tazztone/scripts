@@ -40,12 +40,12 @@ example command:
 | Flag | Description |
 |---|---|
 | `--dry-run` | Preview deletions — no files are touched. |
-| `--trash DIR` | Move matched JPEGs to `DIR` instead of deleting. |
-| `--log FILE` | Write a high-fidelity audit log with timestamps to `FILE`. |
-| `--workers N` | Number of parallel threads (default: `4`). Use `2` for HDDs, `8+` for SSDs. |
+| `--trash DIR` | Move matched JPEGs to `DIR` (mirrored tree) instead of deleting. Refuses to overwrite existing files. |
+| `--log FILE` | Write a high-fidelity audit log with timestamps to `FILE`. Paths are logged relative to the scan root. |
+| `--workers N` | Number of parallel threads, must be `>= 1` (default: `4`). Use `2` for HDDs, `8+` for SSDs. |
 | `--skip-exif` | ⚠ **Safety override**: Reverts to filename-only matching. Use with caution. |
 | `--verbose` | Shows all skipped files and detailed EXIF reasoning. |
-| `--min-raw-size N` | Minimum RAW file size in bytes (default: 100 KB). |
+| `--min-raw-size N` | Minimum RAW file size in bytes, must be `>= 0` (default: 100 KB). |
 
 ---
 

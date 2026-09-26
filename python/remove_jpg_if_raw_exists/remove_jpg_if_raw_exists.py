@@ -118,7 +118,12 @@ def parse_args():
         default=4,
         help="Parallel EXIF threads (default: 4; use 2 for HDDs, 8+ for SSDs)",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.workers < 1:
+        parser.error("--workers must be >= 1")
+    if args.min_raw_size < 0:
+        parser.error("--min-raw-size must be >= 0")
+    return args
 
 
 def setup_logging(args, log_file=None):
@@ -154,10 +159,9 @@ def read_exif(path: Path) -> dict:
     try:
         with open(path, "rb") as f:
             # We must use details=True to see MakerNote tags, which are stripped by editors.
-            # stop_tag stops parsing once we have the critical safety tags.
-            return exifread.process_file(
-                f, details=True, stop_tag="EXIF DateTimeOriginal"
-            )
+            # No stop_tag: it halts parsing at the first matching tag, which can
+            # hide the MakerNote/JFIF/Software tags the safety checks need.
+            return exifread.process_file(f, details=True)
     except Exception:
         return {}
 
@@ -210,14 +214,21 @@ def process_jpg(
 ) -> str:
     """Returns 'deleted', 'kept_edited', or 'error'."""
 
+    # Log paths relative to the scan root: basenames repeat across
+    # folders (DSC00001.JPG, ...) and a bare name is unauditable.
+    try:
+        display = str(jpg_path.relative_to(root))
+    except ValueError:
+        display = jpg_path.name
+
     if not skip_exif:
         ok, reason = is_camera_original(jpg_path)
         if not ok:
-            logging.info(f"  KEPT  {jpg_path.name:<45}  ← {reason}")
+            logging.info(f"  KEPT  {display:<45}  ← {reason}")
             return "kept_edited"
 
     if dry_run:
-        logging.info(f"  DEL   {jpg_path.name:<45}  ← RAW: {raw_counterpart.name}")
+        logging.info(f"  DEL   {display:<45}  ← RAW: {raw_counterpart.name}")
         return "deleted"
 
     if trash_dir:
@@ -225,19 +236,22 @@ def process_jpg(
         dest = trash_dir / rel
         dest.parent.mkdir(parents=True, exist_ok=True)
         try:
+            if dest.exists():
+                logging.error(f"  ERROR Refusing to overwrite {dest}")
+                return "error"
             shutil.move(str(jpg_path), dest)
-            logging.info(f"  DEL   {jpg_path.name:<45}  ← Moved to trash")
+            logging.info(f"  DEL   {display:<45}  ← Moved to trash")
             return "deleted"
         except OSError as e:
-            logging.error(f"  ERROR Failed to move {jpg_path.name}: {e}")
+            logging.error(f"  ERROR Failed to move {display}: {e}")
             return "error"
     else:
         try:
             jpg_path.unlink()
-            logging.info(f"  DEL   {jpg_path.name:<45}  ← {raw_counterpart.name}")
+            logging.info(f"  DEL   {display:<45}  ← {raw_counterpart.name}")
             return "deleted"
         except OSError as e:
-            logging.error(f"  ERROR Failed to delete {jpg_path.name}: {e}")
+            logging.error(f"  ERROR Failed to delete {display}: {e}")
             return "error"
 
 
