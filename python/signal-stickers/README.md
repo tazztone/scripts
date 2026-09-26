@@ -20,10 +20,12 @@ one (same gates; quit anytime with Ctrl-C and re-run to resume).
 # 1. Inventory images, hard-gate check, group visually similar candidates
 ./stickers scan ./my_pack
 
-# 2. Let OpenRouter suggest ranked emojis (up to 5, best first) for kept
-#    stickers lacking a final pick (optional; manual selection avoids the key).
+# 2. Let OpenRouter suggest ranked emojis (up to 5, best first) for every
+#    non-excluded sticker lacking a final pick (optional; manual selection
+#    avoids the key). Undecided cluster members are included, so review
+#    sorts dupes with suggestions already proposed.
 #    Tag only suggests — it ends with a summary, never an export; a human
-#    promotes suggestions to final in review (one click each, or bulk ≥ threshold).
+#    promotes suggestions to final in review (one click each, or bulk all).
 ./stickers tag ./my_pack
 
 # 3. Open the review page (loopback direct-save; opens automatically).
@@ -31,7 +33,7 @@ one (same gates; quit anytime with Ctrl-C and re-run to resume).
 #    after tagging so the page is not stale.
 ./stickers curate ./my_pack --serve
 
-# 4. In the browser: resolve Undecided, set exactly one emoji per kept sticker,
+# 4. In the browser: discard dupes, set exactly one emoji per kept sticker,
 #    set title/author/cover, click Approve Pack, then Save.
 #    With --serve the Save button writes pack_draft.json directly.
 #    Static fallback: Download draft and copy it over pack_draft.json.
@@ -39,7 +41,7 @@ one (same gates; quit anytime with Ctrl-C and re-run to resume).
 # 5. Approve and build. Approval is one gate with two equivalent entries:
 #    browser Approve Pack + Save (server re-validates and persists it), or
 #    CLI approval for non-browser flows. Only one is needed.
-#    No confidence-threshold bypass.
+#    Bulk promotion is human-batched, never automatic.
 ./stickers approve ./my_pack --title "My Pack" --author "me"
 ./stickers export ./my_pack
 
@@ -133,7 +135,7 @@ manifest against the current draft and hashes immediately before use.
 | :--- | :--- | :--- |
 | `./stickers doctor [--upload] [<folder>]` | Core env/capability check; `--upload` also requires the uploader + Signal login; with folder also runs pack preflight | no |
 | `./stickers scan <folder>` | Inventory, hard-gate report, cluster similar candidates | no |
-| `./stickers tag <folder>` | Ranked OpenRouter suggestions for `keep` stickers lacking final emoji (ends with a summary, never exports) | **yes** |
+| `./stickers tag <folder> [--retage]` | Ranked suggestions for stickers missing them (re-runs cover new + failed only; `--retage` forces all) | **yes** |
 | `./stickers curate <folder> [--serve]` | `scan`, then generate/open the review page | no |
 | `./stickers review <folder> [--serve]` | Regenerate/open the review page only | no |
 | `./stickers approve <folder>` | Human approval for the current revision | no |
@@ -185,23 +187,22 @@ are base64-embedded, so expect roughly 1 MB per sticker) and works offline.
 
 | Control | Purpose |
 | :--- | :--- |
-| **Filter tabs** | All / Clusters / Needs Review / Kept / Undecided / Excluded |
-| **Sort tabs** | By Cluster, By Emoji, By Filename, By Confidence |
+| **Show tabs** | All / Needs emoji / Discarded |
+| **Order tabs** | Grouped (similar together) / By Emoji (spots duplicate assignments) / By Name |
+| **Apply all suggestions** | Fills every kept sticker missing an emoji with its top VLM pick in one undoable step; still review, then Save |
 | **Theme tabs** | Light, Dark, White, Black — check contrast on transparent edges |
-| **Search** | Match filename, emoji, or cluster id |
-| **⚡ Keep Only** | On a clustered card: keeps that one, explicitly excludes siblings |
-| **Keep? / ✕ Exclude / ↺ Keep / Later** | Explicit tri-state: Undecided is preserved, never auto-promoted |
-| **Emoji field** | Exactly one emoji (registry suggests; legitimate manual picks allowed) |
-| **✓ suggestion button** | One click applies the card's top-ranked suggestion as final (human act, undoable) |
+| **Search** | Match filename or emoji |
+| **✕ Discard / ↺ Restore** | Binary choice: discard dupes and bad shots, restore mistakes (undoable) |
+| **Emoji field** | Exactly one emoji — typing a valid one keeps the sticker; manual picks allowed |
 | **+ Add dropdown** | Registry emojis, plus a ⭐ group with this sticker's ranked suggestions |
-| **Bulk promote** | Applies every suggestion at or above your threshold (default 0.90) as final; still review, then Save |
 | **Title / Author / Cover** | Required pack metadata; edits invalidate approval |
 | **Save** | Loopback direct-save with `--serve` (digest compare-and-swap; page regenerates); otherwise download fallback |
 | **Approve Pack** | Same gate as CLI `--approve`: server re-validates and persists it on Save |
 
-Cards are outlined by confidence (warning/triage only — never an export gate): red
-below 0.6, orange below 0.8, neutral above. The **Needs Review** filter collects
-low-confidence, unassigned, error, and Undecided stickers.
+Similar stickers sit next to each other with an outline so dupes stand out:
+keep the best one, discard the rest. The **Needs emoji** filter collects
+kept stickers still missing a valid emoji. Model confidence is not shown
+anywhere: it is uncalibrated self-report, so review rests on your judgment.
 
 The browser never generates `stickers.yaml` (single Python implementation only).
 `export`/`preview`/`upload` rebuild or verify the manifest from the current draft
@@ -351,10 +352,12 @@ provider failures stay unresolved/error and block approval/export until re-tagge
 OpenRouter is the only provider (plain `urllib`, no vendor SDK; default
 `inclusionai/ling-3.0-flash-vl`, key `OPENROUTER_API_KEY`).
 
-Each sticker costs one request. Only `keep` stickers lacking a valid final emoji are sent,
+Each sticker costs one request. Every non-excluded sticker lacking a valid final
+emoji is sent (`keep` and `undecided`; excluded are skipped until re-kept),
 and suggestions never auto-approve — a human promotes each to final in review, then records
 `--approve` for the current revision. Any later metadata/selection/tag/cover/hash change
-invalidates approval. Confidence stays a UI warning/triage signal only.
+invalidates approval. Model confidence is stored with each suggestion but never
+shown and never gates anything.
 
 ---
 

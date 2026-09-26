@@ -593,14 +593,54 @@ def test_browser_roundtrip_preserves_undecided_hashes_and_suggestions(tmp_path):
 
     out, stats = rv.generate_review_html(tmp_path, draft_path=draft_path)
     html = out.read_text(encoding="utf-8")
-    assert "Undecided" in html
+    assert "undecided" in html.lower()
     assert "exportYaml" not in html and "Export stickers.yaml" not in html
     assert "DRAFT_BASELINE" in html
     # Full draft embedded (hashes, suggestions, revision) — DOM is a view.
     assert h_before["solo.webp"] and h_before["solo.webp"] in html
     assert '"revision"' in html
-    # Tri-state rendering present, undecided never rendered as keep.
+    # Untouched entries keep their "undecided" selection in the data model;
+    # the simplified UI resolves them via Discard or picking an emoji.
     assert 'data-selection="undecided"' in html or stats.get("undecided", 0) >= 0
+
+
+def test_review_page_simplified_controls(tmp_path):
+    """Per-card UI is Discard + emoji; bulk/sort live once in the header."""
+    import review as rv
+
+    _make_valid_image(tmp_path / "a.webp")
+    _make_valid_image(tmp_path / "b.webp")
+    draft = {
+        "version": 3, "revision": 1, "pack_state": "in_progress", "approval": None,
+        "meta": {"title": "T", "author": "A", "cover": None},
+        "similarity_groups": {},
+        "stickers": {
+            "a.webp": {"selection": "keep", "emojis": ["\U0001F600"],
+                       "suggested_emojis": ["\U0001F600"],
+                       "confidence": 0.9, "reason": "",
+                       "review_status": "pending", "tag_status": "manual",
+                       "tag_source": "manual", "similarity_group": None,
+                       "file_hash": ""},
+            "b.webp": {"selection": "keep", "emojis": None,
+                       "suggested_emojis": ["\U0001F601"],
+                       "confidence": 0.5, "reason": "",
+                       "review_status": "pending", "tag_status": "suggested",
+                       "tag_source": "openrouter", "similarity_group": None,
+                       "file_hash": ""},
+        },
+    }
+    (tmp_path / "pack_draft.json").write_text(json.dumps(draft), encoding="utf-8")
+    out, _ = rv.generate_review_html(tmp_path, draft_path=tmp_path / "pack_draft.json")
+    html = out.read_text(encoding="utf-8")
+    for removed in ("Keep Only", "markLater", "keepOnlyInCluster",
+                    "useSuggestion", "filterByCluster", "Keep?", ">Later<",
+                    "UNDECIDED", "EXCLUDED"):
+        assert removed not in html
+    for required in ("\u2715 Discard", "Needs emoji", "emoji-select",
+                     "emoji-input", "tabCountNeeds", "badgeNeeds",
+                     "Apply all suggestions", "promoteBulk",
+                     "By Emoji", "setSort", "card-needs-emoji"):
+        assert required in html
 
 
 def test_html_escaping_and_script_safe_serialization(tmp_path):
@@ -782,6 +822,69 @@ def test_ranked_suggestions_coercion(tmp_path):
 
     res3 = cab.classify_single_image(Empty(), tmp_path / "a.webp", retries=1)
     assert res3["suggested_emojis"] is None and res3["tag_status"] == "unresolved"
+
+
+def test_tag_sends_all_non_excluded_without_final(tmp_path):
+    """Tagging covers keep AND undecided stickers; excluded and finalized are skipped."""
+    import classify_and_build as cab
+
+    for name in ("keep.webp", "und.webp", "ex.webp", "done.webp"):
+        _make_valid_image(tmp_path / name)
+    # gone.webp stays off disk: referenced by the draft but never sent.
+    draft = {
+        "version": 3, "revision": 1, "pack_state": "in_progress", "approval": None,
+        "meta": {"title": "T", "author": "A", "cover": None}, "similarity_groups": {},
+        "stickers": {
+            "keep.webp": {"selection": "keep", "emojis": None, "file_hash": "x"},
+            "und.webp": {"selection": "undecided", "emojis": None, "file_hash": "x"},
+            "ex.webp": {"selection": "exclude", "emojis": None, "file_hash": "x"},
+            "done.webp": {"selection": "keep", "emojis": ["😀"], "file_hash": "x"},
+            "gone.webp": {"selection": "keep", "emojis": None, "file_hash": "x"},
+        },
+    }
+    got = cab.stickers_needing_tags(draft, tmp_path)
+    assert got == ["keep.webp", "und.webp"]
+
+
+def test_tag_skips_already_suggested(tmp_path):
+    """Re-runs only cover new and failed stickers; --retage forces all."""
+    import classify_and_build as cab
+
+    for name in ("new.webp", "done.webp", "failed.webp"):
+        _make_valid_image(tmp_path / name)
+    draft = {
+        "version": 3, "revision": 1, "pack_state": "in_progress", "approval": None,
+        "meta": {"title": "T", "author": "A", "cover": None}, "similarity_groups": {},
+        "stickers": {
+            "new.webp": {"selection": "keep", "emojis": None, "file_hash": "x",
+                         "suggested_emojis": None, "tag_status": "pending"},
+            "done.webp": {"selection": "keep", "emojis": None, "file_hash": "x",
+                          "suggested_emojis": ["😀"], "tag_status": "suggested"},
+            "failed.webp": {"selection": "keep", "emojis": None, "file_hash": "x",
+                            "suggested_emojis": None, "tag_status": "error"},
+        },
+    }
+    assert cab.stickers_needing_tags(draft, tmp_path) == ["failed.webp", "new.webp"]
+    assert cab.stickers_needing_tags(draft, tmp_path, refresh=True) == [
+        "done.webp", "failed.webp", "new.webp"]
+
+
+def test_classify_kept_threaded_path(tmp_path, monkeypatch):
+    """main()'s worker-pool classification runs end to end with a stubbed provider."""
+    import classify_and_build as cab
+
+    _make_valid_image(tmp_path / "a.webp")
+
+    class FakeProvider:
+        def classify(self, path, prompt):
+            return {"emojis": ["😀"], "reason": "grin", "confidence": 0.9}
+
+    monkeypatch.setattr(cab, "get_configured_provider", lambda model=None: FakeProvider())
+    monkeypatch.setattr(sys, "argv",
+                        ["classify_and_build.py", str(tmp_path), "--classify-kept", "--workers", "1"])
+    cab.main()
+    draft = json.loads((tmp_path / "pack_draft.json").read_text(encoding="utf-8"))
+    assert draft["stickers"]["a.webp"]["suggested_emojis"] == ["😀"]
 
 
 def test_export_receipt_and_stale_rejection(tmp_path):

@@ -2,7 +2,7 @@
 """Interactive Signal Sticker Pack Curation & Review Tool.
 
 Supports:
-- Visual Cluster Curation: side-by-side candidate review and explicit Keep Only.
+- Simple per-sticker review: Discard dupes, pick one emoji (similar ones sit together).
 - Single-emoji review with strict in-page validation (one grapheme).
 - Draft-only saves: the browser never generates stickers.yaml (single implementation).
 - Contrast previews: Dark, Light, White, and Black backgrounds.
@@ -242,10 +242,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       transition: transform 0.1s, border-color 0.15s, opacity 0.2s;
     }}
 
-    .card.conf-low {{ border-color: #e5484d; }}
-    .card.conf-mid {{ border-color: #f79009; }}
-    .card.conf-ok {{ border-color: var(--border); }}
-
     .card.in-cluster {{
       box-shadow: 0 0 0 1px #f79009 inset;
       border-color: #f79009;
@@ -264,6 +260,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       box-shadow: 0 0 0 2px var(--danger) !important;
     }}
 
+    .card.card-needs-emoji {{
+      border-color: #b54708;
+      box-shadow: 0 0 0 1px #b54708 inset;
+    }}
+
     .card-topbar {{
       width: 100%;
       display: flex;
@@ -272,32 +273,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       margin-bottom: 6px;
       min-height: 22px;
       gap: 4px;
-    }}
-
-    .cluster-tag {{
-      background: #f79009;
-      color: #fff;
-      font-size: 10px;
-      font-weight: 700;
-      padding: 2px 6px;
-      border-radius: 10px;
-      cursor: pointer;
-      white-space: nowrap;
-    }}
-
-    .keep-only-btn {{
-      background: transparent;
-      border: 1px solid rgba(247, 144, 9, 0.6);
-      color: #f79009;
-      padding: 2px 6px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 11px;
-      transition: background 0.15s, color 0.15s;
-    }}
-    .keep-only-btn:hover {{
-      background: #f79009;
-      color: #fff;
     }}
 
     .sel-btn {{
@@ -394,9 +369,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       flex-shrink: 0;
     }}
 
-    #bulkConf {{
-      max-width: 5em;
-      flex: 0 0 auto;
+    .emoji-bar {{
+      flex-wrap: wrap;
     }}
 
     .err-msg {{
@@ -408,15 +382,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       font-weight: 600;
     }}
     .card.card-invalid .err-msg {{ display: block; }}
-
-    .meta-row {{
-      width: 100%;
-      display: flex;
-      justify-content: space-between;
-      font-size: 11px;
-      color: var(--subtext);
-      margin-top: 6px;
-    }}
+    .card.card-needs-emoji .err-msg {{ display: block; }}
 
     .reason {{
       font-size: 11px;
@@ -466,16 +432,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       <div class="header-left">
         <h1 id="packHeading">{title}</h1>
         <span class="badge badge-active" id="badgeActive">{count_active} Kept</span>
-        <span class="badge badge-cluster" id="badgeCluster">{count_clusters} Clusters</span>
-        <span class="badge" id="badgeUndecided">{count_undecided} Undecided</span>
-        <span class="badge badge-deleted" id="badgeExcluded">{count_excluded} Excluded</span>
-        <span class="badge" id="badgeApproval">{approval_label}</span>
+        <span class="badge badge-cluster" id="badgeNeeds">0 Need emoji</span>
+        <span class="badge badge-deleted" id="badgeExcluded">{count_excluded} Discarded</span>
       </div>
 
       <div class="header-controls">
         <button class="btn btn-secondary" id="saveServerBtn" onclick="saveDraftToServer()">Save</button>
         <button class="btn btn-secondary" onclick="exportDraftJson()">Download draft (fallback)</button>
         <button class="btn" id="approveBtn" onclick="approvePack()">Approve Pack</button>
+        <button class="btn btn-secondary" onclick="promoteBulk()" title="Fill every kept sticker that has no emoji yet with its top suggestion (skips discarded; undoable, review before Save)">Apply all suggestions</button>
       </div>
     </div>
 
@@ -494,33 +459,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     <div class="header-row1">
       <div class="header-controls">
-        <span class="ctrl-label">Bulk:</span>
-        <button class="btn btn-secondary" onclick="promoteBulk()" title="Apply every suggestion at or above the threshold as final (human-batched; review before Save)">Promote suggestions ≥</button>
-        <input type="number" id="bulkConf" class="search-box" value="0.90" min="0" max="1" step="0.05" title="Confidence threshold for bulk promote">
-        <span class="ctrl-label">as final (batched by you; still review before Save)</span>
-      </div>
-    </div>
-
-    <div class="header-row1">
-      <div class="header-controls">
-        <input type="text" id="searchBox" class="search-box" placeholder="Search filename, emoji, or cluster..." oninput="filterCards()">
+        <input type="text" id="searchBox" class="search-box" placeholder="Search filename or emoji..." oninput="filterCards()">
 
         <div class="filter-tabs">
-          <span class="ctrl-label">Filter:</span>
+          <span class="ctrl-label">Show:</span>
           <button class="filter-tab active" onclick="setFilter('all', this)">All (<span id="tabCountAll">{count_total}</span>)</button>
-          <button class="filter-tab" id="tabClusters" onclick="setFilter('clusters', this)">Clusters (<span id="tabCountClusters">{count_clustered}</span>)</button>
-          <button class="filter-tab" id="tabNeedsReview" onclick="setFilter('review', this)">Needs Review (<span id="tabCountReview">0</span>)</button>
-          <button class="filter-tab" onclick="setFilter('kept', this)">Kept (<span id="tabCountKept">{count_active}</span>)</button>
-          <button class="filter-tab" onclick="setFilter('undecided', this)">Undecided (<span id="tabCountUndecided">{count_undecided}</span>)</button>
-          <button class="filter-tab" onclick="setFilter('excluded', this)">Excluded (<span id="tabCountExcluded">{count_excluded}</span>)</button>
+          <button class="filter-tab" onclick="setFilter('needs-emoji', this)">Needs emoji (<span id="tabCountNeeds">0</span>)</button>
+          <button class="filter-tab" onclick="setFilter('excluded', this)">Discarded (<span id="tabCountExcluded">{count_excluded}</span>)</button>
         </div>
 
         <div class="filter-tabs">
-          <span class="ctrl-label">Sort:</span>
-          <button class="filter-tab active" id="sortClusterBtn" onclick="setSort('cluster', this)">By Cluster</button>
+          <span class="ctrl-label">Order:</span>
+          <button class="filter-tab active" onclick="setSort('cluster', this)">Grouped</button>
           <button class="filter-tab" onclick="setSort('emoji', this)">By Emoji</button>
-          <button class="filter-tab" onclick="setSort('filename', this)">By Filename</button>
-          <button class="filter-tab" onclick="setSort('conf', this)">By Conf</button>
+          <button class="filter-tab" onclick="setSort('filename', this)">By Name</button>
         </div>
 
         <div class="filter-tabs">
@@ -677,77 +629,57 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     function updateCountsAndValidation() {{
       const cards = Array.from(document.querySelectorAll('.card'));
       let invalidCount = 0;
-      let reviewCount = 0;
+      let needsEmojiCount = 0;
       let keptCount = 0;
-      let clusterStickersCount = 0;
 
       cards.forEach(card => {{
         const fn = card.dataset.file;
         const entry = entryFor(fn) || {{ selection: 'keep' }};
         const sel = entry.selection || 'keep';
         const isEx = sel === 'exclude';
-        const isUnd = sel === 'undecided';
-        const cid = card.dataset.cluster;
-        const conf = parseFloat(card.dataset.conf || '1.0');
         const text = getCardEmoji(card);
         const val = validateSequence(text);
 
-        if (cid) clusterStickersCount++;
-
+        // Empty ("needs an emoji") reads as amber todo; genuinely malformed
+        // input reads as red error. Discarded cards are dimmed, not flagged.
+        const isEmpty = !text.trim();
+        card.classList.toggle('card-needs-emoji', !val.valid && isEmpty && !isEx);
+        card.classList.toggle('card-invalid', !val.valid && !isEmpty);
         if (!val.valid) {{
-          card.classList.add('card-invalid');
           const errEl = card.querySelector('.err-msg');
           if (errEl) errEl.textContent = '⚠ ' + val.msg;
-          if (!isEx && !isUnd) invalidCount++;
-        }} else {{
-          card.classList.remove('card-invalid');
+          if (!isEx) invalidCount++;
         }}
 
-        if (sel === 'keep') {{
-          keptCount++;
-          if (conf < 0.8 || !val.valid || card.dataset.status === 'needs_review' || card.dataset.status === 'error') {{
-            reviewCount++;
-          }}
-        }} else if (isUnd) {{
-          reviewCount++;
+        if (sel === 'keep' || sel === 'undecided') keptCount++;
+        if (!isEx && (!val.valid || card.dataset.status === 'needs_review' || card.dataset.status === 'error')) {{
+          needsEmojiCount++;
         }}
 
         card.classList.toggle('is-excluded', isEx);
-        card.classList.toggle('is-undecided', isUnd);
         const btn = card.querySelector('.sel-btn');
-        if (btn) btn.textContent = isEx ? '↺ Keep' : (isUnd ? 'Keep?' : '✕ Exclude');
-        const laterBtn = card.querySelector('.later-btn');
-        if (laterBtn) laterBtn.style.display = isUnd ? 'none' : '';
+        if (btn) btn.textContent = isEx ? '↺ Restore' : '✕ Discard';
         card.dataset.selection = sel;
       }});
 
       const totalCount = cards.length;
       let exCount = 0;
-      let undecidedCount = 0;
       Object.values(draftEntries()).forEach(e => {{
         if (e.selection === 'exclude') exCount++;
-        if (e.selection === 'undecided') undecidedCount++;
       }});
 
       document.getElementById('badgeActive').textContent = keptCount + ' Kept';
-      document.getElementById('badgeExcluded').textContent = exCount + ' Excluded';
-      const badgeUnd = document.getElementById('badgeUndecided');
-      if (badgeUnd) badgeUnd.textContent = undecidedCount + ' Undecided';
-      const badgeAppr = document.getElementById('badgeApproval');
-      if (badgeAppr) badgeAppr.textContent = (DRAFT_STATE.pack_state === 'approved') ? ('Approved r' + DRAFT_STATE.revision) : 'In progress';
+      document.getElementById('badgeNeeds').textContent = needsEmojiCount + ' Need emoji';
+      document.getElementById('badgeExcluded').textContent = exCount + ' Discarded';
       document.getElementById('tabCountAll').textContent = totalCount;
-      document.getElementById('tabCountClusters').textContent = clusterStickersCount;
-      document.getElementById('tabCountReview').textContent = reviewCount;
-      document.getElementById('tabCountKept').textContent = keptCount;
-      const tabUnd = document.getElementById('tabCountUndecided');
-      if (tabUnd) tabUnd.textContent = undecidedCount;
+      document.getElementById('tabCountNeeds').textContent = needsEmojiCount;
       document.getElementById('tabCountExcluded').textContent = exCount;
       const dirtyEl = document.getElementById('dirtyLabel');
       if (dirtyEl) dirtyEl.textContent = isDirty() ? '● unsaved changes' : 'saved';
       const apprEl = document.getElementById('approvalSummary');
       if (apprEl) {{
         const metaOk = (DRAFT_STATE.meta.title || '').trim() && (DRAFT_STATE.meta.author || '').trim();
-        apprEl.textContent = 'Revision ' + DRAFT_STATE.revision + ' • ' + keptCount + ' keep / ' + undecidedCount + ' undecided / ' + exCount + ' excluded • ' + invalidCount + ' invalid • title/author ' + (metaOk ? 'set' : 'MISSING');
+        apprEl.textContent = 'Revision ' + DRAFT_STATE.revision + ' • ' + keptCount + ' kept / ' + exCount + ' discarded • ' + needsEmojiCount + ' need emoji • title/author ' + (metaOk ? 'set' : 'MISSING');
       }}
     }}
 
@@ -756,8 +688,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       const fn = card.dataset.file;
       const entry = entryFor(fn);
       const cur = entry ? entry.selection : 'keep';
-      // Tri-state cycle: undecided -> keep -> exclude -> keep (explicit; never implicit).
-      const next = (cur === 'undecided') ? 'keep' : (cur === 'keep' ? 'exclude' : 'keep');
+      // Binary choice: anything not discarded is kept. Picking an emoji also
+      // keeps the sticker, so "undecided" only ever means "not touched yet".
+      const next = (cur === 'exclude') ? 'keep' : 'exclude';
       const before = snapshotState();
       entry.selection = next;
       entry.review_status = (next === 'exclude') ? 'culled' : 'pending';
@@ -766,21 +699,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       syncCardToEntry(fn);
       updateCountsAndValidation();
       refreshAllSelects();
-      filterCards();
-    }}
-
-    function markLater(btn) {{
-      const card = btn.closest('.card');
-      const fn = card.dataset.file;
-      const entry = entryFor(fn);
-      if (!entry) return;
-      const before = snapshotState();
-      entry.selection = 'undecided';
-      entry.review_status = 'pending';
-      markApprovedDirty();
-      undoStack.push({{ desc: 'marked undecided (' + fn + ')', snapshot: before }});
-      syncCardToEntry(fn);
-      updateCountsAndValidation();
       filterCards();
     }}
 
@@ -801,37 +719,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       if (inp && document.activeElement !== inp) inp.value = card.dataset.emoji;
     }}
 
-    function keepOnlyInCluster(btn) {{
-      const currentCard = btn.closest('.card');
-      const currentFile = currentCard.dataset.file;
-      const cid = currentCard.dataset.cluster;
-      if (!cid) return;
-      const before = snapshotState();
-      let countExcluded = 0;
-      document.querySelectorAll('.card').forEach(card => {{
-        if (card.dataset.cluster === cid) {{
-          const fn = card.dataset.file;
-          const entry = entryFor(fn);
-          if (!entry) return;
-          if (fn !== currentFile) {{
-            entry.selection = 'exclude';
-            entry.review_status = 'culled';
-            countExcluded++;
-          }} else {{
-            entry.selection = 'keep';
-            entry.review_status = 'pending';
-          }}
-          syncCardToEntry(fn);
-        }}
-      }});
-      markApprovedDirty();
-      undoStack.push({{ desc: 'Keep only ' + currentFile + ' in ' + cid, snapshot: before }});
-      updateCountsAndValidation();
-      refreshAllSelects();
-      filterCards();
-      showToast('Kept ' + currentFile + ' and excluded ' + countExcluded + ' other variations in ' + cid, true);
-    }}
-
     function onEmojiInput(input) {{
       const card = input.closest('.card');
       const fn = card.dataset.file;
@@ -847,6 +734,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           entry.review_status = 'pending';
           entry.tag_status = 'manual';
           entry.tag_source = 'manual';
+          // Picking an emoji is a keep decision: untouched cluster members
+          // ("undecided") become kept as soon as they get their emoji.
+          if (entry.selection === 'undecided') entry.selection = 'keep';
           markApprovedDirty();
           if (prevFinal !== v.emojis[0]) undoStack.push({{ desc: 'Emoji edit ' + fn, snapshot: beforeSnap }});
         }} else if ((entry.emojis || []).length !== 0) {{
@@ -871,75 +761,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         onEmojiInput(input);
       }}
       select.selectedIndex = 0;
-    }}
-
-    function applyFinalEmoji(card, entry, emoji, auditSource) {{
-      const beforeSnap = snapshotState();
-      const prevFinal = (entry.emojis && entry.emojis[0]) || '';
-      entry.emojis = [emoji];
-      entry.review_status = 'pending';
-      entry.tag_status = 'approved';
-      if (auditSource) {{
-        const src = entry.tag_source || 'openrouter';
-        entry.tag_source = src.includes('+bulk') ? src : (src + '+' + auditSource);
-      }}
-      const input = card.querySelector('.emoji-input');
-      if (input) input.value = emoji;
-      card.dataset.emoji = emoji;
-      markApprovedDirty();
-      if (prevFinal !== emoji) undoStack.push({{ desc: 'Promote suggestion ' + card.dataset.file, snapshot: beforeSnap }});
-      updateCountsAndValidation();
-      refreshAllSelects();
-      if (currentSort === 'emoji') sortCards('emoji');
-    }}
-
-    function useSuggestion(btn) {{
-      const card = btn.closest('.card');
-      const entry = entryFor(card.dataset.file);
-      if (!entry) return;
-      const sugg = entry.suggested_emojis || [];
-      if (!sugg.length) return;
-      const v = validateSequence(String(sugg[0]));
-      if (!v.valid) {{
-        showToast('Top suggestion is not a valid single emoji.', false);
-        return;
-      }}
-      applyFinalEmoji(card, entry, v.emojis[0], null);
-    }}
-
-    function promoteBulk() {{
-      const thrInput = document.getElementById('bulkConf');
-      let thr = parseFloat(thrInput ? thrInput.value : '0.90');
-      if (!(thr >= 0 && thr <= 1)) thr = 0.90;
-      const audit = 'bulk-' + thr.toFixed(2);
-      const beforeSnap = snapshotState();
-      let n = 0;
-      document.querySelectorAll('.card').forEach(card => {{
-        const entry = entryFor(card.dataset.file);
-        if (!entry || entry.selection !== 'keep') return;
-        if (getPrimaryEmoji(card)) return;
-        const sugg = entry.suggested_emojis || [];
-        if (!sugg.length) return;
-        const conf = parseFloat(entry.confidence || 0);
-        if (!(conf >= thr)) return;
-        const v = validateSequence(String(sugg[0]));
-        if (!v.valid) return;
-        entry.emojis = v.emojis;
-        entry.review_status = 'pending';
-        entry.tag_status = 'approved';
-        const src = entry.tag_source || 'openrouter';
-        entry.tag_source = src.includes('+bulk') ? src : (src + '+' + audit);
-        const input = card.querySelector('.emoji-input');
-        if (input) input.value = v.emojis[0];
-        card.dataset.emoji = v.emojis[0];
-        n++;
-      }});
-      markApprovedDirty();
-      undoStack.push({{ desc: 'Bulk promote ≥ ' + thr.toFixed(2), snapshot: beforeSnap }});
-      updateCountsAndValidation();
-      refreshAllSelects();
-      filterCards();
-      showToast('Promoted ' + n + ' suggestion(s) at ≥ ' + thr.toFixed(2) + '. Review them, then Save.', false);
     }}
 
     function onMetaInput() {{
@@ -968,6 +789,40 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       sortCards(sortType);
     }}
 
+    function promoteBulk() {{
+      // One human-triggered, undoable step: fill every kept sticker that has
+      // no emoji yet with its top suggestion. Discarded stickers are skipped;
+      // review the result before Save. Picking the emoji keeps the sticker,
+      // so untouched entries this covers become kept, not undecided.
+      const beforeSnap = snapshotState();
+      let n = 0;
+      document.querySelectorAll('.card').forEach(card => {{
+        const entry = entryFor(card.dataset.file);
+        if (!entry || entry.selection === 'exclude') return;
+        if (getPrimaryEmoji(card)) return;
+        const sugg = entry.suggested_emojis || [];
+        if (!sugg.length) return;
+        const v = validateSequence(String(sugg[0]));
+        if (!v.valid) return;
+        entry.emojis = v.emojis;
+        entry.review_status = 'pending';
+        entry.tag_status = 'approved';
+        const src = entry.tag_source || 'openrouter';
+        entry.tag_source = src.includes('+bulk') ? src : (src + '+bulk');
+        if (entry.selection === 'undecided') entry.selection = 'keep';
+        const input = card.querySelector('.emoji-input');
+        if (input) input.value = v.emojis[0];
+        card.dataset.emoji = v.emojis[0];
+        n++;
+      }});
+      markApprovedDirty();
+      undoStack.push({{ desc: 'Apply all suggestions', snapshot: beforeSnap }});
+      updateCountsAndValidation();
+      refreshAllSelects();
+      filterCards();
+      showToast('Applied ' + n + ' suggestion(s). Review them, then Save.', false);
+    }}
+
     function sortCards(sortType) {{
       const grid = document.getElementById('cardGrid');
       const cards = Array.from(grid.querySelectorAll('.card'));
@@ -982,11 +837,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           const ea = getPrimaryEmoji(a);
           const eb = getPrimaryEmoji(b);
           if (ea !== eb) return ea.localeCompare(eb, 'en', {{ numeric: true }});
-          return a.dataset.file.localeCompare(b.dataset.file, 'en', {{ numeric: true }});
-        }} else if (sortType === 'conf') {{
-          const ca = parseFloat(a.dataset.conf || '1.0');
-          const cb = parseFloat(b.dataset.conf || '1.0');
-          if (ca !== cb) return ca - cb;
           return a.dataset.file.localeCompare(b.dataset.file, 'en', {{ numeric: true }});
         }} else {{
           return a.dataset.file.localeCompare(b.dataset.file, 'en', {{ numeric: true }});
@@ -1008,15 +858,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       btn.parentElement.querySelectorAll('.filter-tab').forEach(b => {{
         b.classList.remove('active', 'active-warning', 'active-danger');
       }});
-      if (filterType === 'clusters') btn.classList.add('active-warning');
-      else if (filterType === 'excluded') btn.classList.add('active-danger');
+      if (filterType === 'excluded') btn.classList.add('active-danger');
       else btn.classList.add('active');
-      filterCards();
-    }}
-
-    function filterByCluster(cid) {{
-      document.getElementById('searchBox').value = cid;
-      setFilter('clusters', document.getElementById('tabClusters'));
       filterCards();
     }}
 
@@ -1025,28 +868,19 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       document.querySelectorAll('.card').forEach(card => {{
         const fn = card.dataset.file.toLowerCase();
         const emoji = getCardEmoji(card).toLowerCase();
-        const cid = (card.dataset.cluster || '').toLowerCase();
-        const conf = parseFloat(card.dataset.conf || '1.0');
         const entry = entryFor(card.dataset.file) || {{ selection: 'keep' }};
         const sel = entry.selection || 'keep';
         const isEx = sel === 'exclude';
-        const isUnd = sel === 'undecided';
-        const isInv = card.classList.contains('card-invalid');
+        const isInv = card.classList.contains('card-invalid') || card.classList.contains('card-needs-emoji');
 
         let matchFilter = true;
-        if (currentFilter === 'clusters') {{
-          matchFilter = !!cid;
-        }} else if (currentFilter === 'review') {{
-          matchFilter = (sel !== 'exclude') && (conf < 0.8 || isInv || isUnd || card.dataset.status === 'needs_review' || card.dataset.status === 'error');
-        }} else if (currentFilter === 'kept') {{
-          matchFilter = sel === 'keep';
-        }} else if (currentFilter === 'undecided') {{
-          matchFilter = isUnd;
+        if (currentFilter === 'needs-emoji') {{
+          matchFilter = !isEx && (isInv || card.dataset.status === 'needs_review' || card.dataset.status === 'error');
         }} else if (currentFilter === 'excluded') {{
           matchFilter = isEx;
         }}
 
-        let matchSearch = fn.includes(q) || emoji.includes(q) || cid.includes(q);
+        let matchSearch = fn.includes(q) || emoji.includes(q);
         card.style.display = (matchFilter && matchSearch) ? 'flex' : 'none';
       }});
     }}
@@ -1161,7 +995,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       if (!(DRAFT_STATE.meta.title || '').trim()) problems.push('Set a pack title.');
       if (!(DRAFT_STATE.meta.author || '').trim()) problems.push('Set a pack author.');
       Object.entries(draftEntries()).forEach(([fn, e]) => {{
-        if (e.selection === 'undecided') problems.push(fn + ': undecided — Keep or Exclude it.');
+        if (e.selection === 'undecided') problems.push(fn + ': needs a decision — Discard it or give it an emoji.');
         if (e.selection === 'keep') {{
           const v = validateSequence((e.emojis && e.emojis[0]) || '');
           if (!v.valid) problems.push(fn + ': needs exactly one valid emoji.');
@@ -1277,20 +1111,13 @@ def generate_review_html(
         suggested = info.get("suggested_emojis")
         sugg_list = [str(e) for e in suggested] if isinstance(suggested, list) else []
         suggested_str = sugg_list[0] if sugg_list else ""
-        try:
-            conf = float(info.get("confidence", 0.0) or 0.0)
-        except Exception:
-            conf = 0.0
+        # Confidence is model self-report, uncalibrated: never shown, never a
+        # gate. Review decisions rest on human judgment of image + suggestion.
         reason = str(info.get("reason", "") or "")
         status = str(info.get("review_status", "pending") or "pending")
 
-        conf_class = "conf-low" if conf < 0.6 else ("conf-mid" if conf < 0.8 else "conf-ok")
         cluster_class = "in-cluster" if cid else ""
         ex_class = "is-excluded" if sel == "exclude" else ("is-undecided" if sel == "undecided" else "")
-        try:
-            size_kb = img_path.stat().st_size / 1024
-        except Exception:
-            size_kb = 0
         esc_file = html.escape(file_name, quote=True)
         esc_cid = html.escape(cid, quote=True)
         esc_emoji = html.escape(emoji_str, quote=True)
@@ -1301,57 +1128,25 @@ def generate_review_html(
             esc_suggested = html.escape(f" Suggested: {suggested_str}{extra}")
         else:
             esc_suggested = ""
-        use_btn_html = ""
-        if sugg_list and (not emoji_str or emoji_str != sugg_list[0]):
-            top_esc = html.escape(sugg_list[0], quote=True)
-            use_btn_html = f'<button type="button" class="keep-only-btn" onclick="useSuggestion(this)" title="Apply suggested {top_esc} as final">✓ {top_esc}</button>'
-
-        cluster_tag_html = (
-            f'<span class="cluster-tag" onclick="filterByCluster(\'{esc_cid}\')" title="Filter by {esc_cid}">{esc_cid}</span>'
-            if cid
-            else ""
-        )
-        keep_only_html = (
-            f'<button type="button" class="keep-only-btn" onclick="keepOnlyInCluster(this)" title="Keep this variation and explicitly exclude its siblings in {esc_cid}">⚡ Keep Only</button>'
-            if cid
-            else ""
-        )
         if sel == "exclude":
-            sel_label = "↺ Keep"
-        elif sel == "undecided":
-            sel_label = "Keep?"
+            sel_label = "↺ Restore"
         else:
-            sel_label = "✕ Exclude"
-        later_html = (
-            '<button type="button" class="later-btn" onclick="markLater(this)" title="Leave undecided for later">Later</button>'
-            if sel != "undecided"
-            else ""
-        )
-        und_badge = '<div class="excluded-badge" style="background:#7a5b00;">UNDECIDED</div>' if sel == "undecided" else ""
+            sel_label = "✕ Discard"
 
         card_html = f"""
-        <div class="card {conf_class} {cluster_class} {ex_class}" data-file="{esc_file}" data-cluster="{esc_cid}" data-selection="{sel}" data-emoji="{esc_emoji}" data-conf="{conf:.2f}" data-status="{html.escape(status, quote=True)}">
+        <div class="card {cluster_class} {ex_class}" data-file="{esc_file}" data-cluster="{esc_cid}" data-selection="{sel}" data-emoji="{esc_emoji}" data-status="{html.escape(status, quote=True)}">
           <div class="card-topbar">
-            {cluster_tag_html}
-            {keep_only_html}
             <button type="button" class="sel-btn" onclick="toggleSelect(this)">{sel_label}</button>
-            {later_html}
           </div>
           <div class="sticker-container">
-            <div class="excluded-badge">EXCLUDED</div>
-            {und_badge}
+            <div class="excluded-badge">DISCARDED</div>
             <img class="sticker-img" src="{src}" loading="lazy" alt="{esc_file}">
           </div>
           <div class="emoji-bar">
-            <input type="text" class="emoji-input" value="{esc_emoji}" placeholder="one emoji" title="Exactly one emoji" oninput="onEmojiInput(this)">
-            {use_btn_html}
+            <input type="text" class="emoji-input" value="{esc_emoji}" placeholder="one emoji" title="Exactly one emoji — picking one keeps the sticker" oninput="onEmojiInput(this)">
             <select class="emoji-select" onchange="onEmojiAdd(this)" title="Pick a suggested emoji"><option value="" selected disabled>+ Add</option></select>
           </div>
           <div class="err-msg">⚠ Invalid emoji</div>
-          <div class="meta-row">
-            <span>{size_kb:.0f} KB</span>
-            <span>conf: {conf:.2f}</span>
-          </div>
           <div class="reason" title="{esc_reason}">{esc_reason_text}{esc_suggested}</div>
           <div class="filename">{esc_file}</div>
         </div>
@@ -1639,8 +1434,10 @@ def main():
         print(f"  Warning: {stats['missing']} draft entry/entries have no image on disk and were skipped.")
 
     print("\nIn the page:")
-    print("  1. Resolve every Undecided card (Keep Only / Keep? / Exclude / Later).")
-    print("  2. Give each kept sticker exactly one emoji; Save marks dirty state.")
+    print("  1. Discard dupes and bad shots (similar ones sit next to each other).")
+    print("  2. Give each kept sticker exactly one emoji: Apply all suggestions")
+    print("     fills every VLM pick at once (review after), or pick per card")
+    print("     from + Add. Order by Emoji to spot duplicate assignments.")
     print("  3. Set title/author/cover, then Approve Pack and Save.")
     print("  4. For turnkey saves: ./stickers curate --serve (loopback server).")
     print("\nStatic fallback: click Download draft and copy it over")
