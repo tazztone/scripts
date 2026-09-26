@@ -90,7 +90,17 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Remove camera-paired JPEGs when a RAW counterpart exists."
     )
-    parser.add_argument("directory", help="Root directory to scan")
+    parser.add_argument(
+        "directory",
+        nargs="?",
+        default=None,
+        help="Root directory to scan (prompted when --wizard)",
+    )
+    parser.add_argument(
+        "--wizard",
+        action="store_true",
+        help="Interactive mode: prompts for folder, dry-runs, then confirms a trash move",
+    )
     parser.add_argument(
         "--dry-run", action="store_true", help="Preview without deleting"
     )
@@ -119,6 +129,8 @@ def parse_args():
         help="Parallel EXIF threads (default: 4; use 2 for HDDs, 8+ for SSDs)",
     )
     args = parser.parse_args()
+    if not args.wizard and not args.directory:
+        parser.error("directory is required without --wizard")
     if args.workers < 1:
         parser.error("--workers must be >= 1")
     if args.min_raw_size < 0:
@@ -316,10 +328,88 @@ def scan_and_remove(root: Path, trash_dir: Path | None, args):
     logging.info(f"  Editor export : {kept_edited}")
     logging.info(f"  Errors        : {errors}")
 
+    return {
+        "deleted": deleted,
+        "kept_no_raw": kept_no_raw,
+        "kept_edited": kept_edited,
+        "errors": errors,
+    }
+
+
+def prompt(text: str, default: str | None = None) -> str:
+    """Prompt with an optional default. Ctrl-C / Ctrl-D aborts cleanly."""
+    suffix = f" [{default}]" if default else ""
+    try:
+        value = input(f"{text}{suffix}: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        sys.exit(130)
+    return value or default or ""
+
+
+def run_wizard(args) -> dict:
+    """Interactive flow: folder -> dry-run summary -> confirm -> trash move."""
+    print("Photo cleanup wizard (nothing is deleted until you confirm).")
+    print()
+
+    root = None
+    while root is None:
+        answer = prompt("Photo folder to scan", args.directory)
+        candidate = Path(answer).expanduser().resolve() if answer else None
+        if candidate and candidate.is_dir():
+            root = candidate
+        else:
+            print(f"  Not a directory: {answer or '(empty)'}")
+
+    default_trash = str(Path.home() / "Desktop" / "photo-trash" / root.name)
+    trash_dir = None
+    while trash_dir is None:
+        answer = prompt("Trash folder (files are moved here)", args.trash or default_trash)
+        candidate = Path(answer).expanduser().resolve() if answer else None
+        if candidate is None:
+            print("  Please enter a trash folder.")
+        elif root in candidate.parents or root == candidate:
+            print("  Trash folder must be outside the scan directory.")
+        else:
+            trash_dir = candidate
+
+    print()
+    print(f"Step 1/2: previewing {root} ...")
+    dry_args = argparse.Namespace(**{**vars(args), "dry_run": True})
+    preview = scan_and_remove(root, None, dry_args)
+
+    if preview["deleted"] == 0:
+        print("Nothing to move: no deletable camera JPEGs found.")
+        return preview
+
+    if args.dry_run:
+        print("Dry-run requested: stopping after the preview.")
+        return preview
+
+    print()
+    answer = prompt(
+        f"Step 2/2: move {preview['deleted']} JPG(s) to {trash_dir}? [y/N]"
+    )
+    if answer.lower() not in ("y", "yes"):
+        print("Aborted: no files were moved.")
+        return preview
+
+    trash_dir.mkdir(parents=True, exist_ok=True)
+    live_args = argparse.Namespace(**{**vars(args), "dry_run": False})
+    result = scan_and_remove(root, trash_dir, live_args)
+    print()
+    print(f"Moved {result['deleted']} JPG(s) to {trash_dir}.")
+    print("Undo: move them back from the trash folder preserving its tree.")
+    return result
+
 
 def main():
     args = parse_args()
     setup_logging(args, args.log)
+
+    if args.wizard:
+        run_wizard(args)
+        return
 
     root = Path(args.directory).resolve()
     if not root.is_dir():

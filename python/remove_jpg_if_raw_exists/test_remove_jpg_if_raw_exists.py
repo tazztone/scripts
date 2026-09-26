@@ -18,6 +18,7 @@ from remove_jpg_if_raw_exists import (
     parse_args,
     process_jpg,
     scan_and_remove,
+    run_wizard,
     main,
 )
 
@@ -256,3 +257,86 @@ def test_main_rejects_trash_inside_scan_dir(monkeypatch, tmp_path: Path):
         ["prog", str(tmp_path), "--trash", str(tmp_path / "trash-inside")])
     with pytest.raises(SystemExit):
         main()
+
+
+def _wizard_args(**overrides):
+    base = dict(
+        directory=None, trash=None, dry_run=False, skip_exif=False,
+        verbose=False, workers=2, min_raw_size=10, wizard=True, log=None,
+    )
+    base.update(overrides)
+    return types.SimpleNamespace(**base)
+
+
+def _pair(root: Path, name="IMG_0001"):
+    sub = root / "sub"
+    sub.mkdir(exist_ok=True)
+    (sub / f"{name}.JPG").write_bytes(b"dummy")
+    (sub / f"{name}.ARW").write_bytes(b"0" * 64)
+    return sub / f"{name}.JPG"
+
+
+def _answers(monkeypatch, *responses):
+    it = iter(responses)
+    monkeypatch.setattr("builtins.input", lambda _: next(it))
+
+
+@patch("remove_jpg_if_raw_exists.read_exif")
+def test_wizard_moves_to_trash_on_confirm(mock_read_exif, monkeypatch, tmp_path: Path):
+    mock_read_exif.return_value = dict(CAMERA_TAGS)
+    photos = tmp_path / "photos"
+    photos.mkdir()
+    jpg = _pair(photos)
+    trash = tmp_path / "trash"
+    _answers(monkeypatch, str(photos), str(trash), "y")
+    result = run_wizard(_wizard_args())
+    assert result["deleted"] == 1
+    assert not jpg.exists()
+    assert (trash / "sub" / "IMG_0001.JPG").exists()
+
+
+@patch("remove_jpg_if_raw_exists.read_exif")
+def test_wizard_abort_moves_nothing(mock_read_exif, monkeypatch, tmp_path: Path):
+    mock_read_exif.return_value = dict(CAMERA_TAGS)
+    photos = tmp_path / "photos"
+    photos.mkdir()
+    jpg = _pair(photos)
+    trash = tmp_path / "trash"
+    _answers(monkeypatch, str(photos), str(trash), "n")
+    result = run_wizard(_wizard_args())
+    assert result["deleted"] == 1  # preview count, nothing acted on
+    assert jpg.exists()
+    assert not trash.exists()
+
+
+@patch("remove_jpg_if_raw_exists.read_exif")
+def test_wizard_reprompts_bad_dir_and_inside_trash(
+    mock_read_exif, monkeypatch, tmp_path: Path, capsys
+):
+    mock_read_exif.return_value = dict(CAMERA_TAGS)
+    photos = tmp_path / "photos"
+    photos.mkdir()
+    jpg = _pair(photos)
+    trash = tmp_path / "trash"
+    _answers(
+        monkeypatch,
+        "/no/such/dir", str(photos),  # bad folder, then good folder
+        str(photos / "inside"), str(trash),  # inside trash, then good trash
+        "n",
+    )
+    run_wizard(_wizard_args())
+    out = capsys.readouterr().out
+    assert "Not a directory" in out
+    assert "must be outside the scan directory" in out
+    assert jpg.exists()
+
+
+@patch("remove_jpg_if_raw_exists.read_exif")
+def test_scan_and_remove_returns_counts(mock_read_exif, tmp_path: Path):
+    mock_read_exif.return_value = dict(CAMERA_TAGS)
+    _pair(tmp_path)
+    (tmp_path / "orphan.JPG").write_bytes(b"dummy")
+    result = scan_and_remove(tmp_path, None, _args())
+    assert result == {
+        "deleted": 1, "kept_no_raw": 1, "kept_edited": 0, "errors": 0,
+    }

@@ -11,6 +11,7 @@ A professional-grade Python 3 script that deletes (or safely moves) JPEG files w
 - **Recursive Scan**: Deep-scans your entire library tree.
 - **Dry-run Mode**: Preview exactly what will happen without touching a single file.
 - **Trash Mode**: Move matched JPEGs to a mirrored folder instead of hard-deleting.
+- **Wizard Mode**: Interactive folder → preview → confirm → trash flow for one-off cleanups.
 - **Dual Logging**: Clean, scannable terminal output for humans; full timestamped audit logs for the record.
 - **Broad Camera Support**: Detects camera originals from 100+ manufacturer families via MakerNote signatures.
 
@@ -43,6 +44,7 @@ example command:
 | `--trash DIR` | Move matched JPEGs to `DIR` (mirrored tree) instead of deleting. Refuses to overwrite existing files. |
 | `--log FILE` | Write a high-fidelity audit log with timestamps to `FILE`. Paths are logged relative to the scan root. |
 | `--workers N` | Number of parallel threads, must be `>= 1` (default: `4`). Use `2` for HDDs, `8+` for SSDs. |
+| `--wizard` | Interactive mode: prompts for folder and trash dir, shows a dry-run preview, and only moves files after explicit confirmation. |
 | `--skip-exif` | ⚠ **Safety override**: Reverts to filename-only matching. Use with caution. |
 | `--verbose` | Shows all skipped files and detailed EXIF reasoning. |
 | `--min-raw-size N` | Minimum RAW file size in bytes, must be `>= 0` (default: 100 KB). |
@@ -71,6 +73,14 @@ uv run remove_jpg_if_raw_exists.py /Photos/2024 \
     --trash ~/Desktop/photo-trash \
     --log cleanup.log
 ```
+
+**Guided mode — let the wizard drive:**
+```bash
+uv run remove_jpg_if_raw_exists.py --wizard
+```
+Asks for the photo folder (re-prompts on typos), suggests a trash folder
+under `~/Desktop/photo-trash/`, runs a dry-run preview, then moves files
+only after you answer `y`. Ctrl-C aborts at any prompt without touching files.
 
 ---
 
