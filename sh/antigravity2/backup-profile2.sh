@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Backup Profile 2 data and unify chats into the primary ~/.gemini tree.
 # Run as your normal user (NOT via sudo): ./backup-profile2.sh [--yes] [--backup-root DIR]
-# Safe to re-run: copies use "missing-only" semantics and history merge appends
+# Aborts if Antigravity/agy processes are running (open .db files copy corrupt)
+# and verifies backup completeness before merging. Safe to re-run: copies use "missing-only" semantics and history merge appends
 # only lines not already present.
 set -euo pipefail
 
@@ -31,11 +32,21 @@ if [ ! -d "$A2" ]; then
   exit 1
 fi
 
+# Exact process-name match (-x): matches the real binaries but can never match
+# this script, its path (sh/antigravity2/), or parent launchers — unlike pgrep -f
+# substring matching, which false-positives on any cmdline containing "antigravity".
+STALE=$(pgrep -xa 'agy2?|antigravity(-ide)?|language_server' 2>/dev/null || true)
+if [ -n "$STALE" ]; then
+  echo "ERROR: Antigravity/agy processes still running (copying open .db files can corrupt the backup):" >&2
+  echo "$STALE" | cut -c1-160 >&2
+  echo "Quit them first, then re-run." >&2
+  exit 1
+fi
+
 if [ "$YES" -eq 0 ]; then
-  log "Quit Antigravity Desktop / IDE and any running agy/agy2 first,"
-  log "then press Enter to continue (Ctrl-C to abort)."
+  log "No Antigravity/agy processes running. Press Enter to back up + merge (Ctrl-C to abort)."
   # shellcheck disable=SC2034
-  read -r _
+  read -r _ < /dev/tty || { echo "Aborted." >&2; exit 1; }
 fi
 
 TS=$(date +%Y%m%d_%H%M%S)
@@ -56,6 +67,15 @@ cp -a /usr/share/applications/antigravity-profile2.desktop /usr/share/applicatio
   echo "account2: $A2"
   du -sh "$HOME/.antigravity-cli-account2" "$HOME/.config/antigravity-profile2" "$HOME/.config/Antigravity-IDE-profile2" 2>/dev/null || true
 } > "$BK/MANIFEST.txt"
+
+log "Verifying backup completeness (aborts before merging on mismatch)..."
+src_n=$(find "$HOME/.antigravity-cli-account2" | wc -l)
+dst_n=$(find "$BK/.antigravity-cli-account2" | wc -l)
+if [ "$dst_n" -lt "$src_n" ]; then
+  echo "ERROR: backup incomplete ($dst_n of $src_n entries). Remove $BK and re-run." >&2
+  exit 1
+fi
+log "  entry counts match ($dst_n)."
 
 log "2. Merging chats into ~/.gemini (tokens excluded) ..."
 for d in antigravity-cli antigravity; do

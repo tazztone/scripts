@@ -49,7 +49,7 @@ fi
 if [ "$YES" -eq 0 ]; then
   log "Press Enter to continue (Ctrl-C to abort)."
   # shellcheck disable=SC2034
-  read -r _
+  read -r _ < /dev/tty || { echo "Aborted." >&2; exit 1; }
 fi
 
 log "1. Removing system wrappers and desktop entries..."
