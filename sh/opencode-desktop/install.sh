@@ -43,9 +43,9 @@ else
     DEB_FILE="$TMP_DEB"
 
     echo "Checking for existing OpenCode installation..."
-    if dpkg -l | grep -q "opencode"; then
+    if dpkg-query -W -f='${Status}' opencode 2>/dev/null | grep -q "ok installed"; then
         echo "OpenCode is already installed. This will update it."
-        OLD_VERSION=$(dpkg -l | grep opencode | awk '{print $3}')
+        OLD_VERSION=$(dpkg-query -W -f='${Version}' opencode 2>/dev/null)
         echo "Current version: $OLD_VERSION"
     fi
 
@@ -65,7 +65,7 @@ else
 fi
 
 echo "Installing OpenCode..."
-if ! apt-get update -yq; then
+if ! apt-get update -q; then
     echo "WARNING: apt-get update failed, continuing with install..." >&2
 fi
 
@@ -74,6 +74,6 @@ if ! apt-get install -y "$DEB_FILE"; then
     exit 1
 fi
 
-NEW_VERSION=$(dpkg -l | grep opencode | awk '{print $3}')
+NEW_VERSION=$(dpkg-query -W -f='${Version}' opencode 2>/dev/null)
 echo "OpenCode installed/updated successfully!"
 echo "Installed version: $NEW_VERSION"
