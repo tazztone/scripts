@@ -1,0 +1,9 @@
+[Unit]
+Description=Weekly deb-get update check
+
+[Timer]
+OnCalendar=Sun 10:00
+Persistent=true
+
+[Install]
+WantedBy=default.target

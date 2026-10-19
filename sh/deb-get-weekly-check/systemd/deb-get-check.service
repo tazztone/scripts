@@ -1,0 +1,6 @@
+[Unit]
+Description=Weekly deb-get / apt update check (popup only if updates exist)
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/deb-get-weekly-check.sh

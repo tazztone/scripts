@@ -23,6 +23,7 @@ scripts/
 │   ├── TOOLBOXES/                  # Interactive FFmpeg & ImageMagick toolboxes
 │   ├── antigravity2/               # Antigravity 2.0 environment and profile setup
 │   ├── davinci-resolve-updater/    # DaVinci Resolve automated Linux updater
+│   ├── deb-get-weekly-check/       # Weekly desktop popup for deb-get + apt updates
 │   ├── immich/                     # Immich container and service updates
 │   ├── opencode-desktop/           # OpenCode desktop application installer
 │   ├── tarball-installer/          # Universal tarball archive installer
@@ -43,6 +44,7 @@ scripts/
 ### `sh/` — Linux & macOS Utilities
 - **Toolboxes (`sh/TOOLBOXES/`)** — Interactive Zenity & CLI suites for FFmpeg media conversion, lossless cutting, remuxing, and ImageMagick batch image operations.
 - **DaVinci Resolve Updater** — Download and update DaVinci Resolve on Linux distributions.
+- **deb-get Weekly Check** — Weekly desktop popup for `deb-get` (GitHub/direct `.debs` like LACT) + apt updates, with click-to-upgrade terminal.
 - **Immich Update & Installer** — Automated updater and launcher scripts for Immich self-hosted photo servers.
 - **THE FINALS & OBS Automation** — Automated game launch and OBS Replay Buffer management with Wayland PipeWire window capture and cleanup.
 - **Antigravity 2.0 Profile Setup** — Setup scripts for development environment profiles.
@@ -70,7 +72,7 @@ scripts/
 
 Each subdirectory contains its own documentation:
 
-- Bash scripts: [`sh/TOOLBOXES/README.md`](sh/TOOLBOXES/README.md), [`sh/antigravity2/README.md`](sh/antigravity2/README.md), [`sh/davinci-resolve-updater/README.md`](sh/davinci-resolve-updater/README.md), [`sh/immich/README.md`](sh/immich/README.md), [`sh/tarball-installer/README.md`](sh/tarball-installer/README.md), [`sh/the-finals/README.md`](sh/the-finals/README.md)
+- Bash scripts: [`sh/TOOLBOXES/README.md`](sh/TOOLBOXES/README.md), [`sh/antigravity2/README.md`](sh/antigravity2/README.md), [`sh/davinci-resolve-updater/README.md`](sh/davinci-resolve-updater/README.md), [`sh/deb-get-weekly-check/README.md`](sh/deb-get-weekly-check/README.md), [`sh/immich/README.md`](sh/immich/README.md), [`sh/tarball-installer/README.md`](sh/tarball-installer/README.md), [`sh/the-finals/README.md`](sh/the-finals/README.md)
 - Python utilities: [`python/README.md`](python/README.md)
 - Windows Batch: [`bat/README.md`](bat/README.md)
 - Userscripts: [**`tazztone/userscripts`**](https://github.com/tazztone/userscripts) (dedicated repository)
