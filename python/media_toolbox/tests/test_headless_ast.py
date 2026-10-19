@@ -206,14 +206,30 @@ class TestMainRouterAST:
 
     def test_runtime_headless_execution_does_not_load_gi(self) -> None:
         """Assert running CLI in headless environment never loads 'gi' into sys.modules."""
-        from media_toolbox import cli
+        import os
+        import subprocess
 
-        try:
-            exit_code = cli.main(["--version"])
-        except SystemExit as exc:
-            exit_code = exc.code
-        assert exit_code == 0
-        assert "gi" not in sys.modules
+        python_dir = str(get_toolbox_root().parent)
+        env = os.environ.copy()
+        env["PYTHONPATH"] = python_dir
+
+        code = (
+            "import sys\n"
+            "from media_toolbox import cli\n"
+            "try:\n"
+            "    exit_code = cli.main(['--version'])\n"
+            "except SystemExit as exc:\n"
+            "    exit_code = exc.code\n"
+            "assert exit_code == 0\n"
+            "assert 'gi' not in sys.modules, f'Forbidden module gi loaded: {list(sys.modules.keys())}'\n"
+        )
+        proc = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        assert proc.returncode == 0, f"Headless execution failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
 
 
 class TestASTScannerIntegrity:

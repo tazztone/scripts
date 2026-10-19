@@ -30,7 +30,6 @@ from media_toolbox.core.presets import (
     is_video_preset,
 )
 from media_toolbox.cli import (
-    format_aspect_ratio,
     format_bitrate,
     format_channels,
     format_duration,
@@ -56,6 +55,7 @@ def build_encode_options_from_state(
     audio_bitrate_kbps: int,
     speed_factor: float = 1.0,
     fps: Optional[int] = None,
+    crop: Optional[str] = None,
     speed_preset: Optional[str] = None,
     is_extract_audio: bool = False,
 ) -> EncodeOptions:
@@ -98,6 +98,7 @@ def build_encode_options_from_state(
 
     # Resolution resolution
     eff_scale = None if is_extract_audio else scale
+    eff_crop = None if is_extract_audio else crop
 
     return EncodeOptions(
         target_size_mb=target_size,
@@ -106,6 +107,7 @@ def build_encode_options_from_state(
         audio_codec=None,
         audio_bitrate_kbps=eff_audio_br,
         scale=eff_scale,
+        crop=eff_crop,
         speed=eff_speed,
         fps=fps,
         mute_audio=eff_mute,
@@ -459,7 +461,9 @@ class MetadataCard(Adw.PreferencesGroup):
 
     def set_media_info(self, media_info: MediaInfo) -> None:
         # Determine classification badge
-        if media_info.has_video and media_info.has_audio:
+        if media_info.is_image:
+            badge = "[Still Image / Other]"
+        elif media_info.has_video and media_info.has_audio:
             badge = "[Video + Audio]"
         elif media_info.has_video:
             badge = "[Silent Video]"
@@ -484,7 +488,7 @@ class MetadataCard(Adw.PreferencesGroup):
         # Audio stream
         pa = media_info.primary_audio
         if pa:
-            ch_str = format_channels(pa.channels)
+            ch_str = format_channels(pa.channel_layout, pa.channels)
             sr_str = f"{pa.sample_rate_khz:.1f} kHz"
             codec_str = pa.codec_name.upper()
             br_str = format_bitrate(pa.bit_rate) if pa.bit_rate else "-"

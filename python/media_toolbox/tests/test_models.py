@@ -259,5 +259,19 @@ class TestHeadlessInvariant:
     """Verify core models do not trigger imports of GUI libraries."""
 
     def test_zero_gui_imports_in_models(self) -> None:
-        for mod in ("gi", "gi.repository", "gi.repository.Gtk", "gi.repository.Adw"):
-            assert mod not in sys.modules, f"Forbidden GUI module {mod} loaded in core models test!"
+        import os
+        from pathlib import Path
+        import subprocess
+
+        python_root = Path(__file__).resolve().parent.parent.parent
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(python_root)
+
+        code = (
+            "import sys\n"
+            "from media_toolbox.core import models\n"
+            "for mod in ('gi', 'gi.repository', 'gi.repository.Gtk', 'gi.repository.Adw'):\n"
+            "    assert mod not in sys.modules, f'Forbidden GUI module {mod} loaded in core models test!'\n"
+        )
+        proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env)
+        assert proc.returncode == 0, f"Core models triggered GUI import:\n{proc.stderr}"

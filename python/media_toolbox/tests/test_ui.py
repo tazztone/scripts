@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import sys
 import threading
 import time
 from typing import Any, Callable, Optional
@@ -56,6 +57,27 @@ def get_gi_modules():
 def gi_env():
     """Fixture supplying PyGObject modules."""
     return get_gi_modules()
+
+
+@pytest.fixture(autouse=True, scope="module")
+def isolate_gi_sys_modules():
+    """
+    Module-level teardown fixture ensuring PyGObject and UI modules do not leak
+    into sys.modules after UI tests complete.
+    """
+    yield
+    # Purge all PyGObject, GObject static proxies, and UI modules
+    to_delete = [
+        k
+        for k in list(sys.modules.keys())
+        if k == "gi"
+        or k.startswith("gi.")
+        or k.startswith("gi_")
+        or k in ("gobject", "glib", "gio", "gtk", "gtk.gdk")
+        or k.startswith("media_toolbox.ui")
+    ]
+    for k in to_delete:
+        sys.modules.pop(k, None)
 
 
 @pytest.fixture
@@ -390,6 +412,45 @@ class TestWidgetStateToEncodeOptions:
         assert opts_prores.two_pass is False
         assert opts_prores.target_size_mb is None
 
+    def test_build_encode_options_with_crop(self) -> None:
+        """Verify crop string is passed to EncodeOptions."""
+        from media_toolbox.ui.widgets import build_encode_options_from_state
+
+        opts = build_encode_options_from_state(
+            preset="h264",
+            rate_mode="crf",
+            crf_value=23,
+            target_size_mb=25.0,
+            scale=(1920, 1080),
+            crop="ih*9/16:ih",
+            mute_audio=False,
+            normalize_audio=False,
+            volume_boost_db=None,
+            audio_bitrate_kbps=128,
+        )
+        assert opts.crop == "ih*9/16:ih"
+        assert opts.scale == (1920, 1080)
+
+    def test_build_encode_options_crop_ignored_on_audio_extract(self) -> None:
+        """Verify crop is reset to None when extracting audio."""
+        from media_toolbox.ui.widgets import build_encode_options_from_state
+
+        opts = build_encode_options_from_state(
+            preset="mp3",
+            rate_mode="crf",
+            crf_value=23,
+            target_size_mb=25.0,
+            scale=(1920, 1080),
+            crop="ih*9/16:ih",
+            mute_audio=False,
+            normalize_audio=False,
+            volume_boost_db=None,
+            audio_bitrate_kbps=128,
+            is_extract_audio=True,
+        )
+        assert opts.crop is None
+        assert opts.scale is None
+
 
 # ---------------------------------------------------------------------------
 # 4. Default Output Path Resolution Tests
@@ -458,96 +519,302 @@ class TestDefaultOutputPathResolution:
 
 
 class TestDynamicRevealers:
-    """Verifies conditional visibility and sensitivity logic for dynamic forms."""
+    """Verifies conditional visibility and sensitivity logic for dynamic forms using genuine unbound methods."""
 
     def test_rate_control_revealer_crf_vs_target_size(self) -> None:
         """Verify mode index 0 reveals CRF and collapses Target Size; index 1 reverses."""
-        mock_crf_rev = MagicMock()
-        mock_size_rev = MagicMock()
+        from media_toolbox.ui.widgets import RateControlWidget
 
-        def on_rate_mode_changed(selected_index: int):
-            if selected_index == 0:
-                mock_crf_rev.set_reveal_child(True)
-                mock_size_rev.set_reveal_child(False)
-            elif selected_index == 1:
-                mock_crf_rev.set_reveal_child(False)
-                mock_size_rev.set_reveal_child(True)
+        mock_self = MagicMock()
+        mock_combo = MagicMock()
 
-        on_rate_mode_changed(0)
-        mock_crf_rev.set_reveal_child.assert_called_with(True)
-        mock_size_rev.set_reveal_child.assert_called_with(False)
+        # Mode 0: CRF
+        mock_combo.get_selected.return_value = 0
+        RateControlWidget._on_mode_changed(mock_self, mock_combo, None)
+        mock_self.crf_revealer.set_reveal_child.assert_called_with(True)
+        mock_self.target_size_revealer.set_reveal_child.assert_called_with(False)
 
-        on_rate_mode_changed(1)
-        mock_crf_rev.set_reveal_child.assert_called_with(False)
-        mock_size_rev.set_reveal_child.assert_called_with(True)
+        # Mode 1: Target Size
+        mock_combo.get_selected.return_value = 1
+        RateControlWidget._on_mode_changed(mock_self, mock_combo, None)
+        mock_self.crf_revealer.set_reveal_child.assert_called_with(False)
+        mock_self.target_size_revealer.set_reveal_child.assert_called_with(True)
 
     def test_rate_control_revealer_disabled_for_gif_prores(self) -> None:
-        """Verify selecting GIF or ProRes disables the rate control selector."""
-        mock_mode_row = MagicMock()
-        mock_crf_rev = MagicMock()
-        mock_size_rev = MagicMock()
+        """Verify selecting GIF or ProRes disables the rate control selector, and standard codecs re-enable."""
+        from media_toolbox.ui.widgets import RateControlWidget
 
-        def on_preset_changed(preset: str):
-            if preset in ("gif", "prores"):
-                mock_mode_row.set_sensitive(False)
-                mock_crf_rev.set_reveal_child(False)
-                mock_size_rev.set_reveal_child(False)
-            else:
-                mock_mode_row.set_sensitive(True)
+        mock_self = MagicMock()
+        mock_self.mode_row = MagicMock()
+        mock_self.mode_row.get_selected.return_value = 0
+        mock_self._on_mode_changed = RateControlWidget._on_mode_changed.__get__(mock_self, RateControlWidget)
 
-        on_preset_changed("gif")
-        mock_mode_row.set_sensitive.assert_called_with(False)
-        mock_crf_rev.set_reveal_child.assert_called_with(False)
+        # GIF disables rate control and collapses revealers
+        RateControlWidget.set_codec_preset(mock_self, "gif")
+        mock_self.mode_row.set_sensitive.assert_called_with(False)
+        mock_self.crf_revealer.set_reveal_child.assert_called_with(False)
+        mock_self.target_size_revealer.set_reveal_child.assert_called_with(False)
 
-        on_preset_changed("h264")
-        mock_mode_row.set_sensitive.assert_called_with(True)
+        # ProRes also disables rate control
+        RateControlWidget.set_codec_preset(mock_self, "prores")
+        mock_self.mode_row.set_sensitive.assert_called_with(False)
+        mock_self.crf_revealer.set_reveal_child.assert_called_with(False)
+        mock_self.target_size_revealer.set_reveal_child.assert_called_with(False)
+
+        # Standard codec (h264) re-enables and configures upper bound to 51
+        RateControlWidget.set_codec_preset(mock_self, "h264")
+        mock_self.mode_row.set_sensitive.assert_called_with(True)
+        mock_self.crf_adj.set_upper.assert_called_with(51)
+        mock_self.crf_revealer.set_reveal_child.assert_called_with(True)
+
+        # AV1 configures upper bound to 63
+        RateControlWidget.set_codec_preset(mock_self, "av1")
+        mock_self.crf_adj.set_upper.assert_called_with(63)
 
     def test_resolution_revealer_custom_expansion(self) -> None:
         """Verify index 4 (Custom) expands custom dimensions revealer; presets collapse it."""
-        mock_custom_rev = MagicMock()
+        from media_toolbox.ui.widgets import ResolutionWidget
 
-        def on_resolution_changed(selected_index: int):
-            mock_custom_rev.set_reveal_child(selected_index == 4)
+        mock_self = MagicMock()
+        mock_combo = MagicMock()
 
-        on_resolution_changed(4)  # Custom
-        mock_custom_rev.set_reveal_child.assert_called_with(True)
+        mock_combo.get_selected.return_value = 4  # Custom
+        ResolutionWidget._on_resolution_changed(mock_self, mock_combo, None)
+        mock_self.custom_revealer.set_reveal_child.assert_called_with(True)
 
-        on_resolution_changed(1)  # 1080p
-        mock_custom_rev.set_reveal_child.assert_called_with(False)
+        mock_combo.get_selected.return_value = 1  # 1080p
+        ResolutionWidget._on_resolution_changed(mock_self, mock_combo, None)
+        mock_self.custom_revealer.set_reveal_child.assert_called_with(False)
 
     def test_resolution_revealer_preset_collapse(self) -> None:
         """Verify selecting standard presets collapses custom revealer."""
-        mock_custom_rev = MagicMock()
+        from media_toolbox.ui.widgets import ResolutionWidget
 
-        def on_resolution_changed(selected_index: int):
-            mock_custom_rev.set_reveal_child(selected_index == 4)
+        mock_self = MagicMock()
+        mock_combo = MagicMock()
 
         for idx in (0, 1, 2, 3):
-            on_resolution_changed(idx)
-            mock_custom_rev.set_reveal_child.assert_called_with(False)
+            mock_combo.get_selected.return_value = idx
+            ResolutionWidget._on_resolution_changed(mock_self, mock_combo, None)
+            mock_self.custom_revealer.set_reveal_child.assert_called_with(False)
 
     def test_audio_revealer_mute_collapses_adjustments(self) -> None:
         """Verify toggling mute collapses volume and loudness adjustments."""
-        mock_adjustments_rev = MagicMock()
+        from media_toolbox.ui.widgets import AudioOptionsWidget
 
-        def on_mute_toggled(is_muted: bool):
-            mock_adjustments_rev.set_reveal_child(not is_muted)
+        mock_self = MagicMock()
+        mock_switch = MagicMock()
 
-        on_mute_toggled(True)
-        mock_adjustments_rev.set_reveal_child.assert_called_with(False)
+        mock_switch.get_active.return_value = True
+        AudioOptionsWidget._on_mute_changed(mock_self, mock_switch, None)
+        mock_self.adjustments_revealer.set_reveal_child.assert_called_with(False)
 
-        on_mute_toggled(False)
-        mock_adjustments_rev.set_reveal_child.assert_called_with(True)
+        mock_switch.get_active.return_value = False
+        AudioOptionsWidget._on_mute_changed(mock_self, mock_switch, None)
+        mock_self.adjustments_revealer.set_reveal_child.assert_called_with(True)
 
-    def test_audio_options_disabled_when_source_is_silent(self, sample_silent_media_info) -> None:
+    def test_audio_options_disabled_when_source_is_silent(self, sample_silent_media_info: MediaInfo) -> None:
         """Verify that files without audio streams disable the audio options group."""
-        mock_audio_group = MagicMock()
+        from media_toolbox.ui.widgets import AudioOptionsWidget
 
-        def apply_media_info(media_info: MediaInfo):
-            mock_audio_group.set_sensitive(media_info.has_audio)
+        mock_self = MagicMock()
+        AudioOptionsWidget.set_has_audio(mock_self, sample_silent_media_info.has_audio)
+        mock_self.set_sensitive.assert_called_with(False)
+        mock_self.set_description.assert_called_with("Source file contains no audio streams")
 
-        apply_media_info(sample_silent_media_info)
-        mock_audio_group.set_sensitive.assert_called_with(False)
+        AudioOptionsWidget.set_has_audio(mock_self, True)
+        mock_self.set_sensitive.assert_called_with(True)
+        mock_self.set_description.assert_called_with("")
+
+
+# ---------------------------------------------------------------------------
+# 5b. Metadata Card Tests
+# ---------------------------------------------------------------------------
+
+
+class TestMetadataCard:
+    """Headless unit verification for MetadataCard.set_media_info and clear."""
+
+    def test_metadata_card_video_and_audio(self, gi_env) -> None:
+        """Verify card displays both video and audio stream specs and [Video + Audio] badge."""
+        from media_toolbox.core.models import AudioStream, FormatInfo, MediaInfo, VideoStream
+        from media_toolbox.ui.widgets import MetadataCard
+
+        v = VideoStream(
+            index=0,
+            codec_name="h264",
+            width=1920,
+            height=1080,
+            fps=30.0,
+            duration=60.0,
+            bit_rate=2_000_000,
+        )
+        a = AudioStream(
+            index=1,
+            codec_name="aac",
+            channels=2,
+            sample_rate=48000,
+            duration=60.0,
+            channel_layout="stereo",
+            bit_rate=128_000,
+        )
+        fmt = FormatInfo(filename="sample.mp4", format_name="mov,mp4", duration=60.0, size_bytes=15_000_000)
+        info = MediaInfo(format=fmt, video_streams=(v,), audio_streams=(a,))
+
+        mock_card = MagicMock()
+        MetadataCard.set_media_info(mock_card, info)
+
+        mock_card.badge_row.set_subtitle.assert_called_with("[Video + Audio]")
+        mock_card.video_row.set_subtitle.assert_called_with(
+            "H264 | 1920 × 1080 @ 30 fps | Bitrate: 2,000 kbps (2.00 Mbps)"
+        )
+        mock_card.audio_row.set_subtitle.assert_called_with(
+            "AAC | stereo (2 channels) | 48.0 kHz | Bitrate: 128 kbps"
+        )
+        mock_card.format_row.set_subtitle.assert_called_with(
+            "mov,mp4 | Duration: 00:01:00.00 | Size: 14.31 MB (15,000,000 bytes)"
+        )
+
+    def test_metadata_card_silent_video(self, gi_env) -> None:
+        """Verify card displays [Silent Video] badge and 'No audio stream' for video-only media."""
+        from media_toolbox.core.models import FormatInfo, MediaInfo, VideoStream
+        from media_toolbox.ui.widgets import MetadataCard
+
+        v = VideoStream(
+            index=0,
+            codec_name="hevc",
+            width=3840,
+            height=2160,
+            fps=59.94,
+            duration=10.0,
+            bit_rate=15_000_000,
+        )
+        fmt = FormatInfo(filename="silent.mp4", format_name="mp4", duration=10.0, size_bytes=18_750_000)
+        info = MediaInfo(format=fmt, video_streams=(v,), audio_streams=())
+
+        mock_card = MagicMock()
+        MetadataCard.set_media_info(mock_card, info)
+
+        mock_card.badge_row.set_subtitle.assert_called_with("[Silent Video]")
+        mock_card.video_row.set_subtitle.assert_called_with(
+            "HEVC | 3840 × 2160 @ 59.94 fps | Bitrate: 15,000 kbps (15.00 Mbps)"
+        )
+        mock_card.audio_row.set_subtitle.assert_called_with("No audio stream")
+        mock_card.format_row.set_subtitle.assert_called_with(
+            "mp4 | Duration: 00:00:10.00 | Size: 17.88 MB (18,750,000 bytes)"
+        )
+
+    def test_metadata_card_audio_only(self, gi_env) -> None:
+        """Verify card displays [Audio Only] badge and 'No video stream' for audio-only media."""
+        from media_toolbox.core.models import AudioStream, FormatInfo, MediaInfo
+        from media_toolbox.ui.widgets import MetadataCard
+
+        a = AudioStream(
+            index=0,
+            codec_name="mp3",
+            channels=2,
+            sample_rate=44100,
+            duration=120.0,
+            channel_layout="stereo",
+            bit_rate=320_000,
+        )
+        fmt = FormatInfo(filename="track.mp3", format_name="mp3", duration=120.0, size_bytes=4_800_000)
+        info = MediaInfo(format=fmt, video_streams=(), audio_streams=(a,))
+
+        mock_card = MagicMock()
+        MetadataCard.set_media_info(mock_card, info)
+
+        mock_card.badge_row.set_subtitle.assert_called_with("[Audio Only]")
+        mock_card.video_row.set_subtitle.assert_called_with("No video stream")
+        mock_card.audio_row.set_subtitle.assert_called_with(
+            "MP3 | stereo (2 channels) | 44.1 kHz | Bitrate: 320 kbps"
+        )
+        mock_card.format_row.set_subtitle.assert_called_with(
+            "mp3 | Duration: 00:02:00.00 | Size: 4.58 MB (4,800,000 bytes)"
+        )
+
+    def test_metadata_card_still_image(self, gi_env) -> None:
+        """Verify card displays [Still Image / Other] for images and containers without streams."""
+        from media_toolbox.core.models import FormatInfo, MediaInfo, VideoStream
+        from media_toolbox.ui.widgets import MetadataCard
+
+        # Probed still image with 0 duration
+        v = VideoStream(
+            index=0,
+            codec_name="png",
+            width=800,
+            height=600,
+            fps=None,
+            duration=None,
+            bit_rate=None,
+        )
+        fmt = FormatInfo(filename="diagram.png", format_name="image2", duration=None, size_bytes=45_000)
+        info = MediaInfo(format=fmt, video_streams=(v,), audio_streams=())
+
+        mock_card = MagicMock()
+        MetadataCard.set_media_info(mock_card, info)
+
+        mock_card.badge_row.set_subtitle.assert_called_with("[Still Image / Other]")
+        mock_card.video_row.set_subtitle.assert_called_with("PNG | 800 × 600 @ N/A | Bitrate: -")
+        mock_card.audio_row.set_subtitle.assert_called_with("No audio stream")
+
+        # Container without any streams
+        mock_card_empty = MagicMock()
+        empty_fmt = FormatInfo(filename="raw.bin", format_name="data", duration=None, size_bytes=1024)
+        empty_info = MediaInfo(format=empty_fmt, video_streams=(), audio_streams=())
+        MetadataCard.set_media_info(mock_card_empty, empty_info)
+        mock_card_empty.badge_row.set_subtitle.assert_called_with("[Still Image / Other]")
+        mock_card_empty.video_row.set_subtitle.assert_called_with("No video stream")
+        mock_card_empty.audio_row.set_subtitle.assert_called_with("No audio stream")
+
+    def test_metadata_card_missing_channel_layout(self, gi_env) -> None:
+        """Verify format_channels works seamlessly when channel_layout is None."""
+        from media_toolbox.core.models import AudioStream, FormatInfo, MediaInfo
+        from media_toolbox.ui.widgets import MetadataCard
+
+        # Multi-channel layout is None
+        a_multi = AudioStream(
+            index=0,
+            codec_name="flac",
+            channels=6,
+            sample_rate=96000,
+            duration=60.0,
+            channel_layout=None,
+            bit_rate=None,
+        )
+        fmt = FormatInfo(filename="surround.flac", format_name="flac", duration=60.0, size_bytes=30_000_000)
+        info_multi = MediaInfo(format=fmt, video_streams=(), audio_streams=(a_multi,))
+
+        mock_card = MagicMock()
+        MetadataCard.set_media_info(mock_card, info_multi)
+        mock_card.audio_row.set_subtitle.assert_called_with("FLAC | 6 channels | 96.0 kHz | Bitrate: -")
+
+        # Mono layout is None
+        a_mono = AudioStream(
+            index=0,
+            codec_name="wav",
+            channels=1,
+            sample_rate=44100,
+            duration=5.0,
+            channel_layout=None,
+            bit_rate=705_600,
+        )
+        info_mono = MediaInfo(format=fmt, video_streams=(), audio_streams=(a_mono,))
+        mock_card_mono = MagicMock()
+        MetadataCard.set_media_info(mock_card_mono, info_mono)
+        mock_card_mono.audio_row.set_subtitle.assert_called_with("WAV | 1 channel | 44.1 kHz | Bitrate: 706 kbps")
+
+    def test_metadata_card_clear(self, gi_env) -> None:
+        """Verify clear restores placeholder labels across all rows."""
+        from media_toolbox.ui.widgets import MetadataCard
+
+        mock_card = MagicMock()
+        MetadataCard.clear(mock_card)
+
+        mock_card.badge_row.set_subtitle.assert_called_with("No media loaded")
+        mock_card.video_row.set_subtitle.assert_called_with("-")
+        mock_card.audio_row.set_subtitle.assert_called_with("-")
+        mock_card.format_row.set_subtitle.assert_called_with("-")
 
 
 # ---------------------------------------------------------------------------
@@ -556,123 +823,265 @@ class TestDynamicRevealers:
 
 
 class TestNonBlockingWorkerThread:
-    """Verifies daemon worker thread execution and GLib.idle_add main loop marshalling."""
+    """Verifies daemon worker thread execution and GLib.idle_add main loop marshalling using genuine production methods."""
 
-    def test_worker_thread_spawns_daemon(self, gi_env) -> None:
-        """Verify worker thread runs in daemon mode without blocking main thread."""
-        started = threading.Event()
+    def test_worker_thread_spawns_daemon(self, tmp_path: Path) -> None:
+        """Verify MainWindow._launch_worker_pipeline spawns a daemon thread with correct name and target."""
+        from media_toolbox.ui.window import MainWindow
 
-        def dummy_worker():
-            started.set()
+        mock_win = MagicMock()
+        mock_win.progress_footer = MagicMock()
+        mock_win._set_ui_controls_sensitive = MagicMock()
+        mock_win._worker_thread_entry = MagicMock()
 
-        t = threading.Thread(target=dummy_worker, daemon=True, name="MediaToolboxWorker")
-        t.start()
-        assert started.wait(timeout=0.2) is True
-        assert t.daemon is True
-        t.join(timeout=0.1)
+        out_file = tmp_path / "output.mp4"
+        cmds = [["ffmpeg", "-i", "in.mp4", "out.mp4"]]
+
+        with patch("threading.Thread") as mock_thread_cls:
+            mock_thread_inst = MagicMock()
+            mock_thread_cls.return_value = mock_thread_inst
+
+            MainWindow._launch_worker_pipeline(mock_win, cmds, 120.0, out_file, "Encoding...")
+
+            assert mock_win.is_transcoding is True
+            assert isinstance(mock_win.cancel_event, threading.Event)
+            assert not mock_win.cancel_event.is_set()
+            mock_win._set_ui_controls_sensitive.assert_called_with(False)
+            mock_win.progress_footer.start.assert_called_with("Encoding...")
+
+            mock_thread_cls.assert_called_once_with(
+                target=mock_win._worker_thread_entry,
+                args=(cmds, 120.0, out_file, mock_win.cancel_event),
+                daemon=True,
+                name="MediaToolboxWorker",
+            )
+            mock_thread_inst.start.assert_called_once()
 
     def test_worker_dispatches_progress_via_glib_idle_add(self, gi_env) -> None:
-        """Verify ProgressEvents emitted in worker thread update UI via GLib.idle_add."""
+        """Verify ProgressEvents update UI via MainWindow._on_progress_idle and ProgressFooterWidget.update_progress."""
         _, _, _, _, _, GLib = gi_env
+        from media_toolbox.ui.window import MainWindow
+        from media_toolbox.ui.widgets import ProgressFooterWidget
 
-        events_received = []
+        mock_win = MagicMock()
+        evt = ProgressEvent(frame=150, fps=30.0, out_time_seconds=5.0, percentage=50.0, speed=2.0, eta_seconds=5.0, total_size_bytes=1048576)
 
-        def on_progress_idle(event: ProgressEvent):
-            events_received.append(event)
-            return GLib.SOURCE_REMOVE
+        # 1. Verify MainWindow._on_progress_idle dispatch
+        GLib.idle_add(MainWindow._on_progress_idle, mock_win, evt)
 
-        evt = ProgressEvent(frame=150, fps=30.0, out_time_seconds=5.0, percentage=50.0, speed=2.0, eta_seconds=5.0)
-        GLib.idle_add(on_progress_idle, evt)
-
-        # Flush pending events synchronously
         ctx = GLib.MainContext.default()
         while ctx.pending():
             ctx.iteration(False)
 
-        assert len(events_received) == 1
-        assert events_received[0].percentage == 50.0
-        assert events_received[0].speed_str == "2.00x"
+        mock_win.progress_footer.update_progress.assert_called_once_with(evt)
+
+        # 2. Verify ProgressFooterWidget.update_progress widget formatting
+        mock_footer = MagicMock()
+        ProgressFooterWidget.update_progress(mock_footer, evt)
+        mock_footer.progress_bar.set_fraction.assert_called_with(0.5)
+        mock_footer.pct_label.set_text.assert_called_with("50.0%")
+        mock_footer.speed_label.set_text.assert_called_with("Speed: 2.00x")
+        mock_footer.eta_label.set_text.assert_called_with("ETA: 00:05")
+        mock_footer.size_label.set_text.assert_called_with("Size: 1.00 MB (1,048,576 bytes)")
 
     def test_worker_dispatches_pipeline_progress_idle(self, gi_env) -> None:
-        """Verify pipeline multi-pass progress events dispatch to UI."""
+        """Verify multi-pass progress events dispatch to MainWindow._on_pass_progress_idle with pass_info formatted."""
         _, _, _, _, _, GLib = gi_env
+        from media_toolbox.ui.window import MainWindow
 
-        passes_recorded = []
+        mock_win = MagicMock()
+        evt = ProgressEvent(frame=300, fps=30.0, out_time_seconds=10.0, percentage=75.5)
 
-        def on_pass_idle(pass_num: int, total_passes: int, event: ProgressEvent):
-            passes_recorded.append((pass_num, total_passes, event.percentage))
-            return GLib.SOURCE_REMOVE
-
-        evt = ProgressEvent(frame=300, fps=30.0, out_time_seconds=10.0, percentage=100.0)
-        GLib.idle_add(on_pass_idle, 1, 2, evt)
+        # Multi-pass: pass 1 of 2
+        GLib.idle_add(MainWindow._on_pass_progress_idle, mock_win, 1, 2, evt)
 
         ctx = GLib.MainContext.default()
         while ctx.pending():
             ctx.iteration(False)
 
-        assert len(passes_recorded) == 1
-        assert passes_recorded[0] == (1, 2, 100.0)
+        mock_win.progress_footer.update_progress.assert_called_once_with(
+            evt, pass_info="Pass 1 of 2 (75.5%)"
+        )
 
-    def test_worker_idle_handlers_return_source_remove(self, gi_env) -> None:
-        """Verify idle callback returns False/SOURCE_REMOVE so it does not loop infinitely."""
+        # Single pass: pass_info is None
+        mock_win.reset_mock()
+        GLib.idle_add(MainWindow._on_pass_progress_idle, mock_win, 1, 1, evt)
+        while ctx.pending():
+            ctx.iteration(False)
+
+        mock_win.progress_footer.update_progress.assert_called_once_with(
+            evt, pass_info=None
+        )
+
+    def test_worker_idle_handlers_return_source_remove(self, gi_env, tmp_path: Path) -> None:
+        """Verify all MainWindow idle handlers return GLib.SOURCE_REMOVE (False) and do not repeat."""
         _, _, _, _, _, GLib = gi_env
+        from media_toolbox.ui.window import MainWindow
 
-        call_count = 0
+        mock_win = MagicMock()
+        evt = ProgressEvent(frame=100, fps=25.0, out_time_seconds=4.0, percentage=40.0)
+        fake_path = tmp_path / "out.mp4"
 
-        def sample_idle_callback():
-            nonlocal call_count
-            call_count += 1
-            return GLib.SOURCE_REMOVE
+        # Direct return value check
+        assert MainWindow._on_progress_idle(mock_win, evt) == GLib.SOURCE_REMOVE
+        assert MainWindow._on_pass_progress_idle(mock_win, 1, 2, evt) == GLib.SOURCE_REMOVE
+        assert MainWindow._on_success_idle(mock_win, fake_path) == GLib.SOURCE_REMOVE
+        assert MainWindow._on_cancelled_idle(mock_win, fake_path) == GLib.SOURCE_REMOVE
+        assert MainWindow._on_error_idle(mock_win, "error message") == GLib.SOURCE_REMOVE
 
-        GLib.idle_add(sample_idle_callback)
+        # Verify handlers execute exactly once in GLib main context without infinite loop
+        mock_win.reset_mock()
+        GLib.idle_add(MainWindow._on_progress_idle, mock_win, evt)
         ctx = GLib.MainContext.default()
-
-        # Run multiple iterations: handler should execute exactly once
-        for _ in range(5):
-            if ctx.pending():
-                ctx.iteration(False)
-
-        assert call_count == 1
+        assert ctx.pending()
+        ctx.iteration(False)
+        assert not ctx.pending()
+        assert mock_win.progress_footer.update_progress.call_count == 1
 
     def test_worker_success_completion_handling(self, gi_env, tmp_path: Path) -> None:
         """Verify successful transcode schedules success handler and restores UI controls."""
         _, _, _, _, _, GLib = gi_env
+        from media_toolbox.ui.window import MainWindow
+        from media_toolbox.ui.widgets import ProgressFooterWidget
 
-        ui_state = {"status": "running", "active": True}
-
-        def on_success_idle(out_path: Path):
-            ui_state["status"] = "finished"
-            ui_state["active"] = False
-            return GLib.SOURCE_REMOVE
-
+        mock_win = MagicMock()
+        mock_win.is_transcoding = True
         out_file = tmp_path / "done.mp4"
-        GLib.idle_add(on_success_idle, out_file)
+
+        GLib.idle_add(MainWindow._on_success_idle, mock_win, out_file)
 
         ctx = GLib.MainContext.default()
         while ctx.pending():
             ctx.iteration(False)
 
-        assert ui_state["status"] == "finished"
-        assert ui_state["active"] is False
+        assert mock_win.is_transcoding is False
+        mock_win._set_ui_controls_sensitive.assert_called_with(True)
+        mock_win.progress_footer.finish.assert_called_with(True, "Saved: done.mp4")
+        mock_win.toast_overlay.add_toast.assert_called_once()
+
+        # Verify ProgressFooterWidget.finish on success
+        mock_footer = MagicMock()
+        ProgressFooterWidget.finish(mock_footer, True, "Saved: done.mp4")
+        mock_footer.cancel_button.set_sensitive.assert_called_with(False)
+        mock_footer.progress_bar.set_fraction.assert_called_with(1.0)
+        mock_footer.pct_label.set_text.assert_called_with("100.0%")
+        mock_footer.status_label.set_text.assert_called_with("Saved: done.mp4")
 
     def test_worker_error_marshalled_to_ui(self, gi_env) -> None:
-        """Verify runner error message is marshalled back to main thread."""
+        """Verify runner error message is marshalled back to main thread and displayed."""
         _, _, _, _, _, GLib = gi_env
+        from media_toolbox.ui.window import MainWindow
+        from media_toolbox.ui.widgets import ProgressFooterWidget
 
-        error_state = {"error_msg": None}
-
-        def on_error_idle(msg: str):
-            error_state["error_msg"] = msg
-            return GLib.SOURCE_REMOVE
-
+        mock_win = MagicMock()
+        mock_win.is_transcoding = True
         err = RunnerError("FFmpeg error", returncode=1, stderr="Invalid codec parameters")
-        GLib.idle_add(on_error_idle, err.last_error_line)
+
+        GLib.idle_add(MainWindow._on_error_idle, mock_win, err.last_error_line)
 
         ctx = GLib.MainContext.default()
         while ctx.pending():
             ctx.iteration(False)
 
-        assert error_state["error_msg"] == "Invalid codec parameters"
+        assert mock_win.is_transcoding is False
+        mock_win._set_ui_controls_sensitive.assert_called_with(True)
+        mock_win.progress_footer.finish.assert_called_with(False, "Failed: Invalid codec parameters")
+        mock_win.toast_overlay.add_toast.assert_called_once()
+
+        # Verify ProgressFooterWidget.finish on failure
+        mock_footer = MagicMock()
+        ProgressFooterWidget.finish(mock_footer, False, "Failed: Invalid codec parameters")
+        mock_footer.cancel_button.set_sensitive.assert_called_with(False)
+        mock_footer.status_label.set_text.assert_called_with("Failed: Invalid codec parameters")
+
+    def test_worker_start_disables_open_btn(self, gi_env, tmp_path: Path) -> None:
+        """Verify _start_worker marks is_transcoding and disables open_btn."""
+        from media_toolbox.ui.window import MainWindow
+
+        mock_win = MagicMock()
+        mock_win.is_transcoding = False
+        out_file = tmp_path / "out.mp4"
+
+        with patch("threading.Thread") as mock_thread_cls:
+            MainWindow._start_worker(mock_win, [["ffmpeg"]], 60.0, out_file, "Transcoding...")
+
+        assert mock_win.is_transcoding is True
+        mock_win._set_ui_controls_sensitive.assert_called_with(False)
+        mock_win.open_btn.set_sensitive.assert_called_with(False)
+        mock_win.progress_footer.start.assert_called_with("Transcoding...")
+        mock_thread_cls.assert_called_once()
+
+    def test_worker_success_completion_restores_open_btn(self, gi_env, tmp_path: Path) -> None:
+        """Verify _on_success_idle marks is_transcoding=False and enables open_btn."""
+        from media_toolbox.ui.window import MainWindow
+
+        mock_win = MagicMock()
+        mock_win.is_transcoding = True
+        out_file = tmp_path / "done.mp4"
+
+        ret = MainWindow._on_success_idle(mock_win, out_file)
+
+        assert ret is False  # GLib.SOURCE_REMOVE
+        assert mock_win.is_transcoding is False
+        mock_win._set_ui_controls_sensitive.assert_called_with(True)
+        mock_win.open_btn.set_sensitive.assert_called_with(True)
+        mock_win.progress_footer.finish.assert_called_with(True, f"Saved: {out_file.name}")
+
+    def test_worker_cancelled_completion_restores_open_btn(self, gi_env, tmp_path: Path) -> None:
+        """Verify _on_cancelled_idle marks is_transcoding=False and enables open_btn."""
+        from media_toolbox.ui.window import MainWindow
+
+        mock_win = MagicMock()
+        mock_win.is_transcoding = True
+        out_file = tmp_path / "cancelled.mp4"
+
+        ret = MainWindow._on_cancelled_idle(mock_win, out_file)
+
+        assert ret is False  # GLib.SOURCE_REMOVE
+        assert mock_win.is_transcoding is False
+        mock_win._set_ui_controls_sensitive.assert_called_with(True)
+        mock_win.open_btn.set_sensitive.assert_called_with(True)
+        mock_win.progress_footer.finish.assert_called_with(False, "Operation cancelled")
+
+    def test_worker_error_restores_open_btn(self, gi_env) -> None:
+        """Verify _on_error_idle marks is_transcoding=False and enables open_btn."""
+        from media_toolbox.ui.window import MainWindow
+
+        mock_win = MagicMock()
+        mock_win.is_transcoding = True
+
+        ret = MainWindow._on_error_idle(mock_win, "Encode failed")
+
+        assert ret is False  # GLib.SOURCE_REMOVE
+        assert mock_win.is_transcoding is False
+        mock_win._set_ui_controls_sensitive.assert_called_with(True)
+        mock_win.open_btn.set_sensitive.assert_called_with(True)
+        mock_win.progress_footer.finish.assert_called_with(False, "Failed: Encode failed")
+
+    def test_open_file_dialog_blocked_during_transcoding(self, gi_env) -> None:
+        """Verify open_file_dialog toasts and returns early when is_transcoding=True."""
+        from media_toolbox.ui.window import MainWindow
+
+        mock_win = MagicMock()
+        mock_win.is_transcoding = True
+
+        MainWindow.open_file_dialog(mock_win)
+
+        mock_win.toast_overlay.add_toast.assert_called_once()
+
+    def test_load_media_file_blocked_during_transcoding(self, gi_env, tmp_path: Path) -> None:
+        """Verify load_media_file toasts and does not load file when is_transcoding=True."""
+        from media_toolbox.ui.window import MainWindow
+
+        mock_win = MagicMock()
+        mock_win.is_transcoding = True
+        sample_file = tmp_path / "input.mp4"
+        sample_file.touch()
+
+        MainWindow.load_media_file(mock_win, sample_file)
+
+        mock_win.toast_overlay.add_toast.assert_called_once()
+        assert not hasattr(mock_win, "input_file") or mock_win.input_file != sample_file
 
 
 # ---------------------------------------------------------------------------
@@ -681,85 +1090,120 @@ class TestNonBlockingWorkerThread:
 
 
 class TestCancellationFlow:
-    """Verifies responsive cancellation, cancel_event signaling, and partial file cleanup."""
+    """Verifies responsive cancellation, cancel_event signaling, and partial file cleanup using genuine production methods."""
 
     def test_cancel_button_triggers_cancel_event(self) -> None:
-        """Verify clicking Cancel sets the cancel_event immediately."""
-        cancel_event = threading.Event()
-        assert not cancel_event.is_set()
+        """Verify ProgressFooterWidget cancel invokes callback, and MainWindow._on_cancel_clicked sets cancel_event."""
+        from media_toolbox.ui.window import MainWindow
+        from media_toolbox.ui.widgets import ProgressFooterWidget
 
-        def on_cancel_clicked():
-            cancel_event.set()
+        # 1. Verify ProgressFooterWidget._on_cancel_clicked invokes callback
+        mock_cb = MagicMock()
+        mock_footer = MagicMock()
+        mock_footer.on_cancel_callback = mock_cb
+        ProgressFooterWidget._on_cancel_clicked(mock_footer, MagicMock())
+        mock_cb.assert_called_once()
 
-        on_cancel_clicked()
-        assert cancel_event.is_set() is True
+        # 2. Verify MainWindow._on_cancel_clicked sets cancel_event and transitions footer
+        mock_win = MagicMock()
+        mock_win.cancel_event = threading.Event()
+        assert not mock_win.cancel_event.is_set()
+
+        MainWindow._on_cancel_clicked(mock_win)
+        assert mock_win.cancel_event.is_set() is True
+        mock_win.progress_footer.set_cancelling.assert_called_once()
 
     def test_cancel_updates_ui_state_to_cancelling(self) -> None:
-        """Verify cancel click transitions UI label and button state."""
-        state = {"label": "Cancel", "sensitive": True, "status": "Transcoding..."}
+        """Verify ProgressFooterWidget.set_cancelling disables button, updates label and status."""
+        from media_toolbox.ui.widgets import ProgressFooterWidget
 
-        def set_cancelling():
-            state["label"] = "Cancelling..."
-            state["sensitive"] = False
-            state["status"] = "Cancelling transcode..."
+        mock_footer = MagicMock()
+        ProgressFooterWidget.set_cancelling(mock_footer)
 
-        set_cancelling()
-        assert state["label"] == "Cancelling..."
-        assert state["sensitive"] is False
-        assert state["status"] == "Cancelling transcode..."
+        mock_footer.cancel_button.set_sensitive.assert_called_with(False)
+        mock_footer.cancel_button.set_label.assert_called_with("Cancelling...")
+        mock_footer.status_label.set_text.assert_called_with("Cancelling transcode...")
 
-    def test_worker_catches_runner_cancelled_error(self, gi_env) -> None:
-        """Verify worker catches RunnerCancelledError and invokes on_cancelled_idle."""
+    def test_worker_catches_runner_cancelled_error(self, gi_env, tmp_path: Path) -> None:
+        """Verify MainWindow._worker_thread_entry catches RunnerCancelledError, deletes partial file, and schedules _on_cancelled_idle."""
         _, _, _, _, _, GLib = gi_env
+        from media_toolbox.ui.window import MainWindow
 
-        cancelled_called = False
+        mock_win = MagicMock()
+        mock_win.is_transcoding = True
+        mock_win._on_cancelled_idle.return_value = GLib.SOURCE_REMOVE
 
-        def on_cancelled_idle():
-            nonlocal cancelled_called
-            cancelled_called = True
-            return GLib.SOURCE_REMOVE
+        partial_file = tmp_path / "cancelled_output.mp4"
+        partial_file.write_bytes(b"partial video data")
+        assert partial_file.exists()
 
-        def run_worker_simulation():
-            try:
-                raise RunnerCancelledError("Cancelled by user")
-            except RunnerCancelledError:
-                GLib.idle_add(on_cancelled_idle)
+        cancel_event = threading.Event()
+        cancel_event.set()
 
-        t = threading.Thread(target=run_worker_simulation)
-        t.start()
-        t.join(timeout=0.2)
+        with patch("media_toolbox.ui.window.run_ffmpeg_pipeline", side_effect=RunnerCancelledError("Process killed")):
+            MainWindow._worker_thread_entry(
+                mock_win, [["ffmpeg"]], 10.0, partial_file, cancel_event
+            )
 
+        # File is unlinked
+        assert not partial_file.exists()
+
+        # GLib main context dispatches scheduled _on_cancelled_idle
         ctx = GLib.MainContext.default()
         while ctx.pending():
             ctx.iteration(False)
 
-        assert cancelled_called is True
+        mock_win._on_cancelled_idle.assert_called_once_with(partial_file)
+
+        # Verify MainWindow._on_cancelled_idle logic directly
+        mock_win_idle = MagicMock()
+        mock_win_idle.is_transcoding = True
+        ret = MainWindow._on_cancelled_idle(mock_win_idle, partial_file)
+
+        assert ret == GLib.SOURCE_REMOVE
+        assert mock_win_idle.is_transcoding is False
+        mock_win_idle._set_ui_controls_sensitive.assert_called_with(True)
+        mock_win_idle.progress_footer.finish.assert_called_with(False, "Operation cancelled")
+        mock_win_idle.toast_overlay.add_toast.assert_called_once()
 
     def test_cancellation_deletes_partial_output_file(self, tmp_path: Path) -> None:
-        """Verify cancellation cleans up partial unplayable output files."""
-        partial_file = tmp_path / "partial.mp4"
-        partial_file.write_bytes(b"incomplete data")
+        """Verify MainWindow._worker_thread_entry removes unplayable partial output files upon cancellation."""
+        from media_toolbox.ui.window import MainWindow
+
+        mock_win = MagicMock()
+        mock_win._on_cancelled_idle.return_value = False
+
+        partial_file = tmp_path / "partially_encoded.mp4"
+        partial_file.write_bytes(b"corrupt partial chunk")
         assert partial_file.exists()
 
-        def cleanup_cancelled_transcode(output_path: Path):
-            if output_path.exists():
-                output_path.unlink()
+        cancel_event = threading.Event()
+        cancel_event.set()
 
-        cleanup_cancelled_transcode(partial_file)
+        with patch("media_toolbox.ui.window.run_ffmpeg_pipeline", side_effect=RunnerCancelledError("Aborted")):
+            MainWindow._worker_thread_entry(mock_win, [["ffmpeg"]], 5.0, partial_file, cancel_event)
+
         assert not partial_file.exists()
 
     def test_window_close_request_aborts_active_transcode(self) -> None:
-        """Verify closing the window signals cancel_event if transcode is running."""
-        cancel_event = threading.Event()
-        is_transcoding = True
+        """Verify MainWindow._on_close_request signals cancel_event when transcoding and permits window closure."""
+        from media_toolbox.ui.window import MainWindow
 
-        def on_close_request():
-            if is_transcoding and cancel_event:
-                cancel_event.set()
-            return False
+        mock_win = MagicMock()
+        mock_win.cancel_event = threading.Event()
+        mock_win.is_transcoding = True
 
-        on_close_request()
-        assert cancel_event.is_set() is True
+        # When transcoding: sets cancel_event, returns False
+        ret = MainWindow._on_close_request(mock_win)
+        assert ret is False
+        assert mock_win.cancel_event.is_set() is True
+
+        # When idle: leaves cancel_event unset, returns False
+        mock_win.cancel_event.clear()
+        mock_win.is_transcoding = False
+        ret = MainWindow._on_close_request(mock_win)
+        assert ret is False
+        assert not mock_win.cancel_event.is_set()
 
 
 # ---------------------------------------------------------------------------

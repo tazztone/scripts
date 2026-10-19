@@ -95,6 +95,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.audio_output_path: Optional[Path] = None
         self.cancel_event: Optional[threading.Event] = None
         self.is_transcoding: bool = False
+        self.open_btn: Optional[Gtk.Button] = None
 
         self._build_ui()
         self.connect("close-request", self._on_close_request)
@@ -103,12 +104,12 @@ class MainWindow(Adw.ApplicationWindow):
         """Construct the complete Libadwaita window UI layout."""
         # Top Header Bar
         self.header_bar = Adw.HeaderBar()
-        open_btn = Gtk.Button(
+        self.open_btn = Gtk.Button(
             icon_name="document-open-symbolic",
             tooltip_text="Open Media File (<Ctrl>O)",
         )
-        open_btn.connect("clicked", lambda _b: self.open_file_dialog())
-        self.header_bar.pack_start(open_btn)
+        self.open_btn.connect("clicked", lambda _b: self.open_file_dialog())
+        self.header_bar.pack_start(self.open_btn)
 
         self.window_title = Adw.WindowTitle(
             title="Media Toolbox",
@@ -367,6 +368,9 @@ class MainWindow(Adw.ApplicationWindow):
 
     def open_file_dialog(self) -> None:
         """Present modern async file chooser portal."""
+        if self.is_transcoding:
+            self.toast_overlay.add_toast(Adw.Toast(title="Cannot open file while transcoding is in progress."))
+            return
         dialog = Gtk.FileDialog(title="Select Media File")
         dialog.open(self, None, self._on_file_dialog_finish)
 
@@ -406,6 +410,9 @@ class MainWindow(Adw.ApplicationWindow):
 
     def load_media_file(self, path: str | Path) -> None:
         """Inspect media file and configure widgets."""
+        if self.is_transcoding:
+            self.toast_overlay.add_toast(Adw.Toast(title="Cannot load file while transcoding is in progress."))
+            return
         p = Path(path).resolve()
         if not p.exists():
             self.toast_overlay.add_toast(Adw.Toast(title=f"File not found: {p.name}"))
@@ -498,12 +505,13 @@ class MainWindow(Adw.ApplicationWindow):
         boost = self.audio_widget.get_volume_boost()
         audio_br = self.audio_widget.get_audio_bitrate()
 
-        opts = build_encode_options_from_state(
+        return build_encode_options_from_state(
             preset=preset,
             rate_mode=rate_mode,
             crf_value=crf_val,
             target_size_mb=target_size_mb,
             scale=scale,
+            crop=crop,
             mute_audio=mute,
             normalize_audio=norm,
             volume_boost_db=boost,
@@ -511,27 +519,6 @@ class MainWindow(Adw.ApplicationWindow):
             speed_factor=speed_factor,
             is_extract_audio=False,
         )
-        if crop:
-            opts = EncodeOptions(
-                target_size_mb=opts.target_size_mb,
-                crf=opts.crf,
-                video_codec=opts.video_codec,
-                audio_codec=opts.audio_codec,
-                audio_bitrate_kbps=opts.audio_bitrate_kbps,
-                scale=opts.scale,
-                crop=crop,
-                pad=opts.pad,
-                speed=opts.speed,
-                fps=opts.fps,
-                mute_audio=opts.mute_audio,
-                extract_audio=opts.extract_audio,
-                normalize_audio=opts.normalize_audio,
-                volume_boost_db=opts.volume_boost_db,
-                two_pass=opts.two_pass,
-                preset=opts.preset,
-                speed_preset=opts.speed_preset,
-            )
-        return opts
 
     def get_extract_audio_options(self) -> EncodeOptions:
         preset = self.get_current_audio_preset()
@@ -564,6 +551,8 @@ class MainWindow(Adw.ApplicationWindow):
         self.view_stack.set_sensitive(sensitive)
         self.transcode_btn.set_sensitive(sensitive)
         self.extract_btn.set_sensitive(sensitive)
+        if hasattr(self, "open_btn") and self.open_btn is not None:
+            self.open_btn.set_sensitive(sensitive)
 
     def _start_transcode(self) -> None:
         if not self.input_file or not self.media_info:
@@ -590,7 +579,7 @@ class MainWindow(Adw.ApplicationWindow):
             self.toast_overlay.add_toast(Adw.Toast(title=f"Configuration error: {e}"))
             return
 
-        self._launch_worker_pipeline(cmds, self.media_info.duration or 0.0, out_path, "Transcoding video...")
+        self._start_worker(cmds, self.media_info.duration or 0.0, out_path, "Transcoding video...")
 
     def _start_extract_audio(self) -> None:
         if not self.input_file or not self.media_info:
@@ -617,9 +606,9 @@ class MainWindow(Adw.ApplicationWindow):
             self.toast_overlay.add_toast(Adw.Toast(title=f"Configuration error: {e}"))
             return
 
-        self._launch_worker_pipeline(cmds, self.media_info.duration or 0.0, out_path, "Extracting audio...")
+        self._start_worker(cmds, self.media_info.duration or 0.0, out_path, "Extracting audio...")
 
-    def _launch_worker_pipeline(
+    def _start_worker(
         self,
         cmds: list[list[str]],
         duration: float,
@@ -629,6 +618,8 @@ class MainWindow(Adw.ApplicationWindow):
         self.cancel_event = threading.Event()
         self.is_transcoding = True
         self._set_ui_controls_sensitive(False)
+        if hasattr(self, "open_btn") and self.open_btn is not None:
+            self.open_btn.set_sensitive(False)
         self.progress_footer.start(title)
 
         worker_thread = threading.Thread(
@@ -638,6 +629,9 @@ class MainWindow(Adw.ApplicationWindow):
             name="MediaToolboxWorker",
         )
         worker_thread.start()
+
+    # Backwards compatibility alias
+    _launch_worker_pipeline = _start_worker
 
     def _worker_thread_entry(
         self,
@@ -682,6 +676,8 @@ class MainWindow(Adw.ApplicationWindow):
     def _on_success_idle(self, output_path: Path) -> bool:
         self.is_transcoding = False
         self._set_ui_controls_sensitive(True)
+        if hasattr(self, "open_btn") and self.open_btn is not None:
+            self.open_btn.set_sensitive(True)
         self.progress_footer.finish(True, f"Saved: {output_path.name}")
         self.toast_overlay.add_toast(Adw.Toast(title=f"Completed successfully: {output_path.name}"))
         return GLib.SOURCE_REMOVE
@@ -689,6 +685,8 @@ class MainWindow(Adw.ApplicationWindow):
     def _on_cancelled_idle(self, output_path: Path) -> bool:
         self.is_transcoding = False
         self._set_ui_controls_sensitive(True)
+        if hasattr(self, "open_btn") and self.open_btn is not None:
+            self.open_btn.set_sensitive(True)
         self.progress_footer.finish(False, "Operation cancelled")
         self.toast_overlay.add_toast(Adw.Toast(title="Operation cancelled by user."))
         return GLib.SOURCE_REMOVE
@@ -696,6 +694,8 @@ class MainWindow(Adw.ApplicationWindow):
     def _on_error_idle(self, error_message: str) -> bool:
         self.is_transcoding = False
         self._set_ui_controls_sensitive(True)
+        if hasattr(self, "open_btn") and self.open_btn is not None:
+            self.open_btn.set_sensitive(True)
         self.progress_footer.finish(False, f"Failed: {error_message}")
         self.toast_overlay.add_toast(Adw.Toast(title=f"Encoding failed: {error_message}"))
         return GLib.SOURCE_REMOVE
