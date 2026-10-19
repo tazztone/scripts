@@ -96,8 +96,8 @@ run_test "$SCRIPT_DIR/../ffmpeg/Universal-Toolbox.sh" "file_size_lt=600000,vcode
 echo "Test 3: CLI Preset"
 find "$TEST_DATA" -name "input_*.mp4" -delete
 U_TOOLBOX="$SCRIPT_DIR/../ffmpeg/Universal-Toolbox.sh"
-mkdir -p "$HOME/.config/scripts-sh/ffmpeg"
-echo "TestPreset|Speed: 2x (Fast)|Scale: 720p|Quality: Medium|Remove Audio Track" > "$HOME/.config/scripts-sh/ffmpeg/presets.conf"
+mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/scripts-sh/ffmpeg"
+echo "TestPreset|Speed: 2x (Fast)|Scale: 720p|Quality: Medium|Remove Audio Track" > "${XDG_CONFIG_HOME:-$HOME/.config}/scripts-sh/ffmpeg/presets.conf"
 ( 
     cd "$TEST_DATA" || exit 1
     bash "$U_TOOLBOX" --preset "TestPreset" "input.mp4"

@@ -3,8 +3,8 @@
 # Shared Wizard Logic for scripts-sh
 
 # --- Logging & Security ---
-LOG_DIR="$HOME/.local/share/scripts-sh"
-LOG_FILE="$LOG_DIR/debug.log"
+LOG_DIR="${LOG_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/scripts-sh}"
+LOG_FILE="${LOG_FILE:-$LOG_DIR/debug.log}"
 DEBUG_MODE="${DEBUG_MODE:-0}"
 
 # Sourcing Guard

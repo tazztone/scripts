@@ -142,7 +142,7 @@ log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
 
 generate_test_media() {
     # Guard against redundant calls
-    if [[ -f "$TEST_DATA/input.mp4" && -f "$TEST_DATA/input.jpg" && -f "$TEST_DATA/src.mp4" && -f "$TEST_DATA/src.jpg" ]]; then
+    if [[ -f "$TEST_DATA/input.mp4" && -f "$TEST_DATA/input.jpg" && -f "$TEST_DATA/src.mp4" && -f "$TEST_DATA/src.jpg" && -f "$TEST_DATA/watermark.png" ]]; then
         return 0
     fi
 
@@ -155,6 +155,13 @@ generate_test_media() {
         magick -size 100x100 xc:transparent "$TEST_DATA/alpha.png" &>/dev/null
     elif command -v convert &>/dev/null; then
         convert -size 100x100 xc:transparent "$TEST_DATA/alpha.png" &>/dev/null
+    fi
+    if [ ! -f "$TEST_DATA/watermark.png" ]; then
+        if command -v magick &>/dev/null; then
+            magick -size 64x64 xc:yellow "$TEST_DATA/watermark.png" &>/dev/null
+        elif command -v convert &>/dev/null; then
+            convert -size 64x64 xc:yellow "$TEST_DATA/watermark.png" &>/dev/null
+        fi
     fi
 
     # Create src.* copies for compatibility with legacy tests

@@ -659,9 +659,11 @@ The ImageMagick Toolbox follows the principle of **"Parallel Processing + Smart 
 - **Landscape (16:9)**: Standard widescreen format.
 
 ###### 3. 🖼️ Montage & Grid
-- **2x / 3x Grid**: Creates a high-resolution grid montage.
-- **Single Row/Column**: Stitches images together at full resolution.
-- **Contact Sheet**: Creates a sheet of thumbnails (200x200) for overview.
+- **Modes**:
+  - **Simple Concat (Seamless)**: Stitches images edge-to-edge at full native resolution with no borders or padding (`-mode Concatenate`).
+  - **Spaced Grid**: Customizable gap spacing (0px, 5px, 10px, 20px, custom), background canvas (transparent, black, white, custom hex), and cell alignment (center, north, south, east, west).
+  - **Contact Sheet**: Creates an overview sheet of thumbnails (200x200) with white margin padding.
+- **Layouts**: ➡ Single Row (horizontal), ⬇ Single Column (vertical), 2x, 3x, 4x Grids, and Custom shapes.
 
 ###### 4. 📦 Format Converter
 - **Outputs**: JPG, PNG, WEBP, TIFF, PDF.

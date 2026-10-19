@@ -19,7 +19,7 @@ CONFIG_DIR="$STATE_CONFIG_DIR"
 PRESET_FILE="$STATE_PRESET_FILE"
 # shellcheck disable=SC2034
 HISTORY_FILE="$STATE_HISTORY_FILE"
-LOG_FILE="${LOG_FILE:-$HOME/.local/share/scripts-sh/ffmpeg_last_run.log}"
+LOG_FILE="${LOG_FILE:-${XDG_DATA_HOME:-$HOME/.local/share}/scripts-sh/ffmpeg_last_run.log}"
 mkdir -p "$(dirname "$LOG_FILE")"
 
 

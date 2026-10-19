@@ -41,11 +41,23 @@ echo "Test 5: Convert to sRGB"
 export MOCK_LIST="Convert to sRGB"
 run_test "$IM_TOOLBOX" "tags=srgb" "$TEST_DATA/input.jpg" || FAILED=1
 
-# Test 6: Montage
-echo "Test 6: Montage"
+# Test 6: Montage (2x Grid)
+echo "Test 6: Montage (2x Grid)"
 export MOCK_LIST="Montage & Grid"
-export MOCK_FORMS="🏁 2x Grid|"
-run_test "$IM_TOOLBOX" "format=jpeg" --pattern "montage_*" "$TEST_DATA/input.jpg" "$TEST_DATA/input.jpg" || FAILED=1
+export MOCK_FORMS="Spaced Grid (Custom Gap & BG)|🏁 2x Grid|None (0px)|Transparent (none)|Center|"
+run_test "$IM_TOOLBOX" "format=jpeg,width=2560,height=720" --pattern "montage_*" "$TEST_DATA/input.jpg" "$TEST_DATA/input.jpg" || FAILED=1
+
+# Test 6b: Montage (Single Column)
+echo "Test 6b: Montage (Single Column)"
+export MOCK_LIST="Montage & Grid"
+export MOCK_FORMS="Simple Concat (Seamless)|⬇ Single Column|None (0px)|Transparent (none)|Center|"
+run_test "$IM_TOOLBOX" "width=1280,height=1440" --pattern "montage_*" "$TEST_DATA/input.jpg" "$TEST_DATA/input.jpg" || FAILED=1
+
+# Test 6c: Montage (Single Row)
+echo "Test 6c: Montage (Single Row)"
+export MOCK_LIST="Montage & Grid"
+export MOCK_FORMS="Simple Concat (Seamless)|➡ Single Row|None (0px)|Transparent (none)|Center|"
+run_test "$IM_TOOLBOX" "width=2560,height=720" --pattern "montage_*" "$TEST_DATA/input.jpg" "$TEST_DATA/input.jpg" || FAILED=1
 
 # Test 7: Horizontal Crop (16:9)
 echo "Test 7: Horizontal Crop (16:9)"
@@ -64,6 +76,18 @@ echo "Test 9: Text Annotation"
 export MOCK_LIST="Effects & Branding"
 export MOCK_FORMS="No Change|Text Annotation|Watermark Text|"
 run_test "$IM_TOOLBOX" "tags=text" "$TEST_DATA/input.jpg" || FAILED=1
+
+# Test 9b: Watermark PNG
+echo "Test 9b: Watermark PNG"
+export MOCK_LIST="Effects & Branding"
+export MOCK_FORMS="No Change|Watermark PNG|$TEST_DATA/watermark.png|"
+run_test "$IM_TOOLBOX" "tags=wm" "$TEST_DATA/input.jpg" || FAILED=1
+
+# Test 9c: Custom Quality
+echo "Test 9c: Custom Quality"
+export MOCK_LIST="Convert Format"
+export MOCK_FORMS="JPG||92"
+run_test "$IM_TOOLBOX" "tags=q92" "$TEST_DATA/input.jpg" || FAILED=1
 
 # Test 10: PDF Extract (Images from PDF)
 echo "Test 10: PDF Extract"
