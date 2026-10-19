@@ -131,6 +131,8 @@ get_recipe_summary() {
                     summary+="row_"
                 elif [[ "$opt" == *"Column"* ]]; then
                     summary+="col_"
+                elif [[ "$opt" == *"Montage"* ]]; then
+                    summary+="montage_"
                 else
                     summary+="crop_"
                 fi
@@ -170,10 +172,14 @@ show_convert_interface() {
 }
 
 show_montage_interface() {
-    zenity --forms --title="🖼️ Montage & Grid" --width=500 \
-        --text="Select a montage layout and custom shape:" \
-        --add-combo="Layout" --combo-values="🏁 2x Grid|🎲 3x Grid|📑 Contact Sheet|➡ Single Row|⬇ Single Column" \
-        --add-entry="✍️ Custom Grid Shape (e.g. 4x3)" || true
+    zenity --forms --title="🖼️ Montage & Grid" --width=520 \
+        --text="Configure Montage & Grid options:" \
+        --add-combo="Mode" --combo-values="Simple Concat (Seamless)|Spaced Grid (Custom Gap & BG)|Contact Sheet (Thumbnails)" \
+        --add-combo="Layout" --combo-values="➡ Single Row|⬇ Single Column|🏁 2x Grid|🎲 3x Grid|🎲 4x Grid|Custom" \
+        --add-combo="Spacing / Gap" --combo-values="None (0px)|5px|10px|20px|Custom" \
+        --add-combo="Background" --combo-values="Transparent (none)|Black|White|Custom Hex" \
+        --add-combo="Tile Alignment" --combo-values="Center|North (Top)|South (Bottom)|West (Left)|East (Right)" \
+        --add-entry="Custom Shape / Gap / BG (e.g. 4x3 or #1e1e1e)" || true
 }
 
 show_effects_interface() {
@@ -331,14 +337,22 @@ show_main_menu() {
                     "Montage & Grid")
                         RES=$(show_montage_interface || true)
                         if [ -z "$RES" ]; then continue; fi
-                        parse_forms_result "$RES" "layout" "custom_grid"
-                        local CLEAN_MONT
-                        CLEAN_MONT="${CONFIG[layout]%% (*)}"
-                        if [ -n "${CONFIG[custom_grid]}" ]; then
-                            recipe_list+=("Canvas: CustomGrid:${CONFIG[custom_grid]}")
-                        else
-                            recipe_list+=("Canvas: $CLEAN_MONT")
+                        parse_forms_result "$RES" "mode" "layout" "gap" "bg" "gravity" "custom"
+                        
+                        # Backward compatibility for legacy tests/mocks supplying layout in field 1
+                        if [[ "${CONFIG[mode]}" == *"Grid"* || "${CONFIG[mode]}" == *"Row"* || "${CONFIG[mode]}" == *"Column"* || "${CONFIG[mode]}" == *"Sheet"* ]]; then
+                            CONFIG[layout]="${CONFIG[mode]}"
+                            CONFIG[mode]="Spaced Grid"
                         fi
+
+                        local CLEAN_MODE CLEAN_LAYOUT CLEAN_GAP CLEAN_BG CLEAN_GRAV
+                        CLEAN_MODE="${CONFIG[mode]%% (*)}"
+                        CLEAN_LAYOUT="${CONFIG[layout]%% (*)}"
+                        CLEAN_GAP="${CONFIG[gap]%% (*)}"
+                        CLEAN_BG="${CONFIG[bg]%% (*)}"
+                        CLEAN_GRAV="${CONFIG[gravity]%% (*)}"
+
+                        recipe_list+=("Montage: Active|MontageMode: ${CLEAN_MODE:-Simple Concat}|MontageLayout: ${CLEAN_LAYOUT:-➡ Single Row}|MontageGap: ${CLEAN_GAP:-None}|MontageBg: ${CLEAN_BG:-Transparent}|MontageGravity: ${CLEAN_GRAV:-Center}|MontageCustom: ${CONFIG[custom]}")
                         ;;
                     "Flatten Background") recipe_list+=("Effect: Flatten") ;;
                     "Convert to sRGB")    recipe_list+=("Effect: sRGB") ;;
@@ -409,10 +423,25 @@ TAG=""
 MONTAGE_ARGS=()
 DO_MONTAGE=false
 DO_PDF_EXTRACT=false
+M_MODE=""
+M_LAYOUT=""
+M_GAP=""
+M_BG=""
+M_GRAV=""
+M_CUSTOM=""
 
 IFS='|' read -ra CHOICE_ARR <<< "$CHOICES"
 for opt in "${CHOICE_ARR[@]}"; do
     case "$opt" in
+        # --- MONTAGE (PRIORITY 0) ---
+        Montage:*) DO_MONTAGE=true ;;
+        MontageMode:*) M_MODE="${opt#MontageMode: }" ;;
+        MontageLayout:*) M_LAYOUT="${opt#MontageLayout: }" ;;
+        MontageGap:*) M_GAP="${opt#MontageGap: }" ;;
+        MontageBg:*) M_BG="${opt#MontageBg: }" ;;
+        MontageGravity:*) M_GRAV="${opt#MontageGravity: }" ;;
+        MontageCustom:*) M_CUSTOM="${opt#MontageCustom: }" ;;
+
         # --- CROP (PRIORITY 1) ---
         Canvas:*)
             VAL=$(echo "$opt" | cut -d':' -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
@@ -509,6 +538,75 @@ for opt in "${CHOICE_ARR[@]}"; do
             ;;
     esac
 done
+
+# Assemble Montage options if selected
+if [ "$DO_MONTAGE" = true ] && [ ${#MONTAGE_ARGS[@]} -eq 0 ]; then
+    if [[ "$M_MODE" == *"Sheet"* ]]; then
+        MONTAGE_ARGS+=("-thumbnail" "200x200>" "-geometry" "+10+10" "-tile" "4x" "-background" "white")
+        TAG="${TAG}_sheet"
+    elif [[ "$M_MODE" == *"Simple Concat"* || "$M_MODE" == *"Concat"* ]]; then
+        MONTAGE_ARGS+=("-mode" "Concatenate")
+        TAG="${TAG}_concat"
+    else
+        # Spaced Grid
+        grav="Center"
+        case "$M_GRAV" in
+            *"North"*|*"Top"*)    grav="North" ;;
+            *"South"*|*"Bottom"*) grav="South" ;;
+            *"West"*|*"Left"*)    grav="West" ;;
+            *"East"*|*"Right"*)   grav="East" ;;
+            *)                    grav="Center" ;;
+        esac
+        MONTAGE_ARGS+=("-gravity" "$grav")
+
+        gap_val="+0+0"
+        case "$M_GAP" in
+            *"5px"*)  gap_val="+5+5" ;;
+            *"10px"*) gap_val="+10+10" ;;
+            *"20px"*) gap_val="+20+20" ;;
+            *"None"*|*"0px"*) gap_val="+0+0" ;;
+            *)
+                if [[ -n "$M_CUSTOM" && "$M_CUSTOM" == *"+"* ]]; then
+                    gap_val="$M_CUSTOM"
+                fi
+                ;;
+        esac
+        MONTAGE_ARGS+=("-geometry" "$gap_val")
+
+        case "$M_BG" in
+            *"Transparent"*|*"none"*) MONTAGE_ARGS+=("-background" "none") ;;
+            *"Black"*) MONTAGE_ARGS+=("-background" "black") ;;
+            *"White"*) MONTAGE_ARGS+=("-background" "white") ;;
+            *)
+                if [[ -n "$M_BG" && "$M_BG" != "(Inactive)" ]]; then
+                    MONTAGE_ARGS+=("-background" "$M_BG")
+                elif [[ -n "$M_CUSTOM" && "$M_CUSTOM" =~ ^#[0-9a-fA-F]{3,6}$ ]]; then
+                    MONTAGE_ARGS+=("-background" "$M_CUSTOM")
+                else
+                    MONTAGE_ARGS+=("-background" "none")
+                fi
+                ;;
+        esac
+    fi
+
+    # Layout (applies to Concat and Spaced Grid)
+    if [[ "$M_MODE" != *"Sheet"* ]]; then
+        case "$M_LAYOUT" in
+            *"Row"*)     MONTAGE_ARGS+=("-tile" "x1"); TAG="${TAG}_row" ;;
+            *"Column"*)  MONTAGE_ARGS+=("-tile" "1x"); TAG="${TAG}_col" ;;
+            *2*x*Grid*)  MONTAGE_ARGS+=("-tile" "2x"); TAG="${TAG}_grid2x" ;;
+            *3*x*Grid*)  MONTAGE_ARGS+=("-tile" "3x"); TAG="${TAG}_grid3x" ;;
+            *4*x*Grid*)  MONTAGE_ARGS+=("-tile" "4x"); TAG="${TAG}_grid4x" ;;
+            *)
+                if [[ -n "$M_CUSTOM" && "$M_CUSTOM" =~ ^[0-9]+x[0-9]*$ ]]; then
+                    MONTAGE_ARGS+=("-tile" "$M_CUSTOM"); TAG="${TAG}_grid${M_CUSTOM//x/_}"
+                else
+                    MONTAGE_ARGS+=("-tile" "x1"); TAG="${TAG}_row"
+                fi
+                ;;
+        esac
+    fi
+fi
 
 # Combine in priority order - safely to preserve element integrity
 IM_ARGS=()
