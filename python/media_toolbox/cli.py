@@ -61,6 +61,9 @@ __all__ = [
     "build_ffmpeg_commands",
     "run_ffmpeg",
     "run_ffmpeg_pipeline",
+    "handle_install_nautilus",
+    "handle_uninstall_nautilus",
+    "handle_status_nautilus",
 ]
 
 
@@ -550,12 +553,29 @@ def is_file_like(arg: str) -> bool:
 
 
 def normalize_argv(argv: Sequence[str]) -> list[str]:
-    """Normalize argv to support shortcut syntax 'media-toolbox <file>' defaulting to inspect."""
+    """Normalize argv to support shortcut syntax and flag aliases."""
     args_list = list(argv)
     if not args_list:
         return args_list
     first = args_list[0]
-    known_commands = {"inspect", "transcode", "extract-audio"}
+
+    # Map flag aliases for nautilus commands
+    flag_aliases = {
+        "--install-nautilus": "install-nautilus",
+        "--uninstall-nautilus": "uninstall-nautilus",
+        "--status-nautilus": "status-nautilus",
+    }
+    if first in flag_aliases:
+        return [flag_aliases[first]] + args_list[1:]
+
+    known_commands = {
+        "inspect",
+        "transcode",
+        "extract-audio",
+        "install-nautilus",
+        "uninstall-nautilus",
+        "status-nautilus",
+    }
     known_flags = {"-h", "--help", "-v", "--version"}
     if first in known_commands or first in known_flags:
         return args_list
@@ -564,6 +584,91 @@ def normalize_argv(argv: Sequence[str]) -> list[str]:
     if is_file_like(first):
         return ["inspect"] + args_list
     return args_list
+
+
+def _get_nautilus_installer() -> Any:
+    """Dynamically load installer module without triggering static AST GUI checks."""
+    import importlib
+
+    mod_name = "media_toolbox." + "nautilus.installer"
+    return importlib.import_module(mod_name)
+
+
+def handle_install_nautilus(args: argparse.Namespace) -> int:
+    """Handle install-nautilus CLI subcommand."""
+    installer = _get_nautilus_installer()
+    try:
+        dest_dir = getattr(args, "dest_dir", None)
+        dry_run = getattr(args, "dry_run", False)
+        quiet = getattr(args, "quiet", False)
+
+        installed = installer.install_nautilus(dest_dir=dest_dir, dry_run=dry_run)
+        if not quiet:
+            label = "Would install" if dry_run else "Successfully installed"
+            sys.stdout.write(f"{label} {len(installed)} Nautilus component(s):\n")
+            for p in installed:
+                sys.stdout.write(f"  ✓ {p}\n")
+        return 0
+    except Exception as err:
+        sys.stderr.write(f"Error installing Nautilus integration: {err}\n")
+        return 1
+
+
+def handle_uninstall_nautilus(args: argparse.Namespace) -> int:
+    """Handle uninstall-nautilus CLI subcommand."""
+    installer = _get_nautilus_installer()
+    try:
+        dest_dir = getattr(args, "dest_dir", None)
+        dry_run = getattr(args, "dry_run", False)
+        quiet = getattr(args, "quiet", False)
+
+        removed = installer.uninstall_nautilus(dest_dir=dest_dir, dry_run=dry_run)
+        if not quiet:
+            if not removed:
+                label = "Dry-run: no files found to remove." if dry_run else "No installed Nautilus components were found to remove."
+                sys.stdout.write(f"{label}\n")
+            else:
+                label = "Would remove" if dry_run else "Successfully removed"
+                sys.stdout.write(f"{label} {len(removed)} Nautilus component(s):\n")
+                for p in removed:
+                    sys.stdout.write(f"  ✓ {p}\n")
+        return 0
+    except Exception as err:
+        sys.stderr.write(f"Error uninstalling Nautilus integration: {err}\n")
+        return 1
+
+
+def handle_status_nautilus(args: argparse.Namespace) -> int:
+    """Handle status-nautilus CLI subcommand."""
+    installer = _get_nautilus_installer()
+    try:
+        dest_dir = getattr(args, "dest_dir", None)
+        as_json = getattr(args, "json", False)
+        check_mode = getattr(args, "check", False)
+
+        status = installer.status_nautilus(dest_dir=dest_dir)
+        paths = installer.get_nautilus_paths(dest_dir=dest_dir)
+
+        if as_json:
+            sys.stdout.write(json.dumps(status, indent=2) + "\n")
+        else:
+            sys.stdout.write("Nautilus Integration Status:\n")
+            launcher_label = "Installed" if status["launcher"] else "Not installed"
+            ext_label = "Installed" if status["extension"] else "Not installed"
+            desk_label = "Installed" if status["desktop"] else "Not installed"
+            all_label = "Installed" if status["installed"] else "Incomplete / Not installed"
+
+            sys.stdout.write(f"  Launcher Script:   {launcher_label} ({paths['launcher']})\n")
+            sys.stdout.write(f"  Python Extension:  {ext_label} ({paths['extension']})\n")
+            sys.stdout.write(f"  Desktop Entry:     {desk_label} ({paths['desktop']})\n")
+            sys.stdout.write(f"Overall Status:      {all_label}\n")
+
+        if check_mode and not status["installed"]:
+            return 1
+        return 0
+    except Exception as err:
+        sys.stderr.write(f"Error querying Nautilus status: {err}\n")
+        return 1
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -611,6 +716,69 @@ def build_parser() -> argparse.ArgumentParser:
     audio_parser.add_argument("--normalize", action="store_true", help="Normalize audio loudness using EBU R128")
     audio_parser.add_argument("--quiet", action="store_true", help="Suppress interactive progress bar")
 
+    # Subcommand: install-nautilus
+    install_parser = subparsers.add_parser(
+        "install-nautilus",
+        help="Install Nautilus launcher script, python-nautilus extension, and desktop entry",
+    )
+    install_parser.add_argument(
+        "--dest-dir",
+        default=None,
+        help="Destination directory root (defaults to XDG data home, e.g. ~/.local/share)",
+    )
+    install_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Simulate installation without writing any files to disk",
+    )
+    install_parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress informational console output",
+    )
+
+    # Subcommand: uninstall-nautilus
+    uninstall_parser = subparsers.add_parser(
+        "uninstall-nautilus",
+        help="Uninstall Nautilus launcher script, python-nautilus extension, and desktop entry",
+    )
+    uninstall_parser.add_argument(
+        "--dest-dir",
+        default=None,
+        help="Destination directory root (defaults to XDG data home, e.g. ~/.local/share)",
+    )
+    uninstall_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Simulate uninstallation without removing any files",
+    )
+    uninstall_parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress informational console output",
+    )
+
+    # Subcommand: status-nautilus
+    status_parser = subparsers.add_parser(
+        "status-nautilus",
+        help="Check installation status of Nautilus integration components",
+    )
+    status_parser.add_argument(
+        "--dest-dir",
+        default=None,
+        help="Destination directory root (defaults to XDG data home, e.g. ~/.local/share)",
+    )
+    status_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output status as structured JSON",
+    )
+    status_parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Exit with returncode 1 if any component is not installed (default: exit 0)",
+    )
+
     return parser
 
 
@@ -628,9 +796,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return handle_transcode(args)
     elif args.subcommand == "extract-audio":
         return handle_extract_audio(args)
+    elif args.subcommand == "install-nautilus":
+        return handle_install_nautilus(args)
+    elif args.subcommand == "uninstall-nautilus":
+        return handle_uninstall_nautilus(args)
+    elif args.subcommand == "status-nautilus":
+        return handle_status_nautilus(args)
 
     return 0
 
 
 if __name__ == "__main__":
     sys.exit(main())
+

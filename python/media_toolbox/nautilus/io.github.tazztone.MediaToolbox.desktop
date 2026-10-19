@@ -1,0 +1,18 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Media Toolbox
+Comment=Modern Python Media Inspection & Transcoding Toolbox
+Exec=media_toolbox %F
+Icon=video-x-generic
+Terminal=false
+Categories=AudioVideo;AudioVideoEditing;Audio;Video;
+MimeType=video/mp4;video/x-matroska;video/quicktime;video/webm;audio/mpeg;audio/x-wav;audio/flac;audio/ogg;
+Keywords=video;audio;media;transcode;ffmpeg;probe;inspect;adwaita;nautilus;
+StartupNotify=true
+StartupWMClass=io.github.tazztone.MediaToolbox
+Actions=Inspect;
+
+[Desktop Action Inspect]
+Name=Inspect Media Metadata
+Exec=media_toolbox inspect %f
