@@ -344,7 +344,7 @@ class MediaToolboxExtension(GObject.GObject, Nautilus.MenuProvider):
 
         lines = ["set -e", "echo '=== Media Toolbox: Metadata Inspection ==='"]
         for p in paths:
-            lines.append(f"echo '--- Probing: {p} ---'")
+            lines.append(f"echo {shlex.quote(f'--- Probing: {p} ---')}")
             lines.append(f"{shlex.quote(py)} -m media_toolbox.cli inspect {shlex.quote(p)}")
             lines.append("echo ''")
         lines.append("read -n 1 -s -r -p 'Press any key to close...'")
@@ -374,7 +374,7 @@ class MediaToolboxExtension(GObject.GObject, Nautilus.MenuProvider):
         lines = ["set -e", "echo '=== Media Toolbox: Quick Transcode (H.264) ==='"]
         for idx, p in enumerate(paths, 1):
             out_p = get_transcode_output_path(p)
-            lines.append(f"echo '[{idx}/{len(paths)}] Transcoding {p} -> {out_p}'")
+            lines.append(f"echo {shlex.quote(f'[{idx}/{len(paths)}] Transcoding {p} -> {out_p}')}")
             cmd = f"{shlex.quote(py)} -m media_toolbox.cli transcode {shlex.quote(p)} {shlex.quote(out_p)} --preset h264"
             lines.append(cmd)
         lines.append("echo ''")
@@ -396,7 +396,7 @@ class MediaToolboxExtension(GObject.GObject, Nautilus.MenuProvider):
         lines = ["set -e", "echo '=== Media Toolbox: Extract Audio (MP3) ==='"]
         for idx, p in enumerate(paths, 1):
             out_p = get_extract_audio_output_path(p)
-            lines.append(f"echo '[{idx}/{len(paths)}] Extracting audio {p} -> {out_p}'")
+            lines.append(f"echo {shlex.quote(f'[{idx}/{len(paths)}] Extracting audio {p} -> {out_p}')}")
             cmd = f"{shlex.quote(py)} -m media_toolbox.cli extract-audio {shlex.quote(p)} {shlex.quote(out_p)} --codec mp3"
             lines.append(cmd)
         lines.append("echo ''")
