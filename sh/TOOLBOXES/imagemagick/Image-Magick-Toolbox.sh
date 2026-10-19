@@ -47,6 +47,7 @@ BRAND_PAYLOAD=""
 OUT_EXT=""
 TAG=""
 DO_MONTAGE=false
+MONTAGE_ARGS=()
 DO_PDF_EXTRACT=false
 
 # --- MEDIA ANALYSIS (PRE-FLIGHT) ---
@@ -124,7 +125,15 @@ get_recipe_summary() {
                 esac
                 ;;
             Canvas:*)
-                summary+="crop_"
+                if [[ "$opt" == *"Grid"* ]]; then
+                    summary+="grid_"
+                elif [[ "$opt" == *"Row"* ]]; then
+                    summary+="row_"
+                elif [[ "$opt" == *"Column"* ]]; then
+                    summary+="col_"
+                else
+                    summary+="crop_"
+                fi
                 ;;
         esac
     done
@@ -326,11 +335,10 @@ show_main_menu() {
                         local CLEAN_MONT
                         CLEAN_MONT="${CONFIG[layout]%% (*)}"
                         if [ -n "${CONFIG[custom_grid]}" ]; then
-                            echo "Canvas: CustomGrid:${CONFIG[custom_grid]}"
+                            recipe_list+=("Canvas: CustomGrid:${CONFIG[custom_grid]}")
                         else
-                            echo "Canvas: $CLEAN_MONT"
+                            recipe_list+=("Canvas: $CLEAN_MONT")
                         fi
-                        return 0
                         ;;
                     "Flatten Background") recipe_list+=("Effect: Flatten") ;;
                     "Convert to sRGB")    recipe_list+=("Effect: sRGB") ;;
@@ -398,6 +406,7 @@ FORMAT_ARGS=()
 ERR_LOG=$(mktemp /tmp/im_toolbox_errors_XXXXX.log)
 OUT_EXT=""
 TAG=""
+MONTAGE_ARGS=()
 DO_MONTAGE=false
 DO_PDF_EXTRACT=false
 
@@ -427,14 +436,14 @@ for opt in "${CHOICE_ARR[@]}"; do
                        TAG="${TAG}_crop"
                    fi
                    ;;
-                *2*x*Grid*) IM_ARGS+=("-tile" "2x" "-geometry" "+0+0"); TAG="${TAG}_grid2x"; DO_MONTAGE=true ;;
-                *3*x*Grid*) IM_ARGS+=("-tile" "3x" "-geometry" "+0+0"); TAG="${TAG}_grid3x"; DO_MONTAGE=true ;;
-                *Row*) IM_ARGS+=("-tile" "x1" "-geometry" "+0+0" "-background" "none"); TAG="${TAG}_row"; DO_MONTAGE=true ;;
-                *Column*) IM_ARGS+=("-tile" "1x" "-geometry" "+0+0" "-background" "none"); TAG="${TAG}_col"; DO_MONTAGE=true ;;
-                *Sheet*) IM_ARGS+=("-thumbnail" "200x200>" "-geometry" "+10+10" "-tile" "4x"); TAG="${TAG}_sheet"; DO_MONTAGE=true ;;
+                *2*x*Grid*) MONTAGE_ARGS+=("-tile" "2x" "-geometry" "+0+0" "-background" "none"); TAG="${TAG}_grid2x"; DO_MONTAGE=true ;;
+                *3*x*Grid*) MONTAGE_ARGS+=("-tile" "3x" "-geometry" "+0+0" "-background" "none"); TAG="${TAG}_grid3x"; DO_MONTAGE=true ;;
+                *Row*) MONTAGE_ARGS+=("-tile" "x1" "-geometry" "+0+0" "-background" "none"); TAG="${TAG}_row"; DO_MONTAGE=true ;;
+                *Column*) MONTAGE_ARGS+=("-tile" "1x" "-geometry" "+0+0" "-background" "none"); TAG="${TAG}_col"; DO_MONTAGE=true ;;
+                *Sheet*) MONTAGE_ARGS+=("-thumbnail" "200x200>" "-geometry" "+10+10" "-tile" "4x" "-background" "white"); TAG="${TAG}_sheet"; DO_MONTAGE=true ;;
                 *CustomGrid:*)
                     GRID_VAL="${VAL#*CustomGrid:}"
-                    IM_ARGS+=("-tile" "$GRID_VAL" "-geometry" "+0+0")
+                    MONTAGE_ARGS+=("-tile" "$GRID_VAL" "-geometry" "+0+0" "-background" "none")
                     TAG="${TAG}_grid${GRID_VAL//x/_}"
                     DO_MONTAGE=true
                     ;;
@@ -510,9 +519,12 @@ if [ ${#FORMAT_ARGS[@]} -gt 0 ]; then IM_ARGS+=("${FORMAT_ARGS[@]}"); fi
 
 # --- SPECIAL MODE: MONTAGE ---
 if [ "$DO_MONTAGE" = true ]; then
-    OUT_FILE=$(generate_safe_filename "montage" "$TAG" "${OUT_EXT:-jpg}")
+    local_in_ext=$(echo "${1##*.}" | tr '[:upper:]' '[:lower:]')
+    [[ "$local_in_ext" =~ ^(jpg|jpeg|png|webp|gif|tiff)$ ]] || local_in_ext="jpg"
+    MONTAGE_EXT="${OUT_EXT:-$local_in_ext}"
+    OUT_FILE=$(generate_safe_filename "$(dirname "$1")/montage" "$TAG" "$MONTAGE_EXT")
     # shellcheck disable=SC2086,SC2153
-    ( echo "10"; echo "# Creating Montage..."; $IM_MONTAGE "$@" "${IM_ARGS[@]}" "$OUT_FILE" ) | zenity --progress --title="Creating Montage" --auto-close --pulsate
+    ( echo "10"; echo "# Creating Montage..."; $IM_MONTAGE "$@" "${MONTAGE_ARGS[@]}" "${IM_ARGS[@]}" "$OUT_FILE" ) | zenity --progress --title="Creating Montage" --auto-close --pulsate
     zenity --notification --text="Montage Finished: $OUT_FILE"
     exit 0
 fi
