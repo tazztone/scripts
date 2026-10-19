@@ -254,6 +254,8 @@ class ProgressParser:
         self.total_duration = total_duration
         self._block: dict[str, str] = {}
         self._completed_emitted: bool = False
+        self._last_out_time_seconds: float = 0.0
+        self._last_percentage: float = 0.0
 
     def feed_line(self, line: str) -> Optional[ProgressEvent]:
         """Process one stream line. Returns ProgressEvent on block boundary, else None."""
@@ -268,11 +270,14 @@ class ProgressParser:
 
         if key == "progress":
             is_end = val.lower() == "end"
-            out_time = parse_time_to_seconds(
+            parsed_out_time = parse_time_to_seconds(
                 out_time_us=self._block.get("out_time_us"),
                 out_time_ms=self._block.get("out_time_ms"),
                 out_time_str=self._block.get("out_time"),
             )
+            out_time = max(self._last_out_time_seconds, parsed_out_time)
+            self._last_out_time_seconds = out_time
+
             speed = parse_speed(self._block.get("speed"))
 
             def _to_int(k: str) -> int:
@@ -290,7 +295,10 @@ class ProgressParser:
                 except (ValueError, TypeError):
                     return 0.0
 
-            pct = calculate_percentage(out_time, self.total_duration, is_completed=is_end)
+            raw_pct = calculate_percentage(out_time, self.total_duration, is_completed=is_end)
+            pct = max(self._last_percentage, raw_pct)
+            self._last_percentage = pct
+
             eta = calculate_eta_seconds(out_time, self.total_duration, speed, is_completed=is_end)
 
             event = ProgressEvent(
@@ -314,8 +322,16 @@ class ProgressParser:
         """Emit completion event if process finished without emitting progress=end."""
         if not self._completed_emitted:
             self._completed_emitted = True
+            effective_duration = (
+                self.total_duration
+                if (self.total_duration is not None and self.total_duration > 0.0)
+                else 0.0
+            )
+            final_time = max(self._last_out_time_seconds, effective_duration)
+            self._last_out_time_seconds = final_time
+            self._last_percentage = 100.0
             return ProgressEvent(
-                out_time_seconds=self.total_duration or 0.0,
+                out_time_seconds=final_time,
                 percentage=100.0,
                 eta_seconds=0.0,
                 is_completed=True,
@@ -575,6 +591,7 @@ def run_ffmpeg_pipeline(
 
     dur = total_duration_seconds if total_duration_seconds is not None else total_duration
     num_passes = len(cmds)
+    pipeline_last_out_time: float = 0.0
 
     for pass_idx, cmd in enumerate(cmds):
         pass_num = pass_idx + 1
@@ -583,6 +600,7 @@ def run_ffmpeg_pipeline(
             raise RunnerCancelledError(f"Pipeline cancelled before pass {pass_num}", cmd=cmd)
 
         def _pass_callback(raw_event: ProgressEvent, p_idx: int = pass_idx, p_num: int = pass_num) -> None:
+            nonlocal pipeline_last_out_time
             if pipeline_progress_callback is not None:
                 pipeline_progress_callback(p_num, num_passes, raw_event)
 
@@ -601,10 +619,18 @@ def run_ffmpeg_pipeline(
 
                 is_overall_completed = (p_idx == num_passes - 1) and raw_event.is_completed
 
+                if dur is not None and dur > 0.0:
+                    cumulative_out_time = (p_idx * dur) + min(dur, raw_event.out_time_seconds)
+                else:
+                    cumulative_out_time = raw_event.out_time_seconds
+
+                pipeline_out_time = max(pipeline_last_out_time, cumulative_out_time)
+                pipeline_last_out_time = pipeline_out_time
+
                 scaled_event = ProgressEvent(
                     frame=raw_event.frame,
                     fps=raw_event.fps,
-                    out_time_seconds=raw_event.out_time_seconds,
+                    out_time_seconds=pipeline_out_time,
                     total_size_bytes=raw_event.total_size_bytes,
                     speed=raw_event.speed,
                     percentage=clamped_pct,

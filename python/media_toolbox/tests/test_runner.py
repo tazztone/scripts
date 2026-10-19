@@ -219,6 +219,149 @@ class TestProgressParserStream:
         assert evts[0].frame == 5
         assert evts[1].frame == 10
 
+    def test_progress_parser_monotonic_on_na_out_time_and_midstream_drops(self) -> None:
+        """
+        Verify ProgressParser maintains non-decreasing out_time_seconds and percentage
+        when encountering out_time_us='N/A', out_time_ms='N/A', or out-of-order time drops mid-stream.
+        """
+        stream_lines = [
+            # Block 1: Valid initial progress at 2.0s
+            "frame=20\n",
+            "fps=30.0\n",
+            "out_time_us=2000000\n",
+            "progress=continue\n",
+            # Block 2: Multiplexer buffer delay emits N/A out_time_us
+            "frame=35\n",
+            "fps=30.0\n",
+            "out_time_us=N/A\n",
+            "progress=continue\n",
+            # Block 3: Jitter / out-of-order drop (1.5s < 2.0s)
+            "frame=40\n",
+            "fps=30.0\n",
+            "out_time_us=1500000\n",
+            "progress=continue\n",
+            # Block 4: Advances to 5.0s
+            "frame=60\n",
+            "fps=30.0\n",
+            "out_time_us=5000000\n",
+            "progress=continue\n",
+            # Block 5: out_time_ms is N/A and out_time is empty
+            "frame=70\n",
+            "fps=30.0\n",
+            "out_time_ms=N/A\n",
+            "out_time=N/A\n",
+            "progress=continue\n",
+            # Block 6: Mid-stream drop to 3.0s
+            "frame=80\n",
+            "fps=30.0\n",
+            "out_time_us=3000000\n",
+            "progress=continue\n",
+            # Block 7: Completion at 10.0s
+            "frame=100\n",
+            "fps=30.0\n",
+            "out_time_us=10000000\n",
+            "progress=end\n",
+        ]
+
+        parser = ProgressParser(total_duration=10.0)
+        events: list[ProgressEvent] = []
+        for line in stream_lines:
+            evt = parser.feed_line(line)
+            if evt is not None:
+                events.append(evt)
+
+        assert len(events) == 7
+
+        times = [e.out_time_seconds for e in events]
+        pcts = [e.percentage for e in events]
+
+        # Invariant 1: out_time_seconds must be monotonically non-decreasing
+        assert all(times[i] <= times[i + 1] for i in range(len(times) - 1)), (
+            f"out_time_seconds decreased: {times}"
+        )
+
+        # Invariant 2: percentage must be monotonically non-decreasing
+        assert all(pcts[i] <= pcts[i + 1] for i in range(len(pcts) - 1)), (
+            f"percentage decreased: {pcts}"
+        )
+
+        # Exact expected values: prior high-water marks held during drops
+        assert times[0] == 2.0
+        assert times[1] == 2.0  # Held monotonic on N/A
+        assert times[2] == 2.0  # Held monotonic on 1.5s drop
+        assert times[3] == 5.0  # Advanced to 5.0s
+        assert times[4] == 5.0  # Held monotonic on N/A
+        assert times[5] == 5.0  # Held monotonic on 3.0s drop
+        assert times[6] == 10.0  # Advanced to 10.0s
+        assert events[-1].is_completed is True
+        assert events[-1].percentage == 100.0
+
+    def test_progress_parser_monotonic_generator_with_na(self) -> None:
+        """Verify parse_progress_stream generator yields monotonic events through N/A blocks."""
+        stream = [
+            "frame=10\n",
+            "out_time_us=3000000\n",
+            "progress=continue\n",
+            "frame=20\n",
+            "out_time_us=N/A\n",
+            "progress=continue\n",
+            "frame=30\n",
+            "out_time_us=6000000\n",
+            "progress=end\n",
+        ]
+        evts = list(parse_progress_stream(stream, total_duration=6.0))
+        assert len(evts) == 3
+        times = [e.out_time_seconds for e in evts]
+        assert times == [3.0, 3.0, 6.0]
+        assert evts[1].percentage == 50.0  # Kept at 50%, not reset to 0%
+        assert evts[2].percentage == 100.0
+
+    def test_progress_parser_finish_monotonic_with_shorter_total_duration(self) -> None:
+        """
+        Verify finish() does not regress out_time_seconds if total_duration was smaller
+        than already emitted out_time_seconds, or if total_duration was None.
+        """
+        # Case A: Media transcode exceeded estimated total_duration
+        parser_short = ProgressParser(total_duration=5.0)
+        parser_short.feed_line("frame=100")
+        parser_short.feed_line("out_time_us=6200000")  # 6.2s emitted
+        evt_mid = parser_short.feed_line("progress=continue")
+        assert evt_mid is not None
+        assert evt_mid.out_time_seconds == 6.2
+
+        fin_short = parser_short.finish()
+        assert fin_short is not None
+        assert fin_short.is_completed is True
+        assert fin_short.percentage == 100.0
+        assert fin_short.eta_seconds == 0.0
+        # Invariant: finish out_time must not regress to 5.0
+        assert fin_short.out_time_seconds == 6.2
+
+        # Case B: total_duration is None (unknown duration / live stream)
+        parser_none = ProgressParser(total_duration=None)
+        parser_none.feed_line("frame=50")
+        parser_none.feed_line("out_time_us=4500000")  # 4.5s emitted
+        parser_none.feed_line("progress=continue")
+
+        fin_none = parser_none.finish()
+        assert fin_none is not None
+        assert fin_none.is_completed is True
+        assert fin_none.percentage == 100.0
+        # Invariant: finish out_time must not regress to 0.0
+        assert fin_none.out_time_seconds == 4.5
+
+        # Case C: Media completed normally before total_duration
+        parser_normal = ProgressParser(total_duration=10.0)
+        parser_normal.feed_line("frame=70")
+        parser_normal.feed_line("out_time_us=7000000")  # 7.0s emitted
+        parser_normal.feed_line("progress=continue")
+
+        fin_normal = parser_normal.finish()
+        assert fin_normal is not None
+        # Invariant: finish advances to total_duration on completion
+        assert fin_normal.out_time_seconds == 10.0
+        assert fin_normal.percentage == 100.0
+
 
 # ---------------------------------------------------------------------------
 # Test Suite 3: Subprocess Execution & Mock Streaming
@@ -491,6 +634,111 @@ class TestMultiPassPipeline:
         with pytest.raises(RunnerCancelledError):
             run_ffmpeg_pipeline([cmd1, cmd2], progress_callback=_cb, cancel_event=cancel_event)
 
+    def test_pipeline_monotonic_out_time_across_pass_transitions(self) -> None:
+        """
+        Verify run_ffmpeg_pipeline emits non-decreasing cumulative out_time_seconds
+        across pass transitions (Pass 1 completes at duration -> Pass 2 starts).
+        """
+        # Pass 1 script: emits progress at 2.5s and finishes at 5.0s
+        script1 = (
+            "print('frame=10\\nout_time_us=2500000\\nspeed=2.0x\\nprogress=continue', flush=True)\n"
+            "print('frame=20\\nout_time_us=5000000\\nspeed=2.0x\\nprogress=end', flush=True)\n"
+        )
+        # Pass 2 script: starts new process at 0.5s, 2.5s, and finishes at 5.0s
+        script2 = (
+            "print('frame=5\\nout_time_us=500000\\nspeed=2.0x\\nprogress=continue', flush=True)\n"
+            "print('frame=15\\nout_time_us=2500000\\nspeed=2.0x\\nprogress=continue', flush=True)\n"
+            "print('frame=30\\nout_time_us=5000000\\nspeed=2.0x\\nprogress=end', flush=True)\n"
+        )
+        cmds = [
+            [sys.executable, "-c", script1],
+            [sys.executable, "-c", script2],
+        ]
+
+        global_events: list[ProgressEvent] = []
+        pass_records: list[tuple[int, int, ProgressEvent]] = []
+
+        def _pass_cb(p_num: int, total_p: int, ev: ProgressEvent) -> None:
+            pass_records.append((p_num, total_p, ev))
+
+        run_ffmpeg_pipeline(
+            cmds=cmds,
+            total_duration_seconds=5.0,
+            progress_callback=global_events.append,
+            pipeline_progress_callback=_pass_cb,
+        )
+
+        assert len(global_events) == 5
+
+        times = [e.out_time_seconds for e in global_events]
+        pcts = [e.percentage for e in global_events]
+
+        # Invariant 1: Pipeline global out_time_seconds must never decrease
+        assert all(times[i] <= times[i + 1] for i in range(len(times) - 1)), (
+            f"Pipeline out_time_seconds decreased: {times}"
+        )
+
+        # Invariant 2: Pass transition boundary must be strictly monotonic
+        # Event 1 is end of Pass 1 (5.0s); Event 2 is start of Pass 2 (must be >= 5.0s, not 0.5s)
+        assert global_events[1].out_time_seconds <= global_events[2].out_time_seconds, (
+            f"Pass transition regression: {global_events[1].out_time_seconds} -> {global_events[2].out_time_seconds}"
+        )
+
+        # Invariant 3: Cumulative timeline calculation
+        # Pass 1: 2.5s, 5.0s
+        # Pass 2: (1 * 5.0) + 0.5 = 5.5s, (1 * 5.0) + 2.5 = 7.5s, (1 * 5.0) + 5.0 = 10.0s
+        assert times == [2.5, 5.0, 5.5, 7.5, 10.0]
+
+        # Invariant 4: Percentages must be monotonic and reach 100%
+        assert all(pcts[i] <= pcts[i + 1] for i in range(len(pcts) - 1))
+        assert pcts == [25.0, 50.0, 55.0, 75.0, 100.0]
+        assert global_events[-1].is_completed is True
+
+        # Invariant 5: Pass-level callback preserves unscaled pass out_times
+        pass1_raw_times = [ev.out_time_seconds for p_num, _, ev in pass_records if p_num == 1]
+        pass2_raw_times = [ev.out_time_seconds for p_num, _, ev in pass_records if p_num == 2]
+        assert pass1_raw_times == [2.5, 5.0]
+        assert pass2_raw_times == [0.5, 2.5, 5.0]
+
+    def test_pipeline_monotonic_out_time_three_passes(self) -> None:
+        """Verify pipeline monotonicity across three passes."""
+        script_template = (
+            "print('frame=10\\nout_time_us=2000000\\nprogress=continue', flush=True)\n"
+            "print('frame=20\\nout_time_us=4000000\\nprogress=end', flush=True)\n"
+        )
+        cmds = [[sys.executable, "-c", script_template] for _ in range(3)]
+        events: list[ProgressEvent] = []
+
+        run_ffmpeg_pipeline(cmds, total_duration_seconds=4.0, progress_callback=events.append)
+        assert len(events) == 6
+
+        times = [e.out_time_seconds for e in events]
+        assert all(times[i] <= times[i + 1] for i in range(len(times) - 1)), f"Times decreased: {times}"
+        # Expected cumulative times:
+        # Pass 1: 2.0s, 4.0s
+        # Pass 2: 4.0 + 2.0 = 6.0s, 4.0 + 4.0 = 8.0s
+        # Pass 3: 8.0 + 2.0 = 10.0s, 8.0 + 4.0 = 12.0s
+        assert times == [2.0, 4.0, 6.0, 8.0, 10.0, 12.0]
+        assert events[-1].percentage == 100.0
+        assert events[-1].is_completed is True
+
+    def test_pipeline_monotonic_out_time_without_duration(self) -> None:
+        """Verify pipeline out_time does not regress across passes even when total_duration is None."""
+        script1 = "print('out_time_us=3000000\\nprogress=end', flush=True)"
+        script2 = "print('out_time_us=1000000\\nprogress=end', flush=True)"
+        cmds = [
+            [sys.executable, "-c", script1],
+            [sys.executable, "-c", script2],
+        ]
+        events: list[ProgressEvent] = []
+        run_ffmpeg_pipeline(cmds, total_duration_seconds=None, progress_callback=events.append)
+        assert len(events) == 2
+        times = [e.out_time_seconds for e in events]
+        # Invariant: monotonic clamp prevents drop from 3.0s to 1.0s
+        assert times[0] <= times[1]
+        assert times[0] == 3.0
+        assert times[1] == 3.0
+
 
 # ---------------------------------------------------------------------------
 # Test Suite 7: Headless AST Invariant
@@ -515,3 +763,30 @@ class TestRunnerHeadlessASTInvariant:
                     assert not any(
                         pkg in full_name for pkg in forbidden
                     ), f"Forbidden GUI import found in core/runner.py: {full_name}"
+
+    def test_test_runner_zero_gui_imports(self) -> None:
+        """Verify test_runner.py contains zero GUI imports (headless execution invariant)."""
+        test_path = Path(__file__).resolve()
+        with open(test_path, "r", encoding="utf-8") as f:
+            tree = ast.parse(f.read(), filename=str(test_path))
+
+        forbidden_roots = {"gi", "tkinter", "PyQt5", "PyQt6", "PySide2", "PySide6"}
+        forbidden_submodules = {"Gtk", "Adw", "Nautilus"}
+
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                mod = getattr(node, "module", "") or ""
+                root_pkg = mod.split(".")[0] if mod else ""
+                assert root_pkg not in forbidden_roots, (
+                    f"Forbidden root GUI package imported in test_runner.py: {root_pkg}"
+                )
+                if root_pkg == "gi":
+                    for alias in getattr(node, "names", []):
+                        assert alias.name not in forbidden_submodules, (
+                            f"Forbidden GI submodule imported in test_runner.py: {alias.name}"
+                        )
+                for alias in getattr(node, "names", []):
+                    if not mod:
+                        assert alias.name.split(".")[0] not in forbidden_roots, (
+                            f"Forbidden root import in test_runner.py: {alias.name}"
+                        )
