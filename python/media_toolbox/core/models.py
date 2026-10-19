@@ -227,7 +227,7 @@ class EncodeOptions:
     target_size_mb: Optional[float] = None
     crf: Optional[int] = None
     video_codec: str = "libx264"
-    audio_codec: Optional[str] = "aac"
+    audio_codec: Optional[str] = None
     audio_bitrate_kbps: int = 128
     scale: Optional[tuple[int, int]] = None
     crop: Optional[str] = None
@@ -240,6 +240,7 @@ class EncodeOptions:
     volume_boost_db: Optional[float] = None
     two_pass: bool = False
     preset: Optional[str] = None
+    speed_preset: Optional[str] = None
     extra_args: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:

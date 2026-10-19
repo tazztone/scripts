@@ -25,13 +25,115 @@ from media_toolbox.core.filtergraph import (
 )
 from media_toolbox.core.models import EncodeOptions, MediaInfo
 from media_toolbox.core.presets import (
+    AudioPreset,
+    VideoPreset,
     get_audio_preset,
     get_container_faststart_args,
     get_video_preset,
     is_audio_preset,
+    is_speed_preset,
     is_video_preset,
 )
 from media_toolbox.core.probe import probe_media
+
+
+def resolve_video_preset(options: EncodeOptions) -> Optional[VideoPreset]:
+    """
+    Resolve target VideoPreset from EncodeOptions.
+
+    Prioritizes options.preset when it matches a known video preset over
+    options.video_codec (which defaults to 'libx264').
+    """
+    preset_lower = options.preset.strip().lower() if options.preset else ""
+    if is_video_preset(preset_lower):
+        return get_video_preset(preset_lower)
+
+    codec_lower = options.video_codec.strip().lower() if options.video_codec else ""
+    if is_video_preset(codec_lower):
+        return get_video_preset(codec_lower)
+
+    return None
+
+
+def resolve_audio_preset(options: EncodeOptions) -> Optional[AudioPreset]:
+    """
+    Resolve target AudioPreset from EncodeOptions.
+
+    Prioritizes options.preset when it matches a known audio preset over
+    options.video_codec and options.audio_codec.
+    """
+    preset_lower = options.preset.strip().lower() if options.preset else ""
+    if is_audio_preset(preset_lower):
+        return get_audio_preset(preset_lower)
+
+    if not is_video_preset(preset_lower):
+        codec_lower = options.video_codec.strip().lower() if options.video_codec else ""
+        if is_audio_preset(codec_lower):
+            return get_audio_preset(codec_lower)
+
+    if options.audio_codec and is_audio_preset(options.audio_codec):
+        return get_audio_preset(options.audio_codec)
+
+    return None
+
+
+def resolve_speed_preset(options: EncodeOptions) -> Optional[str]:
+    """
+    Resolve valid FFmpeg encoder speed preset from EncodeOptions.
+
+    Distinguishes format preset names ('h264', 'h265', etc.) from encoder speed
+    presets ('ultrafast', 'fast', 'medium', 'slow', etc.).
+    Only returns recognized speed presets, or None.
+    """
+    speed_opt = getattr(options, "speed_preset", None)
+    if speed_opt and is_speed_preset(speed_opt):
+        return speed_opt.strip().lower()
+
+    if options.preset and is_speed_preset(options.preset):
+        return options.preset.strip().lower()
+
+    return None
+
+
+def resolve_audio_codec(
+    options: EncodeOptions,
+    v_preset: Optional[VideoPreset],
+    output_path: str,
+) -> str:
+    """
+    Dynamically resolve the appropriate FFmpeg audio encoder codec.
+
+    Resolution rules:
+    1. If the output container is .webm or the video preset is VP9/WebM:
+       - Only Vorbis and Opus are valid in WebM.
+       - If user explicitly requested Vorbis ('vorbis', 'libvorbis'), resolves to 'libvorbis'.
+       - If user explicitly requested Opus ('opus', 'libopus'), resolves to 'libopus'.
+       - Otherwise (including None, default, or incompatible codecs like 'aac'),
+         resolves to 'libopus'.
+    2. If options.audio_codec was explicitly provided by the caller:
+       - Returns options.audio_codec as requested.
+    3. If options.audio_codec is None:
+       - Defers to v_preset.default_audio_codec if available
+         ('pcm_s16le' for ProRes, 'libopus' for AV1, 'aac' for H.264/H.265).
+    4. Ultimate fallback: 'aac'.
+    """
+    out_ext = Path(output_path).suffix.lower()
+    is_webm_container = out_ext == ".webm" or (v_preset is not None and v_preset.name == "vp9")
+
+    req_audio = options.audio_codec.strip().lower() if options.audio_codec else None
+
+    if is_webm_container:
+        if req_audio in ("vorbis", "libvorbis"):
+            return "libvorbis"
+        return "libopus"
+
+    if req_audio is not None:
+        return options.audio_codec
+
+    if v_preset is not None and v_preset.default_audio_codec:
+        return v_preset.default_audio_codec
+
+    return "aac"
 
 
 def build_audio_extract_command(
@@ -59,17 +161,11 @@ def build_audio_extract_command(
         cmd.extend(["-af", ",".join(af)])
 
     # Resolve audio preset / codec
-    codec_lower = options.video_codec.lower() if options.video_codec else ""
-    preset_lower = options.preset.lower() if options.preset else ""
-
-    if is_audio_preset(codec_lower):
-        audio_preset = get_audio_preset(codec_lower)
-    elif is_audio_preset(preset_lower):
-        audio_preset = get_audio_preset(preset_lower)
-    elif options.audio_codec and is_audio_preset(options.audio_codec):
-        audio_preset = get_audio_preset(options.audio_codec)
-    else:
-        audio_preset = None
+    audio_preset = resolve_audio_preset(options)
+    if audio_preset is None:
+        out_ext = Path(output_path).suffix.lstrip(".").lower()
+        if is_audio_preset(out_ext):
+            audio_preset = get_audio_preset(out_ext)
 
     if audio_preset is not None:
         cmd.extend(audio_preset.build_audio_args(bitrate_kbps=options.audio_bitrate_kbps, extract_audio=False))
@@ -166,15 +262,8 @@ def build_two_pass_commands(
         fps=options.fps,
     )
 
-    codec_lower = options.video_codec.lower() if options.video_codec else ""
-    preset_lower = options.preset.lower() if options.preset else ""
-
-    if is_video_preset(codec_lower):
-        v_preset = get_video_preset(codec_lower)
-    elif is_video_preset(preset_lower):
-        v_preset = get_video_preset(preset_lower)
-    else:
-        v_preset = None
+    v_preset = resolve_video_preset(options)
+    speed_preset = resolve_speed_preset(options)
 
     # Pass 1 Command
     pass1_cmd: list[str] = ["ffmpeg", "-y", "-nostdin"]
@@ -191,7 +280,7 @@ def build_two_pass_commands(
                 bitrate_kbps=v_bitrate_kbps,
                 pass_num=1,
                 pass_logfile=log_prefix,
-                speed_preset=options.preset,
+                speed_preset=speed_preset,
             )
         )
     else:
@@ -201,8 +290,8 @@ def build_two_pass_commands(
             "-pass", "1",
             "-passlogfile", log_prefix,
         ])
-        if options.preset:
-            pass1_cmd.extend(["-preset", options.preset])
+        if speed_preset:
+            pass1_cmd.extend(["-preset", speed_preset])
 
     pass1_cmd.extend(["-an", "-f", "null", os.devnull])
 
@@ -221,7 +310,7 @@ def build_two_pass_commands(
                 bitrate_kbps=v_bitrate_kbps,
                 pass_num=2,
                 pass_logfile=log_prefix,
-                speed_preset=options.preset,
+                speed_preset=speed_preset,
             )
         )
     else:
@@ -231,8 +320,8 @@ def build_two_pass_commands(
             "-pass", "2",
             "-passlogfile", log_prefix,
         ])
-        if options.preset:
-            pass2_cmd.extend(["-preset", options.preset])
+        if speed_preset:
+            pass2_cmd.extend(["-preset", speed_preset])
 
     # Pass 2 Audio
     if options.mute_audio or not media_info.has_audio:
@@ -245,8 +334,10 @@ def build_two_pass_commands(
         )
         if af:
             pass2_cmd.extend(["-af", ",".join(af)])
-        a_codec = options.audio_codec or (v_preset.default_audio_codec if v_preset else "aac") or "aac"
-        pass2_cmd.extend(["-c:a", a_codec, "-b:a", f"{options.audio_bitrate_kbps}k"])
+        a_codec = resolve_audio_codec(options, v_preset, output_path)
+        pass2_cmd.extend(["-c:a", a_codec])
+        if not a_codec.startswith("pcm_"):
+            pass2_cmd.extend(["-b:a", f"{options.audio_bitrate_kbps}k"])
 
     pass2_cmd.extend(get_container_faststart_args(output_path))
     pass2_cmd.extend(options.extra_args)
@@ -283,24 +374,17 @@ def build_single_pass_command(
         cmd.extend(["-vf", ",".join(vf)])
 
     # Video codec & quality
-    codec_lower = options.video_codec.lower() if options.video_codec else ""
-    preset_lower = options.preset.lower() if options.preset else ""
-
-    if is_video_preset(codec_lower):
-        v_preset = get_video_preset(codec_lower)
-    elif is_video_preset(preset_lower):
-        v_preset = get_video_preset(preset_lower)
-    else:
-        v_preset = None
+    v_preset = resolve_video_preset(options)
+    speed_preset = resolve_speed_preset(options)
 
     if v_preset is not None:
-        cmd.extend(v_preset.build_video_args(crf=options.crf, speed_preset=options.preset))
+        cmd.extend(v_preset.build_video_args(crf=options.crf, speed_preset=speed_preset))
     else:
         cmd.extend(["-c:v", options.video_codec])
         if options.crf is not None:
             cmd.extend(["-crf", str(options.crf)])
-        if options.preset:
-            cmd.extend(["-preset", options.preset])
+        if speed_preset:
+            cmd.extend(["-preset", speed_preset])
 
     # Audio handling
     if options.mute_audio or (media_info is not None and not media_info.has_audio):
@@ -313,8 +397,10 @@ def build_single_pass_command(
         )
         if af:
             cmd.extend(["-af", ",".join(af)])
-        a_codec = options.audio_codec or (v_preset.default_audio_codec if v_preset else "aac") or "aac"
-        cmd.extend(["-c:a", a_codec, "-b:a", f"{options.audio_bitrate_kbps}k"])
+        a_codec = resolve_audio_codec(options, v_preset, output_path)
+        cmd.extend(["-c:a", a_codec])
+        if not a_codec.startswith("pcm_"):
+            cmd.extend(["-b:a", f"{options.audio_bitrate_kbps}k"])
 
     cmd.extend(get_container_faststart_args(output_path))
     cmd.extend(options.extra_args)
@@ -352,15 +438,19 @@ def build_ffmpeg_commands(
     if options.target_size_mb is not None and options.target_size_mb <= 0:
         raise ValueError(f"target_size_mb must be positive, got {options.target_size_mb}")
 
-    codec_lower = options.video_codec.lower() if options.video_codec else ""
-    preset_lower = options.preset.lower() if options.preset else ""
+    preset_lower = options.preset.strip().lower() if options.preset else ""
+    codec_lower = options.video_codec.strip().lower() if options.video_codec else ""
 
     # Mode 1: Audio Extraction / Audio-Only Presets
-    if options.extract_audio or is_audio_preset(codec_lower) or is_audio_preset(preset_lower):
+    if (
+        options.extract_audio
+        or is_audio_preset(preset_lower)
+        or (not is_video_preset(preset_lower) and is_audio_preset(codec_lower))
+    ):
         return [build_audio_extract_command(input_str, output_str, options, include_progress=include_progress)]
 
     # Mode 2: Animated GIF
-    if codec_lower == "gif" or preset_lower == "gif":
+    if preset_lower == "gif" or (not is_video_preset(preset_lower) and codec_lower == "gif"):
         if options.two_pass:
             raise ValueError("Two-pass encoding is not supported for GIF preset")
         return [build_gif_command(input_str, output_str, options, include_progress=include_progress)]

@@ -421,3 +421,214 @@ def test_builder_zero_gui() -> None:
                     gui_pkg in full_name
                     for gui_pkg in ("gi", "Gtk", "Adw", "Nautilus", "tkinter", "PyQt", "PySide")
                 ), f"Forbidden GUI import found in builder.py: {full_name}"
+
+
+# ---------------------------------------------------------------------------
+# Bug A Unit Tests (Speed Preset Handling and Format Unshadowing)
+# ---------------------------------------------------------------------------
+
+
+def test_preset_format_h264_no_invalid_preset_cli() -> None:
+    """options.preset='h264' selects H.264 and does not emit invalid '-preset h264'."""
+    options = EncodeOptions(preset="h264")
+    cmds = build_ffmpeg_commands("in.mp4", "out.mp4", options)
+    assert len(cmds) == 1
+    cmd = cmds[0]
+    assert "-c:v" in cmd
+    assert cmd[cmd.index("-c:v") + 1] == "libx264"
+    assert "-preset" in cmd
+    assert cmd[cmd.index("-preset") + 1] == "medium"
+    assert "h264" not in [cmd[i + 1] for i, arg in enumerate(cmd) if arg == "-preset"]
+
+
+def test_preset_format_h265_unshadowed() -> None:
+    """options.preset='h265' overrides default video_codec='libx264' and selects libx265."""
+    options = EncodeOptions(preset="h265")
+    cmds = build_ffmpeg_commands("in.mp4", "out.mp4", options)
+    assert len(cmds) == 1
+    cmd = cmds[0]
+    assert "-c:v" in cmd
+    assert cmd[cmd.index("-c:v") + 1] == "libx265"
+    assert "-crf" in cmd
+    assert cmd[cmd.index("-crf") + 1] == "28"
+    assert "-tag:v" in cmd
+    assert cmd[cmd.index("-tag:v") + 1] == "hvc1"
+    assert "-preset" in cmd
+    assert cmd[cmd.index("-preset") + 1] == "medium"
+
+
+def test_preset_speed_preset_slow() -> None:
+    """options.preset='slow' is recognized as a speed preset and passed as -preset slow."""
+    options = EncodeOptions(preset="slow")
+    cmds = build_ffmpeg_commands("in.mp4", "out.mp4", options)
+    assert len(cmds) == 1
+    cmd = cmds[0]
+    assert "-c:v" in cmd
+    assert cmd[cmd.index("-c:v") + 1] == "libx264"
+    assert "-preset" in cmd
+    assert cmd[cmd.index("-preset") + 1] == "slow"
+
+
+def test_format_preset_with_explicit_speed_preset() -> None:
+    """options.preset='h265' with speed_preset='veryslow' emits both correctly."""
+    options = EncodeOptions(preset="h265", speed_preset="veryslow")
+    cmds = build_ffmpeg_commands("in.mp4", "out.mp4", options)
+    assert len(cmds) == 1
+    cmd = cmds[0]
+    assert "-c:v" in cmd
+    assert cmd[cmd.index("-c:v") + 1] == "libx265"
+    assert "-preset" in cmd
+    assert cmd[cmd.index("-preset") + 1] == "veryslow"
+
+
+# ---------------------------------------------------------------------------
+# Regression Tests for Bug A & Bug B (Presets & Container Compatibility)
+# ---------------------------------------------------------------------------
+
+
+def test_preset_h265_selects_libx265_and_valid_preset() -> None:
+    """
+    EncodeOptions(preset='h265') selects libx265 and does NOT emit '-preset h265'.
+    (Bug A regression test).
+    """
+    options = EncodeOptions(preset="h265")
+    cmd = build_ffmpeg_commands("in.mp4", "out.mp4", options)[0]
+
+    # Video codec must be libx265, not libx264
+    assert "-c:v" in cmd
+    assert cmd[cmd.index("-c:v") + 1] == "libx265"
+
+    # Must NOT emit '-preset h265' (invalid encoder speed preset)
+    if "-preset" in cmd:
+        preset_val = cmd[cmd.index("-preset") + 1]
+        assert preset_val != "h265"
+        assert preset_val == "medium"
+
+    # Default CRF for H.265 is 28
+    assert "-crf" in cmd
+    assert cmd[cmd.index("-crf") + 1] == "28"
+
+    # Apple compatibility tag
+    assert "-tag:v" in cmd
+    assert cmd[cmd.index("-tag:v") + 1] == "hvc1"
+
+    # Container faststart for MP4
+    assert "-movflags" in cmd
+    assert cmd[cmd.index("-movflags") + 1] == "+faststart"
+
+
+def test_preset_h264_emits_default_speed_preset() -> None:
+    """
+    EncodeOptions(preset='h264') does NOT emit '-preset h264'; emits default 'medium'.
+    (Bug A regression test).
+    """
+    options = EncodeOptions(preset="h264")
+    cmd = build_ffmpeg_commands("in.mp4", "out.mp4", options)[0]
+
+    assert "-c:v" in cmd
+    assert cmd[cmd.index("-c:v") + 1] == "libx264"
+
+    # Codec preset name must not be forwarded as speed preset
+    assert "-preset" in cmd
+    preset_idx = cmd.index("-preset")
+    assert cmd[preset_idx + 1] == "medium"
+    assert cmd[preset_idx + 1] != "h264"
+
+
+def test_vp9_webm_selects_libopus_audio() -> None:
+    """
+    EncodeOptions(video_codec='vp9') with .webm output selects libopus, not aac.
+    (Bug B regression test).
+    """
+    options = EncodeOptions(video_codec="vp9")
+    cmd = build_ffmpeg_commands("in.mp4", "out.webm", options)[0]
+
+    # Video codec and VP9 CRF parameters
+    assert "-c:v" in cmd
+    assert cmd[cmd.index("-c:v") + 1] == "libvpx-vp9"
+    assert "-b:v" in cmd
+    assert cmd[cmd.index("-b:v") + 1] == "0"
+    assert "-crf" in cmd
+    assert cmd[cmd.index("-crf") + 1] == "30"
+
+    # Audio codec: WebM container requires Opus or Vorbis, never AAC
+    assert "-c:a" in cmd
+    assert cmd[cmd.index("-c:a") + 1] == "libopus"
+    assert cmd[cmd.index("-c:a") + 1] != "aac"
+
+    # WebM container does not use MP4-specific faststart flags
+    assert "-movflags" not in cmd
+    assert cmd[-1] == "out.webm"
+
+
+def test_two_pass_vp9_webm_uses_libopus_in_pass2(sample_mediainfo_standard_mp4: MediaInfo) -> None:
+    """
+    Two-pass encoding with preset='vp9' and .webm output uses libopus in Pass 2.
+    (Bug A & Bug B regression test for 2-pass).
+    """
+    options = EncodeOptions(preset="vp9", two_pass=True, target_size_mb=10.0)
+    cmds = build_ffmpeg_commands(
+        "in.mp4",
+        "out.webm",
+        options,
+        media_info=sample_mediainfo_standard_mp4,
+    )
+
+    assert len(cmds) == 2
+    pass1, pass2 = cmds[0], cmds[1]
+
+    # Pass 1: video codec must be libvpx-vp9, no invalid preset flag, audio muted
+    assert "-c:v" in pass1
+    assert pass1[pass1.index("-c:v") + 1] == "libvpx-vp9"
+    if "-preset" in pass1:
+        assert pass1[pass1.index("-preset") + 1] != "vp9"
+    assert "-pass" in pass1
+    assert pass1[pass1.index("-pass") + 1] == "1"
+    assert "-an" in pass1
+
+    # Pass 2: video codec libvpx-vp9, audio codec libopus (not aac)
+    assert "-c:v" in pass2
+    assert pass2[pass2.index("-c:v") + 1] == "libvpx-vp9"
+    if "-preset" in pass2:
+        assert pass2[pass2.index("-preset") + 1] != "vp9"
+    assert "-pass" in pass2
+    assert pass2[pass2.index("-pass") + 1] == "2"
+
+    assert "-c:a" in pass2
+    assert pass2[pass2.index("-c:a") + 1] == "libopus"
+    assert pass2[pass2.index("-c:a") + 1] != "aac"
+    assert "-b:a" in pass2
+    assert pass2[pass2.index("-b:a") + 1] == "128k"
+    assert pass2[-1] == "out.webm"
+
+
+def test_preset_prores_selects_pcm_audio() -> None:
+    """
+    EncodeOptions(preset='prores') selects prores_ks video and pcm_s16le audio.
+    (Bug A & Bug B regression test for ProRes).
+    """
+    options = EncodeOptions(preset="prores")
+    cmd = build_ffmpeg_commands("in.mp4", "out.mov", options)[0]
+
+    # Video codec and ProRes specific flags
+    assert "-c:v" in cmd
+    assert cmd[cmd.index("-c:v") + 1] == "prores_ks"
+    assert "-profile:v" in cmd
+    assert cmd[cmd.index("-profile:v") + 1] == "3"
+    assert "-vendor" in cmd
+    assert cmd[cmd.index("-vendor") + 1] == "apl0"
+    assert "-pix_fmt" in cmd
+    assert cmd[cmd.index("-pix_fmt") + 1] == "yuv422p10le"
+
+    # ProRes must not emit -preset
+    assert "-preset" not in cmd
+
+    # Audio codec must be pcm_s16le, not aac
+    assert "-c:a" in cmd
+    assert cmd[cmd.index("-c:a") + 1] == "pcm_s16le"
+    assert cmd[cmd.index("-c:a") + 1] != "aac"
+
+    # MOV faststart
+    assert "-movflags" in cmd
+    assert cmd[cmd.index("-movflags") + 1] == "+faststart"
+

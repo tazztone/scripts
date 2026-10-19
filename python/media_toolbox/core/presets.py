@@ -100,7 +100,11 @@ class VideoPreset:
         # Two-pass bitrate mode
         if pass_num is not None and bitrate_kbps is not None:
             args.extend(["-b:v", f"{int(bitrate_kbps)}k"])
-            preset = speed_preset or self.default_speed_preset
+            preset = (
+                speed_preset.strip().lower()
+                if speed_preset and is_speed_preset(speed_preset)
+                else self.default_speed_preset
+            )
             if preset:
                 args.extend(["-preset", preset])
             if self.apple_tag:
@@ -122,7 +126,11 @@ class VideoPreset:
                 args.extend(["-b:v", "0"])
             args.extend(["-crf", str(effective_crf)])
 
-        preset = speed_preset or self.default_speed_preset
+        preset = (
+            speed_preset.strip().lower()
+            if speed_preset and is_speed_preset(speed_preset)
+            else self.default_speed_preset
+        )
         if preset:
             args.extend(["-preset", preset])
         if self.apple_tag:
@@ -377,6 +385,28 @@ AUDIO_PRESETS: dict[str, AudioPreset] = {
     "opus": OPUS_PRESET,
     "flac": FLAC_PRESET,
 }
+
+VALID_SPEED_PRESETS: frozenset[str] = frozenset({
+    "ultrafast",
+    "superfast",
+    "veryfast",
+    "faster",
+    "fast",
+    "medium",
+    "slow",
+    "slower",
+    "veryslow",
+    "placebo",
+})
+
+
+def is_speed_preset(name: str | Enum | None) -> bool:
+    """Return True if name is a recognized FFmpeg encoder speed preset."""
+    if not name:
+        return False
+    key = name.value if isinstance(name, Enum) else str(name).strip().lower()
+    return key in VALID_SPEED_PRESETS
+
 
 _PRESET_ALIASES: dict[str, str] = {
     # Video aliases

@@ -127,6 +127,15 @@ class TestModelsDefaultsAndHelpers:
         assert fmt_empty.size_mb is None
         assert fmt_empty.bit_rate_kbps is None
 
+    def test_encode_options_defaults(self) -> None:
+        opts = EncodeOptions()
+        assert opts.video_codec == "libx264"
+        assert opts.audio_codec is None
+        assert opts.audio_bitrate_kbps == 128
+        assert opts.preset is None
+        assert opts.speed_preset is None
+        assert opts.two_pass is False
+
 
 class TestMediaInfoProperties:
     """Test MediaInfo composite properties and fallback hierarchy."""

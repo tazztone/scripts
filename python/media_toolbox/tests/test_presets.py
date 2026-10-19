@@ -34,6 +34,7 @@ from media_toolbox.core.presets import (
     get_preset,
     get_video_preset,
     is_audio_preset,
+    is_speed_preset,
     is_video_preset,
     list_audio_presets,
     list_video_presets,
@@ -334,3 +335,26 @@ def test_presets_zero_gui() -> None:
                     gui_pkg in full_name
                     for gui_pkg in ("gi", "Gtk", "Adw", "Nautilus", "tkinter", "PyQt", "PySide")
                 ), f"Forbidden GUI import found in presets.py: {full_name}"
+
+
+def test_is_speed_preset() -> None:
+    """is_speed_preset correctly classifies CPU speed presets vs format presets."""
+    for valid in ("ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow", "placebo"):
+        assert is_speed_preset(valid) is True
+        assert is_speed_preset(valid.upper()) is True
+        assert is_speed_preset(f"  {valid}  ") is True
+
+    for invalid in ("h264", "h265", "av1", "vp9", "gif", "prores", "mp3", "aac", "opus", "flac", "", None, "invalid_xyz"):
+        assert is_speed_preset(invalid) is False
+
+
+def test_video_preset_build_args_ignores_invalid_speed_preset() -> None:
+    """VideoPreset.build_video_args rejects non-speed presets and falls back to default."""
+    args_h264 = H264_PRESET.build_video_args(speed_preset="h264")
+    assert "-preset" in args_h264
+    assert args_h264[args_h264.index("-preset") + 1] == "medium"
+
+    args_h265 = H265_PRESET.build_video_args(speed_preset="h265")
+    assert "-preset" in args_h265
+    assert args_h265[args_h265.index("-preset") + 1] == "medium"
+
