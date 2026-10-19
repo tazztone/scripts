@@ -14,9 +14,9 @@ a terminal where the upgrade runs — nothing upgrades behind your back.
 ## The Solution
 - [`check.sh`](check.sh) compares the installed LACT version (`dpkg-query`)
   against the latest GitHub release (authenticated API via `gh`, falls back to
-  anonymous) and counts `apt list --upgradable`. The check needs **no sudo**.
+  anonymous) and lists upgradable `apt` packages. The check needs **no sudo**.
 - If anything is pending, it sends a `notify-send` notification and a `zenity`
-  `Upgrade / Later` dialog. `Upgrade` opens a terminal running
+  `Upgrade / Later` dialog detailing the updates found. `Upgrade` opens a terminal running
   `deb-get update && deb-get upgrade --dg-only` + `sudo apt upgrade -y`.
 - [`systemd/`](systemd/) user timer runs the check weekly (Sundays 10:00,
   `Persistent=true` so missed runs catch up after the PC was off).

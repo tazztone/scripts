@@ -35,9 +35,30 @@ if [ -n "$INSTALLED" ]; then
 fi
 
 # 2. Regular apt updates (no sudo needed to list)
-APT_N=$(apt list --upgradable 2>/dev/null | grep -cv "^Listing" || true)
-if [ "${APT_N:-0}" -gt 0 ]; then
-  MSG="${MSG}${APT_N} apt updates available\n"
+APT_ITEMS=()
+while IFS= read -r line; do
+  [ -z "$line" ] && continue
+  if [[ "$line" =~ ^([^/]+)/[^[:space:]]+[[:space:]]+([^[:space:]]+)[[:space:]]+[^[:space:]]+[[:space:]]+\[upgradable[[:space:]]from:[[:space:]]*([^]]+)\] ]]; then
+    APT_ITEMS+=("${BASH_REMATCH[1]} (${BASH_REMATCH[3]} → ${BASH_REMATCH[2]})")
+  elif [[ "$line" =~ ^([^/]+)/ ]]; then
+    APT_ITEMS+=("${BASH_REMATCH[1]}")
+  fi
+done < <(apt list --upgradable 2>/dev/null | grep -v "^Listing" || true)
+
+if [ "${#APT_ITEMS[@]}" -gt 0 ]; then
+  [ -n "$MSG" ] && MSG="${MSG}\n"
+  MSG="${MSG}APT updates (${#APT_ITEMS[@]}):\n"
+  if [ "${#APT_ITEMS[@]}" -le 15 ]; then
+    for item in "${APT_ITEMS[@]}"; do
+      MSG="${MSG}• ${item}\n"
+    done
+  else
+    for i in {0..11}; do
+      MSG="${MSG}• ${APT_ITEMS[i]}\n"
+    done
+    MORE=$(( ${#APT_ITEMS[@]} - 12 ))
+    MSG="${MSG}• ... and ${MORE} more\n"
+  fi
 fi
 
 [ -z "$MSG" ] && exit 0
@@ -45,7 +66,7 @@ fi
 notify-send -a deb-get "Updates available" "$(printf "%b" "$MSG")"
 
 if zenity --question --title="Updates available" \
-  --text="$(printf "%b" "$MSG")\nUpgrade now?" \
-  --ok-label="Upgrade" --cancel-label="Later" --width=400; then
+  --text="$(printf "%b" "$MSG")\n\nUpgrade now?" \
+  --ok-label="Upgrade" --cancel-label="Later" --width=500; then
   x-terminal-emulator -e bash -c 'deb-get update && deb-get upgrade --dg-only; sudo apt upgrade -y; echo; read -p "Done. Press Enter to close."'
 fi
