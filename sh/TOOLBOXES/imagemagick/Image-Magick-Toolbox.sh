@@ -43,6 +43,7 @@ EFFECT_ARGS=()
 FORMAT_ARGS=()
 DO_MUTE=false
 DO_TEXT_ANNOTATION=false
+DO_WATERMARK=false
 BRAND_PAYLOAD=""
 OUT_EXT=""
 TAG=""
@@ -447,15 +448,15 @@ for opt in "${CHOICE_ARR[@]}"; do
             VAL=$(echo "$opt" | cut -d':' -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
             case "$VAL" in
                *Square*) 
-                   CROP_ARGS+=("-set" "option:distort:viewport" "%[fx:min(w,h)]x%[fx:min(w,h)]" "-distort" "SRT" "0" "+repage")
+                   CROP_ARGS+=("-gravity" "Center" "-crop" "%[fx:min(w,h)]x%[fx:min(w,h)]+0+0" "+repage")
                    TAG="${TAG}_sq" 
                    ;;
                *Vertical*)
-                   CROP_ARGS+=("-set" "option:distort:viewport" "%[fx:min(w,h*9/16)]x%[fx:min(w*16/9,h)]" "-distort" "SRT" "0" "+repage")
+                   CROP_ARGS+=("-gravity" "Center" "-crop" "%[fx:min(w,h*9/16)]x%[fx:min(w*16/9,h)]+0+0" "+repage")
                    TAG="${TAG}_9x16"
                    ;;
                *Landscape*)
-                   CROP_ARGS+=("-set" "option:distort:viewport" "%[fx:min(w,h*16/9)]x%[fx:min(w*9/16,h)]" "-distort" "SRT" "0" "+repage")
+                   CROP_ARGS+=("-gravity" "Center" "-crop" "%[fx:min(w,h*16/9)]x%[fx:min(w*9/16,h)]+0+0" "+repage")
                    TAG="${TAG}_16x9"
                    ;;
                *Custom:*)
@@ -506,7 +507,8 @@ for opt in "${CHOICE_ARR[@]}"; do
             ;;
         Branding:*)
             VAL=$(echo "$opt" | cut -d':' -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-            if [[ "$VAL" == *"Text Annotation"* ]]; then DO_TEXT_ANNOTATION=true; fi
+            if [[ "$VAL" == *"Text Annotation"* ]]; then DO_TEXT_ANNOTATION=true;
+            elif [[ "$VAL" == *"Watermark"* ]]; then DO_WATERMARK=true; fi
             ;;
         BrandingPayload:*)
             VAL=$(echo "$opt" | cut -d':' -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
@@ -514,6 +516,16 @@ for opt in "${CHOICE_ARR[@]}"; do
             if [ "$DO_TEXT_ANNOTATION" = true ]; then
                 EFFECT_ARGS+=("-gravity" "South" "-pointsize" "24" "-annotate" "+0+20" "$BRAND_PAYLOAD")
                 TAG="${TAG}_text"
+            elif [ "${DO_WATERMARK:-false}" = true ] && [ -f "$BRAND_PAYLOAD" ]; then
+                EFFECT_ARGS+=("-gravity" "Southeast" "-draw" "image Over 10,10 0,0 '$BRAND_PAYLOAD'")
+                TAG="${TAG}_wm"
+            fi
+            ;;
+        ExtraArgs:*)
+            VAL=$(echo "$opt" | cut -d':' -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            if [ -n "$VAL" ]; then
+                read -ra EXTRA_TOKENS <<< "$VAL"
+                EFFECT_ARGS+=("${EXTRA_TOKENS[@]}")
             fi
             ;;
         
@@ -531,6 +543,13 @@ for opt in "${CHOICE_ARR[@]}"; do
                 FORMAT_ARGS+=("-quality" "60" "-strip"); TAG="${TAG}_min"
             elif [[ "$VAL" == *"Archive"* ]]; then
                 TAG="${TAG}_arch"
+            fi
+            ;;
+        CustomQuality:*)
+            VAL=$(echo "$opt" | cut -d':' -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            if [[ "$VAL" =~ ^[0-9]+$ ]]; then
+                FORMAT_ARGS+=("-quality" "$VAL")
+                TAG="${TAG}_q${VAL}"
             fi
             ;;
         Action:ExtractPDF | "Action: ExtractPDF")
@@ -629,7 +648,7 @@ fi
 
 # --- SPECIAL MODE: PDF MERGE/EXTRACT ---
 if [[ "$OUT_EXT" == "pdf" && $# -gt 1 && "$DO_PDF_EXTRACT" == false ]]; then
-    OUT_FILE=$(generate_safe_filename "merged_images" "$TAG" "pdf")
+    OUT_FILE=$(generate_safe_filename "$(dirname "$1")/merged_images" "$TAG" "pdf")
     ( echo "10"; echo "# Merging into PDF..."; $IM_EXE "$@" "${IM_ARGS[@]}" "$OUT_FILE" ) | zenity --progress --title="Creating PDF" --auto-close --pulsate
     zenity --notification --text="PDF Created: $OUT_FILE"
     exit 0

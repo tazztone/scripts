@@ -38,7 +38,7 @@ readonly MAX_PRESETS=20
 
 _wizard_log() {
     if [[ "${DEBUG_MODE:-0}" == "1" ]]; then
-        local log_dir="${LOG_DIR:-$HOME/.local/share/scripts-sh}"
+        local log_dir="${LOG_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/scripts-sh}"
         local log_file="${LOG_FILE:-$log_dir/debug.log}"
         mkdir -p "$log_dir"
         chmod 700 "$log_dir" 2>/dev/null
@@ -194,7 +194,7 @@ state_init() {
         normalized="imagemagick"
     fi
 
-    STATE_CONFIG_DIR="$HOME/.config/scripts-sh/$normalized"
+    STATE_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/scripts-sh/$normalized"
     STATE_PRESET_FILE="$STATE_CONFIG_DIR/presets.conf"
     STATE_HISTORY_FILE="$STATE_CONFIG_DIR/history.conf"
     

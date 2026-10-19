@@ -8,7 +8,9 @@ MOCK_BIN="/tmp/scripts_mock_bin"
 REPORT_FILE="/tmp/scripts_test_report.log"
 HEADLESS=true
 
-mkdir -p "$TEST_DATA" "$MOCK_BIN"
+export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-/tmp/scripts_test_config}"
+export XDG_DATA_HOME="${XDG_DATA_HOME:-/tmp/scripts_test_share}"
+mkdir -p "$TEST_DATA" "$MOCK_BIN" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME"
 if [ -z "$TEST_SUITE_RUNNING" ]; then
     : > "$REPORT_FILE"
     printf "0\n0\n" > /tmp/scripts_test_count.log
