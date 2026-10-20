@@ -3,7 +3,7 @@
 > [!WARNING]
 > **Legacy Project / Deprecated**
 > `sh/TOOLBOXES` is the legacy Bash/Zenity implementation and is no longer actively maintained.
-> It has been superseded by the modern Python implementation: [**Media Toolbox (`python/media_toolbox`)**](../../python/media_toolbox/) (local: `/home/tazztone/_coding/scripts/python/media_toolbox`, dedicated repository: [**`tazztone/media-toolbox`**](https://github.com/tazztone/media-toolbox)).
+> It has been superseded by the modern Python implementation: [**`tazztone/media-toolbox`**](https://github.com/tazztone/media-toolbox) (local: `/home/tazztone/_coding/media-toolbox`).
 
 A collection of "Right-Click" productivity tools for Ubuntu users. These scripts integrate directly into the Nautilus file manager (Files), allowing you to convert, compress, and manipulate video/audio files without opening a heavy GUI application.
 
