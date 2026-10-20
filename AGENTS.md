@@ -14,6 +14,13 @@
   bash testing/test_runner.sh
   ```
 
+- **Shell Script Linting & Local Git Hook:**
+  Local pre-commit hook runs `bash -n` and `shellcheck` (via PATH or `.venv/bin/shellcheck`):
+  ```bash
+  git config core.hooksPath .githooks
+  .githooks/pre-commit
+  ```
+
 ---
 
 ## Repository Scope

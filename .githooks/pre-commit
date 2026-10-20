@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -eo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$REPO_ROOT"
+
+# Resolve shellcheck executable: PATH or virtualenv
+SHELLCHECK_BIN=""
+if command -v shellcheck &>/dev/null; then
+    SHELLCHECK_BIN="shellcheck"
+elif [ -x "$REPO_ROOT/.venv/bin/shellcheck" ]; then
+    SHELLCHECK_BIN="$REPO_ROOT/.venv/bin/shellcheck"
+fi
+
+# Detect files to check: staged .sh files, or all .sh in sh/ if executed standalone
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null | grep -E '\.sh$' || true)
+if [ -n "$STAGED_FILES" ]; then
+    FILES_TO_CHECK="$STAGED_FILES"
+else
+    FILES_TO_CHECK=$(find sh -type f -name "*.sh")
+fi
+
+if [ -z "$SHELLCHECK_BIN" ]; then
+    echo "⚠️  ShellCheck not found in PATH or .venv/bin. Checking syntax only with bash -n."
+fi
+
+ERRORS=0
+for file in $FILES_TO_CHECK; do
+    [ -f "$file" ] || continue
+
+    if ! bash -n "$file" 2>&1; then
+        echo "❌ Syntax error: $file"
+        ERRORS=$((ERRORS + 1))
+        continue
+    fi
+
+    if [ -n "$SHELLCHECK_BIN" ]; then
+        if ! "$SHELLCHECK_BIN" "$file"; then
+            echo "❌ ShellCheck error: $file"
+            ERRORS=$((ERRORS + 1))
+        fi
+    fi
+done
+
+if [ "$ERRORS" -gt 0 ]; then
+    echo "Pre-commit hook failed: $ERRORS script(s) failed validation."
+    exit 1
+fi
+
+exit 0
