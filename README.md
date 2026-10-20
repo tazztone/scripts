@@ -20,7 +20,7 @@ scripts/
 │   ├── windows_organize_files_by_extension.bat
 │   └── windows_organize_images_by_date.bat
 ├── sh/                             # Bash scripts (Linux / macOS)
-│   ├── TOOLBOXES/                  # Interactive FFmpeg & ImageMagick toolboxes
+│   ├── TOOLBOXES/                  # [LEGACY] Interactive FFmpeg & ImageMagick toolboxes (superseded by python/media_toolbox)
 │   ├── antigravity2/               # Antigravity 2.0 environment and profile setup
 │   ├── davinci-resolve-updater/    # DaVinci Resolve automated Linux updater
 │   ├── deb-get-weekly-check/       # Weekly desktop popup for deb-get + apt updates
@@ -35,6 +35,7 @@ scripts/
     ├── immich-api/                 # Immich API utilities (timelapse stacking, unstacking, album expansion, staging)
     ├── immich-launcher/            # Linux desktop launcher & installer for Immich
     ├── lora_remove_te_weights/     # Strip text encoder weights from LoRA .safetensors
+    ├── media_toolbox/              # Media Toolbox: Python transcoding, probe & Nautilus integration
     ├── put_files_into_folder_by_extension/  # Auto-organizer: sort files into folders by extension & category
     └── remove_jpg_if_raw_exists/   # Remove camera JPEGs if matching RAW photo exists
 ```
@@ -42,7 +43,7 @@ scripts/
 ## Highlights
 
 ### `sh/` — Linux & macOS Utilities
-- **Toolboxes (`sh/TOOLBOXES/`)** — Interactive Zenity & CLI suites for FFmpeg media conversion, lossless cutting, remuxing, and ImageMagick batch image operations.
+- **Toolboxes (`sh/TOOLBOXES/`) [LEGACY]** — Interactive Zenity & CLI suites for FFmpeg media conversion, lossless cutting, remuxing, and ImageMagick batch image operations. Superseded by [**Media Toolbox (`python/media_toolbox`)**](python/media_toolbox/) and [**`tazztone/media-toolbox`**](https://github.com/tazztone/media-toolbox).
 - **DaVinci Resolve Updater** — Download and update DaVinci Resolve on Linux distributions.
 - **deb-get Weekly Check** — Weekly desktop popup for `deb-get` (GitHub/direct `.debs` like LACT) + apt updates, with click-to-upgrade terminal.
 - **Immich Update & Installer** — Automated updater and launcher scripts for Immich self-hosted photo servers.
@@ -72,10 +73,11 @@ scripts/
 
 Each subdirectory contains its own documentation:
 
-- Bash scripts: [`sh/TOOLBOXES/README.md`](sh/TOOLBOXES/README.md), [`sh/antigravity2/README.md`](sh/antigravity2/README.md), [`sh/davinci-resolve-updater/README.md`](sh/davinci-resolve-updater/README.md), [`sh/deb-get-weekly-check/README.md`](sh/deb-get-weekly-check/README.md), [`sh/immich/README.md`](sh/immich/README.md), [`sh/tarball-installer/README.md`](sh/tarball-installer/README.md), [`sh/the-finals/README.md`](sh/the-finals/README.md)
-- Python utilities: [`python/README.md`](python/README.md)
+- Bash scripts: [`sh/TOOLBOXES/README.md`](sh/TOOLBOXES/README.md) *(Legacy)*, [`sh/antigravity2/README.md`](sh/antigravity2/README.md), [`sh/davinci-resolve-updater/README.md`](sh/davinci-resolve-updater/README.md), [`sh/deb-get-weekly-check/README.md`](sh/deb-get-weekly-check/README.md), [`sh/immich/README.md`](sh/immich/README.md), [`sh/tarball-installer/README.md`](sh/tarball-installer/README.md), [`sh/the-finals/README.md`](sh/the-finals/README.md)
+- Python utilities: [`python/README.md`](python/README.md), [**Media Toolbox (`python/media_toolbox`)**](python/media_toolbox/README.md)
 - Windows Batch: [`bat/README.md`](bat/README.md)
 - Userscripts: [**`tazztone/userscripts`**](https://github.com/tazztone/userscripts) (dedicated repository)
+- Media Toolbox: [**`tazztone/media-toolbox`**](https://github.com/tazztone/media-toolbox) (dedicated repository)
 
 ### Running Tests
 

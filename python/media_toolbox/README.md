@@ -1,5 +1,9 @@
 # Media Toolbox
 
+> [!NOTE]
+> Published as a standalone dedicated repository: [**`tazztone/media-toolbox`**](https://github.com/tazztone/media-toolbox).
+> Supersedes legacy Bash/Zenity suite: [`sh/TOOLBOXES`](../../sh/TOOLBOXES/).
+
 Modern Python media inspection, transcoding, and audio extraction package replacing legacy Bash/Zenity scripts. Built with a decoupled headless core, a dynamic Libadwaita / GTK4 desktop interface, and dual GNOME Nautilus integrations.
 
 ## Features
