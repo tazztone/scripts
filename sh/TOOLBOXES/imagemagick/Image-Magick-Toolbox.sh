@@ -342,7 +342,7 @@ show_main_menu() {
                         
                         # Backward compatibility for legacy tests/mocks supplying layout in field 1
                         if [[ "${CONFIG[mode]}" == *"Grid"* || "${CONFIG[mode]}" == *"Row"* || "${CONFIG[mode]}" == *"Column"* || "${CONFIG[mode]}" == *"Sheet"* ]]; then
-                            CONFIG[layout]="${CONFIG[mode]}"
+                            CONFIG["layout"]="${CONFIG[mode]}"
                             CONFIG[mode]="Spaced Grid"
                         fi
 

@@ -80,7 +80,7 @@ preview() {
   done
   if [ -f "$A2_H" ]; then
     if [ -f "$HOST_H" ]; then
-      log "  history.jsonl: $(grep -Fxv -f "$HOST_H" "$A2_H" 2>/dev/null | wc -l || true) new line(s) would append"
+      log "  history.jsonl: $(grep -Fxvc -f "$HOST_H" "$A2_H" 2>/dev/null || true) new line(s) would append"
     else
       log "  history.jsonl: host file absent, all $(wc -l < "$A2_H") acct2 line(s) would be written"
     fi
@@ -186,9 +186,10 @@ done
 if [ -f "$A2_H" ]; then
   mkdir -p "$(dirname "$HOST_H")"
   touch "$HOST_H"
-  NEW_LINES=$(grep -Fxv -f "$HOST_H" "$A2_H" 2>/dev/null | wc -l || true)
-  if [ "${NEW_LINES:-0}" -gt 0 ]; then
-    grep -Fxv -f "$HOST_H" "$A2_H" >> "$HOST_H" || true
+  DIFF_LINES=$(grep -Fxv -f "$HOST_H" "$A2_H" 2>/dev/null || true)
+  if [ -n "$DIFF_LINES" ]; then
+    printf '%s\n' "$DIFF_LINES" >> "$HOST_H"
+    NEW_LINES=$(printf '%s\n' "$DIFF_LINES" | wc -l)
     log "  history.jsonl: appended $NEW_LINES new line(s)"
   else
     log "  history.jsonl: already up to date (idempotent, nothing appended)"
