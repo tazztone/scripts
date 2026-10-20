@@ -257,3 +257,4 @@ tmp/
 .ripgreprc
 .zprofile
 .zshrc
+.agents/

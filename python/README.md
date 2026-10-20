@@ -12,6 +12,7 @@ A collection of automation and utility scripts written in Python.
 | **Immich API Tools** | Automate timelapse/burst stacking, unstacking, album date expansion, and DaVinci Resolve media staging. | [`immich-api/`](./immich-api/) |
 | **Immich Desktop Launcher** | Desktop launcher and installer script for Immich web app on Linux. | [`immich-launcher/`](./immich-launcher/) |
 | **LoRA TE Weight Remover** | Strips text encoder weights from SDXL/FLUX `.safetensors` LoRA files to reduce file size. | [`lora_remove_te_weights/`](./lora_remove_te_weights/) |
+| **Media Toolbox** | Modern Python media inspection, transcoding, Libadwaita GUI, and dual Nautilus integrations. | [`media_toolbox/`](./media_toolbox/) |
 | **File Organizer by Extension** | Organizes loose files into folders named by extension and groups them into categories. | [`put_files_into_folder_by_extension/`](./put_files_into_folder_by_extension/) |
 | **RAW/JPEG Cleaner** | Scans photo libraries and removes camera-generated JPEGs if matching RAW files exist. | [`remove_jpg_if_raw_exists/`](./remove_jpg_if_raw_exists/) |
 | **Signal Sticker Pack Builder** | Curation-first sticker packs: clusters near-duplicate images, suggests emojis via VLM, and exports a validated `stickers.yaml`. | [`signal-stickers/`](./signal-stickers/) |
