@@ -34,7 +34,7 @@ Once installed, helper commands are available system-wide:
 * **Update IDE only:** `sudo update-antigravity-ide`
 * **Uninstall system files:** `sudo antigravity-linux --uninstall`
 
-*Note: The installer automatically caches a local copy at `/usr/local/share/antigravity-linux/install.sh`. This ensures `antigravity-linux update --all` can query https://antigravity.google/download directly for updates without requiring access to GitHub.*
+*Note: The installer automatically caches a local copy at `/usr/local/share/antigravity-linux/install.sh`. By default, `antigravity-linux update --all` runs this cached script directly against https://antigravity.google/download without querying GitHub. To pull installer script updates from a remote repository, pass `--install-url <URL>` during install/update or set `ANTIGRAVITY_LINUX_INSTALLER_URL`.*
 
 ---
 
@@ -64,7 +64,7 @@ This prevents configuration/login collisions and allows both sessions to run sim
 
 ## 4. Setting Up Profile 2
 
-To configure the launchers for Profile 2:
+To configure the launchers for Profile 2 (requires `bubblewrap`, installed automatically by `install.sh`):
 
 1. Open terminal in this directory.
 2. Run the setup helper script:
