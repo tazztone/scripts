@@ -167,3 +167,26 @@ During development and testing of the multi-profile architecture, several non-ob
 * **Symptom:** In AG IDE, `gh auth status` reported `Logged in to github.com account (keyring)`. Inside `agy2` and `antigravity-profile2`, `gh auth status` failed with `Failed to log in to github.com account (default) - The token in default is invalid`.
 * **Root Cause:** By default on Linux, `gh` stores credentials in GNOME Keyring via D-Bus Secret Service. Because Profile 2 sets `DBUS_SESSION_BUS_ADDRESS="unix:path=/dev/null"` to isolate Google OAuth tokens, `gh` could not reach the host keyring and fell back to `~/.config/gh/hosts.yml`, which lacked an `oauth_token` field.
 * **Resolution:** Save the GitHub authentication token directly into `~/.config/gh/hosts.yml` (using `gh auth login --insecure-storage` or automatic synchronization during `setup-profile2.sh`). This enables both `gh` and Git credential helpers (`gh auth git-credential`) to work cleanly in all environments (AG IDE, host shells, `agy2`, and `antigravity-profile2`).
+
+---
+
+## 7. Installer & System Updater Architecture Discoveries
+
+During maintenance of `install.sh` and the system manager (`antigravity-linux`):
+
+### A. Broken Upstream Remote Fallback Loop
+* **Issue:** When running `antigravity-linux update --all`, the manager attempted to curl and execute `opensnap/antigravity/main/install.sh`. The upstream script used obsolete bundle extraction regexes, failing on Google's current bundle (`Could not find official Antigravity 2.0 tarball...`), and threw `bash: line 1: tmpdir: unbound variable` due to `set -u` in an EXIT trap.
+* **Resolution:** Local-first architecture: `antigravity-linux` defaults to executing the local cached script at `/usr/local/share/antigravity-linux/install.sh` directly, querying Google download endpoints without third-party GitHub roundtrips. Remote URLs are only queried when explicitly passed via `--install-url` or `ANTIGRAVITY_LINUX_INSTALLER_URL`.
+
+### B. GNU `cp` Self-Copy Collision
+* **Issue:** When the updater ran from `/usr/local/share/antigravity-linux/install.sh`, `install_manager_command()` executed `cp -f "${BASH_SOURCE[0]}" /usr/local/share/antigravity-linux/install.sh`. GNU `cp` refused to copy a file onto itself.
+* **Resolution:** Guarded self-copy with `[ ! "${BASH_SOURCE[0]}" -ef /usr/local/share/antigravity-linux/install.sh ]`.
+
+### C. Redundant `apt-get update`
+* **Issue:** `install_deps_debian()` invoked `apt-get update` unconditionally across 15 repositories even when all required dependencies were already present.
+* **Resolution:** Added `dpkg -s "${packages[@]}" >/dev/null 2>&1 && return 0` check prior to running `apt-get update`.
+
+### D. Nautilus 4.1 Binding Compatibility (Ubuntu 26.04+ / GNOME 50)
+* **Issue:** `install_nautilus_extension()` checked `gi.require_version('Nautilus', '4.0')`. Ubuntu 26.04 ships `gir1.2-nautilus-4.1` with `Nautilus-4.1.typelib`. The probe threw `ValueError`, erroneously skipping context menu installation.
+* **Resolution:** Tested versions `('4.1', '4.0', '3.0')` in fallback order.
+
