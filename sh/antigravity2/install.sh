@@ -18,7 +18,7 @@ DO_STATUS=0
 DO_PRINT_DOWNLOADS=0
 FORCE=0
 YES=0
-INSTALLER_URL="${ANTIGRAVITY_LINUX_INSTALLER_URL:-https://raw.githubusercontent.com/opensnap/antigravity/main/install.sh}"
+INSTALLER_URL="${ANTIGRAVITY_LINUX_INSTALLER_URL:-}"
 TMPDIR_PATH=""
 
 cleanup() {
@@ -119,12 +119,13 @@ require_root_or_reexec() {
 install_deps_debian() {
   [ "$INSTALL_DEPS" -eq 1 ] || return 0
   if command -v apt-get >/dev/null 2>&1; then
-    export DEBIAN_FRONTEND=noninteractive
-    apt-get update
     local packages=(ca-certificates curl tar python3 desktop-file-utils xdg-utils)
     if [ "$INSTALL_NAUTILUS" -eq 1 ] && [ "$INSTALL_IDE" -eq 1 ]; then
       packages+=(python3-nautilus)
     fi
+    dpkg -s "${packages[@]}" >/dev/null 2>&1 && return 0
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
     apt-get install -y "${packages[@]}"
   else
     for c in curl tar python3; do need "$c"; done
@@ -457,8 +458,10 @@ install_manager_command() {
   local installer_url="$INSTALLER_URL"
   mkdir -p /usr/local/share/antigravity-linux
   if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
-    cp -f "${BASH_SOURCE[0]}" /usr/local/share/antigravity-linux/install.sh
-    chmod +x /usr/local/share/antigravity-linux/install.sh
+    if [ ! "${BASH_SOURCE[0]}" -ef /usr/local/share/antigravity-linux/install.sh ]; then
+      cp -f "${BASH_SOURCE[0]}" /usr/local/share/antigravity-linux/install.sh
+      chmod +x /usr/local/share/antigravity-linux/install.sh
+    fi
   elif [ -n "$installer_url" ]; then
     curl -fsSL "$installer_url" -o /usr/local/share/antigravity-linux/install.sh || true
     chmod +x /usr/local/share/antigravity-linux/install.sh || true
