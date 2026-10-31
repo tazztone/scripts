@@ -119,7 +119,7 @@ require_root_or_reexec() {
 install_deps_debian() {
   [ "$INSTALL_DEPS" -eq 1 ] || return 0
   if command -v apt-get >/dev/null 2>&1; then
-    local packages=(ca-certificates curl tar python3 desktop-file-utils xdg-utils)
+    local packages=(ca-certificates curl tar python3 desktop-file-utils xdg-utils bubblewrap)
     if [ "$INSTALL_NAUTILUS" -eq 1 ] && [ "$INSTALL_IDE" -eq 1 ]; then
       packages+=(python3-nautilus)
     fi
@@ -403,7 +403,13 @@ install_nautilus_extension() {
   if ! python3 - <<'PY' >/dev/null 2>&1
 try:
     import gi
-    gi.require_version('Nautilus', '4.0')
+    for ver in ('4.1', '4.0', '3.0'):
+        try:
+            gi.require_version('Nautilus', ver)
+            break
+        except ValueError:
+            continue
+    from gi.repository import Nautilus
 except Exception:
     raise SystemExit(1)
 PY

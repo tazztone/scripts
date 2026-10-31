@@ -11,6 +11,8 @@ REAL_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
 
 log() { printf '%s\n' "$*"; }
 
+command -v bwrap >/dev/null 2>&1 || { echo "ERROR: Required command not found: bwrap (install bubblewrap package)" >&2; exit 1; }
+
 log "1. Cleaning up duplicate installation (using install2.sh)..."
 if [ -f "$REAL_HOME/Downloads/install2.sh" ]; then
   "$REAL_HOME/Downloads/install2.sh" --uninstall || log "Warning: Uninstaller returned an error, proceeding with manual cleanup."
