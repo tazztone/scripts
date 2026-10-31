@@ -86,11 +86,11 @@ while [ $# -gt 0 ]; do
       [ $# -gt 0 ] || err "--install-url needs a URL"
       INSTALLER_URL="$1"
       ;;
-    --status) DO_STATUS=1 ;;
-    --print-downloads) DO_PRINT_DOWNLOADS=1 ;;
-    --uninstall) DO_UNINSTALL=1 ;;
+    --status|status) DO_STATUS=1 ;;
+    --print-downloads|print-downloads) DO_PRINT_DOWNLOADS=1 ;;
+    --uninstall|uninstall) DO_UNINSTALL=1 ;;
     -y|--yes) YES=1 ;;
-    -h|--help) usage; exit 0 ;;
+    -h|--help|help) usage; exit 0 ;;
     *) err "Unknown option: $1" ;;
   esac
   shift
@@ -135,7 +135,7 @@ install_deps_debian() {
 resolve_main_bundle() {
   local tmpdir="$1"
   local html="$tmpdir/download.html"
-  curl -fsSL --compressed --retry 3 -o "$html" "$DOWNLOAD_PAGE"
+  curl -fsSL --connect-timeout 10 -m 30 --compressed --retry 3 -o "$html" "$DOWNLOAD_PAGE"
   local js_urls
   js_urls=$(python3 - "$html" "$DOWNLOAD_PAGE" <<'PY'
 import re, sys
@@ -152,7 +152,7 @@ PY
   while IFS= read -r js_url; do
     [ -n "$js_url" ] || continue
     idx=$((idx + 1))
-    curl -fsSL --compressed --retry 3 -o "$tmpdir/bundle_${idx}.js" "$js_url" || true
+    curl -fsSL --connect-timeout 10 -m 30 --compressed --retry 3 -o "$tmpdir/bundle_${idx}.js" "$js_url" || true
   done <<< "$js_urls"
 }
 
@@ -282,7 +282,9 @@ refresh_desktop_caches() {
 
 installed_version() {
   local file="$1"
-  cat "$file" 2>/dev/null || true
+  local ver
+  ver=$(cat "$file" 2>/dev/null || true)
+  printf '%s' "${ver:-unknown}"
 }
 
 install_desktop_app() {
@@ -485,11 +487,14 @@ run_installer() {
   if [ "\$(id -u)" -eq 0 ]; then
     bash "\$script" "\$@"
   else
-    if [ "\${1:-}" = "--status" ] || [ "\${1:-}" = "-h" ] || [ "\${1:-}" = "--help" ] || [ "\${1:-}" = "--print-downloads" ]; then
-      bash "\$script" "\$@"
-    else
-      sudo bash "\$script" "\$@"
-    fi
+    case "\${1:-}" in
+      --status|status|-h|--help|help|--print-downloads|print-downloads)
+        bash "\$script" "\$@"
+        ;;
+      *)
+        sudo bash "\$script" "\$@"
+        ;;
+    esac
   fi
 }
 

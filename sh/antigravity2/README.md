@@ -28,11 +28,11 @@ Run `install.sh` to install or update Antigravity 2.0 Desktop and Antigravity ID
 ### System Management Commands
 Once installed, helper commands are available system-wide:
 
-* **Check status:** `antigravity-linux --status`
+* **Check status:** `antigravity-linux status` (or `--status`)
 * **Update all components:** `sudo antigravity-linux update --all`
 * **Update desktop app only:** `sudo update-antigravity`
 * **Update IDE only:** `sudo update-antigravity-ide`
-* **Uninstall system files:** `sudo antigravity-linux --uninstall`
+* **Uninstall system files:** `sudo antigravity-linux uninstall` (or `--uninstall`)
 
 *Note: The installer automatically caches a local copy at `/usr/local/share/antigravity-linux/install.sh`. By default, `antigravity-linux update --all` runs this cached script directly against https://antigravity.google/download without querying GitHub. To pull installer script updates from a remote repository, pass `--install-url <URL>` during install/update or set `ANTIGRAVITY_LINUX_INSTALLER_URL`.*
 
